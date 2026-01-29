@@ -9,7 +9,7 @@ Burp AI Agent is an extension for Burp Suite that integrates AI into your securi
 
 ## Highlights
 
-- **6 AI Backends** — Ollama, LM Studio, Gemini CLI, Claude CLI, Codex CLI, OpenCode CLI.
+- **7 AI Backends** — Ollama, LM Studio, Generic OpenAI-compatible, Gemini CLI, Claude CLI, Codex CLI, OpenCode CLI.
 - **53+ MCP Tools** — Let Claude Desktop (or any MCP client) drive Burp autonomously.
 - **62 Vulnerability Classes** — Passive and Active AI scanners across injection, auth, crypto, and more.
 - **3 Privacy Modes** — STRICT / BALANCED / OFF. Redact sensitive data before it leaves Burp.
@@ -62,7 +62,7 @@ Open the **AI Agent** tab and go to **Settings**. Pick a backend:
 
 1. Browse a target through Burp Proxy.
 2. Right-click any request in **Proxy > HTTP History**.
-3. Select **Extensions > Burp AI Agent > Quick recon**.
+3. Select **Extensions > Burp AI Agent > Analyze this request**.
 4. A chat session opens with the AI analysis.
 
 <!-- screenshot: right-click context menu showing Burp AI Agent actions -->

@@ -1,4 +1,4 @@
-package com.six2dez.burp.aiagent.backends.lmstudio
+package com.six2dez.burp.aiagent.backends.openai
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
@@ -15,27 +15,27 @@ import java.net.Proxy
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
-class LmStudioBackend : AiBackend {
-    override val id: String = "lmstudio"
-    override val displayName: String = "LM Studio (local)"
+class OpenAiCompatibleBackend : AiBackend {
+    override val id: String = "openai-compatible"
+    override val displayName: String = "Generic (OpenAI-compatible)"
 
     private val mapper = ObjectMapper().registerKotlinModule()
 
     override fun launch(config: BackendLaunchConfig): AgentConnection {
-        val baseUrl = config.baseUrl?.trimEnd('/') ?: "http://127.0.0.1:1234"
-        val model = config.model?.ifBlank { "lmstudio" } ?: "lmstudio"
+        val baseUrl = config.baseUrl?.trimEnd('/') ?: ""
+        val model = config.model?.ifBlank { "" } ?: ""
         val timeoutSeconds = (config.requestTimeoutSeconds ?: 120L).coerceIn(30L, 3600L)
         val client = buildClient(timeoutSeconds)
-        return LmStudioConnection(
-            client,
-            mapper,
-            baseUrl,
-            model,
-            config.headers,
-            config.determinismMode,
-            config.sessionId,
-            debugLog = { BackendDiagnostics.log("[lmstudio] $it") },
-            errorLog = { BackendDiagnostics.logError("[lmstudio] $it") }
+        return OpenAiCompatibleConnection(
+            client = client,
+            mapper = mapper,
+            baseUrl = baseUrl,
+            model = model,
+            headers = config.headers,
+            determinismMode = config.determinismMode,
+            sessionId = config.sessionId,
+            debugLog = { BackendDiagnostics.log("[openai-compatible] $it") },
+            errorLog = { BackendDiagnostics.logError("[openai-compatible] $it") }
         )
     }
 
@@ -49,7 +49,7 @@ class LmStudioBackend : AiBackend {
             .build()
     }
 
-    private class LmStudioConnection(
+    private class OpenAiCompatibleConnection(
         private val client: OkHttpClient,
         private val mapper: ObjectMapper,
         private val baseUrl: String,
@@ -62,7 +62,7 @@ class LmStudioBackend : AiBackend {
     ) : AgentConnection {
         private val alive = AtomicBoolean(true)
         private val exec = Executors.newSingleThreadExecutor { runnable ->
-            Thread(runnable, "lmstudio-connection").apply { isDaemon = true }
+            Thread(runnable, "openai-compatible-connection").apply { isDaemon = true }
         }
         private val conversationHistory = mutableListOf<Map<String, String>>()
         private val maxHistoryMessages = 20
@@ -86,7 +86,6 @@ class LmStudioBackend : AiBackend {
                             return@submit
                         }
                         try {
-                            // Add user message to conversation history
                             synchronized(conversationHistory) {
                                 conversationHistory.add(mapOf("role" to "user", "content" to text))
                                 while (conversationHistory.size > maxHistoryMessages) {
@@ -120,22 +119,21 @@ class LmStudioBackend : AiBackend {
                                 if (!resp.isSuccessful) {
                                     val bodyText = resp.body?.string().orEmpty()
                                     errorLog("HTTP ${resp.code}: ${bodyText.take(500)}")
-                                    onComplete(IllegalStateException("LM Studio HTTP ${resp.code}: $bodyText"))
+                                    onComplete(IllegalStateException("OpenAI-compatible HTTP ${resp.code}: $bodyText"))
                                     return@submit
                                 }
                                 val body = resp.body?.string().orEmpty()
                                 if (body.isBlank()) {
-                                    onComplete(IllegalStateException("LM Studio response body was empty"))
+                                    onComplete(IllegalStateException("OpenAI-compatible response body was empty"))
                                     return@submit
                                 }
                                 val node = mapper.readTree(body)
                                 val content = node.path("choices").path(0).path("message").path("content").asText()
                                 if (content.isBlank()) {
-                                    onComplete(IllegalStateException("LM Studio response content was empty"))
+                                    onComplete(IllegalStateException("OpenAI-compatible response content was empty"))
                                     return@submit
                                 }
                                 debugLog("response <- ${content.take(200)}")
-                                // Add assistant response to conversation history
                                 synchronized(conversationHistory) {
                                     conversationHistory.add(mapOf("role" to "assistant", "content" to content))
                                     while (conversationHistory.size > maxHistoryMessages) {

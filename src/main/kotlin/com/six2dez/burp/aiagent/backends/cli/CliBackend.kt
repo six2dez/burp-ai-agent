@@ -4,6 +4,7 @@ import com.six2dez.burp.aiagent.backends.AgentConnection
 import com.six2dez.burp.aiagent.backends.AiBackend
 import com.six2dez.burp.aiagent.backends.BackendLaunchConfig
 import com.six2dez.burp.aiagent.backends.DiagnosableConnection
+import com.six2dez.burp.aiagent.backends.SessionAwareConnection
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.util.Locale
@@ -23,7 +24,7 @@ class CliBackend(
         require(config.command.isNotEmpty()) { "CLI backend requires a command" }
         val usePty = (id == "codex-cli" || id == "gemini-cli" || id == "claude-cli") && !config.embeddedMode
         return if (config.embeddedMode) {
-            NonInteractiveCliConnection(id, config.command, config.env)
+            NonInteractiveCliConnection(id, config.command, config.env, config.cliSessionId)
         } else {
             CliConnection(config.command, config.env, usePty, config.embeddedMode)
         }
@@ -32,9 +33,14 @@ class CliBackend(
     private class NonInteractiveCliConnection(
         private val backendId: String,
         private val baseCommand: List<String>,
-        private val env: Map<String, String>
-    ) : AgentConnection {
+        private val env: Map<String, String>,
+        initialCliSessionId: String? = null
+    ) : SessionAwareConnection {
         private val executor = Executors.newSingleThreadExecutor()
+        @Volatile
+        private var _cliSessionId: String? = initialCliSessionId
+
+        override fun cliSessionId(): String? = _cliSessionId
 
         override fun isAlive(): Boolean = true
 
@@ -47,7 +53,7 @@ class CliBackend(
                 }
                 val (cmd, stdinText) = buildCommand(text, outputFile)
                 try {
-                    val process = ProcessBuilder(cmd)
+                    val process = ProcessBuilder(normalizeWindowsCommand(cmd))
                         .apply { environment().putAll(env) }
                         .redirectErrorStream(true)
                         .directory(java.io.File(System.getProperty("user.home")))
@@ -123,8 +129,8 @@ class CliBackend(
                     cmd to null
                 }
                 "claude-cli" -> {
-                    val cmd = buildClaudeCommand(baseCommand, prompt)
-                    cmd to null
+                    val cmd = buildClaudeCommand(baseCommand)
+                    cmd to prompt
                 }
                 else -> baseCommand to prompt
             }
@@ -240,15 +246,27 @@ class CliBackend(
                 .trim()
         }
 
-        private fun buildClaudeCommand(cmd: List<String>, prompt: String): List<String> {
+        private fun buildClaudeCommand(cmd: List<String>): List<String> {
             val base = cmd.firstOrNull() ?: "claude"
             val extras = cmd.drop(1)
             val args = mutableListOf<String>()
             args.add(base)
-            // Assuming claude cli takes prompt as arguments or -p.
-            // "Claude Code" cli usage is likely 'claude "prompt"'
             args.addAll(extras)
-            args.add(prompt)
+            if (!args.contains("-p") && !args.contains("--print")) {
+                args.add("-p")
+            }
+            val currentSessionId = _cliSessionId
+            if (currentSessionId != null) {
+                // Follow-up message: resume existing conversation
+                args.add("--resume")
+                args.add(currentSessionId)
+            } else {
+                // First message: generate a new session id
+                val newId = java.util.UUID.randomUUID().toString()
+                _cliSessionId = newId
+                args.add("--session-id")
+                args.add(newId)
+            }
             return args
         }
 
@@ -410,14 +428,15 @@ class CliBackend(
         }
 
         private fun startProcess(cmd: List<String>, env: Map<String, String>): Process {
+            val normalizedCmd = normalizeWindowsCommand(cmd)
             if (usePty && isUnixLike()) {
-                val ptyCmd = buildPtyCommand(cmd)
+                val ptyCmd = buildPtyCommand(normalizedCmd)
                 return ProcessBuilder(ptyCmd)
                     .apply { environment().putAll(env) }
                     .redirectErrorStream(true)
                     .start()
             }
-            return ProcessBuilder(cmd)
+            return ProcessBuilder(normalizedCmd)
                 .apply { environment().putAll(env) }
                 .redirectErrorStream(true)
                 .start()
@@ -447,4 +466,21 @@ class CliBackend(
         }
 
     }
+}
+
+private fun normalizeWindowsCommand(cmd: List<String>): List<String> {
+    if (!isWindows() || cmd.isEmpty()) return cmd
+    val first = cmd.first()
+    if (first.contains("\\") || first.contains("/")) return cmd
+    val lower = first.lowercase(Locale.ROOT)
+    return if (lower.endsWith(".exe")) {
+        listOf(first.dropLast(4)) + cmd.drop(1)
+    } else {
+        cmd
+    }
+}
+
+private fun isWindows(): Boolean {
+    val os = System.getProperty("os.name").lowercase(Locale.ROOT)
+    return os.contains("win")
 }

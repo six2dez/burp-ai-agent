@@ -15,11 +15,20 @@ data class AgentSettings(
     val ollamaUrl: String,
     val ollamaServeCmd: String,
     val ollamaAutoStart: Boolean,
+    val ollamaApiKey: String,
+    val ollamaHeaders: String,
     val lmStudioUrl: String,
     val lmStudioModel: String,
     val lmStudioTimeoutSeconds: Int,
     val lmStudioServerCmd: String,
     val lmStudioAutoStart: Boolean,
+    val lmStudioApiKey: String,
+    val lmStudioHeaders: String,
+    val openAiCompatibleUrl: String,
+    val openAiCompatibleModel: String,
+    val openAiCompatibleApiKey: String,
+    val openAiCompatibleHeaders: String,
+    val openAiCompatibleTimeoutSeconds: Int,
     val requestPromptTemplate: String,
     val issuePromptTemplate: String,
     val issueAnalyzePrompt: String,
@@ -72,12 +81,22 @@ class AgentSettingsRepository(api: MontoyaApi) {
             ollamaUrl = (prefs.getString(KEY_OLLAMA_URL) ?: "http://127.0.0.1:11434").trim(),
             ollamaServeCmd = prefs.getString(KEY_OLLAMA_SERVE_CMD).orEmpty().trim().ifBlank { defaultOllamaServeCmd() },
             ollamaAutoStart = prefs.getBoolean(KEY_OLLAMA_AUTOSTART) ?: true,
+            ollamaApiKey = prefs.getString(KEY_OLLAMA_API_KEY).orEmpty().trim(),
+            ollamaHeaders = prefs.getString(KEY_OLLAMA_HEADERS).orEmpty(),
             lmStudioUrl = (prefs.getString(KEY_LMSTUDIO_URL) ?: "http://127.0.0.1:1234").trim(),
             lmStudioModel = prefs.getString(KEY_LMSTUDIO_MODEL).orEmpty().trim().ifBlank { defaultLmStudioModel() },
             lmStudioTimeoutSeconds = (prefs.getInteger(KEY_LMSTUDIO_TIMEOUT) ?: defaultLmStudioTimeoutSeconds())
                 .coerceIn(30, 3600),
             lmStudioServerCmd = prefs.getString(KEY_LMSTUDIO_SERVER_CMD).orEmpty().trim().ifBlank { defaultLmStudioServerCmd() },
             lmStudioAutoStart = prefs.getBoolean(KEY_LMSTUDIO_AUTOSTART) ?: true,
+            lmStudioApiKey = prefs.getString(KEY_LMSTUDIO_API_KEY).orEmpty().trim(),
+            lmStudioHeaders = prefs.getString(KEY_LMSTUDIO_HEADERS).orEmpty(),
+            openAiCompatibleUrl = prefs.getString(KEY_OPENAI_COMPAT_URL).orEmpty().trim(),
+            openAiCompatibleModel = prefs.getString(KEY_OPENAI_COMPAT_MODEL).orEmpty().trim(),
+            openAiCompatibleApiKey = prefs.getString(KEY_OPENAI_COMPAT_API_KEY).orEmpty().trim(),
+            openAiCompatibleHeaders = prefs.getString(KEY_OPENAI_COMPAT_HEADERS).orEmpty(),
+            openAiCompatibleTimeoutSeconds = (prefs.getInteger(KEY_OPENAI_COMPAT_TIMEOUT) ?: defaultOpenAiCompatTimeoutSeconds())
+                .coerceIn(30, 3600),
             requestPromptTemplate = prefs.getString(KEY_PROMPT_FIND_VULNS).orEmpty().ifBlank { defaultRequestPrompt() },
             issuePromptTemplate = prefs.getString(KEY_PROMPT_FULL_REPORT).orEmpty().ifBlank { defaultIssuePrompt() },
             issueAnalyzePrompt = prefs.getString(KEY_PROMPT_ISSUE_ANALYZE).orEmpty().ifBlank { defaultIssueAnalyzePrompt() },
@@ -128,11 +147,20 @@ class AgentSettingsRepository(api: MontoyaApi) {
             ollamaUrl = "http://127.0.0.1:11434",
             ollamaServeCmd = defaultOllamaServeCmd(),
             ollamaAutoStart = true,
+            ollamaApiKey = "",
+            ollamaHeaders = "",
             lmStudioUrl = "http://127.0.0.1:1234",
             lmStudioModel = defaultLmStudioModel(),
             lmStudioTimeoutSeconds = defaultLmStudioTimeoutSeconds(),
             lmStudioServerCmd = defaultLmStudioServerCmd(),
             lmStudioAutoStart = true,
+            lmStudioApiKey = "",
+            lmStudioHeaders = "",
+            openAiCompatibleUrl = "",
+            openAiCompatibleModel = "",
+            openAiCompatibleApiKey = "",
+            openAiCompatibleHeaders = "",
+            openAiCompatibleTimeoutSeconds = defaultOpenAiCompatTimeoutSeconds(),
             requestPromptTemplate = defaultRequestPrompt(),
             issuePromptTemplate = defaultIssuePrompt(),
             issueAnalyzePrompt = defaultIssueAnalyzePrompt(),
@@ -178,11 +206,20 @@ class AgentSettingsRepository(api: MontoyaApi) {
         prefs.setString(KEY_OLLAMA_URL, settings.ollamaUrl)
         prefs.setString(KEY_OLLAMA_SERVE_CMD, settings.ollamaServeCmd)
         prefs.setBoolean(KEY_OLLAMA_AUTOSTART, settings.ollamaAutoStart)
+        prefs.setString(KEY_OLLAMA_API_KEY, settings.ollamaApiKey)
+        prefs.setString(KEY_OLLAMA_HEADERS, settings.ollamaHeaders)
         prefs.setString(KEY_LMSTUDIO_URL, settings.lmStudioUrl)
         prefs.setString(KEY_LMSTUDIO_MODEL, settings.lmStudioModel)
         prefs.setInteger(KEY_LMSTUDIO_TIMEOUT, settings.lmStudioTimeoutSeconds.coerceIn(30, 3600))
         prefs.setString(KEY_LMSTUDIO_SERVER_CMD, settings.lmStudioServerCmd)
         prefs.setBoolean(KEY_LMSTUDIO_AUTOSTART, settings.lmStudioAutoStart)
+        prefs.setString(KEY_LMSTUDIO_API_KEY, settings.lmStudioApiKey)
+        prefs.setString(KEY_LMSTUDIO_HEADERS, settings.lmStudioHeaders)
+        prefs.setString(KEY_OPENAI_COMPAT_URL, settings.openAiCompatibleUrl)
+        prefs.setString(KEY_OPENAI_COMPAT_MODEL, settings.openAiCompatibleModel)
+        prefs.setString(KEY_OPENAI_COMPAT_API_KEY, settings.openAiCompatibleApiKey)
+        prefs.setString(KEY_OPENAI_COMPAT_HEADERS, settings.openAiCompatibleHeaders)
+        prefs.setInteger(KEY_OPENAI_COMPAT_TIMEOUT, settings.openAiCompatibleTimeoutSeconds.coerceIn(30, 3600))
         prefs.setString(KEY_PROMPT_FIND_VULNS, settings.requestPromptTemplate)
         prefs.setString(KEY_PROMPT_FULL_REPORT, settings.issuePromptTemplate)
         prefs.setString(KEY_PROMPT_ISSUE_ANALYZE, settings.issueAnalyzePrompt)
@@ -227,11 +264,20 @@ class AgentSettingsRepository(api: MontoyaApi) {
         private const val KEY_OLLAMA_MODEL = "ollama.model"
         private const val KEY_OLLAMA_SERVE_CMD = "ollama.serve.cmd"
         private const val KEY_OLLAMA_AUTOSTART = "ollama.autostart"
+        private const val KEY_OLLAMA_API_KEY = "ollama.apiKey"
+        private const val KEY_OLLAMA_HEADERS = "ollama.headers"
         private const val KEY_LMSTUDIO_URL = "lmstudio.url"
         private const val KEY_LMSTUDIO_MODEL = "lmstudio.model"
         private const val KEY_LMSTUDIO_TIMEOUT = "lmstudio.timeoutSeconds"
         private const val KEY_LMSTUDIO_SERVER_CMD = "lmstudio.server.cmd"
         private const val KEY_LMSTUDIO_AUTOSTART = "lmstudio.autostart"
+        private const val KEY_LMSTUDIO_API_KEY = "lmstudio.apiKey"
+        private const val KEY_LMSTUDIO_HEADERS = "lmstudio.headers"
+        private const val KEY_OPENAI_COMPAT_URL = "openai.compat.url"
+        private const val KEY_OPENAI_COMPAT_MODEL = "openai.compat.model"
+        private const val KEY_OPENAI_COMPAT_API_KEY = "openai.compat.apiKey"
+        private const val KEY_OPENAI_COMPAT_HEADERS = "openai.compat.headers"
+        private const val KEY_OPENAI_COMPAT_TIMEOUT = "openai.compat.timeoutSeconds"
         private const val KEY_PROMPT_FIND_VULNS = "prompt.find_vulns"
         private const val KEY_PROMPT_QUICK_RECON = "prompt.quick_recon"
         private const val KEY_PROMPT_EXPLAIN_JS = "prompt.explain_js"
@@ -321,40 +367,44 @@ class AgentSettingsRepository(api: MontoyaApi) {
             return "lms server start"
         }
 
+        private fun defaultOpenAiCompatTimeoutSeconds(): Int {
+            return 120
+        }
+
         private fun defaultRequestPrompt(): String {
-            return "Analyze this HTTP request/response for security vulnerabilities. Check for: injection points (SQLi, XSS, CMDI, SSTI, SSRF), authentication/authorization flaws (IDOR, BOLA, BAC), information disclosure, insecure headers/cookies, sensitive data exposure, misconfigurations. For each finding provide: vulnerability type, evidence, severity (CVSS), exploitation steps, and remediation."
+            return "Always answer in English. Analyze this HTTP request/response for security vulnerabilities. Check for: injection points (SQLi, XSS, CMDI, SSTI, SSRF), authentication/authorization flaws (IDOR, BOLA, BAC), information disclosure, insecure headers/cookies, sensitive data exposure, misconfigurations. For each finding provide: vulnerability type, evidence, severity (CVSS), exploitation steps, and remediation."
         }
 
         private fun defaultIssuePrompt(): String {
-            return "Write a complete vulnerability report: summary, root cause, evidence, impact, PoC, remediation."
+            return "Always answer in English. Write a complete vulnerability report: summary, root cause, evidence, impact, PoC, remediation."
         }
 
         private fun defaultIssueAnalyzePrompt(): String {
-            return "Analyze the finding. Explain the vulnerability and root cause, cite concrete evidence from the request/response, and list precise validation steps."
+            return "Always answer in English. Analyze the finding. Explain the vulnerability and root cause, cite concrete evidence from the request/response, and list precise validation steps."
         }
 
         private fun defaultIssuePocPrompt(): String {
-            return "Provide a step-by-step PoC with exact HTTP requests (curl where possible), expected responses, and safe validation criteria."
+            return "Always answer in English. Provide a step-by-step PoC with exact HTTP requests (curl where possible), expected responses, and safe validation criteria."
         }
 
         private fun defaultIssueImpactPrompt(): String {
-            return "Assess impact and severity: CIA impact, exploitability, likely business risk, and CVSS considerations. Keep it concise."
+            return "Always answer in English. Assess impact and severity: CIA impact, exploitability, likely business risk, and CVSS considerations. Keep it concise."
         }
 
         private fun defaultRequestSummaryPrompt(): String {
-            return "Summarize this endpoint for recon: HTTP method, path, authentication mechanism, all parameters (query/body/headers/cookies), response data type and key fields, notable security observations. Format: 5-7 concise bullets."
+            return "Always answer in English. Summarize this endpoint: HTTP method, path, authentication mechanism, all parameters (query/body/headers/cookies), response data type and key fields, notable security observations. Format: 5-7 concise bullets."
         }
 
         private fun defaultExplainJsPrompt(): String {
-            return "Summarize JS behavior and any security impact. Output: bullets + 1 risk note."
+            return "Always answer in English. Summarize JS behavior and any security impact. Output: bullets + 1 risk note."
         }
 
         private fun defaultAccessControlPrompt(): String {
-            return "Design an access-control test plan for this request: horizontal/vertical escalation, missing authorization checks, auth bypass. For each test, give the modified request and expected outcome."
+            return "Always answer in English. Design an access-control test plan for this request: horizontal/vertical escalation, missing authorization checks, auth bypass. For each test, give the modified request and expected outcome."
         }
 
         private fun defaultLoginSequencePrompt(): String {
-            return "Draft a login sequence from this traffic. Output: steps + parameters to capture."
+            return "Always answer in English. Draft a login sequence from this traffic. Output: steps + parameters to capture."
         }
 
         private fun defaultMcpSettings(): McpSettings {

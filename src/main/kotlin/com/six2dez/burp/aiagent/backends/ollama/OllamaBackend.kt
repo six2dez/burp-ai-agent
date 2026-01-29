@@ -35,6 +35,7 @@ class OllamaBackend : AiBackend {
             mapper = mapper,
             baseUrl = baseUrl,
             model = model,
+            headers = config.headers,
             determinismMode = config.determinismMode,
             sessionId = config.sessionId,
             debugLog = { BackendDiagnostics.log("[ollama] $it") },
@@ -47,6 +48,7 @@ class OllamaBackend : AiBackend {
         private val mapper: ObjectMapper,
         private val baseUrl: String,
         private val model: String,
+        private val headers: Map<String, String>,
         private val determinismMode: Boolean,
         private val sessionId: String?,
         private val debugLog: (String) -> Unit,
@@ -57,6 +59,8 @@ class OllamaBackend : AiBackend {
         private val exec = Executors.newSingleThreadExecutor { runnable ->
             Thread(runnable, "ollama-connection").apply { isDaemon = true }
         }
+        private val conversationHistory = mutableListOf<Map<String, String>>()
+        private val maxHistoryMessages = 20
 
         override fun isAlive(): Boolean = alive.get()
 
@@ -80,10 +84,14 @@ class OllamaBackend : AiBackend {
                         }
                         try {
                             debugLog("serialize start (model=$model, baseUrl=$baseUrl)")
+                            // Add user message to conversation history
+                            synchronized(conversationHistory) {
+                                conversationHistory.add(mapOf("role" to "user", "content" to text))
+                                trimHistory()
+                            }
                             // Use non-streaming mode for better performance
                             val json = buildChatJson(
                                 model = model,
-                                content = text,
                                 stream = false,
                                 temperature = if (determinismMode) 0.0 else null
                             )
@@ -92,6 +100,9 @@ class OllamaBackend : AiBackend {
                                 .url("$baseUrl/api/chat")
                                 .post(json.toRequestBody("application/json".toMediaType()))
                                 .apply {
+                                    headers.forEach { (name, value) ->
+                                        header(name, value)
+                                    }
                                     if (!sessionId.isNullOrBlank()) {
                                         header("X-Session-Id", sessionId)
                                     }
@@ -130,6 +141,11 @@ class OllamaBackend : AiBackend {
                                 }
 
                                 debugLog("received complete response (${content.length} chars)")
+                                // Add assistant response to conversation history
+                                synchronized(conversationHistory) {
+                                    conversationHistory.add(mapOf("role" to "assistant", "content" to content))
+                                    trimHistory()
+                                }
                                 onChunk(content)
                                 onComplete(null)
                                 return@submit
@@ -173,7 +189,6 @@ class OllamaBackend : AiBackend {
             try {
                 val json = buildChatJson(
                     model = model,
-                    content = text,
                     stream = false,
                     temperature = temperature
                 )
@@ -181,6 +196,9 @@ class OllamaBackend : AiBackend {
                     .url("$baseUrl/api/chat")
                     .post(json.toRequestBody("application/json".toMediaType()))
                     .apply {
+                        headers.forEach { (name, value) ->
+                            header(name, value)
+                        }
                         if (!sessionId.isNullOrBlank()) {
                             header("X-Session-Id", sessionId)
                         }
@@ -218,22 +236,33 @@ class OllamaBackend : AiBackend {
 
         private fun buildChatJson(
             model: String,
-            content: String,
             stream: Boolean,
             temperature: Double?
         ): String {
-            val sb = StringBuilder(128 + content.length)
+            val messages = synchronized(conversationHistory) { conversationHistory.toList() }
+            val sb = StringBuilder(256)
             sb.append("{")
             sb.append("\"model\":\"").append(escapeJson(model)).append("\",")
-            sb.append("\"messages\":[{\"role\":\"user\",\"content\":\"")
-                .append(escapeJson(content))
-                .append("\"}],")
+            sb.append("\"messages\":[")
+            messages.forEachIndexed { index, msg ->
+                if (index > 0) sb.append(",")
+                sb.append("{\"role\":\"").append(escapeJson(msg["role"] ?: "user"))
+                sb.append("\",\"content\":\"").append(escapeJson(msg["content"] ?: ""))
+                sb.append("\"}")
+            }
+            sb.append("],")
             sb.append("\"stream\":").append(if (stream) "true" else "false")
             if (temperature != null) {
                 sb.append(",\"options\":{\"temperature\":").append(temperature).append("}")
             }
             sb.append("}")
             return sb.toString()
+        }
+
+        private fun trimHistory() {
+            while (conversationHistory.size > maxHistoryMessages) {
+                conversationHistory.removeAt(0)
+            }
         }
 
         private fun escapeJson(value: String): String {

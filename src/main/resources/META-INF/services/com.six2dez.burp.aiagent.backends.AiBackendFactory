@@ -1,5 +1,7 @@
 com.six2dez.burp.aiagent.backends.cli.CodexCliBackendFactory
 com.six2dez.burp.aiagent.backends.cli.GeminiCliBackendFactory
 com.six2dez.burp.aiagent.backends.cli.OpenCodeCliBackendFactory
+com.six2dez.burp.aiagent.backends.cli.ClaudeCliBackendFactory
 com.six2dez.burp.aiagent.backends.lmstudio.LmStudioBackendFactory
 com.six2dez.burp.aiagent.backends.ollama.OllamaBackendFactory
+com.six2dez.burp.aiagent.backends.openai.OpenAiCompatibleBackendFactory

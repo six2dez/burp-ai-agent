@@ -12,6 +12,7 @@ import burp.api.montoya.scanner.audit.issues.AuditIssueSeverity
 import com.six2dez.burp.aiagent.audit.AuditLogger
 import com.six2dez.burp.aiagent.config.AgentSettings
 import com.six2dez.burp.aiagent.supervisor.AgentSupervisor
+import com.six2dez.burp.aiagent.util.IssueText
 import java.util.concurrent.Executors
 import java.util.concurrent.Semaphore
 import java.util.concurrent.atomic.AtomicBoolean
@@ -291,13 +292,13 @@ class PassiveAiScanner(
             val settings = getSettings()
             val request = requestResponse.request()
             val response = requestResponse.response()
-            
+
             // Extract request body (truncated)
             val requestBody = try {
                 val bodyStr = request.bodyToString()
                 if (bodyStr.length > 3000) bodyStr.take(3000) + "..." else bodyStr
             } catch (_: Exception) { "" }
-            
+
             // Extract response body (truncated for AI analysis)
             val responseBody = try {
                 val bodyStr = response?.bodyToString() ?: ""
@@ -324,7 +325,7 @@ class PassiveAiScanner(
                 api.logging().logToError("[PassiveAiScanner] No AI backend available - skipping analysis")
                 return
             }
-            
+
             // Build params sample with more detail
             val params = request.parameters().take(20).map { p ->
                 val value = if (p.value().length > 300) p.value().take(300) + "..." else p.value()
@@ -334,135 +335,130 @@ class PassiveAiScanner(
                     "type" to p.type().name
                 )
             }
-        
-        // Extract ALL headers for security analysis
-        val requestHeaders = request.headers().map { h ->
-            "${h.name()}: ${if (h.value().length > 150) h.value().take(150) + "..." else h.value()}"
-        }
-        val responseHeaders = response?.headers()?.map { h ->
-            "${h.name()}: ${if (h.value().length > 150) h.value().take(150) + "..." else h.value()}"
-        } ?: emptyList()
-        
-        // Extract cookies separately for auth analysis
-        val cookies = request.headers()
-            .filter { it.name().equals("Cookie", ignoreCase = true) }
-            .flatMap { it.value().split(";").map { c -> c.trim() } }
-            .take(10)
-        
-        val setCookies = response?.headers()
-            ?.filter { it.name().equals("Set-Cookie", ignoreCase = true) }
-            ?.map { it.value() }
-            ?: emptyList()
-        
-        // Check for auth headers
-        val authHeaders = request.headers()
-            .filter { h -> 
-                h.name().equals("Authorization", ignoreCase = true) ||
-                h.name().equals("X-API-Key", ignoreCase = true) ||
-                h.name().equals("X-Auth-Token", ignoreCase = true)
-            }
-            .map { "${it.name()}: ${it.value().take(50)}..." }
-        
-        // Extract path segments for IDOR/BOLA analysis
-        val urlPath = try {
-            java.net.URI(request.url()).path ?: ""
-        } catch (_: Exception) { "" }
-        
-        // Look for potential object IDs in URL
-        val potentialIds = Regex("\\b([0-9]+|[a-f0-9-]{36}|[a-f0-9]{24})\\b", RegexOption.IGNORE_CASE)
-            .findAll(urlPath + "?" + params.joinToString("&") { "${it["name"]}=${it["value"]}" })
-            .map { it.value }
-            .distinct()
-            .take(10)
-            .toList()
 
-        // Build simple text-based metadata (avoid Jackson classloader issues in Burp)
-        val metadataText = buildString {
-            appendLine("URL: ${request.url()}")
-            appendLine("Path: $urlPath")
-            appendLine("Method: ${request.method()}")
-            appendLine("Status: ${response?.statusCode() ?: 0}")
-            appendLine("MIME Type: ${response?.statedMimeType()?.name ?: "unknown"}")
-            appendLine()
-            if (potentialIds.isNotEmpty()) {
-                appendLine("Potential Object IDs: ${potentialIds.joinToString(", ")}")
+            // Extract ALL headers for security analysis
+            val requestHeaders = request.headers().map { h ->
+                "${h.name()}: ${if (h.value().length > 150) h.value().take(150) + "..." else h.value()}"
             }
-            appendLine()
-            appendLine("=== REQUEST HEADERS ===")
-            requestHeaders.forEach { appendLine(it) }
-            appendLine()
-            appendLine("=== RESPONSE HEADERS ===")
-            responseHeaders.forEach { appendLine(it) }
-            appendLine()
-            if (authHeaders.isNotEmpty()) {
-                appendLine("=== AUTH HEADERS ===")
-                authHeaders.forEach { appendLine(it) }
+            val responseHeaders = response?.headers()?.map { h ->
+                "${h.name()}: ${if (h.value().length > 150) h.value().take(150) + "..." else h.value()}"
+            } ?: emptyList()
+
+            // Extract cookies separately for auth analysis
+            val cookies = request.headers()
+                .filter { it.name().equals("Cookie", ignoreCase = true) }
+                .flatMap { it.value().split(";").map { c -> c.trim() } }
+                .take(10)
+
+            // Check for auth headers
+            val authHeaders = request.headers()
+                .filter { h ->
+                    h.name().equals("Authorization", ignoreCase = true) ||
+                        h.name().equals("X-API-Key", ignoreCase = true) ||
+                        h.name().equals("X-Auth-Token", ignoreCase = true)
+                }
+                .map { "${it.name()}: ${it.value().take(50)}..." }
+
+            // Extract path segments for IDOR/BOLA analysis
+            val urlPath = try {
+                java.net.URI(request.url()).path ?: ""
+            } catch (_: Exception) { "" }
+
+            // Look for potential object IDs in URL
+            val potentialIds = Regex("\\b([0-9]+|[a-f0-9-]{36}|[a-f0-9]{24})\\b", RegexOption.IGNORE_CASE)
+                .findAll(urlPath + "?" + params.joinToString("&") { "${it["name"]}=${it["value"]}" })
+                .map { it.value }
+                .distinct()
+                .take(10)
+                .toList()
+
+            // Build simple text-based metadata (avoid Jackson classloader issues in Burp)
+            val metadataText = buildString {
+                appendLine("URL: ${request.url()}")
+                appendLine("Path: $urlPath")
+                appendLine("Method: ${request.method()}")
+                appendLine("Status: ${response?.statusCode() ?: 0}")
+                appendLine("MIME Type: ${response?.statedMimeType()?.name ?: "unknown"}")
                 appendLine()
-            }
-            if (cookies.isNotEmpty()) {
-                appendLine("=== COOKIES ===")
-                cookies.forEach { appendLine(it) }
-                appendLine()
-            }
-            if (params.isNotEmpty()) {
-                appendLine("=== PARAMETERS ===")
-                params.forEach { p ->
-                    appendLine("${p["name"]} (${p["type"]}): ${p["value"]}")
+                if (potentialIds.isNotEmpty()) {
+                    appendLine("Potential Object IDs: ${potentialIds.joinToString(", ")}")
                 }
                 appendLine()
-            }
-            if (requestBody.isNotEmpty()) {
-                appendLine("=== REQUEST BODY ===")
-                appendLine(requestBody)
+                appendLine("=== REQUEST HEADERS ===")
+                requestHeaders.forEach { appendLine(it) }
                 appendLine()
+                appendLine("=== RESPONSE HEADERS ===")
+                responseHeaders.forEach { appendLine(it) }
+                appendLine()
+                if (authHeaders.isNotEmpty()) {
+                    appendLine("=== AUTH HEADERS ===")
+                    authHeaders.forEach { appendLine(it) }
+                    appendLine()
+                }
+                if (cookies.isNotEmpty()) {
+                    appendLine("=== COOKIES ===")
+                    cookies.forEach { appendLine(it) }
+                    appendLine()
+                }
+                if (params.isNotEmpty()) {
+                    appendLine("=== PARAMETERS ===")
+                    params.forEach { p ->
+                        appendLine("${p["name"]} (${p["type"]}): ${p["value"]}")
+                    }
+                    appendLine()
+                }
+                if (requestBody.isNotEmpty()) {
+                    appendLine("=== REQUEST BODY ===")
+                    appendLine(requestBody)
+                    appendLine()
+                }
+                if (responseBody.isNotEmpty()) {
+                    appendLine("=== RESPONSE BODY ===")
+                    appendLine(responseBody)
+                }
             }
-            if (responseBody.isNotEmpty()) {
-                appendLine("=== RESPONSE BODY ===")
-                appendLine(responseBody)
+
+            val prompt = buildAnalysisPrompt(metadataText, settings.passiveAiMinSeverity)
+
+            // Send to AI backend
+            val responseBuffer = StringBuilder()
+            var completed = false
+            var errorMsg: String? = null
+
+            supervisor.send(
+                text = prompt,
+                contextJson = null,
+                privacyMode = settings.privacyMode,
+                determinismMode = settings.determinismMode,
+                onChunk = { chunk -> responseBuffer.append(chunk) },
+                onComplete = { err ->
+                    errorMsg = err?.message
+                    completed = true
+                }
+            )
+
+            // Wait for completion (with timeout)
+            val startWait = System.currentTimeMillis()
+            while (!completed && System.currentTimeMillis() - startWait < 90000) {
+                Thread.sleep(100)
             }
-        }
-        
-        val prompt = buildAnalysisPrompt(metadataText, settings.passiveAiMinSeverity)
 
-        // Send to AI backend
-        val responseBuffer = StringBuilder()
-        var completed = false
-        var errorMsg: String? = null
+            requestsAnalyzed.incrementAndGet()
+            lastAnalysisTime.set(System.currentTimeMillis())
 
-        supervisor.send(
-            text = prompt,
-            contextJson = null,
-            privacyMode = settings.privacyMode,
-            determinismMode = settings.determinismMode,
-            onChunk = { chunk -> responseBuffer.append(chunk) },
-            onComplete = { err ->
-                errorMsg = err?.message
-                completed = true
+            if (!completed) {
+                api.logging().logToError("[PassiveAiScanner] Timeout for: ${request.url().take(60)}")
+            } else if (errorMsg != null) {
+                api.logging().logToError("[PassiveAiScanner] AI error: $errorMsg")
+            } else if (responseBuffer.isNotEmpty()) {
+                handleAiResponse(responseBuffer.toString(), requestResponse, settings.passiveAiMinSeverity)
             }
-        )
 
-        // Wait for completion (with timeout)
-        val startWait = System.currentTimeMillis()
-        while (!completed && System.currentTimeMillis() - startWait < 90000) {
-            Thread.sleep(100)
-        }
-
-        requestsAnalyzed.incrementAndGet()
-        lastAnalysisTime.set(System.currentTimeMillis())
-
-        if (!completed) {
-            api.logging().logToError("[PassiveAiScanner] Timeout for: ${request.url().take(60)}")
-        } else if (errorMsg != null) {
-            api.logging().logToError("[PassiveAiScanner] AI error: $errorMsg")
-        } else if (responseBuffer.isNotEmpty()) {
-            handleAiResponse(responseBuffer.toString(), requestResponse, settings.passiveAiMinSeverity)
-        }
-
-        audit.logEvent("passive_ai_scan", mapOf(
-            "url" to request.url(),
-            "method" to request.method(),
-            "status" to (response?.statusCode() ?: 0).toString()
-        ))
+            audit.logEvent("passive_ai_scan", mapOf(
+                "url" to request.url(),
+                "method" to request.method(),
+                "status" to (response?.statusCode() ?: 0).toString()
+            ))
         } catch (e: Exception) {
             api.logging().logToError("[PassiveAiScanner] Error: ${e.javaClass.simpleName}: ${e.message}")
         }
@@ -478,6 +474,7 @@ class PassiveAiScanner(
         
         return """
 You are a senior security researcher analyzing HTTP traffic for vulnerabilities.
+ALWAYS respond in English regardless of the language of the analyzed content, requests, or responses.
 $severityInstruction
 
 ANALYSIS SCOPE - Look for these vulnerability classes:
@@ -631,34 +628,41 @@ $metadata
                     confidence >= 85 -> AuditIssueConfidence.FIRM
                     else -> AuditIssueConfidence.TENTATIVE
                 }
-                val confidenceNote = if (confidence < 85) "\nWARNING: Lower confidence - manual verification recommended" else ""
-                val issue = AuditIssue.auditIssue(
-                    "[AI Passive] $title",
-                    "$detail\n\n(AI passive analysis - may need active confirmation)\nConfidence: $confidence%$confidenceNote",
-                    "Verify the finding manually or use AI Active Scanner for confirmation.",
-                    requestResponse.request().url(),
-                    severity,
-                    burpConfidence,
-                    null,
-                    null,
-                    severity,
-                    listOf(requestResponse)
-                )
-                api.siteMap().add(issue)
-                issuesFound.incrementAndGet()
-                api.logging().logToOutput("[PassiveAiScanner] Issue: $title | $rawSeverity | $confidence%")
+                val issueName = issueNameForPassive(title)
+                if (hasExistingIssue(issueName, requestResponse.request().url())) {
+                    api.logging().logToOutput("[PassiveAiScanner] Consolidated duplicate issue: $issueName")
+                    true
+                } else {
+                    val confidenceNote = if (confidence < 85) "\nWARNING: Lower confidence - manual verification recommended" else ""
+                    val sanitizedDetail = IssueText.sanitize(detail)
+                    val issue = AuditIssue.auditIssue(
+                        issueName,
+                        "$sanitizedDetail\n\n(AI passive analysis - may need active confirmation)\nConfidence: $confidence%$confidenceNote",
+                        "Verify the finding manually or use AI Active Scanner for confirmation.",
+                        requestResponse.request().url(),
+                        severity,
+                        burpConfidence,
+                        null,
+                        null,
+                        severity,
+                        listOf(requestResponse)
+                    )
+                    api.siteMap().add(issue)
+                    issuesFound.incrementAndGet()
+                    api.logging().logToOutput("[PassiveAiScanner] Issue: $title | $rawSeverity | $confidence%")
 
-                // Auto-queue to active scanner if enabled
-                queueToActiveScanner(requestResponse, title, rawSeverity, detail, confidence, settings)
+                    // Auto-queue to active scanner if enabled
+                    queueToActiveScanner(requestResponse, title, rawSeverity, detail, confidence, settings)
 
-                audit.logEvent("passive_ai_issue", mapOf(
-                    "title" to title,
-                    "severity" to rawSeverity,
-                    "confidence" to confidence.toString(),
-                    "url" to requestResponse.request().url(),
-                    "source" to source
-                ))
-                true
+                    audit.logEvent("passive_ai_issue", mapOf(
+                        "title" to title,
+                        "severity" to rawSeverity,
+                        "confidence" to confidence.toString(),
+                        "url" to requestResponse.request().url(),
+                        "source" to source
+                    ))
+                    true
+                }
             } catch (e: Exception) {
                 api.logging().logToError("[PassiveAiScanner] Failed to create issue: ${e.message}")
                 false
@@ -693,6 +697,19 @@ $metadata
             if (findings.size >= 50) findings.removeFirst()
             findings.addLast(finding)
         }
+    }
+
+    private fun issueNameForPassive(title: String): String {
+        val vulnClass = mapTitleToVulnClass(title)
+        return if (vulnClass != null) {
+            "[AI Passive] ${vulnClass.name}"
+        } else {
+            "[AI Passive] ${IssueText.sanitize(title)}"
+        }
+    }
+
+    private fun hasExistingIssue(name: String, baseUrl: String): Boolean {
+        return api.siteMap().issues().any { it.name() == name && it.baseUrl() == baseUrl }
     }
     
     private fun queueToActiveScanner(

@@ -121,8 +121,9 @@ object AgentProfileLoader {
         val mapped = when (normalized) {
             "FIND VULNERABILITIES" -> "REQUEST_ANALYSIS"
             "ANALYZE REQUEST" -> "REQUEST_ANALYSIS"
-            "QUICK RECON" -> "REQUEST_TRIAGE"
-            "QUICK TRIAGE" -> "REQUEST_TRIAGE"
+            "ANALYZE THIS REQUEST" -> "ANALYZE_REQUEST"
+            "QUICK RECON" -> "ANALYZE_REQUEST"
+            "QUICK TRIAGE" -> "ANALYZE_REQUEST"
             "SUMMARIZE REQUEST/RESPONSE" -> "REQUEST_SUMMARY"
             "EXPLAIN HEADERS" -> "HEADERS"
             "EXPLAIN JS" -> "JS_ANALYSIS"

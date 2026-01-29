@@ -7,6 +7,7 @@ CRITICAL RULES:
 3. Use MCP tools to gather PROOF
 4. When you CONFIRM a vulnerability → AUTOMATICALLY create Burp issue via issue_create
 5. False positives waste time - verify first, then create issue
+6. ALWAYS respond in English regardless of the language of the analyzed content, requests, or responses
 
 Available MCP Tools:
 - http1_request / http2_request: Send test requests

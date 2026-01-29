@@ -58,11 +58,20 @@ class SettingsPanel(
             ollamaUrl = settings.ollamaUrl,
             ollamaServeCmd = settings.ollamaServeCmd,
             ollamaAutoStart = settings.ollamaAutoStart,
+            ollamaApiKey = settings.ollamaApiKey,
+            ollamaHeaders = settings.ollamaHeaders,
             lmStudioUrl = settings.lmStudioUrl,
             lmStudioModel = settings.lmStudioModel,
             lmStudioTimeoutSeconds = settings.lmStudioTimeoutSeconds.toString(),
             lmStudioServerCmd = settings.lmStudioServerCmd,
-            lmStudioAutoStart = settings.lmStudioAutoStart
+            lmStudioAutoStart = settings.lmStudioAutoStart,
+            lmStudioApiKey = settings.lmStudioApiKey,
+            lmStudioHeaders = settings.lmStudioHeaders,
+            openAiCompatUrl = settings.openAiCompatibleUrl,
+            openAiCompatModel = settings.openAiCompatibleModel,
+            openAiCompatApiKey = settings.openAiCompatibleApiKey,
+            openAiCompatHeaders = settings.openAiCompatibleHeaders,
+            openAiCompatTimeoutSeconds = settings.openAiCompatibleTimeoutSeconds.toString()
         )
     )
     private val profilePicker = JComboBox(arrayOf("pentester", "bughunter", "auditor")).apply {
@@ -262,7 +271,7 @@ class SettingsPanel(
         mcpKeystorePassword.foreground = UiTheme.Colors.inputForeground
 
         promptRequest.toolTipText = "Find vulnerabilities in the selected request/response."
-        promptSummary.toolTipText = "Quick recon summary of the endpoint."
+        promptSummary.toolTipText = "Endpoint summary for analysis."
         promptJs.toolTipText = "Explain JavaScript behavior and risk."
         promptAccessControl.toolTipText = "Access control test plan."
         promptLoginSequence.toolTipText = "Login sequence draft."
@@ -298,7 +307,7 @@ class SettingsPanel(
         }
         val backendSection = AccordionPanel(
             title = "🤖 AI Backend",
-            subtitle = "Select the default terminal backend and edit its command.",
+            subtitle = "Select the default backend and configure its connection.",
             content = backendBody,
             initiallyExpanded = false
         ).apply {
@@ -387,6 +396,9 @@ class SettingsPanel(
             settings = settings.copy(hostAnonymizationSalt = newSalt)
             rotateSaltBtn.toolTipText = "Rotates the salt used for host anonymization (e.g. host-xxxxxx.local). Current: ${newSalt.take(8)}..."
             JOptionPane.showMessageDialog(panel, "Salt rotated. New anonymized hosts will be different.", "Privacy", JOptionPane.INFORMATION_MESSAGE)
+        }
+        backendConfigPanel.onOpenCli = { backendId, command ->
+            openExternalCli(backendId, command)
         }
         backendConfigPanel.setBackend(preferredBackendId())
         updateMcpTlsState()
@@ -573,6 +585,10 @@ class SettingsPanel(
             backendState.lmStudioTimeoutSeconds,
             settings.lmStudioTimeoutSeconds
         )
+        val openAiCompatTimeoutSeconds = parseTimeoutSeconds(
+            backendState.openAiCompatTimeoutSeconds,
+            settings.openAiCompatibleTimeoutSeconds
+        )
         return AgentSettings(
             codexCmd = backendState.codexCmd,
             geminiCmd = backendState.geminiCmd,
@@ -584,11 +600,20 @@ class SettingsPanel(
             ollamaUrl = backendState.ollamaUrl,
             ollamaServeCmd = backendState.ollamaServeCmd,
             ollamaAutoStart = backendState.ollamaAutoStart,
+            ollamaApiKey = backendState.ollamaApiKey,
+            ollamaHeaders = backendState.ollamaHeaders,
             lmStudioUrl = backendState.lmStudioUrl,
             lmStudioModel = backendState.lmStudioModel,
             lmStudioTimeoutSeconds = lmStudioTimeoutSeconds,
             lmStudioServerCmd = backendState.lmStudioServerCmd,
             lmStudioAutoStart = backendState.lmStudioAutoStart,
+            lmStudioApiKey = backendState.lmStudioApiKey,
+            lmStudioHeaders = backendState.lmStudioHeaders,
+            openAiCompatibleUrl = backendState.openAiCompatUrl,
+            openAiCompatibleModel = backendState.openAiCompatModel,
+            openAiCompatibleApiKey = backendState.openAiCompatApiKey,
+            openAiCompatibleHeaders = backendState.openAiCompatHeaders,
+            openAiCompatibleTimeoutSeconds = openAiCompatTimeoutSeconds,
             requestPromptTemplate = promptRequest.text.trim(),
             issuePromptTemplate = promptIssueFull.text.trim(),
             issueAnalyzePrompt = promptIssueAnalyze.text.trim(),
@@ -636,11 +661,20 @@ class SettingsPanel(
                 ollamaUrl = updated.ollamaUrl,
                 ollamaServeCmd = updated.ollamaServeCmd,
                 ollamaAutoStart = updated.ollamaAutoStart,
+                ollamaApiKey = updated.ollamaApiKey,
+                ollamaHeaders = updated.ollamaHeaders,
                 lmStudioUrl = updated.lmStudioUrl,
                 lmStudioModel = updated.lmStudioModel,
                 lmStudioTimeoutSeconds = updated.lmStudioTimeoutSeconds.toString(),
                 lmStudioServerCmd = updated.lmStudioServerCmd,
-                lmStudioAutoStart = updated.lmStudioAutoStart
+                lmStudioAutoStart = updated.lmStudioAutoStart,
+                lmStudioApiKey = updated.lmStudioApiKey,
+                lmStudioHeaders = updated.lmStudioHeaders,
+                openAiCompatUrl = updated.openAiCompatibleUrl,
+                openAiCompatModel = updated.openAiCompatibleModel,
+                openAiCompatApiKey = updated.openAiCompatibleApiKey,
+                openAiCompatHeaders = updated.openAiCompatibleHeaders,
+                openAiCompatTimeoutSeconds = updated.openAiCompatibleTimeoutSeconds.toString()
             )
         )
         profilePicker.selectedItem = updated.agentProfile
@@ -1382,7 +1416,7 @@ class SettingsPanel(
         content.add(requestTitle)
 
         val requestGrid = formGrid()
-        addRowPair(requestGrid, "Find vulnerabilities", JScrollPane(promptRequest), "Quick recon", JScrollPane(promptSummary))
+        addRowPair(requestGrid, "Find vulnerabilities", JScrollPane(promptRequest), "Analyze this request", JScrollPane(promptSummary))
         addRowPair(requestGrid, "Explain JS", JScrollPane(promptJs), "Access control", JScrollPane(promptAccessControl))
         addRowFull(requestGrid, "Login sequence", JScrollPane(promptLoginSequence))
         content.add(requestGrid)
@@ -1670,6 +1704,42 @@ class SettingsPanel(
         combo.background = UiTheme.Colors.comboBackground
         combo.foreground = UiTheme.Colors.comboForeground
         combo.border = LineBorder(UiTheme.Colors.outline, 1, true)
+    }
+
+    private fun openExternalCli(backendId: String, command: String) {
+        if (command.isBlank()) {
+            JOptionPane.showMessageDialog(panel, "Command is empty for $backendId.", "AI Agent", JOptionPane.WARNING_MESSAGE)
+            return
+        }
+        try {
+            val os = System.getProperty("os.name").lowercase()
+            val process = when {
+                os.contains("win") -> {
+                    ProcessBuilder("cmd.exe", "/c", "start", "\"AI Agent CLI\"", "cmd.exe", "/k", command)
+                }
+                os.contains("mac") -> {
+                    val escaped = command.replace("\\", "\\\\").replace("\"", "\\\"")
+                    ProcessBuilder("osascript", "-e", "tell application \"Terminal\" to do script \"$escaped\"")
+                }
+                else -> {
+                    val shellCmd = "x-terminal-emulator -e bash -lc ${shellQuote("$command; exec bash")} " +
+                        "|| gnome-terminal -- bash -lc ${shellQuote("$command; exec bash")} " +
+                        "|| konsole -e bash -lc ${shellQuote("$command; exec bash")} " +
+                        "|| xterm -e bash -lc ${shellQuote("$command; exec bash")}"
+                    ProcessBuilder("sh", "-c", shellCmd)
+                }
+            }
+            process.start()
+        } catch (e: Exception) {
+            api.logging().logToError("Failed to open CLI for $backendId: ${e.message}")
+            JOptionPane.showMessageDialog(panel, "Failed to open CLI: ${e.message}", "AI Agent", JOptionPane.ERROR_MESSAGE)
+        }
+    }
+
+    private fun shellQuote(value: String): String {
+        if (value.isEmpty()) return "''"
+        if (value.none { it.isWhitespace() || it == '"' || it == '\'' }) return value
+        return "'" + value.replace("'", "'\"'\"'") + "'"
     }
 
 }

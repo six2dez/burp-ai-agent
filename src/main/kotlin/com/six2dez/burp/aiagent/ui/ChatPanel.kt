@@ -249,10 +249,6 @@ class ChatPanel(
         applySettings(settings)
         val session = sessionsById[sessionId]
         val backendId = session?.backendId ?: settings.preferredBackendId
-        if (!supervisor.startOrAttach(backendId)) {
-            showError(supervisor.lastStartError() ?: "Failed to start backend.")
-            return
-        }
         onStatusChanged()
 
         val sessionPanel = sessionPanels[sessionId] ?: return
@@ -267,7 +263,9 @@ class ChatPanel(
         ).joinToString("\n\n")
 
         val responseBuffer = StringBuilder()
-        supervisor.send(
+        supervisor.sendChat(
+            chatSessionId = sessionId,
+            backendId = backendId,
             text = finalPrompt,
             contextJson = contextJson,
             privacyMode = settings.privacyMode,
@@ -355,6 +353,7 @@ class ChatPanel(
             javax.swing.JOptionPane.YES_NO_OPTION
         )
         if (confirm == javax.swing.JOptionPane.YES_OPTION) {
+            supervisor.removeChatSession(session.id)
             val removedPanel = sessionPanels.remove(session.id)
             if (removedPanel != null) {
                 chatCards.remove(removedPanel.root)
@@ -414,7 +413,7 @@ class ChatPanel(
 
         val panel = sessionPanels[selected.id] ?: return
         panel.clearMessages()
-        supervisor.stop()
+        supervisor.removeChatSession(selected.id)
         val state = sessionStates[selected.id]
         if (state != null) {
             state.toolCatalogSent = false

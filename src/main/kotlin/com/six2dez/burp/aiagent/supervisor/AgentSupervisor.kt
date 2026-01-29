@@ -8,6 +8,7 @@ import com.six2dez.burp.aiagent.backends.BackendRegistry
 import com.six2dez.burp.aiagent.backends.DiagnosableConnection
 import com.six2dez.burp.aiagent.config.AgentSettings
 import com.six2dez.burp.aiagent.redact.PrivacyMode
+import com.six2dez.burp.aiagent.util.HeaderParser
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -44,6 +45,7 @@ class AgentSupervisor(
     private val lastRestartAt = AtomicLong(0)
     private val autoRestartSuppressed = AtomicReference<String?>(null)
     private val immediateCrashCount = AtomicInteger(0)
+    private val chatSessionManager = ChatSessionManager()
     private val services = java.util.concurrent.ConcurrentHashMap<String, Process>()
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(java.time.Duration.ofSeconds(3))
@@ -114,7 +116,15 @@ class AgentSupervisor(
     fun isOllamaHealthy(settings: AgentSettings): Boolean {
         val url = settings.ollamaUrl.trimEnd('/') + "/api/tags"
         return try {
-            val req = Request.Builder().url(url).get().build()
+            val headers = HeaderParser.withBearerToken(
+                settings.ollamaApiKey,
+                HeaderParser.parse(settings.ollamaHeaders)
+            )
+            val req = Request.Builder()
+                .url(url)
+                .apply { headers.forEach { (name, value) -> header(name, value) } }
+                .get()
+                .build()
             httpClient.newCall(req).execute().use { it.isSuccessful }
         } catch (_: Exception) {
             false
@@ -133,7 +143,15 @@ class AgentSupervisor(
     fun isLmStudioHealthy(settings: AgentSettings): Boolean {
         val url = settings.lmStudioUrl.trimEnd('/') + "/v1/models"
         return try {
-            val req = Request.Builder().url(url).get().build()
+            val headers = HeaderParser.withBearerToken(
+                settings.lmStudioApiKey,
+                HeaderParser.parse(settings.lmStudioHeaders)
+            )
+            val req = Request.Builder()
+                .url(url)
+                .apply { headers.forEach { (name, value) -> header(name, value) } }
+                .get()
+                .build()
             httpClient.newCall(req).execute().use { it.isSuccessful }
         } catch (_: Exception) {
             false
@@ -221,6 +239,66 @@ class AgentSupervisor(
         )
     }
 
+    fun sendChat(
+        chatSessionId: String,
+        backendId: String,
+        text: String,
+        contextJson: String?,
+        privacyMode: PrivacyMode,
+        determinismMode: Boolean,
+        onChunk: (String) -> Unit,
+        onComplete: (Throwable?) -> Unit
+    ) {
+        lastErrorRef.set(null)
+        val backend = registry.get(backendId)
+        if (backend == null) {
+            onComplete(IllegalStateException("Backend not found: $backendId"))
+            return
+        }
+
+        // Try to reuse an existing connection (for HTTP backends with conversation history)
+        val existingConn = chatSessionManager.existingConnectionFor(chatSessionId, backendId)
+        val connection: AgentConnection
+        if (existingConn != null) {
+            connection = existingConn
+        } else {
+            // Create a new connection with cliSessionId for CLI resume
+            val cliSessionId = chatSessionManager.cliSessionIdFor(chatSessionId)
+            val sessionId = "chat-session-" + java.util.UUID.randomUUID().toString()
+            val launchConfig = buildLaunchConfig(backendId, sessionId, embeddedMode = true, cliSessionId = cliSessionId)
+            try {
+                connection = backend.launch(launchConfig)
+            } catch (e: Exception) {
+                val msg = "Failed to launch backend $backendId: ${e.message}"
+                lastErrorRef.set(msg)
+                api.logging().logToError(msg)
+                onComplete(e)
+                return
+            }
+        }
+
+        api.logging().logToOutput("AI chat send: backend=$backendId chatSession=$chatSessionId")
+        connection.send(text,
+            onChunk = { chunk ->
+                audit.logEvent("agent_chunk", mapOf("backendId" to backendId, "chunk" to chunk))
+                onChunk(chunk)
+            },
+            onComplete = { err ->
+                audit.logEvent("prompt_complete", mapOf("backendId" to backendId, "error" to err?.message))
+                if (err != null) {
+                    api.logging().logToError("AI backend error ($backendId): ${err.message}")
+                }
+                // Update session state after completion (stores cliSessionId or connection for reuse)
+                chatSessionManager.updateSession(chatSessionId, backendId, connection)
+                onComplete(err)
+            }
+        )
+    }
+
+    fun removeChatSession(chatSessionId: String) {
+        chatSessionManager.removeSession(chatSessionId)
+    }
+
     fun status(): Status {
         val current = stateRef.get()
         return when (current) {
@@ -235,7 +313,7 @@ class AgentSupervisor(
         }
     }
 
-    private fun buildLaunchConfig(backendId: String, sessionId: String, embeddedMode: Boolean): BackendLaunchConfig {
+    private fun buildLaunchConfig(backendId: String, sessionId: String, embeddedMode: Boolean, cliSessionId: String? = null): BackendLaunchConfig {
         val prefs = api.persistence().preferences()
         val settings = settingsRef.get()
         val determinism = settings?.determinismMode ?: (prefs.getBoolean("determinism.enabled") ?: false)
@@ -280,7 +358,8 @@ class AgentSupervisor(
                     embeddedMode = embeddedMode,
                     sessionId = sessionId,
                     determinismMode = determinism,
-                    env = env
+                    env = env,
+                    cliSessionId = cliSessionId
                 )
             }
             "gemini-cli" -> {
@@ -304,7 +383,8 @@ class AgentSupervisor(
                     embeddedMode = embeddedMode,
                     sessionId = sessionId,
                     determinismMode = determinism,
-                    env = env
+                    env = env,
+                    cliSessionId = cliSessionId
                 )
             }
             "opencode-cli" -> {
@@ -329,7 +409,8 @@ class AgentSupervisor(
                     embeddedMode = embeddedMode,
                     sessionId = sessionId,
                     determinismMode = determinism,
-                    env = env
+                    env = env,
+                    cliSessionId = cliSessionId
                 )
             }
             "claude-cli" -> {
@@ -353,22 +434,31 @@ class AgentSupervisor(
                     embeddedMode = embeddedMode,
                     sessionId = sessionId,
                     determinismMode = determinism,
-                    env = env
+                    env = env,
+                    cliSessionId = cliSessionId
                 )
             }
             "ollama" -> {
                 val url = (settings?.ollamaUrl ?: prefs.getString("ollama.url") ?: "http://127.0.0.1:11434").trim()
                 val explicitModel = (settings?.ollamaModel ?: prefs.getString("ollama.model")).orEmpty().trim()
                 val model = explicitModel.ifBlank { resolveOllamaModel(settings) }
+                val apiKey = settings?.ollamaApiKey ?: prefs.getString("ollama.apiKey").orEmpty()
+                val rawHeaders = settings?.ollamaHeaders ?: prefs.getString("ollama.headers").orEmpty()
+                val headers = HeaderParser.withBearerToken(
+                    apiKey,
+                    HeaderParser.parse(rawHeaders)
+                )
                 BackendLaunchConfig(
                     backendId = backendId,
                     displayName = "Ollama",
                     baseUrl = url,
                     model = model,
+                    headers = headers,
                     embeddedMode = embeddedMode,
                     sessionId = sessionId,
                     determinismMode = determinism,
-                    env = baseEnv
+                    env = baseEnv,
+                    cliSessionId = cliSessionId
                 )
             }
             "lmstudio" -> {
@@ -376,19 +466,52 @@ class AgentSupervisor(
                 val model = (settings?.lmStudioModel ?: prefs.getString("lmstudio.model") ?: "lmstudio").trim()
                 val timeoutSeconds = settings?.lmStudioTimeoutSeconds
                     ?: (prefs.getInteger("lmstudio.timeoutSeconds") ?: 120)
+                val apiKey = settings?.lmStudioApiKey ?: prefs.getString("lmstudio.apiKey").orEmpty()
+                val rawHeaders = settings?.lmStudioHeaders ?: prefs.getString("lmstudio.headers").orEmpty()
+                val headers = HeaderParser.withBearerToken(
+                    apiKey,
+                    HeaderParser.parse(rawHeaders)
+                )
                 BackendLaunchConfig(
                     backendId = backendId,
                     displayName = "LM Studio",
                     baseUrl = url,
                     model = model,
+                    headers = headers,
                     requestTimeoutSeconds = timeoutSeconds.toLong(),
                     embeddedMode = embeddedMode,
                     sessionId = sessionId,
                     determinismMode = determinism,
-                    env = baseEnv
+                    env = baseEnv,
+                    cliSessionId = cliSessionId
                 )
             }
-            else -> BackendLaunchConfig(backendId, backendId, embeddedMode = embeddedMode, env = baseEnv)
+            "openai-compatible" -> {
+                val url = (settings?.openAiCompatibleUrl ?: prefs.getString("openai.compat.url") ?: "").trim()
+                val model = (settings?.openAiCompatibleModel ?: prefs.getString("openai.compat.model") ?: "").trim()
+                val timeoutSeconds = settings?.openAiCompatibleTimeoutSeconds
+                    ?: (prefs.getInteger("openai.compat.timeoutSeconds") ?: 120)
+                val apiKey = settings?.openAiCompatibleApiKey ?: prefs.getString("openai.compat.apiKey").orEmpty()
+                val rawHeaders = settings?.openAiCompatibleHeaders ?: prefs.getString("openai.compat.headers").orEmpty()
+                val headers = HeaderParser.withBearerToken(
+                    apiKey,
+                    HeaderParser.parse(rawHeaders)
+                )
+                BackendLaunchConfig(
+                    backendId = backendId,
+                    displayName = "Generic (OpenAI-compatible)",
+                    baseUrl = url,
+                    model = model,
+                    headers = headers,
+                    requestTimeoutSeconds = timeoutSeconds.toLong(),
+                    embeddedMode = embeddedMode,
+                    sessionId = sessionId,
+                    determinismMode = determinism,
+                    env = baseEnv,
+                    cliSessionId = cliSessionId
+                )
+            }
+            else -> BackendLaunchConfig(backendId, backendId, embeddedMode = embeddedMode, env = baseEnv, cliSessionId = cliSessionId)
         }
     }
 
@@ -563,6 +686,7 @@ class AgentSupervisor(
 
     fun shutdown() {
         stop()
+        chatSessionManager.shutdown()
         monitorExec.shutdown()
         try {
             if (!monitorExec.awaitTermination(3, TimeUnit.SECONDS)) {

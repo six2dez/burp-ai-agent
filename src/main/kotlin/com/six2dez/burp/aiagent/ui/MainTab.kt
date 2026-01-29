@@ -415,14 +415,34 @@ class MainTab(
             "opencode-cli" -> {
                 when {
                     settings.opencodeCmd.isBlank() -> "OpenCode command is empty."
+                    isWindows() && looksLikeBareExe(settings.opencodeCmd) ->
+                        "OpenCode command looks like a bare .exe. If installed via npm, use 'opencode' (without .exe)."
                     else -> null
                 }
             }
             "claude-cli" -> if (settings.claudeCmd.isBlank()) "Claude command is empty." else null
             "ollama" -> if (settings.ollamaCliCmd.isBlank()) "Ollama CLI command is empty." else null
             "lmstudio" -> if (settings.lmStudioUrl.isBlank()) "LM Studio URL is empty." else null
+            "openai-compatible" -> {
+                when {
+                    settings.openAiCompatibleUrl.isBlank() -> "OpenAI-compatible URL is empty."
+                    settings.openAiCompatibleModel.isBlank() -> "OpenAI-compatible model is empty."
+                    else -> null
+                }
+            }
             else -> "Unsupported backend: ${settings.preferredBackendId}"
         }
+    }
+
+    private fun looksLikeBareExe(cmd: String): Boolean {
+        val trimmed = cmd.trim()
+        if (!trimmed.lowercase().endsWith(".exe")) return false
+        return !trimmed.contains("\\") && !trimmed.contains("/")
+    }
+
+    private fun isWindows(): Boolean {
+        val os = System.getProperty("os.name").lowercase()
+        return os.contains("win")
     }
 
     internal fun showError(message: String) {

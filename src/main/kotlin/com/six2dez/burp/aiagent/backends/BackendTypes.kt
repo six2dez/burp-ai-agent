@@ -6,11 +6,13 @@ data class BackendLaunchConfig(
     val command: List<String> = emptyList(), // for CLI backends
     val baseUrl: String? = null,             // for HTTP backends
     val model: String? = null,
+    val headers: Map<String, String> = emptyMap(),
     val requestTimeoutSeconds: Long? = null,
     val embeddedMode: Boolean = false,
     val sessionId: String? = null,
     val determinismMode: Boolean = false,
-    val env: Map<String, String> = emptyMap()
+    val env: Map<String, String> = emptyMap(),
+    val cliSessionId: String? = null         // for CLI session resume (e.g. Claude --resume)
 )
 
 interface AgentConnection {
@@ -28,6 +30,10 @@ interface AiBackend {
     val id: String
     val displayName: String
     fun launch(config: BackendLaunchConfig): AgentConnection
+}
+
+interface SessionAwareConnection : AgentConnection {
+    fun cliSessionId(): String?
 }
 
 interface AiBackendFactory {

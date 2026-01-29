@@ -10,6 +10,7 @@ import com.six2dez.burp.aiagent.audit.AuditLogger
 import com.six2dez.burp.aiagent.config.AgentSettings
 import com.six2dez.burp.aiagent.redact.PrivacyMode
 import com.six2dez.burp.aiagent.supervisor.AgentSupervisor
+import com.six2dez.burp.aiagent.util.IssueText
 import java.util.concurrent.*
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -839,26 +840,24 @@ class ActiveAiScanner(
         val target = confirmation.target
         val payload = confirmation.payload
         
-        val title = "[AI Active] ${target.vulnHint.vulnClass.name} in '${target.injectionPoint.name}'"
+        val title = "[AI Active] ${target.vulnHint.vulnClass.name}"
         
         val detail = buildString {
-            appendLine("**Vulnerability Confirmed via Active Testing**")
+            appendLine("Vulnerability confirmed via active testing")
             appendLine()
-            appendLine("**Type:** ${target.vulnHint.vulnClass.name}")
-            appendLine("**Injection Point:** ${target.injectionPoint.type} - ${target.injectionPoint.name}")
-            appendLine("**Original Value:** ${target.injectionPoint.originalValue.take(100)}")
+            appendLine("Type: ${target.vulnHint.vulnClass.name}")
+            appendLine("Injection Point: ${target.injectionPoint.type} - ${target.injectionPoint.name}")
+            appendLine("Original Value: ${target.injectionPoint.originalValue.take(100)}")
             appendLine()
-            appendLine("**Payload Used:**")
-            appendLine("```")
+            appendLine("Payload Used:")
             appendLine(payload.value.take(500))
-            appendLine("```")
             appendLine()
-            appendLine("**Detection Method:** ${payload.detectionMethod}")
-            appendLine("**Evidence:** ${confirmation.evidence}")
+            appendLine("Detection Method: ${payload.detectionMethod}")
+            appendLine("Evidence: ${confirmation.evidence}")
             appendLine()
-            appendLine("**Confidence:** ${confirmation.confidence}%")
+            appendLine("Confidence: ${confirmation.confidence}%")
             appendLine()
-            appendLine("_(Confirmed via AI active exploitation testing)_")
+            appendLine("(Confirmed via AI active exploitation testing)")
         }
         
         val severity = mapSeverity(target.vulnHint.vulnClass)
@@ -869,9 +868,13 @@ class ActiveAiScanner(
         }
         
         try {
+            if (hasExistingIssue(title, target.originalRequest.request().url())) {
+                api.logging().logToOutput("[ActiveAiScanner] Consolidated duplicate issue: $title")
+                return
+            }
             val issue = AuditIssue.auditIssue(
                 title,
-                detail,
+                IssueText.sanitize(detail),
                 getRemediation(target.vulnHint.vulnClass),
                 target.originalRequest.request().url(),
                 severity,
@@ -901,6 +904,10 @@ class ActiveAiScanner(
         } catch (e: Exception) {
             api.logging().logToError("[ActiveAiScanner] Failed to create issue: ${e.message}")
         }
+    }
+
+    private fun hasExistingIssue(name: String, baseUrl: String): Boolean {
+        return api.siteMap().issues().any { it.name() == name && it.baseUrl() == baseUrl }
     }
 
     private fun injectPayload(request: HttpRequest, point: InjectionPoint, payload: String): HttpRequest {

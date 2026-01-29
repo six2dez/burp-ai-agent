@@ -7,6 +7,7 @@ import com.six2dez.burp.aiagent.backends.cli.OpenCodeCliBackendFactory
 import com.six2dez.burp.aiagent.backends.cli.ClaudeCliBackendFactory
 import com.six2dez.burp.aiagent.backends.lmstudio.LmStudioBackendFactory
 import com.six2dez.burp.aiagent.backends.ollama.OllamaBackendFactory
+import com.six2dez.burp.aiagent.backends.openai.OpenAiCompatibleBackendFactory
 import java.io.File
 import java.net.URLClassLoader
 import java.util.ServiceLoader
@@ -34,7 +35,8 @@ class BackendRegistry(private val api: MontoyaApi) {
                 OpenCodeCliBackendFactory(),
                 ClaudeCliBackendFactory(),
                 LmStudioBackendFactory(),
-                OllamaBackendFactory()
+                OllamaBackendFactory(),
+                OpenAiCompatibleBackendFactory()
             ).forEach { f ->
                 val b = f.create()
                 backends[b.id] = b

@@ -58,11 +58,12 @@ class AuditLogger(private val api: MontoyaApi) {
     ): PromptBundle {
         val sha = Hashing.sha256Hex(promptText)
         val contextSha = contextJson?.let { Hashing.sha256Hex(it) }
+        val safeConfig = backendConfig.copy(headers = redactHeaders(backendConfig.headers))
         return PromptBundle(
             createdAtEpochMs = System.currentTimeMillis(),
             sessionId = sessionId,
             backendId = backendId,
-            backendConfig = backendConfig,
+            backendConfig = safeConfig,
             promptText = promptText,
             promptSha256 = sha,
             contextJson = contextJson,
@@ -70,6 +71,18 @@ class AuditLogger(private val api: MontoyaApi) {
             privacyMode = privacyMode.name,
             determinismMode = determinismMode
         )
+    }
+
+    private fun redactHeaders(headers: Map<String, String>): Map<String, String> {
+        if (headers.isEmpty()) return headers
+        return headers.mapValues { (name, value) ->
+            val lower = name.lowercase()
+            if (lower == "authorization" || lower.contains("api-key") || lower.contains("token")) {
+                "REDACTED"
+            } else {
+                value
+            }
+        }
     }
 
     fun writePromptBundle(bundle: PromptBundle): File {

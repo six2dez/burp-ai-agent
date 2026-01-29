@@ -24,6 +24,7 @@ import com.six2dez.burp.aiagent.mcp.schema.toSerializableForm
 import com.six2dez.burp.aiagent.mcp.schema.toSiteMapEntry
 import com.six2dez.burp.aiagent.redact.Redaction
 import com.six2dez.burp.aiagent.redact.RedactionPolicy
+import com.six2dez.burp.aiagent.util.IssueText
 import io.modelcontextprotocol.kotlin.sdk.server.Server
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -821,16 +822,20 @@ fun Server.registerTools(api: MontoyaApi, context: McpToolContext) {
         }
 
         val issueNameWithPrefix = if (name.startsWith("[AI]")) name else "[AI] $name"
+        val sanitizedDetail = IssueText.sanitize(detail)
+        val sanitizedRemediation = IssueText.sanitize(remediation ?: "")
+        val sanitizedBackground = IssueText.sanitize(background ?: "")
+        val sanitizedRemediationBackground = IssueText.sanitize(remediationBackground ?: "")
         
         val issue = burp.api.montoya.scanner.audit.issues.AuditIssue.auditIssue(
             issueNameWithPrefix,
-            detail,
-            remediation ?: "",
+            sanitizedDetail,
+            sanitizedRemediation,
             baseUrl,
             severityEnum,
             confidenceEnum,
-            background ?: "",
-            remediationBackground ?: "",
+            sanitizedBackground,
+            sanitizedRemediationBackground,
             typicalSeverityEnum,
             requestResponseList
         )
