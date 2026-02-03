@@ -80,7 +80,8 @@ Enable the MCP server in **Settings > MCP Server** and add this to your Claude D
       "command": "npx",
       "args": [
         "-y",
-        "@modelcontextprotocol/server-sse",
+        "supergateway",
+        "--sse",
         "http://127.0.0.1:9876/sse"
       ]
     }
