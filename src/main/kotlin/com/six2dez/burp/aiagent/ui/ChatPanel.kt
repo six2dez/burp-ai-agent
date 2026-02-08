@@ -102,7 +102,26 @@ class ChatPanel(
 
         val listScroll = JScrollPane(sessionsList)
         listScroll.border = EmptyBorder(8, 8, 8, 8)
-        listScroll.preferredSize = Dimension(200, 400)
+
+        val editSessionBtn = JButton("\u270E") // ✎ pencil
+        editSessionBtn.font = UiTheme.Typography.body
+        editSessionBtn.isFocusPainted = false
+        editSessionBtn.toolTipText = "Rename session"
+        editSessionBtn.margin = java.awt.Insets(2, 4, 2, 4)
+        editSessionBtn.addActionListener {
+            val s = sessionsList.selectedValue ?: return@addActionListener
+            renameSession(s)
+        }
+
+        val deleteSessionBtn = JButton("\u2715") // ✕
+        deleteSessionBtn.font = UiTheme.Typography.body
+        deleteSessionBtn.isFocusPainted = false
+        deleteSessionBtn.toolTipText = "Delete session"
+        deleteSessionBtn.margin = java.awt.Insets(2, 4, 2, 4)
+        deleteSessionBtn.addActionListener {
+            val s = sessionsList.selectedValue ?: return@addActionListener
+            deleteSession(s)
+        }
 
         val listHeader = JPanel(BorderLayout())
         listHeader.isOpaque = false
@@ -110,7 +129,15 @@ class ChatPanel(
         listTitle.font = UiTheme.Typography.label
         listTitle.foreground = UiTheme.Colors.onSurfaceVariant
         listHeader.add(listTitle, BorderLayout.WEST)
-        listHeader.add(newSessionBtn, BorderLayout.EAST)
+        val headerActions = JPanel()
+        headerActions.layout = javax.swing.BoxLayout(headerActions, javax.swing.BoxLayout.X_AXIS)
+        headerActions.isOpaque = false
+        headerActions.add(editSessionBtn)
+        headerActions.add(javax.swing.Box.createRigidArea(Dimension(4, 0)))
+        headerActions.add(deleteSessionBtn)
+        headerActions.add(javax.swing.Box.createRigidArea(Dimension(4, 0)))
+        headerActions.add(newSessionBtn)
+        listHeader.add(headerActions, BorderLayout.EAST)
         listHeader.border = EmptyBorder(8, 12, 8, 12)
 
         sessionsPanel.add(listHeader, BorderLayout.NORTH)
@@ -170,17 +197,20 @@ class ChatPanel(
     private fun inputPanel(): JPanel {
         val panel = JPanel(BorderLayout())
         panel.background = UiTheme.Colors.surface
-        panel.border = EmptyBorder(10, 12, 12, 12)
+        panel.border = javax.swing.BorderFactory.createCompoundBorder(
+            javax.swing.BorderFactory.createMatteBorder(1, 0, 0, 0, UiTheme.Colors.outlineVariant),
+            EmptyBorder(6, 12, 10, 12)
+        )
 
         inputArea.lineWrap = true
         inputArea.wrapStyleWord = true
         inputArea.font = UiTheme.Typography.body
         inputArea.background = UiTheme.Colors.inputBackground
         inputArea.foreground = UiTheme.Colors.inputForeground
-        inputArea.border = javax.swing.border.LineBorder(UiTheme.Colors.outline, 1, true)
+        inputArea.margin = java.awt.Insets(8, 10, 8, 10)
         inputArea.addKeyListener(object : KeyAdapter() {
             override fun keyPressed(e: KeyEvent) {
-                if (e.keyCode == KeyEvent.VK_ENTER && (e.isControlDown || e.isMetaDown)) {
+                if (e.keyCode == KeyEvent.VK_ENTER && !e.isShiftDown) {
                     e.consume()
                     sendFromInput()
                 }
@@ -192,18 +222,21 @@ class ChatPanel(
         sendBtn.addActionListener { sendFromInput() }
         updatePrivacyPill()
 
-        panel.add(JScrollPane(inputArea), BorderLayout.CENTER)
-        val actions = JPanel()
-        actions.layout = javax.swing.BoxLayout(actions, javax.swing.BoxLayout.X_AXIS)
-        actions.background = UiTheme.Colors.surface
+        // Input area in a scroll pane with rounded border
+        val inputScroll = JScrollPane(inputArea)
+        inputScroll.border = javax.swing.border.LineBorder(UiTheme.Colors.outline, 1, true)
+        inputScroll.horizontalScrollBarPolicy = JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
+
+        // Action buttons row below input
+        val actions = JPanel(java.awt.FlowLayout(java.awt.FlowLayout.RIGHT, 6, 2))
+        actions.isOpaque = false
         actions.add(privacyPill)
-        actions.add(javax.swing.Box.createRigidArea(Dimension(8, 0)))
         actions.add(toolsBtn)
-        actions.add(javax.swing.Box.createRigidArea(Dimension(8, 0)))
         actions.add(clearChatBtn)
-        actions.add(javax.swing.Box.createRigidArea(Dimension(8, 0)))
         actions.add(sendBtn)
-        panel.add(actions, BorderLayout.EAST)
+
+        panel.add(inputScroll, BorderLayout.CENTER)
+        panel.add(actions, BorderLayout.SOUTH)
         return panel
     }
 
@@ -548,6 +581,33 @@ class ChatPanel(
         layout.show(chatCards, id)
     }
 
+    private fun refreshSessionList() {
+        // Trigger list repaint by resetting elements
+        val selected = sessionsList.selectedIndex
+        for (i in 0 until sessionsModel.size) {
+            sessionsModel.set(i, sessionsModel.get(i))
+        }
+        if (selected >= 0 && selected < sessionsModel.size) {
+            sessionsList.selectedIndex = selected
+        }
+    }
+
+    companion object {
+        fun formatSessionDate(epochMs: Long): String {
+            val now = java.util.Calendar.getInstance()
+            val then = java.util.Calendar.getInstance().apply { timeInMillis = epochMs }
+            val sameDay = now.get(java.util.Calendar.YEAR) == then.get(java.util.Calendar.YEAR) &&
+                    now.get(java.util.Calendar.DAY_OF_YEAR) == then.get(java.util.Calendar.DAY_OF_YEAR)
+            if (sameDay) return "Today"
+            now.add(java.util.Calendar.DAY_OF_YEAR, -1)
+            val yesterday = now.get(java.util.Calendar.YEAR) == then.get(java.util.Calendar.YEAR) &&
+                    now.get(java.util.Calendar.DAY_OF_YEAR) == then.get(java.util.Calendar.DAY_OF_YEAR)
+            if (yesterday) return "Yesterday"
+            val daysDiff = ((System.currentTimeMillis() - epochMs) / 86_400_000).toInt()
+            if (daysDiff <= 7) return "${daysDiff}d ago"
+            return java.text.SimpleDateFormat("MMM d").format(java.util.Date(epochMs))
+        }
+    }
 
     data class ChatSession(val id: String, val title: String, val createdAt: Long, val backendId: String) {
         override fun toString(): String = title
@@ -572,24 +632,30 @@ class ChatPanel(
                 return label
             }
 
-            val panel = JPanel()
-            panel.layout = BoxLayout(panel, BoxLayout.Y_AXIS)
+            val panel = JPanel(BorderLayout())
             panel.border = EmptyBorder(6, 10, 6, 10)
             panel.isOpaque = true
             panel.background = if (isSelected) list.selectionBackground else list.background
+
+            val textPanel = JPanel()
+            textPanel.layout = BoxLayout(textPanel, BoxLayout.Y_AXIS)
+            textPanel.isOpaque = false
 
             val titleLabel = JLabel(value.title)
             titleLabel.font = label.font
             titleLabel.foreground = if (isSelected) list.selectionForeground else list.foreground
             titleLabel.isOpaque = false
 
-            val backendLabel = JLabel(value.backendId)
+            val dateStr = ChatPanel.formatSessionDate(value.createdAt)
+            val infoText = "${value.backendId}  \u00B7  $dateStr"
+            val backendLabel = JLabel(infoText)
             backendLabel.font = label.font.deriveFont((label.font.size - 2).toFloat())
             backendLabel.foreground = if (isSelected) list.selectionForeground else UiTheme.Colors.onSurfaceVariant
             backendLabel.isOpaque = false
 
-            panel.add(titleLabel)
-            panel.add(backendLabel)
+            textPanel.add(titleLabel)
+            textPanel.add(backendLabel)
+            panel.add(textPanel, BorderLayout.CENTER)
             return panel
         }
     }
@@ -603,28 +669,37 @@ class ChatPanel(
             root.background = UiTheme.Colors.surface
             messages.layout = javax.swing.BoxLayout(messages, javax.swing.BoxLayout.Y_AXIS)
             messages.background = UiTheme.Colors.surface
-            scroll.border = EmptyBorder(12, 12, 12, 12)
+            scroll.border = EmptyBorder(8, 8, 8, 8)
             scroll.background = UiTheme.Colors.surface
+            scroll.verticalScrollBarPolicy = JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED
+            scroll.horizontalScrollBarPolicy = JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
             root.add(scroll, BorderLayout.CENTER)
         }
 
         fun addMessage(role: String, text: String) {
             val message = ChatMessagePanel(role, text)
             messages.add(message.root)
-            messages.add(javax.swing.Box.createRigidArea(Dimension(0, 10)))
+            messages.add(javax.swing.Box.createRigidArea(Dimension(0, 4)))
             refreshScroll()
         }
 
         fun addComponent(component: JComponent) {
-            messages.add(component)
-            messages.add(javax.swing.Box.createRigidArea(Dimension(0, 10)))
+            // Wrap in a panel that prevents vertical stretching
+            val wrapper = object : JPanel(BorderLayout()) {
+                override fun getMaximumSize(): Dimension =
+                    Dimension(super.getMaximumSize().width, preferredSize.height)
+            }
+            wrapper.isOpaque = false
+            wrapper.add(component, BorderLayout.CENTER)
+            messages.add(wrapper)
+            messages.add(javax.swing.Box.createRigidArea(Dimension(0, 4)))
             refreshScroll()
         }
 
         fun addStreamingMessage(role: String): StreamingMessage {
             val message = ChatMessagePanel(role, "")
             messages.add(message.root)
-            messages.add(javax.swing.Box.createRigidArea(Dimension(0, 10)))
+            messages.add(javax.swing.Box.createRigidArea(Dimension(0, 4)))
             refreshScroll()
             return StreamingMessage(message)
         }
@@ -651,7 +726,7 @@ class ChatPanel(
                 message.hideSpinner()
                 firstChunk = false
             }
-            message.append(text)
+            message.appendChunk(text)
         }
     }
 
@@ -661,92 +736,178 @@ class ChatPanel(
     ) {
         private val isUser = role == "You"
         private val showSpinner = !isUser && initialText.isEmpty()
-        val root: JComponent = JPanel()
-        private val editorPane = object : javax.swing.JEditorPane() {
-            override fun getPreferredSize(): java.awt.Dimension {
-                // Calculate preferred height based on current width
-                val width = if (parent != null && parent.width > 0) parent.width else 400
-                setSize(width, Short.MAX_VALUE.toInt())
-                val prefSize = super.getPreferredSize()
-                return java.awt.Dimension(width, prefSize.height.coerceAtLeast(20))
-            }
-            
-            override fun getMaximumSize(): java.awt.Dimension {
-                val pref = preferredSize
-                return java.awt.Dimension(Int.MAX_VALUE, pref.height)
-            }
-        }
         private val rawText = StringBuilder(initialText)
         private val copyBtn = JButton("Copy")
         private val spinnerLabel = JLabel("Thinking...")
         private var spinnerTimer: javax.swing.Timer? = null
-        private val spinnerFrames = listOf("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏")
+        private val spinnerFrames = listOf("\u280B", "\u2819", "\u2839", "\u2838", "\u283C", "\u2834", "\u2826", "\u2827", "\u2807", "\u280F")
         private var spinnerIndex = 0
-        private val bubble: JPanel
+        private val pendingText = StringBuilder()
+        private var coalescingTimer: javax.swing.Timer? = null
+        private val timestamp = java.text.SimpleDateFormat("h:mm a").format(java.util.Date())
+        private val contentPanel: JPanel
+
+        /** Walk up to the JScrollPane viewport to get a reliable width */
+        private fun viewportWidth(): Int {
+            var c: java.awt.Container? = root
+            while (c != null && c !is javax.swing.JViewport) c = c.parent
+            return (c as? javax.swing.JViewport)?.width?.takeIf { it > 0 } ?: 650
+        }
+
+        /** EditorPane: calculates height based on a width derived from the viewport */
+        private val editorPane = object : javax.swing.JEditorPane() {
+            override fun getPreferredSize(): java.awt.Dimension {
+                val vpW = viewportWidth()
+                val w: Int = if (isUser) {
+                    // User bubble: max 60% of viewport, but shrink-to-fit for short text
+                    val maxW = (vpW * 0.60).toInt().coerceAtLeast(200)
+                    setSize(maxW, Short.MAX_VALUE.toInt())
+                    val naturalW = super.getPreferredSize().width
+                    naturalW.coerceAtMost(maxW)
+                } else {
+                    // AI: fill available width (viewport minus padding)
+                    (vpW - 48).coerceAtLeast(200)
+                }
+                setSize(w, Short.MAX_VALUE.toInt())
+                val pref = super.getPreferredSize()
+                return java.awt.Dimension(w, pref.height.coerceAtLeast(18))
+            }
+            override fun getMaximumSize(): java.awt.Dimension = preferredSize
+        }
+
+        // Root panel: prevents vertical stretching in BoxLayout.Y_AXIS container
+        val root: JComponent = object : JPanel(BorderLayout()) {
+            init { isOpaque = false }
+            override fun getMaximumSize(): Dimension =
+                Dimension(super.getMaximumSize().width, preferredSize.height)
+        }
 
         init {
-            root.layout = BorderLayout()
-            root.isOpaque = false
-            root.border = EmptyBorder(4, 8, 4, 8)
+            root.border = EmptyBorder(2, 0, 2, 0)
 
-            bubble = JPanel(BorderLayout())
-            bubble.isOpaque = true
-            bubble.background = UiTheme.Colors.surface
-            bubble.border = javax.swing.BorderFactory.createCompoundBorder(
-                javax.swing.BorderFactory.createLineBorder(UiTheme.Colors.outline, 1),
-                EmptyBorder(8, 12, 8, 12)
-            )
-
+            // ── Header: role label + timestamp + copy button ──
             val header = JPanel(BorderLayout())
             header.isOpaque = false
-            header.border = EmptyBorder(0, 0, 4, 0)
+            header.border = EmptyBorder(0, 0, 2, 0)
 
-            val label = JLabel(role)
-            label.font = UiTheme.Typography.label
-            label.foreground = UiTheme.Colors.primary
-            header.add(label, BorderLayout.WEST)
+            val roleLabel = JLabel(role)
+            roleLabel.font = UiTheme.Typography.label
+            roleLabel.foreground = if (isUser) UiTheme.Colors.userRole else UiTheme.Colors.aiRole
 
-            copyBtn.font = UiTheme.Typography.label
+            val timeLabel = JLabel(timestamp)
+            timeLabel.font = UiTheme.Typography.body.deriveFont((UiTheme.Typography.body.size - 2).toFloat())
+            timeLabel.foreground = UiTheme.Colors.onSurfaceVariant
+
+            val leftHeader = JPanel()
+            leftHeader.layout = BoxLayout(leftHeader, BoxLayout.X_AXIS)
+            leftHeader.isOpaque = false
+            leftHeader.add(roleLabel)
+            leftHeader.add(javax.swing.Box.createRigidArea(Dimension(6, 0)))
+            leftHeader.add(timeLabel)
+            header.add(leftHeader, BorderLayout.WEST)
+
+            // Copy button — borderless, appears on hover
+            copyBtn.font = UiTheme.Typography.body.deriveFont((UiTheme.Typography.body.size - 2).toFloat())
             copyBtn.isFocusPainted = false
-            copyBtn.margin = java.awt.Insets(2, 6, 2, 6)
-            copyBtn.border = javax.swing.BorderFactory.createLineBorder(UiTheme.Colors.outline)
-            copyBtn.background = UiTheme.Colors.surface
-            copyBtn.foreground = UiTheme.Colors.onSurface
+            copyBtn.isContentAreaFilled = false
+            copyBtn.border = javax.swing.BorderFactory.createEmptyBorder()
+            copyBtn.foreground = UiTheme.Colors.onSurfaceVariant
+            copyBtn.cursor = java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR)
+            copyBtn.isVisible = false
             copyBtn.addActionListener {
                 val clipboard = java.awt.Toolkit.getDefaultToolkit().systemClipboard
                 clipboard.setContents(java.awt.datatransfer.StringSelection(rawText.toString()), null)
+                copyBtn.text = "Copied!"
+                javax.swing.Timer(1500) { copyBtn.text = "Copy" }.also { it.isRepeats = false; it.start() }
             }
             header.add(copyBtn, BorderLayout.EAST)
 
-            // Spinner setup
+            // ── EditorPane setup ──
+            editorPane.contentType = "text/html"
+            editorPane.isEditable = false
+            editorPane.border = EmptyBorder(0, 0, 0, 0)
+            editorPane.isVisible = !showSpinner
+            editorPane.addHyperlinkListener { e ->
+                if (e.eventType == javax.swing.event.HyperlinkEvent.EventType.ACTIVATED) {
+                    try { java.awt.Desktop.getDesktop().browse(e.url.toURI()) } catch (_: Exception) {}
+                }
+            }
+
+            // Spinner
             spinnerLabel.font = UiTheme.Typography.body
             spinnerLabel.foreground = UiTheme.Colors.onSurfaceVariant
             spinnerLabel.isVisible = showSpinner
 
-            editorPane.contentType = "text/html"
-            editorPane.isEditable = false
-            editorPane.background = UiTheme.Colors.inputBackground
-            editorPane.border = EmptyBorder(4, 6, 4, 6)
-            editorPane.isVisible = !showSpinner
-            updateHtml()
-
-            val contentPanel = JPanel(BorderLayout())
+            // ── Content: spinner above editor ──
+            contentPanel = JPanel(BorderLayout())
             contentPanel.isOpaque = false
             contentPanel.add(spinnerLabel, BorderLayout.NORTH)
             contentPanel.add(editorPane, BorderLayout.CENTER)
 
-            bubble.add(header, BorderLayout.NORTH)
-            bubble.add(contentPanel, BorderLayout.CENTER)
+            // ── Build the message row ──
+            if (isUser) {
+                // User message: right-aligned bubble with colored background
+                val bubble = JPanel(BorderLayout())
+                bubble.isOpaque = true
+                bubble.background = UiTheme.Colors.userBubble
+                bubble.border = EmptyBorder(8, 14, 8, 14)
+                bubble.add(header, BorderLayout.NORTH)
+                bubble.add(contentPanel, BorderLayout.CENTER)
+                editorPane.background = UiTheme.Colors.userBubble
 
-            // Full width layout - bubble takes all available space
-            root.add(bubble, BorderLayout.CENTER)
-            
-            // Add resize listener to recalculate height when width changes
+                // Wrapper: places bubble at EAST (right side)
+                val wrapper = JPanel(BorderLayout())
+                wrapper.isOpaque = false
+                wrapper.border = EmptyBorder(0, 12, 0, 12)
+                wrapper.add(bubble, BorderLayout.EAST)
+                root.add(wrapper, BorderLayout.CENTER)
+
+                // Hover: show copy on the bubble
+                val hoverTarget = bubble
+                val hoverListener = object : java.awt.event.MouseAdapter() {
+                    override fun mouseEntered(e: java.awt.event.MouseEvent?) { copyBtn.isVisible = true }
+                    override fun mouseExited(e: java.awt.event.MouseEvent?) {
+                        val pt = e?.point ?: return; val src = e.component ?: return
+                        val bp = javax.swing.SwingUtilities.convertPoint(src, pt, hoverTarget)
+                        if (!java.awt.Rectangle(0, 0, hoverTarget.width, hoverTarget.height).contains(bp)) copyBtn.isVisible = false
+                    }
+                }
+                bubble.addMouseListener(hoverListener); header.addMouseListener(hoverListener)
+                editorPane.addMouseListener(hoverListener); copyBtn.addMouseListener(hoverListener)
+            } else {
+                // AI / System message: full-width, no visible bubble — clean text
+                val row = JPanel(BorderLayout())
+                row.isOpaque = false
+                row.border = EmptyBorder(4, 12, 4, 12)
+                row.add(header, BorderLayout.NORTH)
+                row.add(contentPanel, BorderLayout.CENTER)
+
+                editorPane.isOpaque = false
+                editorPane.background = UiTheme.Colors.surface
+
+                root.add(row, BorderLayout.CENTER)
+
+                // Hover: show copy on the whole row
+                val hoverTarget = row
+                val hoverListener = object : java.awt.event.MouseAdapter() {
+                    override fun mouseEntered(e: java.awt.event.MouseEvent?) { copyBtn.isVisible = true }
+                    override fun mouseExited(e: java.awt.event.MouseEvent?) {
+                        val pt = e?.point ?: return; val src = e.component ?: return
+                        val bp = javax.swing.SwingUtilities.convertPoint(src, pt, hoverTarget)
+                        if (!java.awt.Rectangle(0, 0, hoverTarget.width, hoverTarget.height).contains(bp)) copyBtn.isVisible = false
+                    }
+                }
+                row.addMouseListener(hoverListener); header.addMouseListener(hoverListener)
+                editorPane.addMouseListener(hoverListener); copyBtn.addMouseListener(hoverListener)
+            }
+
+            updateHtml()
+
+            // Re-layout on resize so editorPane recalculates width
             root.addComponentListener(object : java.awt.event.ComponentAdapter() {
                 override fun componentResized(e: java.awt.event.ComponentEvent?) {
                     SwingUtilities.invokeLater {
                         editorPane.revalidate()
-                        bubble.revalidate()
                         root.revalidate()
                     }
                 }
@@ -759,6 +920,9 @@ class ChatPanel(
                 }
                 spinnerTimer?.start()
             }
+
+            coalescingTimer = javax.swing.Timer(200) { flushPending() }
+            coalescingTimer?.isRepeats = false
         }
 
         fun hideSpinner() {
@@ -768,18 +932,37 @@ class ChatPanel(
             editorPane.isVisible = true
         }
 
+        /** Buffer incoming chunks, coalesce re-renders */
+        fun appendChunk(text: String) {
+            synchronized(pendingText) { pendingText.append(text) }
+            if (coalescingTimer != null && !coalescingTimer!!.isRunning) {
+                coalescingTimer?.restart()
+            }
+        }
+
         fun append(text: String) {
             rawText.append(text)
             updateHtml()
         }
 
+        private fun flushPending() {
+            val chunk: String
+            synchronized(pendingText) {
+                chunk = pendingText.toString()
+                pendingText.setLength(0)
+            }
+            if (chunk.isNotEmpty()) {
+                rawText.append(chunk)
+                updateHtml()
+            }
+        }
+
         private fun updateHtml() {
             val isDark = UiTheme.isDarkTheme
             editorPane.text = MarkdownRenderer.toHtml(rawText.toString(), isDark = isDark)
-            // Revalidate to adjust size
             SwingUtilities.invokeLater {
                 editorPane.revalidate()
-                bubble.revalidate()
+                contentPanel.revalidate()
                 root.revalidate()
             }
         }
