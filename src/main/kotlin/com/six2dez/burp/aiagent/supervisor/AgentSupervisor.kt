@@ -291,12 +291,12 @@ class AgentSupervisor(
         determinismMode: Boolean,
         onChunk: (String) -> Unit,
         onComplete: (Throwable?) -> Unit
-    ) {
+    ): AgentConnection? {
         lastErrorRef.set(null)
         val backend = registry.get(backendId)
         if (backend == null) {
             onComplete(IllegalStateException("Backend not found: $backendId"))
-            return
+            return null
         }
 
         // Try to reuse an existing connection (for HTTP backends with conversation history)
@@ -316,7 +316,7 @@ class AgentSupervisor(
                 lastErrorRef.set(msg)
                 api.logging().logToError(msg)
                 onComplete(e)
-                return
+                return null
             }
         }
 
@@ -336,6 +336,7 @@ class AgentSupervisor(
                 onComplete(err)
             }
         )
+        return connection
     }
 
     fun removeChatSession(chatSessionId: String) {

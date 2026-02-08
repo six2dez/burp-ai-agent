@@ -53,8 +53,11 @@ class ChatPanel(
     private val sessionsPanel = JPanel(BorderLayout())
     private val chatCards = JPanel(java.awt.CardLayout())
     private val sendBtn = JButton("Send")
+    private val cancelBtn = JButton("Cancel")
     private val clearChatBtn = JButton("Clear Chat")
     private val toolsBtn = JButton("Tools")
+    @Volatile private var activeConnection: com.six2dez.burp.aiagent.backends.AgentConnection? = null
+    @Volatile private var isSending = false
     private val inputArea = JTextArea(3, 24)
     private val newSessionBtn = JButton("New Session")
     private val privacyPill = PrivacyPill()
@@ -203,6 +206,7 @@ class ChatPanel(
             role = "You",
             text = prompt
         )
+        session.messages.add(Pair("You", prompt))
         sendMessage(
             sessionId = session.id,
             userText = prompt,
@@ -248,9 +252,15 @@ class ChatPanel(
         // Action buttons row below input
         val actions = JPanel(java.awt.FlowLayout(java.awt.FlowLayout.RIGHT, 6, 2))
         actions.isOpaque = false
+        cancelBtn.font = UiTheme.Typography.label
+        cancelBtn.isFocusPainted = false
+        cancelBtn.isVisible = false
+        cancelBtn.addActionListener { cancelCurrentRequest() }
+
         actions.add(privacyPill)
         actions.add(toolsBtn)
         actions.add(clearChatBtn)
+        actions.add(cancelBtn)
         actions.add(sendBtn)
 
         panel.add(inputScroll, BorderLayout.CENTER)
@@ -271,6 +281,7 @@ class ChatPanel(
             return
         }
         panel.addMessage("You", text)
+        session.messages.add(Pair("You", text))
         inputArea.text = ""
         sendMessage(
             session.id,
@@ -298,6 +309,7 @@ class ChatPanel(
         }
 
         applySettings(settings)
+        setSendingState(true)
         val session = sessionsById[sessionId]
         val backendId = session?.backendId ?: settings.preferredBackendId
         // Track backend usage on session
@@ -320,7 +332,7 @@ class ChatPanel(
         ).joinToString("\n\n")
 
         val responseBuffer = StringBuilder()
-        supervisor.sendChat(
+        val connection = supervisor.sendChat(
             chatSessionId = sessionId,
             backendId = backendId,
             text = finalPrompt,
@@ -332,12 +344,14 @@ class ChatPanel(
                 SwingUtilities.invokeLater { assistant.append(chunk) }
             },
             onComplete = { err ->
+                SwingUtilities.invokeLater { setSendingState(false) }
                 if (err != null) {
                     SwingUtilities.invokeLater { assistant.append("\n[Error] ${err.message}") }
                 } else {
                     val finalResp = responseBuffer.toString()
                     if (session != null) {
                         session.totalCharsOut += finalResp.length.toLong()
+                        session.messages.add(Pair("AI", finalResp))
                     }
                     SwingUtilities.invokeLater {
                         assistant.append("\n")
@@ -356,6 +370,7 @@ class ChatPanel(
                 }
             }
         )
+        activeConnection = connection
     }
 
     private fun createSession(title: String): ChatSession {
@@ -446,15 +461,20 @@ class ChatPanel(
     /** Export current session as a Markdown file */
     fun exportCurrentChatAsMarkdown() {
         val session = sessionsList.selectedValue ?: return
-        // Build markdown from visible messages in the panel
-        val panel = sessionPanels[session.id] ?: return
         val md = buildString {
             appendLine("# ${session.title}")
             appendLine()
             appendLine("Backend: ${session.backendId}")
+            appendLine("Date: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm").format(java.util.Date(session.createdAt))}")
             appendLine()
             appendLine("---")
             appendLine()
+            for ((role, text) in session.messages) {
+                appendLine("**$role:**")
+                appendLine()
+                appendLine(text.trim())
+                appendLine()
+            }
         }
         val chooser = javax.swing.JFileChooser()
         chooser.selectedFile = java.io.File("${session.title.replace(Regex("[^a-zA-Z0-9_\\-]"), "_")}.md")
@@ -476,6 +496,27 @@ class ChatPanel(
     fun deleteCurrentSession() {
         val s = sessionsList.selectedValue ?: return
         deleteSession(s)
+    }
+
+    /** Toggle UI between sending and idle states */
+    private fun setSendingState(sending: Boolean) {
+        isSending = sending
+        sendBtn.isVisible = !sending
+        cancelBtn.isVisible = sending
+        inputArea.isEnabled = !sending
+    }
+
+    /** Cancel the current in-flight AI request */
+    private fun cancelCurrentRequest() {
+        val conn = activeConnection ?: return
+        activeConnection = null
+        setSendingState(false)
+        try {
+            conn.stop()
+        } catch (_: Exception) {}
+        val sessionId = sessionsList.selectedValue?.id ?: return
+        val panel = sessionPanels[sessionId] ?: return
+        panel.addMessage("System", "Request cancelled.")
     }
 
     private fun showToolsMenu() {
@@ -732,7 +773,16 @@ class ChatPanel(
                 }
             }
             prefs.setString(SESSIONS_KEY, sessionList.joinToString("\n"))
-            api.logging().logToOutput("[ChatPanel] Saved ${sessionsById.size} sessions.")
+
+            // Save messages for each session
+            for (s in sessionsById.values) {
+                val msgData = s.messages.joinToString("\u001F") { msg ->
+                    "${msg.first}\u001E${msg.second.replace("\n", "\u001D")}"
+                }
+                prefs.setString(SESSION_MSG_KEY_PREFIX + s.id, msgData)
+            }
+
+            api.logging().logToOutput("[ChatPanel] Saved ${sessionsById.size} sessions with messages.")
         } catch (e: Exception) {
             api.logging().logToError("[ChatPanel] Failed to save sessions: ${e.message}")
         }
@@ -768,6 +818,27 @@ class ChatPanel(
                 val totalCharsIn = parts.getOrNull(5)?.toLongOrNull() ?: 0L
                 val totalCharsOut = parts.getOrNull(6)?.toLongOrNull() ?: 0L
 
+                // Restore messages
+                val messages = mutableListOf<Pair<String, String>>()
+                val msgRaw = prefs.getString(SESSION_MSG_KEY_PREFIX + id)
+                if (!msgRaw.isNullOrBlank()) {
+                    for (msgEntry in msgRaw.split("\u001F")) {
+                        val msgParts = msgEntry.split("\u001E", limit = 2)
+                        if (msgParts.size == 2) {
+                            val role = msgParts[0]
+                            var text = msgParts[1].replace("\u001D", "\n")
+                            // Clean up noise from old persisted messages
+                            text = text.lines()
+                                .filterNot { it.lowercase().startsWith("hook registry initialized") }
+                                .joinToString("\n")
+                                .trim()
+                            if (text.isNotBlank()) {
+                                messages.add(Pair(role, text))
+                            }
+                        }
+                    }
+                }
+
                 val session = ChatSession(
                     id = id,
                     title = title,
@@ -776,7 +847,8 @@ class ChatPanel(
                     backendsUsed = backendsUsed,
                     messageCount = messageCount,
                     totalCharsIn = totalCharsIn,
-                    totalCharsOut = totalCharsOut
+                    totalCharsOut = totalCharsOut,
+                    messages = messages
                 )
 
                 sessionsModel.addElement(session)
@@ -785,13 +857,18 @@ class ChatPanel(
                 sessionPanels[id] = panel
                 sessionStates[id] = ToolSessionState()
                 chatCards.add(panel.root, id)
+
+                // Display restored messages
+                for ((role, text) in messages) {
+                    panel.addMessage(role, text)
+                }
             }
 
             if (sessionsModel.size > 0) {
                 sessionsList.selectedIndex = sessionsModel.size - 1
                 showSession(sessionsById.keys.last())
             }
-            api.logging().logToOutput("[ChatPanel] Restored ${sessionsById.size} sessions.")
+            api.logging().logToOutput("[ChatPanel] Restored ${sessionsById.size} sessions with messages.")
         } catch (e: Exception) {
             api.logging().logToError("[ChatPanel] Failed to restore sessions: ${e.message}")
         }
@@ -829,7 +906,8 @@ class ChatPanel(
         val backendsUsed: MutableMap<String, Int> = mutableMapOf(),
         var messageCount: Int = 0,
         var totalCharsIn: Long = 0,
-        var totalCharsOut: Long = 0
+        var totalCharsOut: Long = 0,
+        val messages: MutableList<Pair<String, String>> = mutableListOf()
     ) {
         override fun toString(): String = title
     }
@@ -955,7 +1033,10 @@ class ChatPanel(
         private val role: String,
         initialText: String
     ) {
-        private val isUser = role == "You"
+        // Normalize role detection: accept "You", "user", "User" as user
+        private val isUser = role.lowercase() in listOf("you", "user")
+        // Display normalized labels
+        private val displayRole = if (isUser) "You" else "AI"
         private val showSpinner = !isUser && initialText.isEmpty()
         private val rawText = StringBuilder(initialText)
         private val copyBtn = JButton("Copy")
@@ -965,6 +1046,8 @@ class ChatPanel(
         private var spinnerIndex = 0
         private val pendingText = StringBuilder()
         private var coalescingTimer: javax.swing.Timer? = null
+        private var isStreaming = false
+        private var lastRenderedLength = 0
         private val timestamp = java.text.SimpleDateFormat("h:mm a").format(java.util.Date())
         private val contentPanel: JPanel
 
@@ -986,8 +1069,11 @@ class ChatPanel(
                     val naturalW = super.getPreferredSize().width
                     naturalW.coerceAtMost(maxW)
                 } else {
-                    // AI: fill available width (viewport minus padding)
-                    (vpW - 48).coerceAtLeast(200)
+                    // AI bubble: max 75% of viewport, shrink-to-fit for short text
+                    val maxW = (vpW * 0.75).toInt().coerceAtLeast(200)
+                    setSize(maxW, Short.MAX_VALUE.toInt())
+                    val naturalW = super.getPreferredSize().width
+                    naturalW.coerceAtMost(maxW)
                 }
                 setSize(w, Short.MAX_VALUE.toInt())
                 val pref = super.getPreferredSize()
@@ -1011,7 +1097,7 @@ class ChatPanel(
             header.isOpaque = false
             header.border = EmptyBorder(0, 0, 2, 0)
 
-            val roleLabel = JLabel(role)
+            val roleLabel = JLabel(displayRole)
             roleLabel.font = UiTheme.Typography.label
             roleLabel.foreground = if (isUser) UiTheme.Colors.userRole else UiTheme.Colors.aiRole
 
@@ -1096,20 +1182,28 @@ class ChatPanel(
                 bubble.addMouseListener(hoverListener); header.addMouseListener(hoverListener)
                 editorPane.addMouseListener(hoverListener); copyBtn.addMouseListener(hoverListener)
             } else {
-                // AI / System message: full-width, no visible bubble — clean text
-                val row = JPanel(BorderLayout())
-                row.isOpaque = false
-                row.border = EmptyBorder(4, 12, 4, 12)
-                row.add(header, BorderLayout.NORTH)
-                row.add(contentPanel, BorderLayout.CENTER)
+                // AI / System message: left-aligned bubble (like ChatGPT)
+                val bubble = JPanel(BorderLayout())
+                bubble.isOpaque = true
+                bubble.background = UiTheme.Colors.aiBubble
+                bubble.border = javax.swing.BorderFactory.createCompoundBorder(
+                    javax.swing.BorderFactory.createLineBorder(UiTheme.Colors.outline, 1),
+                    EmptyBorder(8, 14, 8, 14)
+                )
+                bubble.add(header, BorderLayout.NORTH)
+                bubble.add(contentPanel, BorderLayout.CENTER)
+                editorPane.background = UiTheme.Colors.aiBubble
 
-                editorPane.isOpaque = false
-                editorPane.background = UiTheme.Colors.surface
+                // Wrapper: places bubble at WEST (left side)
+                val wrapper = JPanel(BorderLayout())
+                wrapper.isOpaque = false
+                wrapper.border = EmptyBorder(0, 12, 0, 12)
+                wrapper.add(bubble, BorderLayout.WEST)
 
-                root.add(row, BorderLayout.CENTER)
+                root.add(wrapper, BorderLayout.CENTER)
 
-                // Hover: show copy on the whole row
-                val hoverTarget = row
+                // Hover: show copy on the bubble
+                val hoverTarget = bubble
                 val hoverListener = object : java.awt.event.MouseAdapter() {
                     override fun mouseEntered(e: java.awt.event.MouseEvent?) { copyBtn.isVisible = true }
                     override fun mouseExited(e: java.awt.event.MouseEvent?) {
@@ -1118,7 +1212,7 @@ class ChatPanel(
                         if (!java.awt.Rectangle(0, 0, hoverTarget.width, hoverTarget.height).contains(bp)) copyBtn.isVisible = false
                     }
                 }
-                row.addMouseListener(hoverListener); header.addMouseListener(hoverListener)
+                bubble.addMouseListener(hoverListener); header.addMouseListener(hoverListener)
                 editorPane.addMouseListener(hoverListener); copyBtn.addMouseListener(hoverListener)
             }
 
@@ -1155,6 +1249,7 @@ class ChatPanel(
 
         /** Buffer incoming chunks, coalesce re-renders */
         fun appendChunk(text: String) {
+            isStreaming = true
             synchronized(pendingText) { pendingText.append(text) }
             if (coalescingTimer != null && !coalescingTimer!!.isRunning) {
                 coalescingTimer?.restart()
@@ -1163,6 +1258,8 @@ class ChatPanel(
 
         fun append(text: String) {
             rawText.append(text)
+            isStreaming = false
+            lastRenderedLength = rawText.length
             updateHtml()
         }
 
@@ -1174,7 +1271,27 @@ class ChatPanel(
             }
             if (chunk.isNotEmpty()) {
                 rawText.append(chunk)
-                updateHtml()
+                // During streaming on long messages: only do full markdown render
+                // every 2KB of new content to avoid O(n) regex on every 200ms tick
+                val newBytes = rawText.length - lastRenderedLength
+                if (isStreaming && rawText.length > 1024 && newBytes < 2048) {
+                    // Lightweight: just set plain escaped text for intermediate updates
+                    val escaped = rawText.toString()
+                        .replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                        .replace("\n", "<br>")
+                    val isDark = UiTheme.isDarkTheme
+                    val fontSize = UiTheme.Typography.body.size
+                    val textColor = if (isDark) "#e0e0e0" else "#202020"
+                    editorPane.text = "<html><body style='font-family:SansSerif;color:$textColor;font-size:${fontSize}px;margin:0;padding:0;line-height:1.4;'>$escaped</body></html>"
+                    SwingUtilities.invokeLater {
+                        editorPane.revalidate()
+                        contentPanel.revalidate()
+                        root.revalidate()
+                    }
+                } else {
+                    lastRenderedLength = rawText.length
+                    updateHtml()
+                }
             }
         }
 
