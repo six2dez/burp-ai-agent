@@ -57,6 +57,14 @@ class ConversationHistory(private val maxMessages: Int = Defaults.MAX_HISTORY_ME
 
     fun snapshot(): List<Map<String, String>> = history.toList()
 
+    fun setHistory(newHistory: List<com.six2dez.burp.aiagent.backends.ChatMessage>) {
+        history.clear()
+        newHistory.forEach { msg ->
+            history.addLast(mapOf("role" to msg.role, "content" to msg.content))
+        }
+        trim()
+    }
+
     private fun trim() {
         while (history.size > maxMessages) {
             history.pollFirst()

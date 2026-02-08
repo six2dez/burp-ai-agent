@@ -112,7 +112,7 @@ object App {
             api.logging().logToOutput("AI ScanCheck not registered (Burp Pro required for Scanner API)")
         }
 
-        api.logging().logToOutput("AI Agent extension loaded. Backends discovered: ${backendRegistry.listBackendIds().joinToString(", ")}")
+        api.logging().logToOutput("AI Agent extension loaded. Backends discovered: ${backendRegistry.listBackendIds(settingsRepo.load()).joinToString(", ")}")
     }
 
     fun shutdown() {

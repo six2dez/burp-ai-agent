@@ -31,6 +31,29 @@ class CliBackend(
         }
     }
 
+    override fun isAvailable(settings: com.six2dez.burp.aiagent.config.AgentSettings): Boolean {
+        val command = when (id) {
+            "claude-cli" -> settings.claudeCmd
+            "gemini-cli" -> settings.geminiCmd
+            "codex-cli" -> settings.codexCmd
+            "opencode-cli" -> settings.opencodeCmd
+            "ollama" -> settings.ollamaCliCmd
+            else -> ""
+        }
+        if (command.isBlank()) return false
+        val cmdList = command.trim().split("\\s+".toRegex())
+        val env = mapOf("PATH" to com.six2dez.burp.aiagent.supervisor.AgentSupervisor.buildCliPathStatic())
+        val resolved = resolveCommand(cmdList, env)
+        if (resolved.isEmpty()) return false
+        val executable = resolved[0]
+        val file = java.io.File(executable)
+        val available = file.exists() && file.canExecute()
+        if (available) {
+            com.six2dez.burp.aiagent.backends.BackendDiagnostics.log("[Burp AI Agent] Found $displayName: $executable")
+        }
+        return available
+    }
+
     private class NonInteractiveCliConnection(
         private val backendId: String,
         private val baseCommand: List<String>,
@@ -40,14 +63,24 @@ class CliBackend(
         private val executor = Executors.newSingleThreadExecutor()
         @Volatile
         private var _cliSessionId: String? = initialCliSessionId
-        private val conversationHistory = mutableListOf<String>() // For stateless CLIs
 
         override fun cliSessionId(): String? = _cliSessionId
 
         override fun isAlive(): Boolean = true
 
-        override fun send(text: String, onChunk: (String) -> Unit, onComplete: (Throwable?) -> Unit) {
+        override fun send(
+            text: String,
+            history: List<com.six2dez.burp.aiagent.backends.ChatMessage>?,
+            onChunk: (String) -> Unit,
+            onComplete: (Throwable?) -> Unit
+        ) {
             executor.submit {
+                // Prepend history if provided
+                val historyText = if (history != null && history.isNotEmpty()) {
+                    history.joinToString("\n") { "${it.role}: ${it.content}" } + "\n\n"
+                } else ""
+                
+                val finalText = historyText + text
                 val outputFile = if (backendId == "codex-cli") {
                     java.io.File.createTempFile("burp-ai-agent-codex", ".txt")
                 } else {
@@ -58,32 +91,26 @@ class CliBackend(
                 // Update history and build transcript for stateless CLIs
                 val promptToSend: String
                 val promptFile: java.io.File?
-                if (backendId == "claude-cli" && text.length > Defaults.LARGE_PROMPT_THRESHOLD) {
-                    // For large payloads, write to a temp file and ask Claude to read it.
-                    // This bypasses shell/stdin limits and avoids "Prompt is too long" errors.
+                
+                // If we have a cliSessionId, the backend already has the history. 
+                // We only need to provide historyText if we are starting a NEW session or switched backends.
+                val effectiveHistory = if (_cliSessionId == null) historyText else ""
+                val combinedText = effectiveHistory + text
+
+                if (backendId == "claude-cli" && combinedText.length > Defaults.LARGE_PROMPT_THRESHOLD) {
                     val tFile = java.io.File.createTempFile("burp_uv_prompt_", ".txt")
-                    tFile.writeText(text)
+                    tFile.writeText(combinedText)
                     promptFile = tFile
                     promptToSend = "Please process the instructions and data provided in the following file:\n${tFile.absolutePath}"
                 } else {
                     promptFile = null
-                    synchronized(conversationHistory) {
-                        if (backendId != "claude-cli") {
-                            conversationHistory.add("User: $text")
-                            // Trim history to reasonable size
-                            while (conversationHistory.size > Defaults.MAX_HISTORY_MESSAGES) {
-                                conversationHistory.removeAt(0)
-                            }
-                            promptToSend = conversationHistory.joinToString("\n\n")
-                        } else {
-                            promptToSend = text
-                        }
-                    }
+                    promptToSend = combinedText
                 }
 
                 val (cmd, stdinText) = buildCommand(promptToSend, outputFile)
+                val resolvedCmd = resolveCommand(cmd, env)
                 try {
-                    val process = ProcessBuilder(normalizeWindowsCommand(cmd))
+                    val process = ProcessBuilder(normalizeWindowsCommand(resolvedCmd))
                         .apply { environment().putAll(env) }
                         .redirectErrorStream(true)
                         .directory(java.io.File(System.getProperty("user.home")))
@@ -167,12 +194,6 @@ class CliBackend(
                         else -> rawOutput.toString().trim()
                     }
                     if (finalMessage.isNotBlank()) {
-                        // Store assistant response in history for stateless CLIs
-                        if (backendId != "claude-cli") {
-                            synchronized(conversationHistory) {
-                                conversationHistory.add("Assistant: $finalMessage")
-                            }
-                        }
                         onChunk(finalMessage)
                     }
                     onComplete(null)
@@ -403,7 +424,12 @@ class CliBackend(
 
         override fun isAlive(): Boolean = alive.get() && process.isAlive
 
-        override fun send(text: String, onChunk: (String) -> Unit, onComplete: (Throwable?) -> Unit) {
+        override fun send(
+            text: String,
+            history: List<com.six2dez.burp.aiagent.backends.ChatMessage>?,
+            onChunk: (String) -> Unit,
+            onComplete: (Throwable?) -> Unit
+        ) {
             if (!isAlive()) {
                 onComplete(buildExitError())
                 return
@@ -411,8 +437,15 @@ class CliBackend(
 
             exec.submit {
                 try {
+                    // Prepend history if provided (Best effort for interactive CLI)
+                    val historyText = if (history != null && history.isNotEmpty()) {
+                        history.joinToString("\n") { "${it.role}: ${it.content}" } + "\n\n"
+                    } else ""
+                    
+                    val finalText = historyText + text
+
                     // write input
-                    writer.write(text)
+                    writer.write(finalText)
                     writer.newLine()
                     writer.flush()
 
@@ -513,7 +546,8 @@ class CliBackend(
         }
 
         private fun startProcess(cmd: List<String>, env: Map<String, String>): Process {
-            val normalizedCmd = normalizeWindowsCommand(cmd)
+            val resolvedCmd = resolveCommand(cmd, env)
+            val normalizedCmd = normalizeWindowsCommand(resolvedCmd)
             if (usePty && isUnixLike()) {
                 val ptyCmd = buildPtyCommand(normalizedCmd)
                 return ProcessBuilder(ptyCmd)
@@ -570,6 +604,43 @@ private fun normalizeWindowsCommand(cmd: List<String>): List<String> {
     } else {
         cmd
     }
+}
+
+private fun resolveCommand(cmd: List<String>, env: Map<String, String>): List<String> {
+    if (cmd.isEmpty()) return cmd
+    val first = cmd[0]
+    
+    // 1. If already an absolute path, verify and return
+    val firstFile = java.io.File(first)
+    if (firstFile.isAbsolute) {
+        return if (firstFile.exists()) {
+            com.six2dez.burp.aiagent.backends.BackendDiagnostics.log("[Burp AI Agent] Resolved absolute: $first")
+            cmd
+        } else {
+            com.six2dez.burp.aiagent.backends.BackendDiagnostics.log("[Burp AI Agent] Absolute path not found: $first")
+            emptyList()
+        }
+    }
+
+    // 2. Manual PATH search to avoid dependency on 'which' / 'where'
+    val path = env["PATH"] ?: System.getenv("PATH") ?: ""
+    val sep = java.io.File.pathSeparator
+    val isWin = isWindows()
+    val extensions = if (isWin) listOf("", ".exe", ".bat", ".cmd") else listOf("")
+
+    for (dir in path.split(sep)) {
+        if (dir.isBlank()) continue
+        for (ext in extensions) {
+            val candidate = java.io.File(dir, first + ext)
+            try {
+                if (candidate.exists() && candidate.canExecute()) {
+                    return listOf(candidate.absolutePath) + cmd.drop(1)
+                }
+            } catch (_: Exception) {}
+        }
+    }
+
+    return emptyList()
 }
 
 private fun isWindows(): Boolean {
