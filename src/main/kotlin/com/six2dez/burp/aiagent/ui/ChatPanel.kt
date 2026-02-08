@@ -655,17 +655,6 @@ class ChatPanel(
         layout.show(chatCards, id)
     }
 
-    private fun refreshSessionList() {
-        // Trigger list repaint by resetting elements
-        val selected = sessionsList.selectedIndex
-        for (i in 0 until sessionsModel.size) {
-            sessionsModel.set(i, sessionsModel.get(i))
-        }
-        if (selected >= 0 && selected < sessionsModel.size) {
-            sessionsList.selectedIndex = selected
-        }
-    }
-
     companion object {
         fun formatSessionDate(epochMs: Long): String {
             val now = java.util.Calendar.getInstance()
