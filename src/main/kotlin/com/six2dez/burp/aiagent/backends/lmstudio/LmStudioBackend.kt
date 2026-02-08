@@ -57,7 +57,12 @@ class LmStudioBackend : AiBackend {
 
         override fun isAlive(): Boolean = alive.get()
 
-        override fun send(text: String, onChunk: (String) -> Unit, onComplete: (Throwable?) -> Unit) {
+        override fun send(
+            text: String,
+            history: List<com.six2dez.burp.aiagent.backends.ChatMessage>?,
+            onChunk: (String) -> Unit,
+            onComplete: (Throwable?) -> Unit
+        ) {
             if (!isAlive()) {
                 onComplete(IllegalStateException("Connection closed"))
                 return
@@ -65,6 +70,11 @@ class LmStudioBackend : AiBackend {
 
             exec.submit {
                 try {
+                    // Sync history if provided
+                    if (history != null) {
+                        conversationHistory.setHistory(history)
+                    }
+                    
                     val maxAttempts = 6
                     var attempt = 0
                     var lastError: Exception? = null

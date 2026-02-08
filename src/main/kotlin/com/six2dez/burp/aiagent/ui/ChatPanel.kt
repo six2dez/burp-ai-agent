@@ -220,6 +220,7 @@ class ChatPanel(
             return
         }
         panel.addMessage("You", text)
+        session.messages.add(com.six2dez.burp.aiagent.backends.ChatMessage("user", text))
         inputArea.text = ""
         sendMessage(
             session.id,
@@ -248,7 +249,13 @@ class ChatPanel(
 
         applySettings(settings)
         val session = sessionsById[sessionId]
-        val backendId = session?.backendId ?: settings.preferredBackendId
+        val backendId = settings.preferredBackendId
+        // Track backend usage on session
+        if (session != null) {
+            session.backendsUsed[backendId] = (session.backendsUsed[backendId] ?: 0) + 1
+            session.messageCount++
+            session.totalCharsIn += userText.length.toLong()
+        }
         onStatusChanged()
 
         val sessionPanel = sessionPanels[sessionId] ?: return
@@ -262,11 +269,14 @@ class ChatPanel(
             prompt.takeIf { it.isNotBlank() }
         ).joinToString("\n\n")
 
+        val history = session?.messages?.toList()
+        
         val responseBuffer = StringBuilder()
         supervisor.sendChat(
             chatSessionId = sessionId,
             backendId = backendId,
             text = finalPrompt,
+            history = history,
             contextJson = contextJson,
             privacyMode = settings.privacyMode,
             determinismMode = settings.determinismMode,
@@ -278,6 +288,11 @@ class ChatPanel(
                 if (err != null) {
                     SwingUtilities.invokeLater { assistant.append("\n[Error] ${err.message}") }
                 } else {
+                    val finalResp = responseBuffer.toString()
+                    session?.messages?.add(com.six2dez.burp.aiagent.backends.ChatMessage("assistant", finalResp))
+                    if (session != null) {
+                        session.totalCharsOut += finalResp.length.toLong()
+                    }
                     SwingUtilities.invokeLater {
                         assistant.append("\n")
                         onResponseReady()
@@ -286,7 +301,7 @@ class ChatPanel(
                         maybeExecuteToolCall(
                             sessionId = sessionId,
                             userText = userText,
-                            responseText = responseBuffer.toString(),
+                            responseText = finalResp,
                             context = toolContext,
                             settings = settings
                         )
@@ -298,8 +313,7 @@ class ChatPanel(
 
     private fun createSession(title: String): ChatSession {
         val id = "chat-" + UUID.randomUUID().toString()
-        val backendId = getSettings().preferredBackendId
-        val session = ChatSession(id, title, System.currentTimeMillis(), backendId)
+        val session = ChatSession(id, title, System.currentTimeMillis())
         sessionsModel.addElement(session)
         sessionsById[id] = session
 
@@ -549,7 +563,16 @@ class ChatPanel(
     }
 
 
-    data class ChatSession(val id: String, val title: String, val createdAt: Long, val backendId: String) {
+    data class ChatSession(
+        val id: String,
+        val title: String,
+        val createdAt: Long,
+        val messages: MutableList<com.six2dez.burp.aiagent.backends.ChatMessage> = mutableListOf(),
+        val backendsUsed: MutableMap<String, Int> = mutableMapOf(),
+        var messageCount: Int = 0,
+        var totalCharsIn: Long = 0L,
+        var totalCharsOut: Long = 0L
+    ) {
         override fun toString(): String = title
     }
 
@@ -583,7 +606,8 @@ class ChatPanel(
             titleLabel.foreground = if (isSelected) list.selectionForeground else list.foreground
             titleLabel.isOpaque = false
 
-            val backendLabel = JLabel(value.backendId)
+            val backendText = value.backendsUsed.keys.joinToString(", ").ifBlank { "—" }
+            val backendLabel = JLabel(backendText)
             backendLabel.font = label.font.deriveFont((label.font.size - 2).toFloat())
             backendLabel.foreground = if (isSelected) list.selectionForeground else UiTheme.Colors.onSurfaceVariant
             backendLabel.isOpaque = false

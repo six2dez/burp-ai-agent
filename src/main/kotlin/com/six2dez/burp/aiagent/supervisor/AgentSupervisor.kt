@@ -230,6 +230,7 @@ class AgentSupervisor(
 
     fun send(
         text: String,
+        history: List<com.six2dez.burp.aiagent.backends.ChatMessage>? = null,
         contextJson: String?,
         privacyMode: PrivacyMode,
         determinismMode: Boolean,
@@ -268,6 +269,7 @@ class AgentSupervisor(
         api.logging().logToOutput("AI send: backend=$backendId session=$sessionId")
         api.logging().logToOutput("AI connection: ${current.connection.javaClass.name}")
         current.connection.send(text,
+            history = history,
             onChunk = { chunk ->
                 audit.logEvent("agent_chunk", mapOf("backendId" to backendId, "chunk" to chunk))
                 onChunk(chunk)
@@ -286,6 +288,7 @@ class AgentSupervisor(
         chatSessionId: String,
         backendId: String,
         text: String,
+        history: List<com.six2dez.burp.aiagent.backends.ChatMessage>? = null,
         contextJson: String?,
         privacyMode: PrivacyMode,
         determinismMode: Boolean,
@@ -306,7 +309,7 @@ class AgentSupervisor(
             connection = existingConn
         } else {
             // Create a new connection with cliSessionId for CLI resume
-            val cliSessionId = chatSessionManager.cliSessionIdFor(chatSessionId)
+            val cliSessionId = chatSessionManager.cliSessionIdFor(chatSessionId, backendId)
             val sessionId = "chat-session-" + java.util.UUID.randomUUID().toString()
             val launchConfig = buildLaunchConfig(backendId, sessionId, embeddedMode = true, cliSessionId = cliSessionId)
             try {
@@ -322,6 +325,7 @@ class AgentSupervisor(
 
         api.logging().logToOutput("AI chat send: backend=$backendId chatSession=$chatSessionId")
         connection.send(text,
+            history = history,
             onChunk = { chunk ->
                 audit.logEvent("agent_chunk", mapOf("backendId" to backendId, "chunk" to chunk))
                 onChunk(chunk)

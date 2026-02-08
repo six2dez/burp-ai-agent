@@ -22,8 +22,10 @@ class ChatSessionManager {
     /**
      * Returns the stored cliSessionId for a chat session, or null if none.
      */
-    fun cliSessionIdFor(chatId: String): String? {
-        return sessions[chatId]?.cliSessionId
+    fun cliSessionIdFor(chatId: String, requestedBackendId: String): String? {
+        val state = sessions[chatId] ?: return null
+        if (state.backendId != requestedBackendId) return null
+        return state.cliSessionId
     }
 
     /**

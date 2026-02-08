@@ -16,9 +16,16 @@ data class BackendLaunchConfig(
     val contextWindow: Int? = null
 )
 
+data class ChatMessage(val role: String, val content: String)
+
 interface AgentConnection {
     fun isAlive(): Boolean
-    fun send(text: String, onChunk: (String) -> Unit, onComplete: (Throwable?) -> Unit)
+    fun send(
+        text: String,
+        history: List<ChatMessage>? = null,
+        onChunk: (String) -> Unit,
+        onComplete: (Throwable?) -> Unit
+    )
     fun stop()
 }
 
