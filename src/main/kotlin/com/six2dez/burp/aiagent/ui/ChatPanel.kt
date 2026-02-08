@@ -351,8 +351,13 @@ class ChatPanel(
         val deleteItem = javax.swing.JMenuItem("Delete")
         deleteItem.addActionListener { deleteSession(selected) }
         
+        val exportItem = javax.swing.JMenuItem("Export as Markdown")
+        exportItem.addActionListener { exportCurrentChatAsMarkdown() }
+
         menu.add(renameItem)
         menu.add(deleteItem)
+        menu.addSeparator()
+        menu.add(exportItem)
         menu.show(comp, x, y)
     }
 
@@ -405,6 +410,41 @@ class ChatPanel(
         }
     }
 
+    /** Export current session as a Markdown file */
+    fun exportCurrentChatAsMarkdown() {
+        val session = sessionsList.selectedValue ?: return
+        // Build markdown from visible messages in the panel
+        val panel = sessionPanels[session.id] ?: return
+        val md = buildString {
+            appendLine("# ${session.title}")
+            appendLine()
+            appendLine("Backend: ${session.backendId}")
+            appendLine()
+            appendLine("---")
+            appendLine()
+        }
+        val chooser = javax.swing.JFileChooser()
+        chooser.selectedFile = java.io.File("${session.title.replace(Regex("[^a-zA-Z0-9_\\-]"), "_")}.md")
+        if (chooser.showSaveDialog(root) == javax.swing.JFileChooser.APPROVE_OPTION) {
+            try {
+                chooser.selectedFile.writeText(md)
+            } catch (e: Exception) {
+                showError("Failed to export: ${e.message}")
+            }
+        }
+    }
+
+    /** Create a new empty session (called from keyboard shortcut) */
+    fun createNewSession() {
+        createSession("Chat ${sessionsModel.size + 1}")
+    }
+
+    /** Delete the currently selected session (called from keyboard shortcut) */
+    fun deleteCurrentSession() {
+        val s = sessionsList.selectedValue ?: return
+        deleteSession(s)
+    }
+
     private fun showToolsMenu() {
         val menu = javax.swing.JPopupMenu()
         val tools = McpToolCatalog.all()
@@ -435,7 +475,7 @@ class ChatPanel(
         menu.show(toolsBtn, 0, toolsBtn.height)
     }
 
-    private fun clearCurrentChat() {
+    fun clearCurrentChat() {
         val selected = sessionsList.selectedValue ?: return
         val confirm = javax.swing.JOptionPane.showConfirmDialog(
             root,

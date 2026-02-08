@@ -15,9 +15,27 @@ class BottomTabsPanel(private val settingsPanel: SettingsPanel) {
     private val tabbedPane = JTabbedPane()
     private val saveButton = JButton("Save settings")
     private val restoreButton = JButton("Restore defaults")
+    private val collapseButton = JButton("\u25BC Settings") // ▼
+    private val contentPanel = JPanel(BorderLayout())
+    private var collapsed = false
+    private var savedDividerLocation = -1
 
     init {
         root.background = UiTheme.Colors.surface
+
+        // Collapse/expand toggle bar
+        collapseButton.font = UiTheme.Typography.label
+        collapseButton.isFocusPainted = false
+        collapseButton.isOpaque = false
+        collapseButton.border = javax.swing.border.EmptyBorder(4, 12, 4, 12)
+        collapseButton.horizontalAlignment = javax.swing.SwingConstants.LEFT
+        collapseButton.cursor = java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR)
+        collapseButton.addActionListener { toggleCollapse() }
+
+        val toggleBar = JPanel(BorderLayout())
+        toggleBar.background = UiTheme.Colors.surface
+        toggleBar.border = javax.swing.border.MatteBorder(1, 0, 0, 0, UiTheme.Colors.outline)
+        toggleBar.add(collapseButton, BorderLayout.WEST)
 
         tabbedPane.background = UiTheme.Colors.surface
         tabbedPane.foreground = UiTheme.Colors.onSurface
@@ -58,9 +76,41 @@ class BottomTabsPanel(private val settingsPanel: SettingsPanel) {
         buttonPanel.add(restoreButton)
         buttonPanel.add(saveButton)
 
-        root.add(tabbedPane, BorderLayout.CENTER)
-        root.add(buttonPanel, BorderLayout.SOUTH)
+        contentPanel.background = UiTheme.Colors.surface
+        contentPanel.add(tabbedPane, BorderLayout.CENTER)
+        contentPanel.add(buttonPanel, BorderLayout.SOUTH)
+
+        root.add(toggleBar, BorderLayout.NORTH)
+        root.add(contentPanel, BorderLayout.CENTER)
 
         settingsPanel.setDialogParent(root)
+    }
+
+    /** Public API for keyboard shortcut (Escape key) */
+    fun toggle() = toggleCollapse()
+
+    private fun toggleCollapse() {
+        val splitPane = root.parent as? javax.swing.JSplitPane ?: return
+        collapsed = !collapsed
+        if (collapsed) {
+            savedDividerLocation = splitPane.dividerLocation
+            contentPanel.isVisible = false
+            root.minimumSize = java.awt.Dimension(0, 0)
+            root.preferredSize = java.awt.Dimension(0, collapseButton.preferredSize.height + 6)
+            splitPane.dividerLocation = splitPane.height - splitPane.dividerSize - collapseButton.preferredSize.height - 6
+            collapseButton.text = "\u25B6 Settings"
+        } else {
+            contentPanel.isVisible = true
+            root.minimumSize = java.awt.Dimension(0, 90)
+            root.preferredSize = java.awt.Dimension(0, 240)
+            if (savedDividerLocation > 0) {
+                splitPane.dividerLocation = savedDividerLocation
+            }
+            collapseButton.text = "\u25BC Settings"
+        }
+        root.revalidate()
+        root.repaint()
+        splitPane.revalidate()
+        splitPane.repaint()
     }
 }
