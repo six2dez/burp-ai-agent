@@ -330,7 +330,8 @@ class CliBackend(
                 lower.startsWith("listening for changes") ||
                 lower.contains("supports tool updates") ||
                 (lower.startsWith("ready.") && lower.contains("standing by")) ||
-                lower.startsWith("send over your first target")
+                lower.startsWith("send over your first target") ||
+                lower.startsWith("hook registry initialized")
         }
 
         private fun buildOpenCodeCommand(cmd: List<String>, prompt: String): List<String> {
