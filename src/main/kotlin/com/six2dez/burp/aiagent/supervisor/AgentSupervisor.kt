@@ -380,7 +380,7 @@ class AgentSupervisor(
         val baseEnv = mapOf(
             "BURP_AI_AGENT_SESSION_ID" to sessionId,
             "BURP_AI_AGENT_DETERMINISM" to determinism.toString(),
-            "PATH" to buildCliPath()
+            "PATH" to buildCliPathStatic()
         ) + mcpEnv
 
         return when (backendId) {
@@ -728,11 +728,96 @@ class AgentSupervisor(
         httpClient.connectionPool.evictAll()
     }
 
-    private fun buildCliPath(): String {
-        val current = System.getenv("PATH").orEmpty()
-        val defaults = listOf("/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin")
-        val existing = current.split(":").filter { it.isNotBlank() }.toMutableSet()
-        defaults.forEach { existing.add(it) }
-        return existing.joinToString(":")
+    companion object {
+        @Volatile
+        private var cachedPath: String? = null
+
+        fun buildCliPathStatic(): String {
+            cachedPath?.let { return it }
+
+            val initialBase = System.getenv("PATH").orEmpty()
+            val userHome = System.getProperty("user.home")
+            val sep = java.io.File.pathSeparator
+            val os = System.getProperty("os.name").lowercase(java.util.Locale.ROOT)
+            val isWin = os.contains("win")
+
+            if (isWin) {
+                cachedPath = initialBase
+                return initialBase
+            }
+
+            // On Unix (macOS/Linux), Burp often has a truncated PATH if not started from terminal.
+            // We try multiple strategies to find the "real" user PATH.
+            val capturedPath = capturePathFromShells() ?: initialBase
+
+            // Merge everything and inject common local folders that are often missed
+            val rawList = (capturedPath.split(sep) + initialBase.split(sep)).toMutableList()
+            
+            val commonFolders = listOf(
+                "~/.local/bin",
+                "~/bin",
+                "/opt/homebrew/bin",
+                "/usr/local/bin"
+            )
+
+            for (f in commonFolders) {
+                val expanded = expandHome(f, userHome)
+                if (java.io.File(expanded).exists()) {
+                    rawList.add(expanded)
+                }
+            }
+
+            val finalPath = rawList.filter { it.isNotBlank() }.distinct().joinToString(sep)
+            
+            cachedPath = finalPath
+            return finalPath
+        }
+
+        private fun expandHome(path: String, home: String): String {
+            return if (path.startsWith("~")) {
+                home + path.substring(1)
+            } else path
+        }
+
+        private fun capturePathFromShells(): String? {
+            val shells = listOf(
+                System.getenv("SHELL"),
+                "/bin/zsh", "/usr/bin/zsh",
+                "/bin/bash", "/usr/bin/bash",
+                "/bin/sh"
+            ).filterNotNull().distinct()
+
+            for (shellPath in shells) {
+                if (!java.io.File(shellPath).exists()) continue
+                
+                // Strategy A: Standard login shell
+                val captured = tryCapture(shellPath, "-l", "echo ___BURP_PATH___\$PATH")
+                if (captured != null && (captured.contains(".local/bin") || captured.contains("homebrew"))) {
+                    return captured
+                }
+
+                // Strategy B: Explicit source (often needed for macOS GUI apps)
+                if (shellPath.endsWith("zsh")) {
+                    val fallback = tryCapture(shellPath, "-c", "source ~/.zshrc 2>/dev/null; echo ___BURP_PATH___\$PATH")
+                    if (fallback != null) return fallback
+                }
+            }
+            return null
+        }
+
+        private fun tryCapture(shellPath: String, flag: String, cmd: String): String? {
+            try {
+                val process = ProcessBuilder(shellPath, flag, "-c", cmd).start()
+                val output = process.inputStream.bufferedReader().use { it.readText() }
+                if (process.waitFor() == 0 && output.contains("___BURP_PATH___")) {
+                    val result = output.substringAfter("___BURP_PATH___").substringBefore("\n").trim()
+                    if (result.isNotBlank()) {
+                        return result
+                    }
+                }
+            } catch (_: Exception) {
+            }
+            return null
+        }
     }
 }

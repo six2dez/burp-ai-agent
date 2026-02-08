@@ -53,14 +53,23 @@ class BackendRegistry(private val api: MontoyaApi) {
         // Optional drop-in backend JARs
         loadExternalBackendJars()
 
-        api.logging().logToOutput("Backends available: ${listBackendIds().joinToString(", ")}")
+        api.logging().logToOutput("Total backends registered: ${backends.size}")
     }
 
     fun get(id: String): AiBackend? = backends[id]
 
-    fun listBackendIds(): List<String> = backends.values
-        .sortedBy { it.displayName }
-        .map { it.id }
+    private val availabilityCache = ConcurrentHashMap<Pair<String, Int>, Boolean>()
+
+    fun listBackendIds(settings: com.six2dez.burp.aiagent.config.AgentSettings): List<String> {
+        val settingsHash = settings.hashCode()
+        return backends.values
+            .filter { backend ->
+                val cacheKey = Pair(backend.id, settingsHash)
+                availabilityCache.getOrPut(cacheKey) { backend.isAvailable(settings) }
+            }
+            .sortedBy { it.displayName }
+            .map { it.id }
+    }
 
     fun shutdown() {
         backends.clear()

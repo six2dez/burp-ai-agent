@@ -31,6 +31,7 @@ interface AiBackend {
     val id: String
     val displayName: String
     fun launch(config: BackendLaunchConfig): AgentConnection
+    fun isAvailable(settings: com.six2dez.burp.aiagent.config.AgentSettings): Boolean = true
 }
 
 interface SessionAwareConnection : AgentConnection {

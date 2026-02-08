@@ -31,6 +31,29 @@ class CliBackend(
         }
     }
 
+    override fun isAvailable(settings: com.six2dez.burp.aiagent.config.AgentSettings): Boolean {
+        val command = when (id) {
+            "claude-cli" -> settings.claudeCmd
+            "gemini-cli" -> settings.geminiCmd
+            "codex-cli" -> settings.codexCmd
+            "opencode-cli" -> settings.opencodeCmd
+            "ollama" -> settings.ollamaCliCmd
+            else -> ""
+        }
+        if (command.isBlank()) return false
+        val cmdList = command.trim().split("\\s+".toRegex())
+        val env = mapOf("PATH" to com.six2dez.burp.aiagent.supervisor.AgentSupervisor.buildCliPathStatic())
+        val resolved = resolveCommand(cmdList, env)
+        if (resolved.isEmpty()) return false
+        val executable = resolved[0]
+        val file = java.io.File(executable)
+        val available = file.exists() && file.canExecute()
+        if (available) {
+            com.six2dez.burp.aiagent.backends.BackendDiagnostics.log("[Burp AI Agent] Found $displayName: $executable")
+        }
+        return available
+    }
+
     private class NonInteractiveCliConnection(
         private val backendId: String,
         private val baseCommand: List<String>,
@@ -82,8 +105,9 @@ class CliBackend(
                 }
 
                 val (cmd, stdinText) = buildCommand(promptToSend, outputFile)
+                val resolvedCmd = resolveCommand(cmd, env)
                 try {
-                    val process = ProcessBuilder(normalizeWindowsCommand(cmd))
+                    val process = ProcessBuilder(normalizeWindowsCommand(resolvedCmd))
                         .apply { environment().putAll(env) }
                         .redirectErrorStream(true)
                         .directory(java.io.File(System.getProperty("user.home")))
@@ -513,7 +537,8 @@ class CliBackend(
         }
 
         private fun startProcess(cmd: List<String>, env: Map<String, String>): Process {
-            val normalizedCmd = normalizeWindowsCommand(cmd)
+            val resolvedCmd = resolveCommand(cmd, env)
+            val normalizedCmd = normalizeWindowsCommand(resolvedCmd)
             if (usePty && isUnixLike()) {
                 val ptyCmd = buildPtyCommand(normalizedCmd)
                 return ProcessBuilder(ptyCmd)
@@ -570,6 +595,43 @@ private fun normalizeWindowsCommand(cmd: List<String>): List<String> {
     } else {
         cmd
     }
+}
+
+private fun resolveCommand(cmd: List<String>, env: Map<String, String>): List<String> {
+    if (cmd.isEmpty()) return cmd
+    val first = cmd[0]
+    
+    // 1. If already an absolute path, verify and return
+    val firstFile = java.io.File(first)
+    if (firstFile.isAbsolute) {
+        return if (firstFile.exists()) {
+            com.six2dez.burp.aiagent.backends.BackendDiagnostics.log("[Burp AI Agent] Resolved absolute: $first")
+            cmd
+        } else {
+            com.six2dez.burp.aiagent.backends.BackendDiagnostics.log("[Burp AI Agent] Absolute path not found: $first")
+            emptyList()
+        }
+    }
+
+    // 2. Manual PATH search to avoid dependency on 'which' / 'where'
+    val path = env["PATH"] ?: System.getenv("PATH") ?: ""
+    val sep = java.io.File.pathSeparator
+    val isWin = isWindows()
+    val extensions = if (isWin) listOf("", ".exe", ".bat", ".cmd") else listOf("")
+
+    for (dir in path.split(sep)) {
+        if (dir.isBlank()) continue
+        for (ext in extensions) {
+            val candidate = java.io.File(dir, first + ext)
+            try {
+                if (candidate.exists() && candidate.canExecute()) {
+                    return listOf(candidate.absolutePath) + cmd.drop(1)
+                }
+            } catch (_: Exception) {}
+        }
+    }
+
+    return emptyList()
 }
 
 private fun isWindows(): Boolean {
