@@ -2,7 +2,6 @@ package com.six2dez.burp.aiagent.ui.components
 
 import com.six2dez.burp.aiagent.ui.UiTheme
 import java.awt.BorderLayout
-import java.awt.Color
 import javax.swing.JLabel
 import javax.swing.JPanel
 import javax.swing.border.EmptyBorder
@@ -12,9 +11,9 @@ class DependencyBanner(message: String) : JPanel(BorderLayout()) {
     private val label = JLabel(message)
 
     init {
-        background = Color(0xFFF3CD.toInt())
+        background = UiTheme.Colors.warningBannerBg
         border = LineBorder(UiTheme.Colors.outlineVariant, 1, true)
-        label.foreground = UiTheme.Colors.onSurface
+        label.foreground = UiTheme.Colors.warningBannerFg
         label.font = UiTheme.Typography.body
         label.border = EmptyBorder(6, 10, 6, 10)
         add(label, BorderLayout.CENTER)

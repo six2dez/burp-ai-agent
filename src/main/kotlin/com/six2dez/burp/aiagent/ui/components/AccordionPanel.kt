@@ -82,7 +82,7 @@ class AccordionPanel(
 
     private fun updateExpandedState() {
         contentPanel.isVisible = expanded
-        toggleLabel.text = if (expanded) "v" else ">"
+        toggleLabel.text = if (expanded) "\u25BC" else "\u25B6"
         revalidate()
         repaint()
     }

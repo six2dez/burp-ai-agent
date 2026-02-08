@@ -28,6 +28,10 @@ object UiTheme {
         val inputForeground: Color get() = UIManager.getColor("TextField.foreground") ?: Color(0x1A1A1A)
         val comboBackground: Color get() = UIManager.getColor("ComboBox.background") ?: Color.WHITE
         val comboForeground: Color get() = UIManager.getColor("ComboBox.foreground") ?: Color(0x1A1A1A)
+
+        // Banner
+        val warningBannerBg: Color get() = if (isDarkTheme) Color(0x3E2723) else Color(0xFFF3CD)
+        val warningBannerFg: Color get() = if (isDarkTheme) Color(0xFFCC80) else onSurface
     }
 
     object Typography {
