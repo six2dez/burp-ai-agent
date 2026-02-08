@@ -28,6 +28,12 @@ object UiTheme {
         val inputForeground: Color get() = UIManager.getColor("TextField.foreground") ?: Color(0x1A1A1A)
         val comboBackground: Color get() = UIManager.getColor("ComboBox.background") ?: Color.WHITE
         val comboForeground: Color get() = UIManager.getColor("ComboBox.foreground") ?: Color(0x1A1A1A)
+
+        // Chat bubble colors
+        val userBubble: Color get() = if (isDarkTheme) Color(0x1A3A2A) else Color(0xE8F5E9)
+        val aiBubble: Color get() = if (isDarkTheme) Color(0x1E2A3A) else Color(0xE3F2FD)
+        val userRole: Color get() = Color(0x2E7D32) // green
+        val aiRole: Color get() = primary // orange
     }
 
     object Typography {

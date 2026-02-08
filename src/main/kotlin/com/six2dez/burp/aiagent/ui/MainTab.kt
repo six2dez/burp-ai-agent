@@ -105,8 +105,7 @@ class MainTab(
         titleBox.add(javax.swing.Box.createRigidArea(Dimension(0, 4)))
         titleBox.add(subtitle)
 
-        val actions = JPanel()
-        actions.layout = BoxLayout(actions, BoxLayout.X_AXIS)
+        val actions = JPanel(java.awt.FlowLayout(java.awt.FlowLayout.RIGHT, 12, 4))
         actions.isOpaque = false
 
         mcpLabel.font = UiTheme.Typography.body
@@ -194,9 +193,7 @@ class MainTab(
         clientGroup.add(sessionLabel)
 
         actions.add(mcpGroup)
-        actions.add(javax.swing.Box.createRigidArea(Dimension(24, 0)))
         actions.add(scannerGroup)
-        actions.add(javax.swing.Box.createRigidArea(Dimension(24, 0)))
         actions.add(clientGroup)
 
         val mainContent = javax.swing.JSplitPane(
