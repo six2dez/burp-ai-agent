@@ -1687,7 +1687,14 @@ object McpToolExecutor {
     private inline fun <reified T : Any> decode(raw: String?): T {
         val jsonText = raw?.trim().orEmpty().ifBlank { "{}" }
         val element = decodeJson.parseToJsonElement(jsonText)
-        return decodeJson.decodeFromJsonElement(element)
+        try {
+            return decodeJson.decodeFromJsonElement(element)
+        } catch (e: kotlinx.serialization.MissingFieldException) {
+            throw IllegalArgumentException(
+                "Missing required argument(s) for ${T::class.simpleName}: ${e.message}. " +
+                "Please provide the required fields in the JSON arguments."
+            )
+        }
     }
 
     private fun resolveAlias(toolName: String): String {
@@ -1953,10 +1960,14 @@ data class CookieEntry(
 )
 
 @Serializable
-data class ScopeCheck(val url: String)
+data class ScopeCheck(val url: String = "") {
+    init { require(url.isNotBlank()) { "'url' is required for scope_check. Provide the URL to check." } }
+}
 
 @Serializable
-data class ScopeUpdate(val url: String)
+data class ScopeUpdate(val url: String = "") {
+    init { require(url.isNotBlank()) { "'url' is required for scope_include/scope_exclude. Provide the URL to modify." } }
+}
 
 @Serializable
 data class CollaboratorGenerate(
