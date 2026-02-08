@@ -62,6 +62,9 @@ class ChatPanel(
     private val sessionStates = linkedMapOf<String, ToolSessionState>()
     private val sessionsById = linkedMapOf<String, ChatSession>()
     private var mcpAvailable = true
+    private val usageStatsLine1 = JLabel("No usage yet")
+    private val usageStatsLine2 = JLabel("")
+    private val usageStatsLine3 = JLabel("")
 
     init {
         root.background = UiTheme.Colors.surface
@@ -113,8 +116,23 @@ class ChatPanel(
         listHeader.add(newSessionBtn, BorderLayout.EAST)
         listHeader.border = EmptyBorder(8, 12, 8, 12)
 
+        // Usage stats footer
+        val smallFont = UiTheme.Typography.body.deriveFont((UiTheme.Typography.body.size - 1).toFloat())
+        val dimColor = UiTheme.Colors.onSurfaceVariant
+        val usageFooter = JPanel()
+        usageFooter.layout = BoxLayout(usageFooter, BoxLayout.Y_AXIS)
+        usageFooter.isOpaque = false
+        usageFooter.border = EmptyBorder(4, 12, 8, 12)
+        for (lbl in listOf(usageStatsLine1, usageStatsLine2, usageStatsLine3)) {
+            lbl.font = smallFont
+            lbl.foreground = dimColor
+            usageFooter.add(lbl)
+        }
+        updateUsageStatsLabel()
+
         sessionsPanel.add(listHeader, BorderLayout.NORTH)
         sessionsPanel.add(listScroll, BorderLayout.CENTER)
+        sessionsPanel.add(usageFooter, BorderLayout.SOUTH)
         sessionsPanel.background = UiTheme.Colors.surface
 
         val chatContainer = JPanel(BorderLayout())
@@ -249,6 +267,12 @@ class ChatPanel(
         applySettings(settings)
         val session = sessionsById[sessionId]
         val backendId = session?.backendId ?: settings.preferredBackendId
+        // Track backend usage on session
+        if (session != null) {
+            session.backendsUsed[backendId] = (session.backendsUsed[backendId] ?: 0) + 1
+            session.messageCount++
+            session.totalCharsIn += userText.length.toLong()
+        }
         onStatusChanged()
 
         val sessionPanel = sessionPanels[sessionId] ?: return
@@ -278,8 +302,13 @@ class ChatPanel(
                 if (err != null) {
                     SwingUtilities.invokeLater { assistant.append("\n[Error] ${err.message}") }
                 } else {
+                    val finalResp = responseBuffer.toString()
+                    if (session != null) {
+                        session.totalCharsOut += finalResp.length.toLong()
+                    }
                     SwingUtilities.invokeLater {
                         assistant.append("\n")
+                        refreshSessionList()
                         onResponseReady()
                     }
                     if (allowToolCalls && state.toolsMode && toolContext != null) {
@@ -361,6 +390,10 @@ class ChatPanel(
             sessionStates.remove(session.id)
             sessionsById.remove(session.id)
             sessionsModel.removeElement(session)
+            // Clean persisted data
+            try {
+                api.persistence().preferences().setString(SESSION_MSG_KEY_PREFIX + session.id, "")
+            } catch (_: Exception) {}
             
             if (sessionsModel.isEmpty()) {
                 // Create a default session if all gone
@@ -368,6 +401,7 @@ class ChatPanel(
             } else if (sessionsList.isSelectionEmpty) {
                 sessionsList.selectedIndex = sessionsModel.size - 1
             }
+            updateUsageStatsLabel()
         }
     }
 
@@ -549,7 +583,165 @@ class ChatPanel(
     }
 
 
-    data class ChatSession(val id: String, val title: String, val createdAt: Long, val backendId: String) {
+    private fun refreshSessionList() {
+        val selected = sessionsList.selectedIndex
+        for (i in 0 until sessionsModel.size) {
+            sessionsModel.set(i, sessionsModel.get(i))
+        }
+        if (selected >= 0 && selected < sessionsModel.size) {
+            sessionsList.selectedIndex = selected
+        }
+        updateUsageStatsLabel()
+    }
+
+    private fun updateUsageStatsLabel() {
+        val stats = usageStats()
+        if (stats.totalMessages == 0) {
+            usageStatsLine1.text = "No usage yet"
+            usageStatsLine2.text = ""
+            usageStatsLine3.text = ""
+        } else {
+            usageStatsLine1.text = "${stats.totalMessages} msgs | In: ${formatChars(stats.totalCharsIn)} | Out: ${formatChars(stats.totalCharsOut)}"
+            usageStatsLine2.text = stats.perBackend.entries
+                .sortedByDescending { it.value }
+                .joinToString(", ") { "${it.key}: ${it.value}" }
+            usageStatsLine3.text = ""
+        }
+    }
+
+    private fun formatChars(chars: Long): String {
+        return when {
+            chars >= 1_000_000 -> String.format("%.1fM", chars / 1_000_000.0)
+            chars >= 1_000 -> String.format("%.1fK", chars / 1_000.0)
+            else -> "${chars}"
+        }
+    }
+
+    // ── Persistence: save/restore chat sessions via Burp preferences ──
+
+    private val SESSIONS_KEY = "chat.sessions"
+    private val SESSION_MSG_KEY_PREFIX = "chat.messages."
+
+    fun saveSessions() {
+        try {
+            val prefs = api.persistence().preferences()
+            val sessionList = sessionsById.values.map { s ->
+                buildString {
+                    append(s.id)
+                    append('\t')
+                    append(s.title)
+                    append('\t')
+                    append(s.createdAt)
+                    append('\t')
+                    append(s.backendsUsed.entries.joinToString(",") { "${it.key}:${it.value}" })
+                    append('\t')
+                    append(s.messageCount)
+                    append('\t')
+                    append(s.totalCharsIn)
+                    append('\t')
+                    append(s.totalCharsOut)
+                }
+            }
+            prefs.setString(SESSIONS_KEY, sessionList.joinToString("\n"))
+            api.logging().logToOutput("[ChatPanel] Saved ${sessionsById.size} sessions.")
+        } catch (e: Exception) {
+            api.logging().logToError("[ChatPanel] Failed to save sessions: ${e.message}")
+        }
+    }
+
+    fun restoreSessions() {
+        try {
+            val prefs = api.persistence().preferences()
+            val raw = prefs.getString(SESSIONS_KEY) ?: return
+            if (raw.isBlank()) return
+            val lines = raw.split('\n').filter { it.isNotBlank() }
+            if (lines.isEmpty()) return
+
+            for (line in lines) {
+                val parts = line.split('\t')
+                if (parts.size < 3) continue
+                val id = parts[0]
+                val title = parts[1]
+                val createdAt = parts[2].toLongOrNull() ?: System.currentTimeMillis()
+                val backendsRaw = parts.getOrNull(3).orEmpty()
+                val backendsUsed = mutableMapOf<String, Int>()
+                if (backendsRaw.isNotBlank()) {
+                    for (entry in backendsRaw.split(",")) {
+                        val kv = entry.split(":", limit = 2)
+                        if (kv.size == 2 && kv[1].toIntOrNull() != null) {
+                            backendsUsed[kv[0]] = kv[1].toInt()
+                        } else if (kv.size == 1 && kv[0].isNotBlank()) {
+                            backendsUsed[kv[0]] = 0
+                        }
+                    }
+                }
+                val messageCount = parts.getOrNull(4)?.toIntOrNull() ?: 0
+                val totalCharsIn = parts.getOrNull(5)?.toLongOrNull() ?: 0L
+                val totalCharsOut = parts.getOrNull(6)?.toLongOrNull() ?: 0L
+
+                val session = ChatSession(
+                    id = id,
+                    title = title,
+                    createdAt = createdAt,
+                    backendId = backendsUsed.keys.firstOrNull() ?: "unknown",
+                    backendsUsed = backendsUsed,
+                    messageCount = messageCount,
+                    totalCharsIn = totalCharsIn,
+                    totalCharsOut = totalCharsOut
+                )
+
+                sessionsModel.addElement(session)
+                sessionsById[id] = session
+                val panel = SessionPanel()
+                sessionPanels[id] = panel
+                sessionStates[id] = ToolSessionState()
+                chatCards.add(panel.root, id)
+            }
+
+            if (sessionsModel.size > 0) {
+                sessionsList.selectedIndex = sessionsModel.size - 1
+                showSession(sessionsById.keys.last())
+            }
+            api.logging().logToOutput("[ChatPanel] Restored ${sessionsById.size} sessions.")
+        } catch (e: Exception) {
+            api.logging().logToError("[ChatPanel] Failed to restore sessions: ${e.message}")
+        }
+    }
+
+    /** Aggregate usage stats across all sessions. */
+    fun usageStats(): UsageStats {
+        var totalMsgs = 0
+        var totalIn = 0L
+        var totalOut = 0L
+        val backendCounts = mutableMapOf<String, Int>()
+        for (s in sessionsById.values) {
+            totalMsgs += s.messageCount
+            totalIn += s.totalCharsIn
+            totalOut += s.totalCharsOut
+            for ((backend, count) in s.backendsUsed) {
+                backendCounts[backend] = (backendCounts[backend] ?: 0) + count
+            }
+        }
+        return UsageStats(totalMsgs, totalIn, totalOut, backendCounts)
+    }
+
+    data class UsageStats(
+        val totalMessages: Int,
+        val totalCharsIn: Long,
+        val totalCharsOut: Long,
+        val perBackend: Map<String, Int>
+    )
+
+    data class ChatSession(
+        val id: String,
+        val title: String,
+        val createdAt: Long,
+        val backendId: String,
+        val backendsUsed: MutableMap<String, Int> = mutableMapOf(),
+        var messageCount: Int = 0,
+        var totalCharsIn: Long = 0,
+        var totalCharsOut: Long = 0
+    ) {
         override fun toString(): String = title
     }
 

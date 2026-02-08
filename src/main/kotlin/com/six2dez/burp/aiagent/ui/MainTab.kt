@@ -64,6 +64,7 @@ class MainTab(
         DependencyBanner("MCP Server must be enabled. Toggle MCP to enable AI features.")
     private var syncingToggles = false
     private var healthTimer: Timer? = null
+    private var sessionPersistTimer: Timer? = null
 
     init {
         settingsPanel = SettingsPanel(api, backends, supervisor, audit, mcpSupervisor, passiveAiScanner, activeAiScanner)
@@ -231,10 +232,21 @@ class MainTab(
         wireActions()
         renderStatus()
         mcpStatusTimer.start()
+
+        // Restore persisted chat sessions
+        chatPanel.restoreSessions()
+
+        // Auto-save sessions every 30 seconds and update usage stats
+        sessionPersistTimer = Timer(30_000) {
+            chatPanel.saveSessions()
+            settingsPanel.updateUsageSummary(chatPanel.usageStats())
+        }
+        sessionPersistTimer?.start()
     }
 
     private fun notifyResponseReady() {
         SwingUtilities.invokeLater {
+            settingsPanel.updateUsageSummary(chatPanel.usageStats())
             val pane = ensureTabPaneAttached() ?: return@invokeLater
             if (pane.selectedComponent == root) return@invokeLater
             setAttention(true)
@@ -566,5 +578,8 @@ class MainTab(
         mcpStatusTimer.stop()
         healthTimer?.stop()
         healthTimer = null
+        sessionPersistTimer?.stop()
+        sessionPersistTimer = null
+        chatPanel.saveSessions()
     }
 }

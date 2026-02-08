@@ -532,6 +532,10 @@ class SettingsPanel(
 
     fun helpTabComponent(): JComponent = helpTab
 
+    fun updateUsageSummary(stats: ChatPanel.UsageStats) {
+        // Usage is displayed in sidebar only
+    }
+
     fun saveSettings() {
         applyAndSaveSettings(currentSettings())
     }
