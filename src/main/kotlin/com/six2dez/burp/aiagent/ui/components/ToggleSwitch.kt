@@ -67,6 +67,12 @@ class ToggleSwitch(selected: Boolean = false) : JToggleButton() {
         }
         g2.fillRoundRect(0, 0, trackWidth, trackHeight, trackHeight, trackHeight)
 
+        // Focus ring
+        if (isFocusOwner) {
+            g2.color = UiTheme.Colors.primary
+            g2.drawRoundRect(-1, -1, trackWidth + 1, trackHeight + 1, trackHeight + 2, trackHeight + 2)
+        }
+
         // Thumb
         val thumbY = (trackHeight - thumbDiameter) / 2f
         g2.color = if (isEnabled) java.awt.Color.WHITE else java.awt.Color(255, 255, 255, 180)

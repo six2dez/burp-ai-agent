@@ -12,9 +12,9 @@ class DependencyBanner(message: String) : JPanel(BorderLayout()) {
     private val label = JLabel(message)
 
     init {
-        background = Color(0xFFF3CD.toInt())
+        background = UiTheme.Colors.warningBannerBg
         border = LineBorder(UiTheme.Colors.outlineVariant, 1, true)
-        label.foreground = UiTheme.Colors.onSurface
+        label.foreground = UiTheme.Colors.warningBannerFg
         label.font = UiTheme.Typography.body
         label.border = EmptyBorder(6, 10, 6, 10)
         add(label, BorderLayout.CENTER)

@@ -86,6 +86,9 @@ class BottomTabsPanel(private val settingsPanel: SettingsPanel) {
         settingsPanel.setDialogParent(root)
     }
 
+    /** Public API for keyboard shortcut (Escape key) */
+    fun toggle() = toggleCollapse()
+
     private fun toggleCollapse() {
         val splitPane = root.parent as? javax.swing.JSplitPane ?: return
         collapsed = !collapsed
