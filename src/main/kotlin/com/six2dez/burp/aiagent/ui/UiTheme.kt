@@ -32,6 +32,10 @@ object UiTheme {
         // Banner
         val warningBannerBg: Color get() = if (isDarkTheme) Color(0x3E2723) else Color(0xFFF3CD)
         val warningBannerFg: Color get() = if (isDarkTheme) Color(0xFFCC80) else onSurface
+
+        // Code blocks
+        val codeBlockBg: Color get() = if (isDarkTheme) Color(0x2D2D2D) else Color(0xF0F0F0)
+        val inlineCodeBg: Color get() = if (isDarkTheme) Color(0x3C3C3C) else Color(0xE0E0E0)
     }
 
     object Typography {
