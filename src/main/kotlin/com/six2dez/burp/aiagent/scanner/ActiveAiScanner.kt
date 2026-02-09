@@ -854,25 +854,21 @@ class ActiveAiScanner(
         
         // Get backend info for metadata
         val backendInfo = supervisor.getCurrentBackendInfo()
-        val metadataSection = buildMetadataSection(backendInfo, "Active", confirmation.confidence)
+        val metadataSection = buildMetadataSectionPlain(backendInfo, "Active", confirmation.confidence, "Confirmed via AI active exploitation testing.")
         
-        val detail = buildString {
-            appendLine("Vulnerability confirmed via active testing")
-            appendLine()
-            appendLine("Type: ${target.vulnHint.vulnClass.name}")
-            appendLine("Injection Point: ${target.injectionPoint.type} - ${target.injectionPoint.name}")
-            appendLine("Original Value: ${target.injectionPoint.originalValue.take(100)}")
-            appendLine()
-            appendLine("Payload Used:")
-            appendLine(payload.value.take(500))
-            appendLine()
-            appendLine("Detection Method: ${payload.detectionMethod}")
-            appendLine("Evidence: ${confirmation.evidence}")
-            appendLine()
-            appendLine(metadataSection)
-            appendLine()
-            appendLine("(Confirmed via AI active exploitation testing)")
-        }
+        val detailLines = mutableListOf<String>()
+        detailLines.add("Vulnerability confirmed via active testing")
+        detailLines.add("")
+        detailLines.add("Type:")
+        detailLines.add("  ${target.vulnHint.vulnClass.name}")
+        detailLines.add("  Injection Point: ${target.injectionPoint.type} - ${target.injectionPoint.name}")
+        detailLines.add("  Original Value: ${target.injectionPoint.originalValue.take(100)}")
+        detailLines.add("  Payload Used: ${payload.value.take(500)}")
+        detailLines.add("  Detection Method: ${payload.detectionMethod}")
+        detailLines.add("  Evidence: ${confirmation.evidence}")
+        detailLines.add("")
+        detailLines.addAll(metadataSection.split("\r\n"))
+        val detail = formatIssueDetailHtml(detailLines)
         
         val severity = ScannerIssueSupport.mapSeverity(target.vulnHint.vulnClass)
         val confidence = when {
@@ -888,7 +884,7 @@ class ActiveAiScanner(
             }
             val issue = AuditIssue.auditIssue(
                 title,
-                IssueText.sanitize(detail),
+                detail,
                 ScannerIssueSupport.remediation(target.vulnHint.vulnClass),
                 target.originalRequest.request().url(),
                 severity,
@@ -941,6 +937,45 @@ class ActiveAiScanner(
             appendLine("**Scan Date:** $timestamp UTC")
             appendLine()
             appendLine("---")
+        }
+    }
+
+    private fun buildMetadataSectionPlain(
+        backendInfo: AgentSupervisor.BackendInfo?,
+        scanType: String,
+        confidence: Int,
+        note: String
+    ): String {
+        val lines = mutableListOf<String>()
+        lines.add("AI Analysis Metadata")
+        if (backendInfo != null) {
+            lines.add("  Backend: ${backendInfo.displayName}")
+            if (backendInfo.model != null) {
+                lines.add("  Model: ${backendInfo.model}")
+            }
+        } else {
+            lines.add("  Backend: Unknown")
+        }
+        lines.add("  Scan Type: $scanType")
+        lines.add("  Confidence: $confidence%")
+
+        val timestamp = java.time.Instant.now().toString().replace('T', ' ').substringBefore('.')
+        lines.add("  Scan Date: $timestamp UTC")
+        lines.add("  Note: $note")
+        return lines.joinToString("\r\n")
+    }
+
+    private fun formatIssueDetailHtml(lines: List<String>): String {
+        return lines.joinToString("<br>") { line ->
+            val escaped = line
+                .replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+            if (escaped.startsWith("  ")) {
+                "&nbsp;&nbsp;" + escaped.drop(2)
+            } else {
+                escaped
+            }
         }
     }
 

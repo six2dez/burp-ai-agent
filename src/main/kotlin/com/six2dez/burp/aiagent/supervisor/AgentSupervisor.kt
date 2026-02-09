@@ -231,6 +231,7 @@ class AgentSupervisor(
 
     fun send(
         text: String,
+        history: List<com.six2dez.burp.aiagent.backends.ChatMessage>? = null,
         contextJson: String?,
         privacyMode: PrivacyMode,
         determinismMode: Boolean,
@@ -269,6 +270,7 @@ class AgentSupervisor(
         api.logging().logToOutput("AI send: backend=$backendId session=$sessionId")
         api.logging().logToOutput("AI connection: ${current.connection.javaClass.name}")
         current.connection.send(text,
+            history = history,
             onChunk = { chunk ->
                 audit.logEvent("agent_chunk", mapOf("backendId" to backendId, "chunk" to chunk))
                 onChunk(chunk)
@@ -287,17 +289,18 @@ class AgentSupervisor(
         chatSessionId: String,
         backendId: String,
         text: String,
+        history: List<com.six2dez.burp.aiagent.backends.ChatMessage>? = null,
         contextJson: String?,
         privacyMode: PrivacyMode,
         determinismMode: Boolean,
         onChunk: (String) -> Unit,
         onComplete: (Throwable?) -> Unit
-    ) {
+    ): com.six2dez.burp.aiagent.backends.AgentConnection? {
         lastErrorRef.set(null)
         val backend = registry.get(backendId)
         if (backend == null) {
             onComplete(IllegalStateException("Backend not found: $backendId"))
-            return
+            return null
         }
 
         // Try to reuse an existing connection (for HTTP backends with conversation history)
@@ -307,7 +310,7 @@ class AgentSupervisor(
             connection = existingConn
         } else {
             // Create a new connection with cliSessionId for CLI resume
-            val cliSessionId = chatSessionManager.cliSessionIdFor(chatSessionId)
+            val cliSessionId = chatSessionManager.cliSessionIdFor(chatSessionId, backendId)
             val sessionId = "chat-session-" + java.util.UUID.randomUUID().toString()
             val launchConfig = buildLaunchConfig(backendId, sessionId, embeddedMode = true, cliSessionId = cliSessionId)
             try {
@@ -317,12 +320,13 @@ class AgentSupervisor(
                 lastErrorRef.set(msg)
                 api.logging().logToError(msg)
                 onComplete(e)
-                return
+                return null
             }
         }
 
         api.logging().logToOutput("AI chat send: backend=$backendId chatSession=$chatSessionId")
         connection.send(text,
+            history = history,
             onChunk = { chunk ->
                 audit.logEvent("agent_chunk", mapOf("backendId" to backendId, "chunk" to chunk))
                 onChunk(chunk)
@@ -337,6 +341,7 @@ class AgentSupervisor(
                 onComplete(err)
             }
         )
+        return connection
     }
 
     fun removeChatSession(chatSessionId: String) {
@@ -393,7 +398,7 @@ class AgentSupervisor(
         val baseEnv = mapOf(
             "BURP_AI_AGENT_SESSION_ID" to sessionId,
             "BURP_AI_AGENT_DETERMINISM" to determinism.toString(),
-            "PATH" to buildCliPath()
+            "PATH" to buildCliPathStatic()
         ) + mcpEnv
 
         return when (backendId) {
@@ -741,11 +746,93 @@ class AgentSupervisor(
         httpClient.connectionPool.evictAll()
     }
 
-    private fun buildCliPath(): String {
-        val current = System.getenv("PATH").orEmpty()
-        val defaults = listOf("/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin")
-        val existing = current.split(":").filter { it.isNotBlank() }.toMutableSet()
-        defaults.forEach { existing.add(it) }
-        return existing.joinToString(":")
+    companion object {
+        @Volatile
+        private var cachedPath: String? = null
+
+        fun buildCliPathStatic(): String {
+            cachedPath?.let { return it }
+
+            val initialBase = System.getenv("PATH").orEmpty()
+            val userHome = System.getProperty("user.home")
+            val sep = java.io.File.pathSeparator
+            val os = System.getProperty("os.name").lowercase(java.util.Locale.ROOT)
+            val isWin = os.contains("win")
+
+            if (isWin) {
+                cachedPath = initialBase
+                return initialBase
+            }
+
+            // On Unix (macOS/Linux), Burp often has a truncated PATH if not started from terminal.
+            val capturedPath = capturePathFromShells() ?: initialBase
+
+            // Merge everything and inject common local folders that are often missed
+            val rawList = (capturedPath.split(sep) + initialBase.split(sep)).toMutableList()
+
+            val commonFolders = listOf(
+                "~/.local/bin",
+                "~/bin",
+                "/opt/homebrew/bin",
+                "/usr/local/bin"
+            )
+
+            for (f in commonFolders) {
+                val expanded = expandHome(f, userHome)
+                if (java.io.File(expanded).exists()) {
+                    rawList.add(expanded)
+                }
+            }
+
+            val finalPath = rawList.filter { it.isNotBlank() }.distinct().joinToString(sep)
+
+            cachedPath = finalPath
+            return finalPath
+        }
+
+        private fun expandHome(path: String, home: String): String {
+            return if (path.startsWith("~")) {
+                home + path.substring(1)
+            } else path
+        }
+
+        private fun capturePathFromShells(): String? {
+            val shells = listOf(
+                System.getenv("SHELL"),
+                "/bin/zsh", "/usr/bin/zsh",
+                "/bin/bash", "/usr/bin/bash",
+                "/bin/sh"
+            ).filterNotNull().distinct()
+
+            for (shellPath in shells) {
+                if (!java.io.File(shellPath).exists()) continue
+
+                // Strategy A: Standard login shell
+                val captured = tryCapture(shellPath, listOf("-l", "-c", "echo ___BURP_PATH___\$PATH"))
+                if (!captured.isNullOrBlank()) return captured
+
+                // Strategy B: Explicit source (often needed for macOS GUI apps)
+                if (shellPath.endsWith("zsh")) {
+                    val fallback = tryCapture(shellPath, listOf("-c", "source ~/.zshrc 2>/dev/null; echo ___BURP_PATH___\$PATH"))
+                    if (!fallback.isNullOrBlank()) return fallback
+                }
+            }
+            return null
+        }
+
+        private fun tryCapture(shellPath: String, args: List<String>): String? {
+            try {
+                val process = ProcessBuilder(listOf(shellPath) + args).start()
+                val output = process.inputStream.bufferedReader().use { it.readText() }
+                if (process.waitFor() == 0 && output.contains("___BURP_PATH___")) {
+                    val result = output.substringAfter("___BURP_PATH___").substringBefore("\n").trim()
+                    if (result.isNotBlank()) {
+                        return result
+                    }
+                }
+            } catch (_: Exception) {
+            }
+            return null
+        }
     }
 }

@@ -28,16 +28,32 @@ object UiTheme {
         val inputForeground: Color get() = UIManager.getColor("TextField.foreground") ?: Color(0x1A1A1A)
         val comboBackground: Color get() = UIManager.getColor("ComboBox.background") ?: Color.WHITE
         val comboForeground: Color get() = UIManager.getColor("ComboBox.foreground") ?: Color(0x1A1A1A)
+
+        // Chat bubble colors
+        val userBubble: Color get() = if (isDarkTheme) Color(0x264653) else Color(0xDCF8C6)
+        val aiBubble: Color get() = if (isDarkTheme) Color(0x3D3D3D) else Color(0xFFFFFF)
+        val userRole: Color get() = if (isDarkTheme) Color(0x81C784) else Color(0x2E7D32)
+        val aiRole: Color get() = if (isDarkTheme) Color(0xFFB74D) else primary
+
+        // Banner
+        val warningBannerBg: Color get() = if (isDarkTheme) Color(0x3E2723) else Color(0xFFF3CD)
+        val warningBannerFg: Color get() = if (isDarkTheme) Color(0xFFCC80) else onSurface
+
+        // Code blocks
+        val codeBlockBg: Color get() = if (isDarkTheme) Color(0x2D2D2D) else Color(0xF0F0F0)
+        val inlineCodeBg: Color get() = if (isDarkTheme) Color(0x3C3C3C) else Color(0xE0E0E0)
     }
 
     object Typography {
         private val baseFont: Font get() = UIManager.getFont("Label.font") ?: Font("SansSerif", Font.PLAIN, 14)
         private val baseSize: Int get() = baseFont.size
+        private val textAreaFont: Font get() = UIManager.getFont("TextArea.font") ?: baseFont
 
         val headline: Font get() = baseFont.deriveFont(Font.BOLD, (baseSize * 1.8f))
         val title: Font get() = baseFont.deriveFont(Font.BOLD, (baseSize * 1.2f))
         val body: Font get() = baseFont.deriveFont(Font.PLAIN, baseSize.toFloat())
         val label: Font get() = baseFont.deriveFont(Font.BOLD, baseSize.toFloat())
         val mono: Font get() = UIManager.getFont("TextArea.font") ?: Font("Monospaced", Font.PLAIN, baseSize)
+        val chatBody: Font get() = textAreaFont.deriveFont(Font.PLAIN, textAreaFont.size.toFloat())
     }
 }

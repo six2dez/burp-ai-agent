@@ -127,9 +127,22 @@ internal fun runTool(
     return try {
         val output = context.limitOutput(execute())
         CallToolResult(content = listOf(TextContent(output)))
+    } catch (e: kotlinx.serialization.SerializationException) {
+        // Extract missing field from the error message for a cleaner message
+        val msg = e.message.orEmpty()
+        val fieldMatch = Regex("Field '([^']+)' is required").find(msg)
+        val cleanMsg = if (fieldMatch != null) {
+            "Missing required parameter: ${fieldMatch.groupValues[1]}"
+        } else {
+            "Invalid tool arguments: $msg"
+        }
+        CallToolResult(
+            content = listOf(TextContent(cleanMsg)),
+            isError = true
+        )
     } catch (e: Exception) {
         CallToolResult(
-            content = listOf(TextContent("Error: ${e.message}")),
+            content = listOf(TextContent(e.message ?: "Unknown error")),
             isError = true
         )
     } finally {

@@ -51,6 +51,7 @@ class SettingsPanel(
     var onMcpEnabledChanged: ((Boolean) -> Unit)? = null
     var onPassiveAiEnabledChanged: ((Boolean) -> Unit)? = null
     var onActiveAiEnabledChanged: ((Boolean) -> Unit)? = null
+    var onSettingsChanged: ((AgentSettings) -> Unit)? = null
     private var dialogParent: JComponent? = null
     private lateinit var generalTab: JComponent
     private lateinit var passiveScannerTab: JComponent
@@ -97,7 +98,7 @@ class SettingsPanel(
         isVisible = false
     }
     private val refreshProfilesBtn = JButton("Refresh")
-    private val preferredBackend = JComboBox(backends.listBackendIds().toTypedArray()).apply {
+    private val preferredBackend = JComboBox(backends.listBackendIds(settings).toTypedArray()).apply {
         selectedItem = settings.preferredBackendId
         preferredSize = java.awt.Dimension(140, preferredSize.height)
         maximumSize = java.awt.Dimension(140, preferredSize.height)
@@ -531,6 +532,10 @@ class SettingsPanel(
 
     fun helpTabComponent(): JComponent = helpTab
 
+    fun updateUsageSummary(stats: ChatPanel.UsageStats) {
+        // Usage is displayed in sidebar only
+    }
+
     fun saveSettings() {
         applyAndSaveSettings(currentSettings())
     }
@@ -787,6 +792,7 @@ class SettingsPanel(
         activeAiScanner.setEnabled(updated.activeAiEnabled)
         
         api.logging().logToOutput("AI Agent settings saved.")
+        onSettingsChanged?.invoke(updated)
         refreshPassiveAiStatus()
         refreshActiveAiStatus()
         updateProfileWarnings()

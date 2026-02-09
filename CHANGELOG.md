@@ -4,6 +4,35 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.2.0] - 2026-02-09
+
+### Added
+
+- **Chat UI Overhaul**: ChatGPT-style message bubbles with timestamps, hover-copy, and improved streaming layout.
+- **Session Persistence**: Chat sessions (titles, messages, usage stats) are auto-saved and restored across Burp restarts.
+- **Chat Export**: Export any session as Markdown via context menu or shortcut.
+- **Keyboard Shortcuts**: New session, delete session, clear chat, export chat, and toggle settings panel.
+- **Cancel In-Flight Requests**: Cancel current AI response directly from the chat UI.
+- **Usage Stats Sidebar**: Total messages and per-backend usage displayed in the sessions sidebar.
+- **Backend Availability Filtering**: Backend selector only shows backends that are available on this machine.
+- **Cross-Platform CLI Resolution**: Robust PATH discovery (login shell capture + fallbacks) and executable resolution.
+- **Markdown Rendering Enhancements**: Headings, blockquotes, horizontal rules, links, inline code, and improved code block styling.
+
+### Changed
+
+- **Settings Panel UX**: Collapsible settings panel with a compact toggle bar and improved focus styling.
+- **Chat History Handling**: Controlled CLI history size to avoid oversized prompts while preserving context.
+- **MCP Tool Errors**: Cleaner, action-oriented validation errors for missing tool arguments.
+
+### Fixed
+
+- **CLI Discovery Reliability**: Better detection of CLI tools when Burp is launched from a GUI environment.
+- **Chat Session Backend Tracking**: Sessions now track the last backend used rather than only the creation backend.
+- **UI State Safety**: Prevent stuck “sending” states when session panels are missing.
+- **Chat Input Shortcuts**: Shift+Enter now reliably inserts a new line while Enter sends.
+- **Chat Persistence Scope**: Chat history now persists per Burp project (with one-time migration from global storage).
+- **Issue Detail Formatting**: AI Active and Passive issues now render line breaks and indented sections reliably.
+
 ## [0.1.4] - 2026-02-06
 
 ### Added

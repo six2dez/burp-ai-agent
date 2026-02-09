@@ -14,6 +14,7 @@ import java.awt.Dimension
 import java.awt.Graphics
 import java.awt.Graphics2D
 import java.awt.RenderingHints
+import java.awt.event.KeyEvent
 import javax.swing.BoxLayout
 import javax.swing.JComponent
 import javax.swing.JLabel
@@ -64,6 +65,7 @@ class MainTab(
         DependencyBanner("MCP Server must be enabled. Toggle MCP to enable AI features.")
     private var syncingToggles = false
     private var healthTimer: Timer? = null
+    private var sessionPersistTimer: Timer? = null
 
     init {
         settingsPanel = SettingsPanel(api, backends, supervisor, audit, mcpSupervisor, passiveAiScanner, activeAiScanner)
@@ -103,8 +105,7 @@ class MainTab(
         titleBox.add(javax.swing.Box.createRigidArea(Dimension(0, 4)))
         titleBox.add(subtitle)
 
-        val actions = JPanel()
-        actions.layout = BoxLayout(actions, BoxLayout.X_AXIS)
+        val actions = JPanel(java.awt.FlowLayout(java.awt.FlowLayout.RIGHT, 12, 4))
         actions.isOpaque = false
 
         mcpLabel.font = UiTheme.Typography.body
@@ -115,14 +116,14 @@ class MainTab(
         backendPicker.background = UiTheme.Colors.comboBackground
         backendPicker.foreground = UiTheme.Colors.comboForeground
         backendPicker.border = javax.swing.border.LineBorder(UiTheme.Colors.outline, 1, true)
-        backendPicker.model = javax.swing.DefaultComboBoxModel(backends.listBackendIds().toTypedArray())
-        backendPicker.selectedItem = settingsRepo.load().preferredBackendId
+        val initialSettings = settingsRepo.load()
+        backendPicker.model = javax.swing.DefaultComboBoxModel(backends.listBackendIds(initialSettings).toTypedArray())
+        backendPicker.selectedItem = initialSettings.preferredBackendId
         backendPicker.addActionListener {
             val selected = backendPicker.selectedItem as? String ?: "codex-cli"
             settingsPanel.setPreferredBackend(selected)
         }
 
-        val initialSettings = settingsRepo.load()
         mcpToggle.isSelected = initialSettings.mcpSettings.enabled
         passiveToggle.isSelected = initialSettings.passiveAiEnabled
         activeToggle.isSelected = initialSettings.activeAiEnabled
@@ -193,9 +194,7 @@ class MainTab(
         clientGroup.add(sessionLabel)
 
         actions.add(mcpGroup)
-        actions.add(javax.swing.Box.createRigidArea(Dimension(24, 0)))
         actions.add(scannerGroup)
-        actions.add(javax.swing.Box.createRigidArea(Dimension(24, 0)))
         actions.add(clientGroup)
 
         val mainContent = javax.swing.JSplitPane(
@@ -229,13 +228,50 @@ class MainTab(
         root.add(north, BorderLayout.NORTH)
         root.add(center, BorderLayout.CENTER)
 
+        // ── Keyboard shortcuts ──
+        val imap = root.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT)
+        val amap = root.actionMap
+        val meta = java.awt.Toolkit.getDefaultToolkit().menuShortcutKeyMaskEx
+
+        imap.put(javax.swing.KeyStroke.getKeyStroke(KeyEvent.VK_N, meta), "newSession")
+        amap.put("newSession", object : javax.swing.AbstractAction() {
+            override fun actionPerformed(e: java.awt.event.ActionEvent?) { chatPanel.createNewSession() }
+        })
+        imap.put(javax.swing.KeyStroke.getKeyStroke(KeyEvent.VK_W, meta), "deleteSession")
+        amap.put("deleteSession", object : javax.swing.AbstractAction() {
+            override fun actionPerformed(e: java.awt.event.ActionEvent?) { chatPanel.deleteCurrentSession() }
+        })
+        imap.put(javax.swing.KeyStroke.getKeyStroke(KeyEvent.VK_L, meta), "clearChat")
+        amap.put("clearChat", object : javax.swing.AbstractAction() {
+            override fun actionPerformed(e: java.awt.event.ActionEvent?) { chatPanel.clearCurrentChat() }
+        })
+        imap.put(javax.swing.KeyStroke.getKeyStroke(KeyEvent.VK_E, meta), "exportChat")
+        amap.put("exportChat", object : javax.swing.AbstractAction() {
+            override fun actionPerformed(e: java.awt.event.ActionEvent?) { chatPanel.exportCurrentChatAsMarkdown() }
+        })
+        imap.put(javax.swing.KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "toggleSettings")
+        amap.put("toggleSettings", object : javax.swing.AbstractAction() {
+            override fun actionPerformed(e: java.awt.event.ActionEvent?) { bottomTabsPanel.toggle() }
+        })
+
         wireActions()
         renderStatus()
         mcpStatusTimer.start()
+
+        // Restore persisted chat sessions
+        chatPanel.restoreSessions()
+
+        // Auto-save sessions every 30 seconds and update usage stats
+        sessionPersistTimer = Timer(30_000) {
+            chatPanel.saveSessions()
+            settingsPanel.updateUsageSummary(chatPanel.usageStats())
+        }
+        sessionPersistTimer?.start()
     }
 
     private fun notifyResponseReady() {
         SwingUtilities.invokeLater {
+            settingsPanel.updateUsageSummary(chatPanel.usageStats())
             val pane = ensureTabPaneAttached() ?: return@invokeLater
             if (pane.selectedComponent == root) return@invokeLater
             setAttention(true)
@@ -332,6 +368,15 @@ class MainTab(
             syncingToggles = false
             settingsRepo.save(settingsPanel.currentSettings())
             renderStatus()
+        }
+        settingsPanel.onSettingsChanged = { updated ->
+            SwingUtilities.invokeLater {
+                val available = backends.listBackendIds(updated)
+                backendPicker.model = javax.swing.DefaultComboBoxModel(available.toTypedArray())
+                if (available.contains(updated.preferredBackendId)) {
+                    backendPicker.selectedItem = updated.preferredBackendId
+                }
+            }
         }
     }
 
@@ -558,5 +603,8 @@ class MainTab(
         mcpStatusTimer.stop()
         healthTimer?.stop()
         healthTimer = null
+        sessionPersistTimer?.stop()
+        sessionPersistTimer = null
+        chatPanel.saveSessions()
     }
 }

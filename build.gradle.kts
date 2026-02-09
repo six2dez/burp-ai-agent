@@ -61,10 +61,18 @@ tasks.withType<KotlinCompile> {
     }
 }
 
+tasks.jar {
+    enabled = false
+}
+
 tasks.shadowJar {
     archiveBaseName.set("Burp-AI-Agent")
     archiveClassifier.set("")
     mergeServiceFiles()
+    isZip64 = true
+
+    // Shadow JAR should include all runtime dependencies
+    configurations = listOf(project.configurations.runtimeClasspath.get())
 }
 
 tasks.build {

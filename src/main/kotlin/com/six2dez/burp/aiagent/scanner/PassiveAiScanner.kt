@@ -547,11 +547,20 @@ $metadata
                 val title = (item.title ?: "AI Potential Issue").take(120)
                 val rawSeverity = item.severity ?: "Information"
                 val reasoning = item.reasoning ?: ""
-                var detail = item.detail ?: "No detail from AI"
-                
-                if (reasoning.isNotBlank()) {
-                    detail = "Analysis Reasoning: $reasoning\n\n$detail"
-                }
+                val detail = buildString {
+                    if (reasoning.isNotBlank()) {
+                        appendLine("Analysis Reasoning")
+                        reasoning.trim().lines().forEach { line ->
+                            if (line.isNotBlank()) {
+                                appendLine("  $line")
+                            } else {
+                                appendLine()
+                            }
+                        }
+                        appendLine()
+                    }
+                    appendLine((item.detail ?: "No detail from AI").trim())
+                }.trim()
 
                 handleFinding(requestResponse, title, rawSeverity, detail, confidence, minSeverity, settings, "ai")
             }
@@ -592,19 +601,22 @@ $metadata
                     true
                 } else {
                     val sanitizedDetail = IssueText.sanitize(detail)
-                    
+
                     // Get backend info for metadata
                     val backendInfo = supervisor.getCurrentBackendInfo()
-                    val metadataSection = buildMetadataSection(backendInfo, "Passive", confidence)
-                    
+                    val metadataSection = buildMetadataSectionPlain(
+                        backendInfo,
+                        "Passive",
+                        confidence,
+                        "AI passive analysis - may need active confirmation for verification."
+                    )
+
                     // Build well-formatted detail
-                    val fullDetail = buildString {
-                        appendLine(sanitizedDetail)
-                        appendLine()
-                        appendLine(metadataSection)
-                        appendLine()
-                        appendLine("**Note:** AI passive analysis - may need active confirmation for verification.")
-                    }
+                    val fullDetailLines = mutableListOf<String>()
+                    fullDetailLines.addAll(sanitizedDetail.split("\n"))
+                    fullDetailLines.add("")
+                    fullDetailLines.addAll(metadataSection.split("\r\n"))
+                    val fullDetail = formatIssueDetailHtml(fullDetailLines)
                     
                     val issue = AuditIssue.auditIssue(
                         issueName,
@@ -1073,6 +1085,45 @@ $metadata
             appendLine("**Scan Date:** $timestamp UTC")
             appendLine()
             appendLine("---")
+        }
+    }
+
+    private fun buildMetadataSectionPlain(
+        backendInfo: AgentSupervisor.BackendInfo?,
+        scanType: String,
+        confidence: Int,
+        note: String
+    ): String {
+        val lines = mutableListOf<String>()
+        lines.add("AI Analysis Metadata")
+        if (backendInfo != null) {
+            lines.add("  Backend: ${backendInfo.displayName}")
+            if (backendInfo.model != null) {
+                lines.add("  Model: ${backendInfo.model}")
+            }
+        } else {
+            lines.add("  Backend: Unknown")
+        }
+        lines.add("  Scan Type: $scanType")
+        lines.add("  Confidence: $confidence%")
+
+        val timestamp = java.time.Instant.now().toString().replace('T', ' ').substringBefore('.')
+        lines.add("  Scan Date: $timestamp UTC")
+        lines.add("  Note: $note")
+        return lines.joinToString("\r\n")
+    }
+
+    private fun formatIssueDetailHtml(lines: List<String>): String {
+        return lines.joinToString("<br>") { line ->
+            val escaped = line
+                .replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+            if (escaped.startsWith("  ")) {
+                "&nbsp;&nbsp;" + escaped.drop(2)
+            } else {
+                escaped
+            }
         }
     }
 }
