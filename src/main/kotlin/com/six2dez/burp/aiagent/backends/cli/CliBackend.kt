@@ -320,6 +320,8 @@ class CliBackend(
             return lower == "loaded cached credentials." ||
                 lower.startsWith("mcp server 'burp':") ||
                 lower.startsWith("error during discovery for mcp server") ||
+                lower.startsWith("hook registry initialized with") ||
+                (lower.startsWith("error executing tool ") && lower.contains("tool execution denied by policy")) ||
                 lower.startsWith("loading extension:") ||
                 lower.startsWith("listening for changes") ||
                 lower.contains("supports tool updates") ||

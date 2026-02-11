@@ -58,6 +58,8 @@ class PassiveAiScanner(
     private val issuesFound = AtomicInteger(0)
     private val lastAnalysisTime = AtomicLong(0)
     private val lastRequestTime = AtomicLong(0)
+    private val aiBackoffUntilMs = AtomicLong(0)
+    private val lastBackoffLogTime = AtomicLong(0)
     private val executor = Executors.newSingleThreadExecutor { r ->
         Thread(r, "PassiveAiScanner").apply { isDaemon = true }
     }
@@ -117,6 +119,11 @@ class PassiveAiScanner(
                 return ProxyResponseReceivedAction.continueWith(response)
             }
 
+            // Skip streaming/upgrade endpoints that are noisy and frequently time out.
+            if (isStreamingOrRealtimeEndpoint(response)) {
+                return ProxyResponseReceivedAction.continueWith(response)
+            }
+
             // Rate limiting - skip if too recent
             val now = System.currentTimeMillis()
             if (now - lastRequestTime.get() < rateLimitSeconds * 1000) {
@@ -155,32 +162,33 @@ class PassiveAiScanner(
 
     fun isEnabled(): Boolean = enabled.get()
     
-    private val backendStartAttempted = AtomicBoolean(false)
-    
     private fun ensureBackendRunning(settings: AgentSettings): Boolean {
-        // Check if supervisor has an active session
-        if (supervisor.currentSessionId() != null) {
+        val targetBackend = settings.preferredBackendId
+        val currentStatus = supervisor.status()
+        val currentSessionId = supervisor.currentSessionId()
+        val currentBackend = currentStatus.backendId
+
+        // Reuse only when the running backend matches the scanner target backend.
+        if (currentSessionId != null && currentBackend == targetBackend) {
             return true
         }
-        
-        // Try to start the preferred backend (only once per scan batch)
-        if (backendStartAttempted.compareAndSet(false, true)) {
-            api.logging().logToOutput("[PassiveAiScanner] Starting backend: ${settings.preferredBackendId}")
-            val started = supervisor.startOrAttach(settings.preferredBackendId)
-            if (started) {
-                val ready = waitForBackendSession(maxWaitMs = 10_000L, pollMs = 200L)
-                if (ready) {
-                    api.logging().logToOutput("[PassiveAiScanner] Backend started successfully")
-                    return true
-                }
-                api.logging().logToError("[PassiveAiScanner] Backend started but session did not become ready in time")
-            } else {
-                val error = supervisor.lastStartError()
-                api.logging().logToError("[PassiveAiScanner] Failed to start backend: $error")
+
+        val action = if (currentSessionId == null) "Starting" else "Switching"
+        api.logging().logToOutput("[PassiveAiScanner] $action backend: $targetBackend (current=${currentBackend ?: "none"})")
+        val started = supervisor.startOrAttach(targetBackend)
+        if (started) {
+            val ready = waitForBackendSession(maxWaitMs = 10_000L, pollMs = 200L)
+            if (ready) {
+                api.logging().logToOutput("[PassiveAiScanner] Backend ready: $targetBackend")
+                return true
             }
+            api.logging().logToError("[PassiveAiScanner] Backend started but session did not become ready in time")
+        } else {
+            val error = supervisor.lastStartError()
+            api.logging().logToError("[PassiveAiScanner] Failed to start backend: $error")
         }
-        
-        return supervisor.currentSessionId() != null
+
+        return supervisor.currentSessionId() != null && supervisor.status().backendId == targetBackend
     }
 
     private fun waitForBackendSession(maxWaitMs: Long, pollMs: Long): Boolean {
@@ -255,7 +263,6 @@ class PassiveAiScanner(
         manualScanTotal.set(total)
         manualScanCompleted.set(0)
         manualScanInProgress.set(true)
-        backendStartAttempted.set(false)  // Reset so we try to start backend for this scan
         
         api.logging().logToOutput("[PassiveAiScanner] Manual scan started: $total requests queued")
         
@@ -336,6 +343,13 @@ class PassiveAiScanner(
             // Ensure backend is running for AI analysis
             if (!ensureBackendRunning(settings)) {
                 api.logging().logToError("[PassiveAiScanner] No AI backend available - skipping analysis")
+                return
+            }
+
+            val nowMs = System.currentTimeMillis()
+            val backoffUntil = aiBackoffUntilMs.get()
+            if (backoffUntil > nowMs) {
+                maybeLogBackoff(nowMs, backoffUntil)
                 return
             }
 
@@ -471,7 +485,13 @@ class PassiveAiScanner(
             if (!completed) {
                 api.logging().logToError("[PassiveAiScanner] Timeout for: ${request.url().take(60)}")
             } else if (errorRef.get() != null) {
-                api.logging().logToError("[PassiveAiScanner] AI error: ${errorRef.get()}")
+                val err = errorRef.get().orEmpty()
+                if (isGeminiCapacityError(err)) {
+                    val until = System.currentTimeMillis() + GEMINI_CAPACITY_BACKOFF_MS
+                    aiBackoffUntilMs.set(until)
+                    maybeLogBackoff(System.currentTimeMillis(), until)
+                }
+                api.logging().logToError("[PassiveAiScanner] AI error: $err")
             } else if (responseBuffer.isNotEmpty()) {
                 handleAiResponse(responseBuffer.toString(), requestResponse, settings.passiveAiMinSeverity.name)
             }
@@ -685,7 +705,19 @@ $metadata
     }
 
     private fun hasExistingIssue(name: String, baseUrl: String): Boolean {
-        return api.siteMap().issues().any { it.name() == name && it.baseUrl() == baseUrl }
+        val canonicalName = canonicalIssueName(name)
+        return api.siteMap().issues().any { issue ->
+            issue.baseUrl() == baseUrl && canonicalIssueName(issue.name()) == canonicalName
+        }
+    }
+
+    private fun canonicalIssueName(name: String): String {
+        return name
+            .trim()
+            .replace(Regex("^\\[(?:AI(?:\\s+Passive)?)\\]\\s*", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("^\\[(?:AI(?:\\s+Passive)?)\\]\\s*", RegexOption.IGNORE_CASE), "")
+            .trim()
+            .lowercase()
     }
     
     private fun queueToActiveScanner(
@@ -1188,6 +1220,48 @@ $metadata
             appendLine()
             appendLine("---")
         }
+    }
+
+    private fun isStreamingOrRealtimeEndpoint(response: InterceptedResponse): Boolean {
+        val request = response.initiatingRequest()
+        val reqAccept = request.headerValue("Accept").orEmpty().lowercase()
+        if (reqAccept.contains("text/event-stream")) return true
+
+        val reqUpgrade = request.headerValue("Upgrade").orEmpty().lowercase()
+        if (reqUpgrade.contains("websocket")) return true
+
+        val respContentType = response.headerValue("Content-Type").orEmpty().lowercase()
+        if (respContentType.contains("text/event-stream")) return true
+
+        val respUpgrade = response.headerValue("Upgrade").orEmpty().lowercase()
+        if (respUpgrade.contains("websocket")) return true
+
+        val path = try { URI(request.url()).path.orEmpty().lowercase() } catch (_: Exception) { "" }
+        if (path.contains("/_ws/") || path.startsWith("/ws") || path.contains("/socket")) return true
+
+        return false
+    }
+
+    private fun isGeminiCapacityError(error: String): Boolean {
+        val lower = error.lowercase()
+        return lower.contains("resource_exhausted") ||
+            lower.contains("model_capacity_exhausted") ||
+            (lower.contains("status 429") && lower.contains("gemini")) ||
+            lower.contains("no capacity available for model")
+    }
+
+    private fun maybeLogBackoff(nowMs: Long, untilMs: Long) {
+        val prev = lastBackoffLogTime.get()
+        if (nowMs - prev < BACKOFF_LOG_INTERVAL_MS) return
+        if (lastBackoffLogTime.compareAndSet(prev, nowMs)) {
+            val seconds = ((untilMs - nowMs).coerceAtLeast(0L) / 1000L)
+            api.logging().logToOutput("[PassiveAiScanner] AI backend backoff active (${seconds}s remaining)")
+        }
+    }
+
+    private companion object {
+        private const val GEMINI_CAPACITY_BACKOFF_MS = 60_000L
+        private const val BACKOFF_LOG_INTERVAL_MS = 10_000L
     }
 
     private fun buildMetadataSectionPlain(

@@ -87,9 +87,10 @@ class AgentSettingsRepository(api: MontoyaApi) {
     fun load(): AgentSettings {
         val privacy = PrivacyMode.fromString(prefs.getString(KEY_PRIVACY_MODE))
         val mcpSettings = loadMcpSettings()
+        val rawGeminiCmd = prefs.getString(KEY_GEMINI_CMD).orEmpty().trim()
         return AgentSettings(
             codexCmd = prefs.getString(KEY_CODEX_CMD).orEmpty().trim().ifBlank { defaultCodexCmd() },
-            geminiCmd = prefs.getString(KEY_GEMINI_CMD).orEmpty().trim().ifBlank { defaultGeminiCmd() },
+            geminiCmd = normalizeLegacyGeminiCmd(rawGeminiCmd).ifBlank { defaultGeminiCmd() },
             opencodeCmd = prefs.getString(KEY_OPENCODE_CMD).orEmpty().trim().ifBlank { defaultOpenCodeCmd() },
             claudeCmd = prefs.getString(KEY_CLAUDE_CMD).orEmpty().trim().ifBlank { defaultClaudeCmd() },
             agentProfile = prefs.getString(KEY_AGENT_PROFILE).orEmpty().trim().ifBlank { defaultAgentProfile() },
@@ -355,7 +356,17 @@ class AgentSettingsRepository(api: MontoyaApi) {
         }
 
         private fun defaultGeminiCmd(): String {
-            return "gemini --output-format text --model gemini-2.5-flash"
+            return "gemini --output-format text --model gemini-2.5-flash --yolo"
+        }
+
+        private fun normalizeLegacyGeminiCmd(raw: String): String {
+            if (raw.isBlank()) return raw
+            val legacyDefault = "gemini --output-format text --model gemini-2.5-flash"
+            return if (raw == legacyDefault) {
+                defaultGeminiCmd()
+            } else {
+                raw
+            }
         }
 
         private fun defaultOpenCodeCmd(): String {

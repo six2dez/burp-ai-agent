@@ -20,6 +20,7 @@ import java.awt.event.KeyEvent
 import java.net.URI
 import java.util.UUID
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -1477,7 +1478,7 @@ class ChatPanel(
             if (call != null) return call
         }
         val trimmed = text.trim()
-        if (trimmed.startsWith("{") && trimmed.endsWith("}") && trimmed.contains("\"tool\"")) {
+        if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
             return parseToolJson(trimmed)
         }
         return null
@@ -1495,13 +1496,52 @@ class ChatPanel(
         return try {
             val element = Json.parseToJsonElement(jsonText)
             val obj = element.jsonObject
-            val tool = obj["tool"]?.jsonPrimitive?.content ?: return null
-            val args = obj["args"]?.toString()
+            val tool = resolveToolName(obj) ?: return null
+            val args = resolveToolArgs(obj)
             ToolCall(tool, args)
         } catch (e: Exception) {
             api.logging().logToOutput("[ChatPanel] Invalid tool JSON payload: ${e.message}")
             null
         }
+    }
+
+    private fun resolveToolName(obj: kotlinx.serialization.json.JsonObject): String? {
+        val directTool = obj["tool"]?.jsonPrimitive?.contentOrNull?.trim()
+        if (!directTool.isNullOrBlank()) return directTool
+
+        val directName = obj["name"]?.jsonPrimitive?.contentOrNull?.trim()
+        if (!directName.isNullOrBlank()) return directName
+
+        val functionName = obj["function"]
+            ?.let { runCatching { it.jsonObject["name"]?.jsonPrimitive?.contentOrNull?.trim() }.getOrNull() }
+        if (!functionName.isNullOrBlank()) return functionName
+
+        return null
+    }
+
+    private fun resolveToolArgs(obj: kotlinx.serialization.json.JsonObject): String? {
+        val directArgs = obj["args"]
+        if (directArgs != null) return normalizeArgsJson(directArgs)
+
+        val arguments = obj["arguments"]
+        if (arguments != null) return normalizeArgsJson(arguments)
+
+        val input = obj["input"]
+        if (input != null) return normalizeArgsJson(input)
+
+        val functionArgs = obj["function"]
+            ?.let { runCatching { it.jsonObject["arguments"] }.getOrNull() }
+        return normalizeArgsJson(functionArgs)
+    }
+
+    private fun normalizeArgsJson(value: JsonElement?): String? {
+        if (value == null) return null
+        val primitive = runCatching { value.jsonPrimitive }.getOrNull()
+        if (primitive != null && primitive.isString) {
+            val raw = primitive.contentOrNull?.trim().orEmpty()
+            return raw.ifBlank { null }
+        }
+        return value.toString()
     }
 
     private fun buildToolPreamble(
@@ -1510,9 +1550,17 @@ class ChatPanel(
         mutateState: Boolean
     ): String? {
         if (context == null) return null
-        val header = "Tool mode is enabled. If you need a tool, include a fenced code block " +
-            "with language 'tool' that contains only the JSON call, then wait. " +
-            "After the tool result, respond in clear natural language or markdown."
+        val header = """
+Tool mode is enabled.
+If a required MCP tool is available and enabled, call it instead of saying you cannot execute tools.
+For confirmed vulnerabilities that should be recorded, call `issue_create` with concrete evidence.
+
+Tool call format:
+- Preferred: fenced block with language `tool` containing only JSON.
+- Accepted JSON keys: `tool`+`args`, `name`+`arguments`, or `function.name`+`function.arguments`.
+
+After a tool call, wait for the tool result. Then respond using the tool output.
+        """.trim()
         if (state.toolCatalogSent) return header
         if (mutateState) {
             state.toolCatalogSent = true

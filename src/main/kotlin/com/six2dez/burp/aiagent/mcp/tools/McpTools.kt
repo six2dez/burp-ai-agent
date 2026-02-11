@@ -821,7 +821,10 @@ fun Server.registerTools(api: MontoyaApi, context: McpToolContext) {
             emptyList()
         }
 
-        val issueNameWithPrefix = if (name.startsWith("[AI]")) name else "[AI] $name"
+        val issueNameWithPrefix = withAiIssuePrefix(name)
+        if (hasEquivalentIssue(api, issueNameWithPrefix, baseUrl)) {
+            return@mcpTool "Issue already exists: $issueNameWithPrefix"
+        }
         val sanitizedDetail = IssueText.sanitize(detail)
         val sanitizedRemediation = IssueText.sanitize(remediation ?: "")
         val sanitizedBackground = IssueText.sanitize(background ?: "")
@@ -843,6 +846,29 @@ fun Server.registerTools(api: MontoyaApi, context: McpToolContext) {
         api.siteMap().add(issue)
         "Issue created: $issueNameWithPrefix (Severity: $severity, Confidence: $confidence)"
     }
+}
+
+private fun withAiIssuePrefix(rawName: String): String {
+    val trimmed = rawName.trim()
+    if (trimmed.startsWith("[AI]", ignoreCase = true)) return trimmed
+    if (trimmed.startsWith("[AI Passive]", ignoreCase = true)) return trimmed
+    return "[AI] $trimmed"
+}
+
+private fun hasEquivalentIssue(api: MontoyaApi, name: String, baseUrl: String): Boolean {
+    val canonicalName = canonicalIssueName(name)
+    return api.siteMap().issues().any { issue ->
+        issue.baseUrl() == baseUrl && canonicalIssueName(issue.name()) == canonicalName
+    }
+}
+
+private fun canonicalIssueName(name: String): String {
+    return name
+        .trim()
+        .replace(Regex("^\\[(?:AI(?:\\s+Passive)?)\\]\\s*", RegexOption.IGNORE_CASE), "")
+        .replace(Regex("^\\[(?:AI(?:\\s+Passive)?)\\]\\s*", RegexOption.IGNORE_CASE), "")
+        .trim()
+        .lowercase()
 }
 
 /**
@@ -2047,7 +2073,7 @@ data class CreateAuditIssue(
 }
 
 @Serializable
-data class GetScannerIssues(override val count: Int, override val offset: Int) : Paginated
+data class GetScannerIssues(override val count: Int = 5, override val offset: Int = 0) : Paginated
 
 @Serializable
 data class StartAudit(val builtInConfiguration: String)
@@ -2088,20 +2114,32 @@ data class GenerateScannerReport(
 )
 
 @Serializable
-data class GetProxyHttpHistory(override val count: Int, override val offset: Int) : Paginated
+data class GetProxyHttpHistory(override val count: Int = 5, override val offset: Int = 0) : Paginated
 
 @Serializable
-data class GetProxyHttpHistoryRegex(val regex: String, override val count: Int, override val offset: Int) : Paginated
+data class GetProxyHttpHistoryRegex(
+    val regex: String,
+    override val count: Int = 5,
+    override val offset: Int = 0
+) : Paginated
 
 @Serializable
-data class GetProxyWebsocketHistory(override val count: Int, override val offset: Int) : Paginated
+data class GetProxyWebsocketHistory(override val count: Int = 5, override val offset: Int = 0) : Paginated
 
 @Serializable
-data class GetProxyWebsocketHistoryRegex(val regex: String, override val count: Int, override val offset: Int) :
+data class GetProxyWebsocketHistoryRegex(
+    val regex: String,
+    override val count: Int = 5,
+    override val offset: Int = 0
+) :
     Paginated
 
 @Serializable
-data class GetSiteMap(override val count: Int, override val offset: Int) : Paginated
+data class GetSiteMap(override val count: Int = 5, override val offset: Int = 0) : Paginated
 
 @Serializable
-data class GetSiteMapRegex(val regex: String, override val count: Int, override val offset: Int) : Paginated
+data class GetSiteMapRegex(
+    val regex: String,
+    override val count: Int = 5,
+    override val offset: Int = 0
+) : Paginated
