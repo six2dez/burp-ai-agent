@@ -2,6 +2,7 @@ package com.six2dez.burp.aiagent.config
 
 import burp.api.montoya.MontoyaApi
 import burp.api.montoya.persistence.Preferences
+import com.six2dez.burp.aiagent.prompts.bountyprompt.BountyPromptCatalog
 import com.six2dez.burp.aiagent.redact.PrivacyMode
 import com.six2dez.burp.aiagent.scanner.PayloadRisk
 import com.six2dez.burp.aiagent.scanner.ScanMode
@@ -78,7 +79,13 @@ data class AgentSettings(
     val activeAiScopeOnly: Boolean = true,
     val activeAiAutoFromPassive: Boolean = true,  // Auto-queue passive findings
     val activeAiScanMode: ScanMode = ScanMode.FULL,
-    val activeAiUseCollaborator: Boolean = false  // SSRF OAST confirmation
+    val activeAiUseCollaborator: Boolean = false,  // SSRF OAST confirmation
+    // BountyPrompt integration settings
+    val bountyPromptEnabled: Boolean = false,
+    val bountyPromptDir: String = "",
+    val bountyPromptAutoCreateIssues: Boolean = true,
+    val bountyPromptIssueConfidenceThreshold: Int = 90,
+    val bountyPromptEnabledPromptIds: Set<String> = emptySet()
 )
 
 class AgentSettingsRepository(api: MontoyaApi) {
@@ -153,7 +160,16 @@ class AgentSettingsRepository(api: MontoyaApi) {
             activeAiScopeOnly = prefs.getBoolean(KEY_ACTIVE_AI_SCOPE_ONLY) ?: true,
             activeAiAutoFromPassive = prefs.getBoolean(KEY_ACTIVE_AI_AUTO_PASSIVE) ?: true,
             activeAiScanMode = ScanMode.fromString(prefs.getString(KEY_ACTIVE_AI_SCAN_MODE)),
-            activeAiUseCollaborator = prefs.getBoolean(KEY_ACTIVE_AI_USE_COLLABORATOR) ?: false
+            activeAiUseCollaborator = prefs.getBoolean(KEY_ACTIVE_AI_USE_COLLABORATOR) ?: false,
+            bountyPromptEnabled = prefs.getBoolean(KEY_BOUNTY_PROMPT_ENABLED) ?: false,
+            bountyPromptDir = prefs.getString(KEY_BOUNTY_PROMPT_DIR).orEmpty().trim().ifBlank { defaultBountyPromptDir() },
+            bountyPromptAutoCreateIssues = prefs.getBoolean(KEY_BOUNTY_PROMPT_AUTO_CREATE_ISSUES) ?: true,
+            bountyPromptIssueConfidenceThreshold = (prefs.getInteger(KEY_BOUNTY_PROMPT_CONFIDENCE_THRESHOLD) ?: 90)
+                .coerceIn(0, 100),
+            bountyPromptEnabledPromptIds = parseIdSet(
+                prefs.getString(KEY_BOUNTY_PROMPT_ENABLED_IDS),
+                BountyPromptCatalog.defaultEnabledPromptIds()
+            )
         )
     }
 
@@ -215,7 +231,12 @@ class AgentSettingsRepository(api: MontoyaApi) {
             activeAiScopeOnly = true,
             activeAiAutoFromPassive = true,
             activeAiScanMode = ScanMode.FULL,
-            activeAiUseCollaborator = false
+            activeAiUseCollaborator = false,
+            bountyPromptEnabled = false,
+            bountyPromptDir = defaultBountyPromptDir(),
+            bountyPromptAutoCreateIssues = true,
+            bountyPromptIssueConfidenceThreshold = 90,
+            bountyPromptEnabledPromptIds = BountyPromptCatalog.defaultEnabledPromptIds()
         )
     }
 
@@ -277,6 +298,17 @@ class AgentSettingsRepository(api: MontoyaApi) {
         prefs.setBoolean(KEY_ACTIVE_AI_AUTO_PASSIVE, settings.activeAiAutoFromPassive)
         prefs.setString(KEY_ACTIVE_AI_SCAN_MODE, settings.activeAiScanMode.name)
         prefs.setBoolean(KEY_ACTIVE_AI_USE_COLLABORATOR, settings.activeAiUseCollaborator)
+        prefs.setBoolean(KEY_BOUNTY_PROMPT_ENABLED, settings.bountyPromptEnabled)
+        prefs.setString(KEY_BOUNTY_PROMPT_DIR, settings.bountyPromptDir)
+        prefs.setBoolean(KEY_BOUNTY_PROMPT_AUTO_CREATE_ISSUES, settings.bountyPromptAutoCreateIssues)
+        prefs.setInteger(
+            KEY_BOUNTY_PROMPT_CONFIDENCE_THRESHOLD,
+            settings.bountyPromptIssueConfidenceThreshold.coerceIn(0, 100)
+        )
+        prefs.setString(
+            KEY_BOUNTY_PROMPT_ENABLED_IDS,
+            serializeIdSet(settings.bountyPromptEnabledPromptIds)
+        )
     }
 
     companion object {
@@ -350,6 +382,11 @@ class AgentSettingsRepository(api: MontoyaApi) {
         private const val KEY_ACTIVE_AI_AUTO_PASSIVE = "active.ai.auto.passive"
         private const val KEY_ACTIVE_AI_SCAN_MODE = "active.ai.scan.mode"
         private const val KEY_ACTIVE_AI_USE_COLLABORATOR = "active.ai.use.collaborator"
+        private const val KEY_BOUNTY_PROMPT_ENABLED = "bountyprompt.enabled"
+        private const val KEY_BOUNTY_PROMPT_DIR = "bountyprompt.dir"
+        private const val KEY_BOUNTY_PROMPT_AUTO_CREATE_ISSUES = "bountyprompt.auto.issue"
+        private const val KEY_BOUNTY_PROMPT_CONFIDENCE_THRESHOLD = "bountyprompt.issue.threshold"
+        private const val KEY_BOUNTY_PROMPT_ENABLED_IDS = "bountyprompt.enabled.ids"
 
         private fun defaultCodexCmd(): String {
             return "codex chat"
@@ -415,6 +452,13 @@ class AgentSettingsRepository(api: MontoyaApi) {
 
         private fun defaultOpenAiCompatTimeoutSeconds(): Int {
             return Defaults.CLI_PROCESS_TIMEOUT_SECONDS
+        }
+
+        private fun defaultBountyPromptDir(): String {
+            return java.io.File(
+                System.getProperty("user.home"),
+                "Tools/BountyPrompt/prompts"
+            ).absolutePath
         }
 
         private fun defaultRequestPrompt(): String {
@@ -577,6 +621,23 @@ Response Language: English.
                 toolToggles = emptyMap(),
                 unsafeEnabled = false
             )
+        }
+
+        private fun parseIdSet(raw: String?, fallback: Set<String>): Set<String> {
+            val parsed = raw.orEmpty()
+                .split(',')
+                .map { it.trim() }
+                .filter { it.isNotBlank() }
+                .toSet()
+            return if (parsed.isEmpty()) fallback else parsed
+        }
+
+        private fun serializeIdSet(ids: Set<String>): String {
+            return ids
+                .map { it.trim() }
+                .filter { it.isNotBlank() }
+                .toSortedSet()
+                .joinToString(",")
         }
     }
 

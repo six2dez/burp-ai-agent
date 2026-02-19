@@ -194,7 +194,12 @@ class ChatPanel(
         newSessionBtn.isEnabled = mcpAvailable
     }
 
-    fun startSessionFromContext(capture: ContextCapture, promptTemplate: String, actionName: String) {
+    fun startSessionFromContext(
+        capture: ContextCapture,
+        promptTemplate: String,
+        actionName: String,
+        onCompleted: ((String, Throwable?) -> Unit)? = null
+    ) {
         updatePrivacyPill()
         val uri = extractUriFromContext(capture)
         val title = if (uri.isNullOrBlank()) actionName else "$actionName: $uri"
@@ -214,7 +219,8 @@ class ChatPanel(
             userText = prompt,
             contextJson = capture.contextJson,
             allowToolCalls = state.toolsMode,
-            actionName = actionName
+            actionName = actionName,
+            onCompleted = onCompleted
         )
     }
 
@@ -300,7 +306,8 @@ class ChatPanel(
         userText: String,
         contextJson: String?,
         allowToolCalls: Boolean,
-        actionName: String? = null
+        actionName: String? = null,
+        onCompleted: ((String, Throwable?) -> Unit)? = null
     ) {
         val settings = getSettings()
         updatePrivacyPill()
@@ -368,6 +375,7 @@ class ChatPanel(
                 SwingUtilities.invokeLater { setSendingState(false) }
                 if (err != null) {
                     SwingUtilities.invokeLater { assistant.append("\n[Error] ${err.message}") }
+                    onCompleted?.invoke(responseBuffer.toString(), err)
                 } else {
                     val finalResp = responseBuffer.toString()
                     if (session != null) {
@@ -388,6 +396,7 @@ class ChatPanel(
                             settings = settings
                         )
                     }
+                    onCompleted?.invoke(finalResp, null)
                 }
             }
         )

@@ -2,13 +2,16 @@ package com.six2dez.burp.aiagent.ui.panels
 
 import com.six2dez.burp.aiagent.ui.UiTheme
 import java.awt.BorderLayout
+import java.awt.Dimension
 import javax.swing.BoxLayout
 import javax.swing.JComponent
 import javax.swing.JLabel
 import javax.swing.JPanel
 import javax.swing.JScrollPane
+import javax.swing.JSpinner
 import javax.swing.JTextArea
 import javax.swing.border.EmptyBorder
+import com.six2dez.burp.aiagent.ui.components.ToggleSwitch
 
 class PromptConfigPanel(
     private val sectionPanel: (String, String, JComponent) -> JPanel,
@@ -22,7 +25,12 @@ class PromptConfigPanel(
     private val promptIssueAnalyze: JTextArea,
     private val promptIssuePoc: JTextArea,
     private val promptIssueImpact: JTextArea,
-    private val promptIssueFull: JTextArea
+    private val promptIssueFull: JTextArea,
+    private val bountyPromptEnabled: ToggleSwitch,
+    private val bountyPromptDir: javax.swing.JTextField,
+    private val bountyPromptAutoCreateIssues: ToggleSwitch,
+    private val bountyPromptIssueThreshold: JSpinner,
+    private val bountyPromptEnabledIds: JTextArea
 ) : ConfigPanel {
     override fun build(): JPanel {
         val body = JPanel(BorderLayout())
@@ -60,10 +68,27 @@ class PromptConfigPanel(
         addRowFull(issueGrid, "Full report", JScrollPane(promptIssueFull))
         content.add(issueGrid)
 
+        val bountyTitle = JLabel("BountyPrompt integration")
+        bountyTitle.font = UiTheme.Typography.label
+        bountyTitle.foreground = UiTheme.Colors.onSurfaceVariant
+        bountyTitle.border = EmptyBorder(12, 0, 6, 0)
+        content.add(bountyTitle)
+
+        val bountyGrid = formGrid()
+        addRowFull(bountyGrid, "Enable BountyPrompt actions", bountyPromptEnabled)
+        addRowFull(bountyGrid, "Prompt directory", bountyPromptDir)
+        addRowFull(bountyGrid, "Auto-create issues", bountyPromptAutoCreateIssues)
+        addRowFull(bountyGrid, "Issue confidence threshold", bountyPromptIssueThreshold)
+        val idsScroll = JScrollPane(bountyPromptEnabledIds).apply {
+            preferredSize = Dimension(preferredSize.width, 60)
+        }
+        addRowFull(bountyGrid, "Enabled prompt IDs", idsScroll)
+        content.add(bountyGrid)
+
         body.add(content, BorderLayout.CENTER)
         return sectionPanel(
             "Prompt Templates",
-            "Edit the default prompts used by context actions.",
+            "Edit built-in prompts and curated BountyPrompt context actions.",
             body
         )
     }

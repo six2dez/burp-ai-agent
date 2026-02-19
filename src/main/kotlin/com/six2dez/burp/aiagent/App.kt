@@ -94,7 +94,15 @@ object App {
         // Context menu: requests/responses (all editions)
         api.userInterface().registerContextMenuItemsProvider(object : ContextMenuItemsProvider {
             override fun provideMenuItems(event: ContextMenuEvent) =
-                UiActions.requestResponseMenuItems(api, event, ui, mcpSupervisor, passiveAiScanner, activeAiScanner)
+                UiActions.requestResponseMenuItems(
+                    api,
+                    event,
+                    ui,
+                    mcpSupervisor,
+                    passiveAiScanner,
+                    activeAiScanner,
+                    auditLogger
+                )
 
             // Scanner findings (Pro): use the dedicated event type
             override fun provideMenuItems(event: AuditIssueContextMenuEvent) =

@@ -397,8 +397,13 @@ class MainTab(
 
     fun currentSessionId(): String? = supervisor.currentSessionId()
 
-    fun openChatWithContext(capture: ContextCapture, promptTemplate: String, actionName: String) {
-        chatPanel.startSessionFromContext(capture, promptTemplate, actionName)
+    fun openChatWithContext(
+        capture: ContextCapture,
+        promptTemplate: String,
+        actionName: String,
+        onCompleted: ((String, Throwable?) -> Unit)? = null
+    ) {
+        chatPanel.startSessionFromContext(capture, promptTemplate, actionName, onCompleted)
     }
 
     fun refreshStatus() {

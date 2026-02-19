@@ -10,6 +10,7 @@ import com.six2dez.burp.aiagent.config.SeverityLevel
 import com.six2dez.burp.aiagent.mcp.McpSupervisor
 import com.six2dez.burp.aiagent.mcp.McpToolCatalog
 import com.six2dez.burp.aiagent.agents.AgentProfileLoader
+import com.six2dez.burp.aiagent.prompts.bountyprompt.BountyPromptCatalog
 import com.six2dez.burp.aiagent.ui.components.ToggleSwitch
 import com.six2dez.burp.aiagent.ui.panels.ActiveScanConfigPanel
 import com.six2dez.burp.aiagent.ui.panels.BackendConfigPanel
@@ -122,6 +123,22 @@ class SettingsPanel(
     private val promptIssuePoc = JTextArea(settings.issuePocPrompt, 3, 20)
     private val promptIssueImpact = JTextArea(settings.issueImpactPrompt, 3, 20)
     private val promptIssueFull = JTextArea(settings.issuePromptTemplate, 3, 20)
+    private val bountyPromptEnabled = ToggleSwitch(settings.bountyPromptEnabled)
+    private val bountyPromptDir = JTextField(settings.bountyPromptDir, 24).apply {
+        preferredSize = java.awt.Dimension(320, preferredSize.height)
+    }
+    private val bountyPromptAutoCreateIssues = ToggleSwitch(settings.bountyPromptAutoCreateIssues)
+    private val bountyPromptIssueThreshold = JSpinner(
+        SpinnerNumberModel(settings.bountyPromptIssueConfidenceThreshold, 0, 100, 1)
+    ).apply {
+        preferredSize = java.awt.Dimension(80, preferredSize.height)
+        maximumSize = java.awt.Dimension(80, preferredSize.height)
+    }
+    private val bountyPromptEnabledIds = JTextArea(
+        settings.bountyPromptEnabledPromptIds.joinToString(","),
+        2,
+        20
+    )
     private val privacyWarning = JLabel("Privacy mode is OFF. Raw traffic may be exposed via MCP and prompts.")
     private val privacyActiveWarning = JLabel(
         "STRICT anonymizes hosts in AI prompts but does not prevent active scanner from sending real requests to targets."
@@ -240,6 +257,8 @@ class SettingsPanel(
         applyAreaStyle(promptIssuePoc)
         applyAreaStyle(promptIssueImpact)
         applyAreaStyle(promptIssueFull)
+        applyFieldStyle(bountyPromptDir)
+        applyAreaStyle(bountyPromptEnabledIds)
 
         styleCombo(privacyMode)
         styleCombo(profilePicker)
@@ -299,6 +318,12 @@ class SettingsPanel(
         promptIssuePoc.toolTipText = "Generate PoC steps and validation guidance."
         promptIssueImpact.toolTipText = "Assess impact and severity."
         promptIssueFull.toolTipText = "Full vulnerability report for an issue."
+        bountyPromptEnabled.toolTipText = "Enable curated BountyPrompt actions in the request/response context menu."
+        bountyPromptDir.toolTipText = "Directory containing BountyPrompt JSON files."
+        bountyPromptAutoCreateIssues.toolTipText = "Auto-create Burp issues when parsed confidence meets threshold."
+        bountyPromptIssueThreshold.toolTipText = "Confidence threshold (0-100) required for auto-creating issues."
+        bountyPromptEnabledIds.toolTipText =
+            "Comma-separated prompt IDs to expose. Leave empty to use curated defaults."
         mcpMaxConcurrent.font = UiTheme.Typography.body
         mcpMaxBodyMb.font = UiTheme.Typography.body
         mcpMaxBodyMb.toolTipText = "Maximum MCP response body size per item (MB)."
@@ -664,7 +689,15 @@ class SettingsPanel(
             activeAiScopeOnly = activeAiScopeOnly.isSelected,
             activeAiAutoFromPassive = activeAiAutoFromPassive.isSelected,
             activeAiScanMode = ScanMode.fromString(activeAiScanModeCombo.selectedItem as? String),
-            activeAiUseCollaborator = activeAiUseCollaborator.isSelected
+            activeAiUseCollaborator = activeAiUseCollaborator.isSelected,
+            bountyPromptEnabled = bountyPromptEnabled.isSelected,
+            bountyPromptDir = bountyPromptDir.text.trim(),
+            bountyPromptAutoCreateIssues = bountyPromptAutoCreateIssues.isSelected,
+            bountyPromptIssueConfidenceThreshold = (bountyPromptIssueThreshold.value as? Int) ?: 90,
+            bountyPromptEnabledPromptIds = parseIdSetInput(
+                bountyPromptEnabledIds.text,
+                BountyPromptCatalog.defaultEnabledPromptIds()
+            )
         )
     }
 
@@ -712,6 +745,11 @@ class SettingsPanel(
         promptJs.text = updated.explainJsPrompt
         promptAccessControl.text = updated.accessControlPrompt
         promptLoginSequence.text = updated.loginSequencePrompt
+        bountyPromptEnabled.isSelected = updated.bountyPromptEnabled
+        bountyPromptDir.text = updated.bountyPromptDir
+        bountyPromptAutoCreateIssues.isSelected = updated.bountyPromptAutoCreateIssues
+        bountyPromptIssueThreshold.value = updated.bountyPromptIssueConfidenceThreshold
+        bountyPromptEnabledIds.text = updated.bountyPromptEnabledPromptIds.joinToString(",")
 
         mcpEnabled.isSelected = updated.mcpSettings.enabled
         mcpHost.text = updated.mcpSettings.host
@@ -763,6 +801,14 @@ class SettingsPanel(
     private fun parseTimeoutSeconds(raw: String, fallback: Int): Int {
         val parsed = raw.trim().toIntOrNull() ?: return fallback.coerceIn(30, 3600)
         return parsed.coerceIn(30, 3600)
+    }
+
+    private fun parseIdSetInput(raw: String, fallback: Set<String>): Set<String> {
+        val parsed = raw.split(',')
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .toSet()
+        return if (parsed.isEmpty()) fallback else parsed
     }
 
     private fun applyAndSaveSettings(updated: AgentSettings) {
@@ -1309,7 +1355,12 @@ class SettingsPanel(
             promptIssueAnalyze = promptIssueAnalyze,
             promptIssuePoc = promptIssuePoc,
             promptIssueImpact = promptIssueImpact,
-            promptIssueFull = promptIssueFull
+            promptIssueFull = promptIssueFull,
+            bountyPromptEnabled = bountyPromptEnabled,
+            bountyPromptDir = bountyPromptDir,
+            bountyPromptAutoCreateIssues = bountyPromptAutoCreateIssues,
+            bountyPromptIssueThreshold = bountyPromptIssueThreshold,
+            bountyPromptEnabledIds = bountyPromptEnabledIds
         ).build()
     }
 
