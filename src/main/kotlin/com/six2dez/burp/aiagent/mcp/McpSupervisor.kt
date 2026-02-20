@@ -3,6 +3,7 @@ package com.six2dez.burp.aiagent.mcp
 import burp.api.montoya.MontoyaApi
 import com.six2dez.burp.aiagent.config.McpSettings
 import com.six2dez.burp.aiagent.redact.PrivacyMode
+import com.six2dez.burp.aiagent.mcp.tools.CollaboratorRegistry
 import com.six2dez.burp.aiagent.mcp.tools.ScannerTaskRegistry
 import java.net.BindException
 import java.net.HttpURLConnection
@@ -11,8 +12,8 @@ import java.net.URI
 import javax.net.ssl.HostnameVerifier
 import javax.net.ssl.HttpsURLConnection
 import javax.net.ssl.SSLContext
-import javax.net.ssl.TrustManager
-import javax.net.ssl.X509TrustManager
+import javax.net.ssl.TrustManagerFactory
+import java.security.KeyStore
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
@@ -63,6 +64,7 @@ class McpSupervisor(
         }
         stdioBridge.stop()
         ScannerTaskRegistry.clear()
+        CollaboratorRegistry.clear()
     }
 
     fun shutdown() {
@@ -131,16 +133,20 @@ class McpSupervisor(
             conn.requestMethod = "GET"
             conn.connectTimeout = 800
             conn.readTimeout = 800
+            if (settings.externalEnabled) {
+                conn.setRequestProperty("Authorization", "Bearer ${settings.token}")
+            }
             conn.connect()
             val ok = conn.responseCode in 200..299 &&
                 conn.getHeaderField("X-Burp-AI-Agent") == "mcp"
             conn.disconnect()
             
             if (ok) {
-                // Server exists, try to shut it down and take over
+                // Server exists, try to shut it down and take over.
+                // The caller (handleFailure) schedules a retry with 1s delay,
+                // which gives the remote server time to shut down.
                 api.logging().logToOutput("Found existing MCP server, requesting shutdown to take over...")
                 requestRemoteShutdownWithToken(settings)
-                Thread.sleep(500) // Wait for shutdown
                 false // Return false to trigger a new start
             } else {
                 false
@@ -194,15 +200,30 @@ class McpSupervisor(
                 url.host.equals("::1")
 
             if (isLoopback) {
-                val trustAll = arrayOf<TrustManager>(object : X509TrustManager {
-                    override fun getAcceptedIssuers() = emptyArray<java.security.cert.X509Certificate>()
-                    override fun checkClientTrusted(chain: Array<java.security.cert.X509Certificate>, authType: String) = Unit
-                    override fun checkServerTrusted(chain: Array<java.security.cert.X509Certificate>, authType: String) = Unit
-                })
-                val sslContext = SSLContext.getInstance("TLS")
-                sslContext.init(null, trustAll, java.security.SecureRandom())
+                val settings = settingsRef.get()
+                val tlsMaterial = settings?.let { McpTls.resolve(it) }
+                val sslContext = SSLContext.getInstance("TLSv1.2")
+                if (tlsMaterial != null) {
+                    val trustStore = KeyStore.getInstance("PKCS12")
+                    trustStore.load(null, null)
+                    val cert = tlsMaterial.keyStore.getCertificate(tlsMaterial.keyAlias)
+                    if (cert != null) {
+                        trustStore.setCertificateEntry("mcp-server", cert)
+                    }
+                    val tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm())
+                    tmf.init(trustStore)
+                    sslContext.init(null, tmf.trustManagers, java.security.SecureRandom())
+                } else {
+                    if (settings?.tlsEnabled == true) {
+                        api.logging().logToOutput("TLS enabled but keystore material unavailable; health probe using JVM default trust")
+                    }
+                    sslContext.init(null, null, java.security.SecureRandom())
+                }
                 conn.sslSocketFactory = sslContext.socketFactory
-                conn.hostnameVerifier = HostnameVerifier { _, _ -> true }
+                conn.hostnameVerifier = HostnameVerifier { hostname, _ ->
+                    hostname.equals("localhost", ignoreCase = true) ||
+                        hostname == "127.0.0.1" || hostname == "::1"
+                }
             }
         }
         return conn

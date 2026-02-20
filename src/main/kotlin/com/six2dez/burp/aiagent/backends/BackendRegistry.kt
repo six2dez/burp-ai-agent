@@ -25,6 +25,7 @@ class BackendRegistry(private val api: MontoyaApi) {
 
     fun reload() {
         backends.clear()
+        availabilityCache.clear()
         closeExternalClassLoader()
 
         // Built-ins (same extension JAR)
@@ -58,17 +59,31 @@ class BackendRegistry(private val api: MontoyaApi) {
 
     fun get(id: String): AiBackend? = backends[id]
 
-    private val availabilityCache = ConcurrentHashMap<Pair<String, Int>, Boolean>()
+    private val availabilityCache = ConcurrentHashMap<Pair<String, String>, Boolean>()
 
     fun listBackendIds(settings: com.six2dez.burp.aiagent.config.AgentSettings): List<String> {
-        val settingsHash = settings.hashCode()
         return backends.values
             .filter { backend ->
-                val cacheKey = Pair(backend.id, settingsHash)
-                availabilityCache.getOrPut(cacheKey) { backend.isAvailable(settings) }
+                val relevantKey = buildAvailabilityCacheKey(backend.id, settings)
+                availabilityCache.getOrPut(relevantKey) { backend.isAvailable(settings) }
             }
             .sortedBy { it.displayName }
             .map { it.id }
+    }
+
+    private fun buildAvailabilityCacheKey(backendId: String, settings: com.six2dez.burp.aiagent.config.AgentSettings): Pair<String, String> {
+        val relevantValue = when (backendId) {
+            "claude-cli" -> settings.claudeCmd
+            "gemini-cli" -> settings.geminiCmd
+            "codex-cli" -> settings.codexCmd
+            "opencode-cli" -> settings.opencodeCmd
+            "ollama" -> settings.ollamaCliCmd
+            "ollama-http" -> settings.ollamaUrl
+            "lmstudio" -> settings.lmStudioUrl
+            "openai-compatible" -> settings.openAiCompatibleUrl
+            else -> settings.hashCode().toString()
+        }
+        return Pair(backendId, relevantValue)
     }
 
     fun shutdown() {

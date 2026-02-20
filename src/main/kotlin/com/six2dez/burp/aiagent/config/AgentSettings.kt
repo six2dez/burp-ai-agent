@@ -86,7 +86,12 @@ class AgentSettingsRepository(api: MontoyaApi) {
 
     fun load(): AgentSettings {
         val privacy = PrivacyMode.fromString(prefs.getString(KEY_PRIVACY_MODE))
-        val mcpSettings = loadMcpSettings()
+        val hostSalt = prefs.getString(KEY_HOST_SALT).orEmpty().ifBlank {
+            val generated = McpSettings.generateToken()
+            prefs.setString(KEY_HOST_SALT, generated)
+            generated
+        }
+        val mcpSettings = loadMcpSettings().copy(hostAnonymizationSalt = hostSalt)
         val rawGeminiCmd = prefs.getString(KEY_GEMINI_CMD).orEmpty().trim()
         return AgentSettings(
             codexCmd = prefs.getString(KEY_CODEX_CMD).orEmpty().trim().ifBlank { defaultCodexCmd() },
@@ -128,11 +133,7 @@ class AgentSettingsRepository(api: MontoyaApi) {
             explainJsPrompt = prefs.getString(KEY_PROMPT_EXPLAIN_JS).orEmpty().ifBlank { defaultExplainJsPrompt() },
             accessControlPrompt = prefs.getString(KEY_PROMPT_ACCESS_CONTROL).orEmpty().ifBlank { defaultAccessControlPrompt() },
             loginSequencePrompt = prefs.getString(KEY_PROMPT_LOGIN_SEQUENCE).orEmpty().ifBlank { defaultLoginSequencePrompt() },
-            hostAnonymizationSalt = prefs.getString(KEY_HOST_SALT).orEmpty().ifBlank {
-                val generated = McpSettings.generateToken() // Reuse token generator for salt
-                prefs.setString(KEY_HOST_SALT, generated)
-                generated
-            },
+            hostAnonymizationSalt = hostSalt,
             preferredBackendId = (prefs.getString(KEY_PREFERRED_BACKEND) ?: "codex-cli").trim(),
             privacyMode = privacy,
             determinismMode = prefs.getBoolean(KEY_DETERMINISM) ?: false,
@@ -575,7 +576,8 @@ Response Language: English.
                 maxConcurrentRequests = 4,
                 maxBodyBytes = 2 * 1024 * 1024,
                 toolToggles = emptyMap(),
-                unsafeEnabled = false
+                unsafeEnabled = false,
+                hostAnonymizationSalt = McpSettings.generateToken()
             )
         }
     }

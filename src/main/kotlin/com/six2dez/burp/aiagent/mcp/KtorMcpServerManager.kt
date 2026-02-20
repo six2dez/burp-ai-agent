@@ -47,7 +47,7 @@ class KtorMcpServerManager(private val api: MontoyaApi) : McpServerManager {
                 val tools = McpToolCatalog.mergeWithDefaults(settings.toolToggles)
                 val unsafeTools = McpToolCatalog.unsafeToolIds()
                 val limiter = McpRequestLimiter(settings.maxConcurrentRequests)
-                val hostSalt = "mcp-${settings.token.take(12)}"
+                val hostSalt = settings.hostAnonymizationSalt.ifBlank { "mcp-${settings.token.take(12)}" }
                 val context = McpToolContext(
                     api = api,
                     privacyMode = privacyMode,
@@ -62,7 +62,7 @@ class KtorMcpServerManager(private val api: MontoyaApi) : McpServerManager {
                 )
 
                 val mcpServer = Server(
-                    serverInfo = Implementation("burp-ai-agent", "0.1.0"),
+                    serverInfo = Implementation("burp-ai-agent", com.six2dez.burp.aiagent.config.Defaults.MCP_VERSION),
                     options = ServerOptions(
                         capabilities = ServerCapabilities(
                             tools = ServerCapabilities.Tools(listChanged = false)
@@ -111,6 +111,13 @@ class KtorMcpServerManager(private val api: MontoyaApi) : McpServerManager {
 
                     routing {
                         get("/__mcp/health") {
+                            if (settings.externalEnabled) {
+                                val authHeader = call.request.headers["Authorization"].orEmpty()
+                                if (!isAuthorized(authHeader, settings.token)) {
+                                    call.respond(HttpStatusCode.Unauthorized)
+                                    return@get
+                                }
+                            }
                             call.response.headers.append("X-Burp-AI-Agent", "mcp")
                             call.respondText("ok")
                         }

@@ -19,7 +19,8 @@ data class McpSettings(
     val maxConcurrentRequests: Int,
     val maxBodyBytes: Int,
     val toolToggles: Map<String, Boolean>,
-    val unsafeEnabled: Boolean
+    val unsafeEnabled: Boolean,
+    val hostAnonymizationSalt: String = ""
 ) {
     companion object {
         private val mapper = JsonMapper.builder()

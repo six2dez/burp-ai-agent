@@ -14,7 +14,7 @@ import java.util.zip.ZipOutputStream
 
 class AuditLogger(private val api: MontoyaApi) {
     @Volatile
-    private var enabled: Boolean = true
+    private var enabled: Boolean = false
     private val mapper = JsonMapper.builder()
         .enable(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY)
         .enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS)

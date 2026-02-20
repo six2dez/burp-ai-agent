@@ -33,7 +33,7 @@ class McpStdioBridge(private val api: MontoyaApi) {
         val tools = McpToolCatalog.mergeWithDefaults(settings.toolToggles)
         val unsafeTools = McpToolCatalog.unsafeToolIds()
         val limiter = McpRequestLimiter(settings.maxConcurrentRequests)
-        val hostSalt = "mcp-${settings.token.take(12)}"
+        val hostSalt = settings.hostAnonymizationSalt.ifBlank { "mcp-${settings.token.take(12)}" }
         val context = McpToolContext(
             api = api,
             privacyMode = privacyMode,
@@ -48,7 +48,7 @@ class McpStdioBridge(private val api: MontoyaApi) {
         )
 
         val mcpServer = Server(
-            serverInfo = Implementation("burp-ai-agent", "0.1.0"),
+            serverInfo = Implementation("burp-ai-agent", com.six2dez.burp.aiagent.config.Defaults.MCP_VERSION),
             options = ServerOptions(
                 capabilities = ServerCapabilities(
                     tools = ServerCapabilities.Tools(listChanged = false)

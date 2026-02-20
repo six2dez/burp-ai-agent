@@ -2,6 +2,8 @@ package com.six2dez.burp.aiagent.redact
 
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
+import java.util.Collections
+import java.util.LinkedHashMap
 import java.util.concurrent.ConcurrentHashMap
 
 data class RedactionPolicy(
@@ -62,8 +64,18 @@ object Redaction {
 
     private val hostHeaderRegex = Regex("(?im)^host:\\s*([^\\s]+)\\s*$")
 
-    private val hostForwardMap = ConcurrentHashMap<String, ConcurrentHashMap<String, String>>()
-    private val hostReverseMap = ConcurrentHashMap<String, ConcurrentHashMap<String, String>>()
+    private const val MAX_HOST_ENTRIES = 10_000
+
+    private fun <K, V> boundedSynchronizedMap(maxSize: Int): MutableMap<K, V> {
+        return Collections.synchronizedMap(object : LinkedHashMap<K, V>(16, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<K, V>?): Boolean {
+                return size > maxSize
+            }
+        })
+    }
+
+    private val hostForwardMap = ConcurrentHashMap<String, MutableMap<String, String>>()
+    private val hostReverseMap = ConcurrentHashMap<String, MutableMap<String, String>>()
 
     fun apply(raw: String, policy: RedactionPolicy, stableHostSalt: String, recordMapping: Boolean = true): String {
         var out = raw
@@ -99,8 +111,8 @@ object Redaction {
         val short = digest.take(6).joinToString("") { "%02x".format(it) }
         val anon = "host-$short.local"
         if (recordMapping) {
-            hostForwardMap.computeIfAbsent(salt) { ConcurrentHashMap() }[host] = anon
-            hostReverseMap.computeIfAbsent(salt) { ConcurrentHashMap() }[anon] = host
+            hostForwardMap.computeIfAbsent(salt) { boundedSynchronizedMap(MAX_HOST_ENTRIES) }[host] = anon
+            hostReverseMap.computeIfAbsent(salt) { boundedSynchronizedMap(MAX_HOST_ENTRIES) }[anon] = host
         }
         return anon
     }

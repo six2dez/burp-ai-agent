@@ -10,4 +10,5 @@ object Defaults {
     const val BACKEND_STARTUP_DELAY_MS = 2_000L
     const val DEDUP_WINDOW_MS = 3_600_000L
     const val ACTIVE_SCAN_MAX_QUEUE_SIZE = 2_000
+    const val MCP_VERSION = "0.2.1"
 }

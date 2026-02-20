@@ -863,12 +863,7 @@ private fun hasEquivalentIssue(api: MontoyaApi, name: String, baseUrl: String): 
 }
 
 private fun canonicalIssueName(name: String): String {
-    return name
-        .trim()
-        .replace(Regex("^\\[(?:AI(?:\\s+Passive)?)\\]\\s*", RegexOption.IGNORE_CASE), "")
-        .replace(Regex("^\\[(?:AI(?:\\s+Passive)?)\\]\\s*", RegexOption.IGNORE_CASE), "")
-        .trim()
-        .lowercase()
+    return com.six2dez.burp.aiagent.scanner.canonicalIssueName(name)
 }
 
 /**

@@ -712,12 +712,7 @@ $metadata
     }
 
     private fun canonicalIssueName(name: String): String {
-        return name
-            .trim()
-            .replace(Regex("^\\[(?:AI(?:\\s+Passive)?)\\]\\s*", RegexOption.IGNORE_CASE), "")
-            .replace(Regex("^\\[(?:AI(?:\\s+Passive)?)\\]\\s*", RegexOption.IGNORE_CASE), "")
-            .trim()
-            .lowercase()
+        return com.six2dez.burp.aiagent.scanner.canonicalIssueName(name)
     }
     
     private fun queueToActiveScanner(
@@ -768,7 +763,7 @@ $metadata
         val lowerTitle = title.lowercase()
         return when {
             // Injection vulnerabilities
-            lowerTitle.contains("sql") || lowerTitle.contains("injection") && lowerTitle.contains("database") -> VulnClass.SQLI
+            lowerTitle.contains("sql") || (lowerTitle.contains("injection") && lowerTitle.contains("database")) -> VulnClass.SQLI
             lowerTitle.contains("xss") || lowerTitle.contains("cross-site scripting") || lowerTitle.contains("script injection") -> VulnClass.XSS_REFLECTED
             lowerTitle.contains("lfi") || lowerTitle.contains("local file") || lowerTitle.contains("file inclusion") -> VulnClass.LFI
             lowerTitle.contains("path traversal") || lowerTitle.contains("directory traversal") -> VulnClass.PATH_TRAVERSAL
@@ -793,7 +788,7 @@ $metadata
 
             // Authentication/Authorization (NEW)
             lowerTitle.contains("account takeover") || lowerTitle.contains("ato") || lowerTitle.contains("password reset") -> VulnClass.ACCOUNT_TAKEOVER
-            lowerTitle.contains("oauth") || lowerTitle.contains("sso") && lowerTitle.contains("bypass") -> VulnClass.OAUTH_MISCONFIGURATION
+            lowerTitle.contains("oauth") || (lowerTitle.contains("sso") && lowerTitle.contains("bypass")) -> VulnClass.OAUTH_MISCONFIGURATION
             lowerTitle.contains("2fa") || lowerTitle.contains("mfa") || lowerTitle.contains("two-factor") -> VulnClass.MFA_BYPASS
             lowerTitle.contains("jwt") || lowerTitle.contains("json web token") -> VulnClass.JWT_WEAKNESS
             lowerTitle.contains("csrf") || lowerTitle.contains("cross-site request forgery") -> VulnClass.CSRF
@@ -807,8 +802,8 @@ $metadata
             // Cache attacks (NEW)
             lowerTitle.contains("cache poison") -> VulnClass.CACHE_POISONING
             lowerTitle.contains("cache deception") -> VulnClass.CACHE_DECEPTION
-            lowerTitle.contains("request smuggling") || lowerTitle.contains("cl.te") || lowerTitle.contains("transfer-encoding") && lowerTitle.contains("content-length") -> VulnClass.REQUEST_SMUGGLING
-            lowerTitle.contains("file upload") || lowerTitle.contains("unrestricted upload") || lowerTitle.contains("upload") && lowerTitle.contains("executable") -> VulnClass.UNRESTRICTED_FILE_UPLOAD
+            lowerTitle.contains("request smuggling") || lowerTitle.contains("cl.te") || (lowerTitle.contains("transfer-encoding") && lowerTitle.contains("content-length")) -> VulnClass.REQUEST_SMUGGLING
+            lowerTitle.contains("file upload") || lowerTitle.contains("unrestricted upload") || (lowerTitle.contains("upload") && lowerTitle.contains("executable")) -> VulnClass.UNRESTRICTED_FILE_UPLOAD
 
             // Information disclosure (NEW)
             lowerTitle.contains("source map") || lowerTitle.contains("sourcemap") -> VulnClass.SOURCEMAP_DISCLOSURE
@@ -818,11 +813,11 @@ $metadata
             lowerTitle.contains("stack trace") || lowerTitle.contains("error leak") -> VulnClass.STACK_TRACE_EXPOSURE
 
             // Cloud/Infrastructure (NEW)
-            lowerTitle.contains("s3") || lowerTitle.contains("bucket") && lowerTitle.contains("public") -> VulnClass.S3_MISCONFIGURATION
+            lowerTitle.contains("s3") || (lowerTitle.contains("bucket") && lowerTitle.contains("public")) -> VulnClass.S3_MISCONFIGURATION
             lowerTitle.contains("subdomain takeover") || lowerTitle.contains("dangling") -> VulnClass.SUBDOMAIN_TAKEOVER
 
             // Business logic (NEW)
-            lowerTitle.contains("price") || lowerTitle.contains("quantity") && lowerTitle.contains("manipulation") -> VulnClass.PRICE_MANIPULATION
+            (lowerTitle.contains("price") || lowerTitle.contains("quantity")) && lowerTitle.contains("manipulation") -> VulnClass.PRICE_MANIPULATION
             lowerTitle.contains("race condition") || lowerTitle.contains("toctou") -> VulnClass.RACE_CONDITION_TOCTOU
 
             // API security (NEW)
@@ -1195,30 +1190,6 @@ $metadata
                 val key = pair.substring(0, separator)
                 if (sensitiveKey.containsMatchIn(key)) "$key=[REDACTED]" else pair
             }
-        }
-    }
-
-    private fun buildMetadataSection(backendInfo: AgentSupervisor.BackendInfo?, scanType: String, confidence: Int): String {
-        return buildString {
-            appendLine("---")
-            appendLine()
-            appendLine("### AI Analysis Metadata")
-            appendLine()
-            if (backendInfo != null) {
-                appendLine("**Backend:** ${backendInfo.displayName}")
-                if (backendInfo.model != null) {
-                    appendLine("**Model:** ${backendInfo.model}")
-                }
-            } else {
-                appendLine("**Backend:** Unknown")
-            }
-            appendLine("**Scan Type:** $scanType")
-            appendLine("**Confidence:** $confidence%")
-            
-            val timestamp = java.time.Instant.now().toString().replace('T', ' ').substringBefore('.')
-            appendLine("**Scan Date:** $timestamp UTC")
-            appendLine()
-            appendLine("---")
         }
     }
 
