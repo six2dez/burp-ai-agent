@@ -38,6 +38,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
     implementation("org.jetbrains.kotlinx:kotlinx-io-core:0.5.4")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
+    implementation("org.bouncycastle:bcpkix-jdk18on:1.83")
 
     // Logging façade (we keep it minimal; Burp logs are also used)
     implementation("org.slf4j:slf4j-api:2.0.16")

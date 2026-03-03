@@ -133,56 +133,37 @@ class CliBackend(
                     }
 
                     val rawOutput = StringBuilder()
-                    val lastOutputAt = java.util.concurrent.atomic.AtomicLong(0L)
-                    val hasOutput = java.util.concurrent.atomic.AtomicBoolean(false)
                     val readerThread = Thread({
                         val reader = BufferedReader(InputStreamReader(process.inputStream))
                         reader.forEachLine { line ->
                             rawOutput.appendLine(line)
-                            hasOutput.set(true)
-                            lastOutputAt.set(System.currentTimeMillis())
                         }
                     }, "burp-ai-agent-cli-reader")
                     readerThread.isDaemon = true
                     readerThread.start()
 
-                    var terminatedAfterIdle = false
-                    if (backendId == "opencode-cli") {
-                        val start = System.currentTimeMillis()
-                        while (true) {
-                            if (process.waitFor(200, TimeUnit.MILLISECONDS)) break
-                            val idleMs = System.currentTimeMillis() - lastOutputAt.get()
-                            if (hasOutput.get() && idleMs > 10000) {
-                                terminatedAfterIdle = true
-                                process.destroyForcibly()
-                                break
-                            }
-                            if (System.currentTimeMillis() - start > Defaults.CLI_PROCESS_TIMEOUT_SECONDS * 1000L) break
+                    if (!process.waitFor(Defaults.CLI_PROCESS_TIMEOUT_SECONDS.toLong(), TimeUnit.SECONDS)) {
+                        process.destroyForcibly()
+                        try {
+                            readerThread.join(2000)
+                        } catch (_: InterruptedException) {
+                            Thread.currentThread().interrupt()
                         }
-                    } else {
-                        if (!process.waitFor(Defaults.CLI_PROCESS_TIMEOUT_SECONDS.toLong(), TimeUnit.SECONDS)) {
-                            process.destroyForcibly()
-                            try {
-                                readerThread.join(2000)
-                            } catch (_: InterruptedException) {
-                                Thread.currentThread().interrupt()
-                            }
-                            val tail = rawOutput.toString().trim().take(2000)
-                            val msg = if (tail.isBlank()) {
-                                "CLI command timed out"
-                            } else {
-                                "CLI command timed out: $tail"
-                            }
-                            onComplete(IllegalStateException(msg))
-                            return@submit
+                        val tail = rawOutput.toString().trim().take(2000)
+                        val msg = if (tail.isBlank()) {
+                            "CLI command timed out"
+                        } else {
+                            "CLI command timed out: $tail"
                         }
+                        onComplete(IllegalStateException(msg))
+                        return@submit
                     }
                     try {
                         readerThread.join(2000)
                     } catch (_: InterruptedException) {
                         Thread.currentThread().interrupt()
                     }
-                    if (!terminatedAfterIdle && process.exitValue() != 0) {
+                    if (process.exitValue() != 0) {
                         val tail = rawOutput.toString().trim().take(2000)
                         val msg = if (tail.isBlank()) {
                             "CLI command failed (exit=${process.exitValue()})"
