@@ -1,6 +1,7 @@
 package com.six2dez.burp.aiagent.mcp
 
 import burp.api.montoya.MontoyaApi
+import com.six2dez.burp.aiagent.audit.AiRequestLogger
 import com.six2dez.burp.aiagent.config.McpSettings
 import com.six2dez.burp.aiagent.mcp.tools.CollaboratorRegistry
 import com.six2dez.burp.aiagent.mcp.tools.ScannerTaskRegistry
@@ -54,6 +55,11 @@ class McpSupervisor(
         require(takeoverRetryDelayMs > 0) { "takeoverRetryDelayMs must be > 0" }
     }
 
+    fun setAiRequestLogger(logger: AiRequestLogger) {
+        serverManager.setAiRequestLogger(logger)
+        stdioBridge.setAiRequestLogger(logger)
+    }
+
     fun applySettings(settings: McpSettings, privacyMode: PrivacyMode, determinismMode: Boolean) {
         settingsRef.set(settings)
         privacyRef.set(privacyMode)
@@ -93,9 +99,14 @@ class McpSupervisor(
     }
 
     fun shutdown() {
+        scheduler.shutdown()
+        try {
+            scheduler.awaitTermination(5, TimeUnit.SECONDS)
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
+        }
         serverManager.shutdown()
         stdioBridge.stop()
-        scheduler.shutdown()
     }
 
     private fun startInternal(settings: McpSettings, privacyMode: PrivacyMode, determinismMode: Boolean) {
@@ -198,14 +209,16 @@ class McpSupervisor(
             val scheme = if (settings.tlsEnabled) "https" else "http"
             val url = URI.create("$scheme://${settings.host}:${settings.port}/__mcp/health").toURL()
             val conn = openConnection(url, settings.tlsEnabled)
-            conn.requestMethod = "GET"
-            conn.connectTimeout = 800
-            conn.readTimeout = 800
-            conn.connect()
-            val isHealthyMcp = conn.responseCode in 200..299 &&
-                conn.getHeaderField("X-Burp-AI-Agent") == "mcp"
-            conn.disconnect()
-            isHealthyMcp
+            try {
+                conn.requestMethod = "GET"
+                conn.connectTimeout = 800
+                conn.readTimeout = 800
+                conn.connect()
+                conn.responseCode in 200..299 &&
+                    conn.getHeaderField("X-Burp-AI-Agent") == "mcp"
+            } finally {
+                conn.disconnect()
+            }
         } catch (e: Exception) {
             api.logging().logToOutput("MCP probe failed on ${settings.host}:${settings.port}: ${e.message}")
             false
@@ -217,14 +230,16 @@ class McpSupervisor(
             val scheme = if (settings.tlsEnabled) "https" else "http"
             val url = URI.create("$scheme://${settings.host}:${settings.port}/__mcp/shutdown").toURL()
             val conn = openConnection(url, settings.tlsEnabled)
-            conn.requestMethod = "POST"
-            conn.setRequestProperty("Authorization", "Bearer ${settings.token}")
-            conn.connectTimeout = 500
-            conn.readTimeout = 500
-            conn.connect()
-            val accepted = conn.responseCode in 200..299
-            conn.disconnect()
-            accepted
+            try {
+                conn.requestMethod = "POST"
+                conn.setRequestProperty("Authorization", "Bearer ${settings.token}")
+                conn.connectTimeout = 500
+                conn.readTimeout = 500
+                conn.connect()
+                conn.responseCode in 200..299
+            } finally {
+                conn.disconnect()
+            }
         } catch (e: Exception) {
             api.logging().logToOutput("MCP remote shutdown request was not accepted: ${e.message}")
             false

@@ -1,6 +1,7 @@
 package com.six2dez.burp.aiagent.ui
 
 import burp.api.montoya.MontoyaApi
+import com.six2dez.burp.aiagent.audit.AiRequestLogger
 import com.six2dez.burp.aiagent.audit.AuditLogger
 import com.six2dez.burp.aiagent.backends.HealthCheckResult
 import com.six2dez.burp.aiagent.backends.BackendRegistry
@@ -34,12 +35,14 @@ class MainTab(
     private val audit: AuditLogger,
     private val mcpSupervisor: McpSupervisor,
     private val passiveAiScanner: com.six2dez.burp.aiagent.scanner.PassiveAiScanner,
-    private val activeAiScanner: com.six2dez.burp.aiagent.scanner.ActiveAiScanner
+    private val activeAiScanner: com.six2dez.burp.aiagent.scanner.ActiveAiScanner,
+    private val aiRequestLogger: AiRequestLogger? = null
 ) {
     val root: JComponent = JPanel(BorderLayout())
     private lateinit var settingsPanel: SettingsPanel
     private lateinit var chatPanel: ChatPanel
     private lateinit var bottomTabsPanel: BottomTabsPanel
+    private var aiLoggerPanel: AiLoggerPanel? = null
 
     private val mcpToggle = ToggleSwitch()
     private val passiveToggle = ToggleSwitch()
@@ -73,14 +76,20 @@ class MainTab(
 
     init {
         settingsPanel = SettingsPanel(api, backends, supervisor, audit, mcpSupervisor, passiveAiScanner, activeAiScanner)
-        bottomTabsPanel = BottomTabsPanel(settingsPanel)
+        if (aiRequestLogger != null) {
+            aiLoggerPanel = AiLoggerPanel(aiRequestLogger)
+        }
+        bottomTabsPanel = BottomTabsPanel(settingsPanel, aiLoggerPanel)
         chatPanel = ChatPanel(
             api = api,
             supervisor = supervisor,
             getSettings = { settingsPanel.currentSettings() },
             applySettings = { settings ->
                 settingsRepo.save(settings)
+                aiRequestLogger?.enabled = settings.aiRequestLoggerEnabled
+                aiRequestLogger?.maxEntries = settings.aiRequestLoggerMaxEntries
                 supervisor.applySettings(settings)
+                mcpSupervisor.applySettings(settings.mcpSettings, settings.privacyMode, settings.determinismMode)
             },
             validateBackend = { validateBackendCommand(it) },
             ensureBackendReady = { ensureBackendReady(it) },
@@ -407,6 +416,8 @@ class MainTab(
         }
         settingsPanel.onSettingsChanged = { updated ->
             SwingUtilities.invokeLater {
+                aiRequestLogger?.enabled = updated.aiRequestLoggerEnabled
+                aiRequestLogger?.maxEntries = updated.aiRequestLoggerMaxEntries
                 val available = backends.listBackendIds(updated)
                 backendPicker.model = javax.swing.DefaultComboBoxModel(available.toTypedArray())
                 if (available.contains(updated.preferredBackendId)) {
@@ -580,6 +591,7 @@ class MainTab(
                 }
             }
             "claude-cli" -> if (settings.claudeCmd.isBlank()) "Claude command is empty." else null
+            "copilot-cli" -> if (settings.copilotCmd.isBlank()) "Copilot command is empty." else null
             "ollama" -> if (settings.ollamaCliCmd.isBlank()) "Ollama CLI command is empty." else null
             "lmstudio" -> if (settings.lmStudioUrl.isBlank()) "LM Studio URL is empty." else null
             "openai-compatible" -> {
@@ -666,11 +678,13 @@ class MainTab(
     }
 
     fun shutdown() {
+        settingsPanel.shutdown()
         mcpStatusTimer.stop()
         healthTimer?.stop()
         healthTimer = null
         sessionPersistTimer?.stop()
         sessionPersistTimer = null
         chatPanel.saveSessions()
+        aiLoggerPanel?.shutdown()
     }
 }

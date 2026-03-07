@@ -12,6 +12,8 @@ import burp.api.montoya.scanner.audit.issues.AuditIssueSeverity
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
+import com.six2dez.burp.aiagent.audit.ActivityType
+import com.six2dez.burp.aiagent.audit.AiRequestLogger
 import com.six2dez.burp.aiagent.audit.AuditLogger
 import com.six2dez.burp.aiagent.config.AgentSettings
 import com.six2dez.burp.aiagent.config.Defaults
@@ -24,6 +26,7 @@ import com.six2dez.burp.aiagent.util.TokenTracker
 import java.net.URI
 import java.security.MessageDigest
 import java.util.LinkedHashMap
+import java.util.UUID
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -57,6 +60,8 @@ class PassiveAiScanner(
     private val audit: AuditLogger,
     private val getSettings: () -> AgentSettings
 ) {
+    var aiRequestLogger: AiRequestLogger? = null
+
     private val enabled = AtomicBoolean(false)
     private val requestsAnalyzed = AtomicInteger(0)
     private val issuesFound = AtomicInteger(0)
@@ -573,7 +578,7 @@ class PassiveAiScanner(
             } catch (_: Exception) { "" }
 
             // Look for potential object IDs in URL
-            val potentialIds = Regex("\\b([0-9]+|[a-f0-9-]{36}|[a-f0-9]{24})\\b", RegexOption.IGNORE_CASE)
+            val potentialIds = POTENTIAL_IDS_REGEX
                 .findAll(urlPath + "?" + params.joinToString("&"))
                 .map { it.value }
                 .distinct()
@@ -669,9 +674,12 @@ class PassiveAiScanner(
             val responseBuffer = StringBuilder()
             val completionLatch = CountDownLatch(1)
             val errorRef = AtomicReference<String?>(null)
+            val traceId = "scanner-job-" + UUID.randomUUID().toString()
+            val sendStartMs = System.currentTimeMillis()
 
             supervisor.send(
                 text = prompt,
+                history = emptyList(),
                 contextJson = null,
                 privacyMode = settings.privacyMode,
                 determinismMode = settings.determinismMode,
@@ -679,16 +687,48 @@ class PassiveAiScanner(
                 onComplete = { err ->
                     errorRef.set(err?.message)
                     completionLatch.countDown()
-                }
+                },
+                traceId = traceId
+            )
+
+            aiRequestLogger?.log(
+                type = ActivityType.SCANNER_SEND,
+                source = "passive_scanner",
+                backendId = settings.preferredBackendId,
+                detail = "Passive scan: ${request.method()} ${request.url().take(80)}",
+                promptChars = prompt.length,
+                metadata = mapOf(
+                    "operation" to "scanner_job",
+                    "status" to "sent",
+                    "traceId" to traceId,
+                    "url" to request.url().take(200),
+                    "method" to request.method()
+                )
             )
 
             val completed = completionLatch.await(Defaults.PASSIVE_SCAN_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+            val durationMs = System.currentTimeMillis() - sendStartMs
 
             requestsAnalyzed.incrementAndGet()
             lastAnalysisTime.set(System.currentTimeMillis())
 
             if (!completed) {
                 api.logging().logToError("[PassiveAiScanner] Timeout for: ${request.url().take(60)}")
+                aiRequestLogger?.log(
+                    type = ActivityType.ERROR,
+                    source = "passive_scanner",
+                    backendId = settings.preferredBackendId,
+                    detail = "Passive scan timeout: ${request.method()} ${request.url().take(80)}",
+                    durationMs = durationMs,
+                    promptChars = prompt.length,
+                    metadata = mapOf(
+                        "operation" to "scanner_job",
+                        "status" to "timeout",
+                        "traceId" to traceId,
+                        "url" to request.url().take(200),
+                        "method" to request.method()
+                    )
+                )
             } else if (errorRef.get() != null) {
                 val err = errorRef.get().orEmpty()
                 if (isGeminiCapacityError(err)) {
@@ -697,10 +737,42 @@ class PassiveAiScanner(
                     maybeLogBackoff(System.currentTimeMillis(), until)
                 }
                 api.logging().logToError("[PassiveAiScanner] AI error: $err")
+                aiRequestLogger?.log(
+                    type = ActivityType.ERROR,
+                    source = "passive_scanner",
+                    backendId = settings.preferredBackendId,
+                    detail = "Passive scan error: ${err.take(200)}",
+                    durationMs = durationMs,
+                    promptChars = prompt.length,
+                    metadata = mapOf(
+                        "operation" to "scanner_job",
+                        "status" to "error",
+                        "traceId" to traceId,
+                        "url" to request.url().take(200),
+                        "method" to request.method()
+                    )
+                )
             } else if (responseBuffer.isNotEmpty()) {
                 val issues = parseIssuesFromAiResponse(responseBuffer.toString())
                 putPromptResultCacheValue(promptHash, issues)
                 handleParsedAiIssues(issues, requestResponse, settings.passiveAiMinSeverity.name)
+                aiRequestLogger?.log(
+                    type = ActivityType.RESPONSE_COMPLETE,
+                    source = "passive_scanner",
+                    backendId = settings.preferredBackendId,
+                    detail = "Passive scan completed with ${issues.size} issue(s)",
+                    durationMs = durationMs,
+                    promptChars = prompt.length,
+                    responseChars = responseBuffer.length,
+                    metadata = mapOf(
+                        "operation" to "scanner_job",
+                        "status" to "ok",
+                        "traceId" to traceId,
+                        "issues" to issues.size.toString(),
+                        "url" to request.url().take(200),
+                        "method" to request.method()
+                    )
+                )
             }
 
             TokenTracker.record(
@@ -851,7 +923,7 @@ class PassiveAiScanner(
         val bodyPrefix = responseBody.take(RESPONSE_FINGERPRINT_BODY_PREFIX_CHARS)
         val raw = buildString {
             append(request.method()).append('\n')
-            append(request.url()).append('\n')
+            append(IssueUtils.normalizeUrl(request.url())).append('\n')
             append(response.statusCode()).append('\n')
             append(headers).append('\n')
             append(bodyPrefix)
@@ -1006,9 +1078,22 @@ class PassiveAiScanner(
 You are a security researcher. Analyze this HTTP traffic for real vulnerabilities.
 $severityInstruction
 
-Check: Injection (XSS/SQLi/CMDI/SSTI/SSRF/XXE/NoSQL), Auth (IDOR/BOLA/BAC/CSRF/JWT), Info disclosure (secrets/debug/source), Config (security headers/CORS/open redirect), High-value (ATO/cache poison/smuggling/host-header), API (version bypass/GraphQL).
-Rules: evidence required, no speculation, confidence >=85 only, output JSON array only.
-Output schema: [{"reasoning":"...","title":"...","severity":"High|Medium|Low|Information","detail":"...with evidence","confidence":0-100}]
+SEVERITY DEFINITIONS:
+- Critical: RCE, authentication bypass, full account takeover
+- High: SQLi, stored XSS, SSRF with internal access, deserialization
+- Medium: Reflected XSS, IDOR/BOLA, CSRF on sensitive actions, open redirect
+- Low: Information disclosure, verbose errors, minor misconfigurations
+
+CHECK: Injection (XSS/SQLi/CMDI/SSTI/SSRF/XXE/NoSQL), Auth (IDOR/BOLA/BAC/CSRF/JWT), Info disclosure (secrets/debug/source), Config (CORS/open redirect), High-value (ATO/cache poison/smuggling/host-header), API (version bypass/GraphQL).
+
+DO NOT REPORT:
+- Missing security headers (CSP, X-Frame-Options, HSTS, X-Content-Type-Options) as standalone findings
+- "Potential" issues without concrete evidence in the request/response
+- Generic reflection without XSS context (e.g., parameter echoed in non-executable context)
+- Absence of rate limiting as a vulnerability
+
+RULES: Evidence required — provide step-by-step evidence chain in reasoning. No speculation. Confidence >=85 only. Output JSON array only.
+Output schema: [{"reasoning":"step-by-step evidence chain","title":"...","severity":"Critical|High|Medium|Low|Information","detail":"...with evidence","confidence":0-100}]
 Return [] when no supported issue exists.
 
 HTTP DATA:
@@ -1409,7 +1494,7 @@ $metadata
         requestBody: String
     ): LocalFinding? {
         val serializedParam = request.parameters().firstOrNull { param ->
-            val nameMatch = Regex("(data|payload|serialized|object|state|viewstate)", RegexOption.IGNORE_CASE)
+            val nameMatch = SERIALIZED_NAME_REGEX
                 .containsMatchIn(param.name())
             val value = param.value()
             if (!nameMatch || value.length < 100) return@firstOrNull false
@@ -1542,7 +1627,7 @@ $metadata
     private fun stripCodeFences(text: String): String {
         return text
             .replace(Regex("^```(?:json)?\\s*", setOf(RegexOption.IGNORE_CASE, RegexOption.MULTILINE)), "")
-            .replace(Regex("\\s*```$", RegexOption.MULTILINE), "")
+            .replace(CODE_FENCE_END_REGEX, "")
             .trim()
     }
 
@@ -1612,7 +1697,7 @@ $metadata
 
     private fun mapSeverity(raw: String): AuditIssueSeverity {
         return when (raw.lowercase()) {
-            "high" -> AuditIssueSeverity.HIGH
+            "critical", "high" -> AuditIssueSeverity.HIGH
             "medium" -> AuditIssueSeverity.MEDIUM
             "low" -> AuditIssueSeverity.LOW
             else -> AuditIssueSeverity.INFORMATION
@@ -1649,7 +1734,7 @@ $metadata
     }
 
     private fun redactSensitiveQuery(query: String): String {
-        val sensitiveKey = Regex("(token|key|auth|session|jwt|cookie|password|secret)", RegexOption.IGNORE_CASE)
+        val sensitiveKey = SENSITIVE_KEY_REGEX
         return query.split("&").joinToString("&") { pair ->
             val separator = pair.indexOf('=')
             if (separator <= 0) {
@@ -1764,6 +1849,12 @@ $metadata
         private const val JSON_ARRAY_SAMPLE_SIZE = 3
         private const val HTML_FORMS_SAMPLE_MAX = 3
         private const val HTML_INLINE_SCRIPTS_SAMPLE_MAX = 3
+
+        // Pre-compiled Regex patterns (avoid recompilation in hot paths)
+        val POTENTIAL_IDS_REGEX = Regex("\\b([0-9]+|[a-f0-9-]{36}|[a-f0-9]{24})\\b", RegexOption.IGNORE_CASE)
+        val SERIALIZED_NAME_REGEX = Regex("(data|payload|serialized|object|state|viewstate)", RegexOption.IGNORE_CASE)
+        val CODE_FENCE_END_REGEX = Regex("\\s*```$", RegexOption.MULTILINE)
+        val SENSITIVE_KEY_REGEX = Regex("(token|key|auth|session|jwt|cookie|password|secret)", RegexOption.IGNORE_CASE)
     }
 
     private fun buildMetadataSectionPlain(

@@ -10,6 +10,7 @@ import burp.api.montoya.scanner.audit.issues.AuditIssue
 import burp.api.montoya.scanner.audit.issues.AuditIssueConfidence
 import burp.api.montoya.scanner.audit.issues.AuditIssueSeverity
 import com.six2dez.burp.aiagent.config.AgentSettings
+import com.six2dez.burp.aiagent.util.IssueUtils
 
 /**
  * Burp Scanner API integration (Option A - Burp Pro only)
@@ -87,9 +88,10 @@ class AiScanCheck(
      * Consolidate duplicate issues
      */
     override fun consolidateIssues(newIssue: AuditIssue, existingIssue: AuditIssue): ConsolidationAction {
-        // If same type and same URL path, keep existing
-        if (newIssue.name() == existingIssue.name() && 
-            newIssue.baseUrl() == existingIssue.baseUrl()) {
+        // Use canonical name (strips AI prefixes) + normalized URL for cross-scanner dedup
+        val sameName = IssueUtils.canonicalIssueName(newIssue.name()) == IssueUtils.canonicalIssueName(existingIssue.name())
+        val sameUrl = IssueUtils.normalizeUrl(newIssue.baseUrl()) == IssueUtils.normalizeUrl(existingIssue.baseUrl())
+        if (sameName && sameUrl) {
             return ConsolidationAction.KEEP_EXISTING
         }
         return ConsolidationAction.KEEP_BOTH
@@ -222,7 +224,7 @@ class AiScanCheck(
     ): String {
         return when (payload.detectionMethod) {
             DetectionMethod.BLIND_TIME -> 
-                "Time-based detection: baseline=${baselineTime}ms, attack=${responseTime}ms (expected delay: ${payload.timeDelayMs}ms)"
+                "Time-based detection: baseline=${baselineTime}ms, attack=${responseTime}ms (expected delay: ${payload.timeDelayMs ?: 3000}ms)"
             DetectionMethod.ERROR_BASED -> {
                 val body = attack.response()?.bodyToString() ?: ""
                 val errorMatch = findErrorPattern(body, vulnClass)

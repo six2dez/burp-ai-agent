@@ -59,6 +59,7 @@ class SettingsPanel(
     var onSettingsChanged: ((AgentSettings) -> Unit)? = null
     private var dialogParent: JComponent? = null
     private var saveFeedbackResetTimer: javax.swing.Timer? = null
+    private var statusRefreshTimer: javax.swing.Timer? = null
     private lateinit var generalTab: JComponent
     private lateinit var passiveScannerTab: JComponent
     private lateinit var activeScannerTab: JComponent
@@ -93,7 +94,8 @@ class SettingsPanel(
             openAiCompatModel = settings.openAiCompatibleModel,
             openAiCompatApiKey = settings.openAiCompatibleApiKey,
             openAiCompatHeaders = settings.openAiCompatibleHeaders,
-            openAiCompatTimeoutSeconds = settings.openAiCompatibleTimeoutSeconds.toString()
+            openAiCompatTimeoutSeconds = settings.openAiCompatibleTimeoutSeconds.toString(),
+            copilotCmd = settings.copilotCmd
         )
     )
     private val profilePicker = JComboBox<String>().apply {
@@ -144,6 +146,13 @@ class SettingsPanel(
         2,
         20
     )
+    private val aiLoggerEnabled = ToggleSwitch(settings.aiRequestLoggerEnabled)
+    private val aiLoggerMaxEntries = JSpinner(
+        SpinnerNumberModel(settings.aiRequestLoggerMaxEntries, 10, 5000, 50)
+    ).apply {
+        preferredSize = java.awt.Dimension(80, preferredSize.height)
+        maximumSize = java.awt.Dimension(80, preferredSize.height)
+    }
     private val privacyWarning = JLabel("Privacy mode is OFF. Raw traffic may be exposed via MCP and prompts.")
     private val privacyActiveWarning = JLabel(
         "STRICT anonymizes hosts in AI prompts but does not prevent active scanner from sending real requests to targets."
@@ -421,6 +430,8 @@ class SettingsPanel(
         bountyPromptIssueThreshold.toolTipText = "Confidence threshold (0-100) required for auto-creating issues."
         bountyPromptEnabledIds.toolTipText =
             "Comma-separated prompt IDs to expose. Leave empty to use curated defaults."
+        aiLoggerEnabled.toolTipText = "Enable the AI request logger to record all AI interactions for observability."
+        aiLoggerMaxEntries.toolTipText = "Maximum number of log entries to keep in memory (10-5000)."
         mcpMaxConcurrent.font = UiTheme.Typography.body
         mcpMaxBodyMb.font = UiTheme.Typography.body
         mcpMaxBodyMb.toolTipText = "Maximum MCP response body size per item (MB)."
@@ -712,11 +723,11 @@ class SettingsPanel(
         }
         
         // Timer to refresh scanner status periodically
-        val statusRefreshTimer = javax.swing.Timer(2000) {
+        statusRefreshTimer = javax.swing.Timer(2000) {
             refreshPassiveAiStatus()
             refreshActiveAiStatus()
         }
-        statusRefreshTimer.start()
+        statusRefreshTimer?.start()
         updateProfileWarnings()
 
     }
@@ -874,6 +885,7 @@ class SettingsPanel(
             openAiCompatibleApiKey = backendState.openAiCompatApiKey,
             openAiCompatibleHeaders = backendState.openAiCompatHeaders,
             openAiCompatibleTimeoutSeconds = openAiCompatTimeoutSeconds,
+            copilotCmd = backendState.copilotCmd,
             requestPromptTemplate = promptRequest.text.trim(),
             issuePromptTemplate = promptIssueFull.text.trim(),
             issueAnalyzePrompt = promptIssueAnalyze.text.trim(),
@@ -925,7 +937,9 @@ class SettingsPanel(
             bountyPromptEnabledPromptIds = parseIdSetInput(
                 bountyPromptEnabledIds.text,
                 BountyPromptCatalog.defaultEnabledPromptIds()
-            )
+            ),
+            aiRequestLoggerEnabled = aiLoggerEnabled.isSelected,
+            aiRequestLoggerMaxEntries = (aiLoggerMaxEntries.value as? Int) ?: 500
         )
     }
 
@@ -956,7 +970,8 @@ class SettingsPanel(
                 openAiCompatModel = updated.openAiCompatibleModel,
                 openAiCompatApiKey = updated.openAiCompatibleApiKey,
                 openAiCompatHeaders = updated.openAiCompatibleHeaders,
-                openAiCompatTimeoutSeconds = updated.openAiCompatibleTimeoutSeconds.toString()
+                openAiCompatTimeoutSeconds = updated.openAiCompatibleTimeoutSeconds.toString(),
+                copilotCmd = updated.copilotCmd
             )
         )
         profilePicker.selectedItem = updated.agentProfile
@@ -978,6 +993,8 @@ class SettingsPanel(
         bountyPromptAutoCreateIssues.isSelected = updated.bountyPromptAutoCreateIssues
         bountyPromptIssueThreshold.value = updated.bountyPromptIssueConfidenceThreshold
         bountyPromptEnabledIds.text = updated.bountyPromptEnabledPromptIds.joinToString(",")
+        aiLoggerEnabled.isSelected = updated.aiRequestLoggerEnabled
+        aiLoggerMaxEntries.value = updated.aiRequestLoggerMaxEntries
 
         mcpEnabled.isSelected = updated.mcpSettings.enabled
         mcpHost.text = updated.mcpSettings.host
@@ -1054,6 +1071,13 @@ class SettingsPanel(
             .filter { it.isNotBlank() }
             .toSet()
         return if (parsed.isEmpty()) fallback else parsed
+    }
+
+    fun shutdown() {
+        statusRefreshTimer?.stop()
+        statusRefreshTimer = null
+        saveFeedbackResetTimer?.stop()
+        saveFeedbackResetTimer = null
     }
 
     private fun parseAllowedOriginsInput(raw: String): List<String> {
@@ -1292,7 +1316,9 @@ class SettingsPanel(
             privacyWarning = privacyWarning,
             privacyActiveWarning = privacyActiveWarning,
             privacyRiskWarning = privacyRiskWarning,
-            saveFeedback = saveFeedbackLabel
+            saveFeedback = saveFeedbackLabel,
+            aiLoggerEnabled = aiLoggerEnabled,
+            aiLoggerMaxEntries = aiLoggerMaxEntries
         ).build()
     }
 

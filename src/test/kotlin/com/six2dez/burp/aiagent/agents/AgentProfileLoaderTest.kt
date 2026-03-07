@@ -109,4 +109,50 @@ class AgentProfileLoaderTest {
         assertFalse(warnings.any { it.contains("automatically") })
         assertFalse(warnings.any { it.contains("creates") })
     }
+
+    @Test
+    fun `validate profile suppresses unsafe warnings for catalog-only tools`() {
+        val custom = tempDir.resolve("custom.md")
+        custom.writeText(
+            """
+            [GLOBAL]
+            Available MCP Tools:
+            - status: Check status
+            - http1_request / http2_request: Send test requests
+            """.trimIndent()
+        )
+
+        val warnings = AgentProfileLoader.validateProfile(
+            profileName = "custom",
+            availableTools = setOf("status"),
+            disabledReasons = mapOf(
+                "http1_request" to "requires Unsafe mode or explicit per-tool unsafe approval.",
+                "http2_request" to "requires Unsafe mode or explicit per-tool unsafe approval."
+            )
+        )
+
+        assertFalse(warnings.any { it.contains("http1_request") })
+        assertFalse(warnings.any { it.contains("http2_request") })
+    }
+
+    @Test
+    fun `validate profile still warns for explicit unsafe tool calls`() {
+        val custom = tempDir.resolve("custom.md")
+        custom.writeText(
+            """
+            [GLOBAL]
+            Use /tool http1_request {}
+            """.trimIndent()
+        )
+
+        val warnings = AgentProfileLoader.validateProfile(
+            profileName = "custom",
+            availableTools = emptySet(),
+            disabledReasons = mapOf(
+                "http1_request" to "requires Unsafe mode or explicit per-tool unsafe approval."
+            )
+        )
+
+        assertTrue(warnings.any { it.contains("http1_request") })
+    }
 }

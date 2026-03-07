@@ -62,7 +62,8 @@ class ChatPanelConcurrencyTest {
             text: String,
             history: List<ChatMessage>?,
             onChunk: (String) -> Unit,
-            onComplete: (Throwable?) -> Unit
+            onComplete: (Throwable?) -> Unit,
+            systemPrompt: String?
         ) = Unit
 
         override fun stop() = Unit

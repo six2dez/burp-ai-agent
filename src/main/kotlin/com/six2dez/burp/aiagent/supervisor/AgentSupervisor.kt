@@ -1,6 +1,8 @@
 package com.six2dez.burp.aiagent.supervisor
 
 import burp.api.montoya.MontoyaApi
+import com.six2dez.burp.aiagent.audit.ActivityType
+import com.six2dez.burp.aiagent.audit.AiRequestLogger
 import com.six2dez.burp.aiagent.audit.AuditLogger
 import com.six2dez.burp.aiagent.backends.AgentConnection
 import com.six2dez.burp.aiagent.backends.BackendLaunchConfig
@@ -27,11 +29,13 @@ class AgentSupervisor(
     private val audit: AuditLogger,
     private val workerPool: ExecutorService
 ) {
+    var aiRequestLogger: AiRequestLogger? = null
     data class Status(val state: String, val backendId: String?)
     data class BackendInfo(val backendId: String, val displayName: String, val model: String?)
 
     private sealed class AgentState {
         data object Idle : AgentState()
+        data class Starting(val backendId: String) : AgentState()
         data class Running(
             val backendId: String,
             val sessionId: String,
@@ -73,7 +77,13 @@ class AgentSupervisor(
     fun lastStartError(): String? = lastErrorRef.get()
 
     fun startOrAttach(backendId: String): Boolean {
-        return lifecycleLock.withLock {
+        // Phase 1: Acquire lock, transition state, prepare config — then release lock
+        val backend: com.six2dez.burp.aiagent.backends.AiBackend
+        val sessionId: String
+        val launchConfig: BackendLaunchConfig
+        val startingState: AgentState.Starting
+
+        lifecycleLock.withLock {
             lastErrorRef.set(null)
             autoRestartSuppressed.set(null)
             immediateCrashCount.set(0)
@@ -81,42 +91,68 @@ class AgentSupervisor(
             // Check if already running the requested backend
             val current = stateRef.get()
             if (current is AgentState.Running && current.backendId == backendId && current.connection.isAlive()) {
-                return@withLock true
+                return true
+            }
+
+            // Reject if another start is in progress
+            if (current is AgentState.Starting) {
+                val msg = "Backend startup already in progress: ${current.backendId}"
+                lastErrorRef.set(msg)
+                api.logging().logToError(msg)
+                return false
             }
 
             stop()
 
-            val backend = registry.get(backendId)
-            if (backend == null) {
+            val resolved = registry.get(backendId)
+            if (resolved == null) {
                 val msg = "Backend not found: $backendId"
                 lastErrorRef.set(msg)
                 api.logging().logToError(msg)
-                return@withLock false
+                return false
             }
+            backend = resolved
 
-            try {
-                val sessionId = "session-" + UUID.randomUUID().toString()
-                val launchConfig = buildLaunchConfig(backendId, sessionId, embeddedMode = true)
-                api.logging().logToOutput("Launching backend $backendId with config: $launchConfig")
-                val conn = backend.launch(launchConfig)
+            sessionId = "session-" + UUID.randomUUID().toString()
+            launchConfig = buildLaunchConfig(backendId, sessionId, embeddedMode = true)
 
-                val newState = AgentState.Running(
-                    backendId = backendId,
-                    sessionId = sessionId,
-                    connection = conn,
-                    launchConfig = launchConfig,
-                    startedAt = System.currentTimeMillis()
-                )
-                stateRef.set(newState)
+            // Set transitional STARTING state before releasing lock.
+            // Keep a reference for the CAS below (AtomicReference uses identity comparison).
+            startingState = AgentState.Starting(backendId)
+            stateRef.set(startingState)
+        }
 
+        // Phase 2: Launch backend outside lock (may block for CLI processes)
+        return try {
+            api.logging().logToOutput("Launching backend $backendId with config: $launchConfig")
+            val conn = backend.launch(launchConfig)
+
+            val newState = AgentState.Running(
+                backendId = backendId,
+                sessionId = sessionId,
+                connection = conn,
+                launchConfig = launchConfig,
+                startedAt = System.currentTimeMillis()
+            )
+
+            // Only transition if still in STARTING state (stop() may have been called).
+            // Uses the same instance reference set above — AtomicReference.compareAndSet
+            // checks identity (===), not structural equality.
+            if (stateRef.compareAndSet(startingState, newState)) {
                 audit.logEvent("session_start", mapOf("backendId" to backendId, "sessionId" to sessionId, "config" to launchConfig))
                 true
-            } catch (e: Exception) {
-                val msg = "Failed to launch backend $backendId: ${e.message}"
-                lastErrorRef.set(msg)
-                api.logging().logToError(msg)
+            } else {
+                // Another thread called stop() while we were launching — clean up
+                conn.stop()
                 false
             }
+        } catch (e: Exception) {
+            val msg = "Failed to launch backend $backendId: ${e.message}"
+            lastErrorRef.set(msg)
+            api.logging().logToError(msg)
+            // Reset to Idle if still in STARTING
+            stateRef.compareAndSet(startingState, AgentState.Idle)
+            false
         }
     }
 
@@ -157,9 +193,17 @@ class AgentSupervisor(
     fun stop() {
         lifecycleLock.withLock {
             val prev = stateRef.getAndSet(AgentState.Idle)
-            if (prev is AgentState.Running) {
-                prev.connection.stop()
-                audit.logEvent("session_stop", mapOf("backendId" to prev.backendId))
+            when (prev) {
+                is AgentState.Running -> {
+                    prev.connection.stop()
+                    audit.logEvent("session_stop", mapOf("backendId" to prev.backendId))
+                }
+                is AgentState.Starting -> {
+                    // Launch in progress — state set to Idle; the launching thread
+                    // will detect the CAS failure and clean up the connection.
+                    audit.logEvent("session_stop", mapOf("backendId" to prev.backendId, "note" to "cancelled_during_start"))
+                }
+                is AgentState.Idle -> { /* nothing */ }
             }
             autoRestartSuppressed.set(null)
             immediateCrashCount.set(0)
@@ -183,7 +227,9 @@ class AgentSupervisor(
         privacyMode: PrivacyMode,
         determinismMode: Boolean,
         onChunk: (String) -> Unit,
-        onComplete: (Throwable?) -> Unit
+        onComplete: (Throwable?) -> Unit,
+        traceId: String? = null,
+        systemPrompt: String? = null
     ) {
         val current = stateRef.get()
         if (current !is AgentState.Running) {
@@ -199,6 +245,7 @@ class AgentSupervisor(
         val sessionId = current.sessionId
         val backendId = current.backendId
         val launchConfig = current.launchConfig
+        val resolvedTraceId = traceId ?: "agent-turn-" + UUID.randomUUID().toString()
 
         if (audit.isEnabled()) {
             val bundle = audit.buildPromptBundle(
@@ -216,19 +263,71 @@ class AgentSupervisor(
 
         api.logging().logToOutput("AI send: backend=$backendId session=$sessionId")
         api.logging().logToOutput("AI connection: ${current.connection.javaClass.name}")
+
+        val sendStartMs = System.currentTimeMillis()
+        aiRequestLogger?.log(
+            type = ActivityType.PROMPT_SENT,
+            source = "agent",
+            backendId = backendId,
+            sessionId = sessionId,
+            detail = "Prompt sent (${text.length} chars)",
+            promptChars = text.length,
+            metadata = mapOf(
+                "operation" to "agent_send",
+                "status" to "sent",
+                "traceId" to resolvedTraceId
+            )
+        )
+
+        val responseAccumulator = StringBuilder()
         current.connection.send(text,
             history = history,
             onChunk = { chunk ->
+                responseAccumulator.append(chunk)
                 audit.logEvent("agent_chunk", mapOf("backendId" to backendId, "chunk" to chunk))
                 onChunk(chunk)
             },
             onComplete = { err ->
+                val durationMs = System.currentTimeMillis() - sendStartMs
                 audit.logEvent("prompt_complete", mapOf("backendId" to backendId, "error" to err?.message))
                 if (err != null) {
                     api.logging().logToError("AI backend error ($backendId): ${err.message}")
+                    aiRequestLogger?.log(
+                        type = ActivityType.ERROR,
+                        source = "agent",
+                        backendId = backendId,
+                        sessionId = sessionId,
+                        detail = "Error: ${err.message}",
+                        durationMs = durationMs,
+                        promptChars = text.length,
+                        metadata = mapOf(
+                            "operation" to "agent_send",
+                            "status" to "error",
+                            "traceId" to resolvedTraceId,
+                            "errorClass" to err.javaClass.simpleName,
+                            "errorCode" to err.javaClass.simpleName
+                        )
+                    )
+                } else {
+                    aiRequestLogger?.log(
+                        type = ActivityType.RESPONSE_COMPLETE,
+                        source = "agent",
+                        backendId = backendId,
+                        sessionId = sessionId,
+                        detail = "Response received (${responseAccumulator.length} chars)",
+                        durationMs = durationMs,
+                        promptChars = text.length,
+                        responseChars = responseAccumulator.length,
+                        metadata = mapOf(
+                            "operation" to "agent_send",
+                            "status" to "ok",
+                            "traceId" to resolvedTraceId
+                        )
+                    )
                 }
                 onComplete(err)
-            }
+            },
+            systemPrompt = systemPrompt
         )
     }
 
@@ -241,9 +340,12 @@ class AgentSupervisor(
         privacyMode: PrivacyMode,
         determinismMode: Boolean,
         onChunk: (String) -> Unit,
-        onComplete: (Throwable?) -> Unit
+        onComplete: (Throwable?) -> Unit,
+        traceId: String? = null,
+        systemPrompt: String? = null
     ): com.six2dez.burp.aiagent.backends.AgentConnection? {
         lastErrorRef.set(null)
+        val resolvedTraceId = traceId ?: "chat-turn-" + UUID.randomUUID().toString()
         val backend = registry.get(backendId)
         if (backend == null) {
             onComplete(IllegalStateException("Backend not found: $backendId"))
@@ -272,16 +374,68 @@ class AgentSupervisor(
         }
 
         api.logging().logToOutput("AI chat send: backend=$backendId chatSession=$chatSessionId")
+
+        val chatSendStartMs = System.currentTimeMillis()
+        aiRequestLogger?.log(
+            type = ActivityType.PROMPT_SENT,
+            source = "chat",
+            backendId = backendId,
+            sessionId = chatSessionId,
+            detail = "Chat prompt sent (${text.length} chars)",
+            promptChars = text.length,
+            metadata = mapOf(
+                "operation" to "chat_turn",
+                "status" to "sent",
+                "traceId" to resolvedTraceId
+            )
+        )
+
+        val chatResponseAccumulator = StringBuilder()
         connection.send(text,
             history = history,
             onChunk = { chunk ->
+                chatResponseAccumulator.append(chunk)
                 audit.logEvent("agent_chunk", mapOf("backendId" to backendId, "chunk" to chunk))
                 onChunk(chunk)
             },
+            systemPrompt = systemPrompt,
             onComplete = { err ->
+                val durationMs = System.currentTimeMillis() - chatSendStartMs
                 audit.logEvent("prompt_complete", mapOf("backendId" to backendId, "error" to err?.message))
                 if (err != null) {
                     api.logging().logToError("AI backend error ($backendId): ${err.message}")
+                    aiRequestLogger?.log(
+                        type = ActivityType.ERROR,
+                        source = "chat",
+                        backendId = backendId,
+                        sessionId = chatSessionId,
+                        detail = "Chat error: ${err.message}",
+                        durationMs = durationMs,
+                        promptChars = text.length,
+                        metadata = mapOf(
+                            "operation" to "chat_turn",
+                            "status" to "error",
+                            "traceId" to resolvedTraceId,
+                            "errorClass" to err.javaClass.simpleName,
+                            "errorCode" to err.javaClass.simpleName
+                        )
+                    )
+                } else {
+                    aiRequestLogger?.log(
+                        type = ActivityType.RESPONSE_COMPLETE,
+                        source = "chat",
+                        backendId = backendId,
+                        sessionId = chatSessionId,
+                        detail = "Chat response received (${chatResponseAccumulator.length} chars)",
+                        durationMs = durationMs,
+                        promptChars = text.length,
+                        responseChars = chatResponseAccumulator.length,
+                        metadata = mapOf(
+                            "operation" to "chat_turn",
+                            "status" to "ok",
+                            "traceId" to resolvedTraceId
+                        )
+                    )
                 }
                 // Update session state after completion (stores cliSessionId or connection for reuse)
                 chatSessionManager.updateSession(chatSessionId, backendId, connection)
@@ -291,6 +445,8 @@ class AgentSupervisor(
         return connection
     }
 
+    fun getBackend(backendId: String): com.six2dez.burp.aiagent.backends.AiBackend? = registry.get(backendId)
+
     fun removeChatSession(chatSessionId: String) {
         chatSessionManager.removeSession(chatSessionId)
     }
@@ -299,6 +455,7 @@ class AgentSupervisor(
         val current = stateRef.get()
         return when (current) {
             is AgentState.Idle -> Status("Idle", null)
+            is AgentState.Starting -> Status("Starting", current.backendId)
             is AgentState.Running -> {
                 if (current.connection.isAlive()) {
                     Status("Running", current.backendId)
@@ -484,6 +641,20 @@ class AgentSupervisor(
                     cliSessionId = cliSessionId
                 )
             }
+            "copilot-cli" -> {
+                val cmd = (settings?.copilotCmd ?: prefs.getString("copilot.cmd") ?: "copilot").trim()
+                val env = embeddedCliEnv(baseEnv, embeddedMode)
+                BackendLaunchConfig(
+                    backendId = backendId,
+                    displayName = "Copilot CLI",
+                    command = tokenizeCommand(cmd),
+                    embeddedMode = embeddedMode,
+                    sessionId = sessionId,
+                    determinismMode = determinism,
+                    env = env,
+                    cliSessionId = cliSessionId
+                )
+            }
             else -> BackendLaunchConfig(backendId, backendId, embeddedMode = embeddedMode, env = baseEnv, cliSessionId = cliSessionId)
         }
     }
@@ -522,6 +693,7 @@ class AgentSupervisor(
     }
 
     private fun checkHealth() {
+        // Snapshot state atomically — if it's not Running, skip
         val current = stateRef.get() as? AgentState.Running ?: return
 
         if (current.connection.isAlive()) {
@@ -533,6 +705,9 @@ class AgentSupervisor(
             }
             return
         }
+
+        // Verify state hasn't changed since we checked isAlive (another thread may have called stop())
+        if (stateRef.get() !== current) return
 
         val settings = settingsRef.get() ?: return
         if (!settings.autoRestart) return
@@ -549,7 +724,7 @@ class AgentSupervisor(
 
         val attempt = crashCount.incrementAndGet()
         val backendId = current.backendId
-        
+
         if (immediateCrash) {
             val immediate = immediateCrashCount.incrementAndGet()
             val detail = buildExitDetail(current.connection)
@@ -592,9 +767,10 @@ class AgentSupervisor(
             services[name] = process
             workerPool.submit {
                 try {
-                    val reader = process.inputStream.bufferedReader()
-                    reader.forEachLine { line ->
-                        safeLogOutput("[$name] $line")
+                    process.inputStream.bufferedReader().use { reader ->
+                        reader.forEachLine { line ->
+                            safeLogOutput("[$name] $line")
+                        }
                     }
                 } catch (e: Exception) {
                     safeLogOutput("[$name] output stream closed: ${e.message}")
@@ -692,11 +868,10 @@ class AgentSupervisor(
     }
 
     companion object {
-        @Volatile
-        private var cachedPath: String? = null
+        private val cachedPathRef = AtomicReference<String?>(null)
 
         fun buildCliPathStatic(): String {
-            cachedPath?.let { return it }
+            cachedPathRef.get()?.let { return it }
 
             val initialBase = System.getenv("PATH").orEmpty()
             val userHome = System.getProperty("user.home")
@@ -705,8 +880,8 @@ class AgentSupervisor(
             val isWin = os.contains("win")
 
             if (isWin) {
-                cachedPath = initialBase
-                return initialBase
+                cachedPathRef.compareAndSet(null, initialBase)
+                return cachedPathRef.get()!!
             }
 
             // On Unix (macOS/Linux), Burp often has a truncated PATH if not started from terminal.
@@ -731,8 +906,9 @@ class AgentSupervisor(
 
             val finalPath = rawList.filter { it.isNotBlank() }.distinct().joinToString(sep)
 
-            cachedPath = finalPath
-            return finalPath
+            // Atomic set — first thread wins, subsequent calls use the cached value
+            cachedPathRef.compareAndSet(null, finalPath)
+            return cachedPathRef.get()!!
         }
 
         private fun expandHome(path: String, home: String): String {
@@ -769,7 +945,11 @@ class AgentSupervisor(
             try {
                 val process = ProcessBuilder(listOf(shellPath) + args).start()
                 val output = process.inputStream.bufferedReader().use { it.readText() }
-                if (process.waitFor() == 0 && output.contains("___BURP_PATH___")) {
+                if (!process.waitFor(5, TimeUnit.SECONDS)) {
+                    process.destroyForcibly()
+                    return null
+                }
+                if (process.exitValue() == 0 && output.contains("___BURP_PATH___")) {
                     val result = output.substringAfter("___BURP_PATH___").substringBefore("\n").trim()
                     if (result.isNotBlank()) {
                         return result

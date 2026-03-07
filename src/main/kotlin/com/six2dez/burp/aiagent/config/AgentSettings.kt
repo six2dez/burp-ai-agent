@@ -47,6 +47,7 @@ data class AgentSettings(
     val openAiCompatibleApiKey: String,
     val openAiCompatibleHeaders: String,
     val openAiCompatibleTimeoutSeconds: Int,
+    val copilotCmd: String = "",
     val requestPromptTemplate: String,
     val issuePromptTemplate: String,
     val issueAnalyzePrompt: String,
@@ -98,13 +99,20 @@ data class AgentSettings(
     val bountyPromptDir: String = "",
     val bountyPromptAutoCreateIssues: Boolean = true,
     val bountyPromptIssueConfidenceThreshold: Int = 90,
-    val bountyPromptEnabledPromptIds: Set<String> = emptySet()
+    val bountyPromptEnabledPromptIds: Set<String> = emptySet(),
+    // AI Request Logger settings
+    val aiRequestLoggerEnabled: Boolean = true,
+    val aiRequestLoggerMaxEntries: Int = 500
 )
 
 class AgentSettingsRepository(api: MontoyaApi) {
     private val prefs: Preferences = api.persistence().preferences()
+    /** Thread-safe cached settings snapshot. Updated atomically on save(). */
+    private val cachedSettings = java.util.concurrent.atomic.AtomicReference<AgentSettings?>(null)
 
     fun load(): AgentSettings {
+        // Return cached snapshot if available (thread-safe immutable data class)
+        cachedSettings.get()?.let { return it }
         migrateIfNeeded()
         val privacy = PrivacyMode.fromString(prefs.getString(KEY_PRIVACY_MODE))
         val mcpSettings = loadMcpSettings()
@@ -140,6 +148,7 @@ class AgentSettingsRepository(api: MontoyaApi) {
             openAiCompatibleHeaders = prefs.getString(KEY_OPENAI_COMPAT_HEADERS).orEmpty(),
             openAiCompatibleTimeoutSeconds = (prefs.getInteger(KEY_OPENAI_COMPAT_TIMEOUT) ?: defaultOpenAiCompatTimeoutSeconds())
                 .coerceIn(30, 3600),
+            copilotCmd = prefs.getString(KEY_COPILOT_CMD).orEmpty().trim().ifBlank { defaultCopilotCmd() },
             requestPromptTemplate = prefs.getString(KEY_PROMPT_FIND_VULNS).orEmpty().ifBlank { defaultRequestPrompt() },
             issuePromptTemplate = prefs.getString(KEY_PROMPT_FULL_REPORT).orEmpty().ifBlank { defaultIssuePrompt() },
             issueAnalyzePrompt = prefs.getString(KEY_PROMPT_ISSUE_ANALYZE).orEmpty().ifBlank { defaultIssueAnalyzePrompt() },
@@ -196,8 +205,10 @@ class AgentSettingsRepository(api: MontoyaApi) {
             bountyPromptEnabledPromptIds = parseIdSet(
                 prefs.getString(KEY_BOUNTY_PROMPT_ENABLED_IDS),
                 BountyPromptCatalog.defaultEnabledPromptIds()
-            )
-        )
+            ),
+            aiRequestLoggerEnabled = prefs.getBoolean(KEY_AI_LOGGER_ENABLED) ?: true,
+            aiRequestLoggerMaxEntries = (prefs.getInteger(KEY_AI_LOGGER_MAX_ENTRIES) ?: 500).coerceIn(50, 5_000)
+        ).also { cachedSettings.set(it) }
     }
 
     fun defaultSettings(): AgentSettings {
@@ -228,6 +239,7 @@ class AgentSettingsRepository(api: MontoyaApi) {
             openAiCompatibleApiKey = "",
             openAiCompatibleHeaders = "",
             openAiCompatibleTimeoutSeconds = defaultOpenAiCompatTimeoutSeconds(),
+            copilotCmd = defaultCopilotCmd(),
             requestPromptTemplate = defaultRequestPrompt(),
             issuePromptTemplate = defaultIssuePrompt(),
             issueAnalyzePrompt = defaultIssueAnalyzePrompt(),
@@ -276,11 +288,15 @@ class AgentSettingsRepository(api: MontoyaApi) {
             bountyPromptDir = defaultBountyPromptDir(),
             bountyPromptAutoCreateIssues = true,
             bountyPromptIssueConfidenceThreshold = 90,
-            bountyPromptEnabledPromptIds = BountyPromptCatalog.defaultEnabledPromptIds()
+            bountyPromptEnabledPromptIds = BountyPromptCatalog.defaultEnabledPromptIds(),
+            aiRequestLoggerEnabled = true,
+            aiRequestLoggerMaxEntries = 500
         )
     }
 
     fun save(settings: AgentSettings) {
+        // Atomically update the cached snapshot before persisting to disk
+        cachedSettings.set(settings)
         prefs.setString(KEY_CODEX_CMD, settings.codexCmd)
         prefs.setString(KEY_GEMINI_CMD, settings.geminiCmd)
         prefs.setString(KEY_OPENCODE_CMD, settings.opencodeCmd)
@@ -307,6 +323,7 @@ class AgentSettingsRepository(api: MontoyaApi) {
         prefs.setString(KEY_OPENAI_COMPAT_API_KEY, settings.openAiCompatibleApiKey)
         prefs.setString(KEY_OPENAI_COMPAT_HEADERS, settings.openAiCompatibleHeaders)
         prefs.setInteger(KEY_OPENAI_COMPAT_TIMEOUT, settings.openAiCompatibleTimeoutSeconds.coerceIn(30, 3600))
+        prefs.setString(KEY_COPILOT_CMD, settings.copilotCmd)
         prefs.setString(KEY_PROMPT_FIND_VULNS, settings.requestPromptTemplate)
         prefs.setString(KEY_PROMPT_FULL_REPORT, settings.issuePromptTemplate)
         prefs.setString(KEY_PROMPT_ISSUE_ANALYZE, settings.issueAnalyzePrompt)
@@ -395,6 +412,8 @@ class AgentSettingsRepository(api: MontoyaApi) {
             KEY_BOUNTY_PROMPT_ENABLED_IDS,
             serializeIdSet(settings.bountyPromptEnabledPromptIds)
         )
+        prefs.setBoolean(KEY_AI_LOGGER_ENABLED, settings.aiRequestLoggerEnabled)
+        prefs.setInteger(KEY_AI_LOGGER_MAX_ENTRIES, settings.aiRequestLoggerMaxEntries.coerceIn(50, 5_000))
         prefs.setInteger(KEY_SETTINGS_SCHEMA_VERSION, CURRENT_SETTINGS_SCHEMA_VERSION)
     }
 
@@ -453,6 +472,7 @@ class AgentSettingsRepository(api: MontoyaApi) {
         private const val KEY_OPENAI_COMPAT_API_KEY = "openai.compat.apiKey"
         private const val KEY_OPENAI_COMPAT_HEADERS = "openai.compat.headers"
         private const val KEY_OPENAI_COMPAT_TIMEOUT = "openai.compat.timeoutSeconds"
+        private const val KEY_COPILOT_CMD = "copilot.cmd"
         private const val KEY_PROMPT_FIND_VULNS = "prompt.find_vulns"
         private const val KEY_PROMPT_QUICK_RECON = "prompt.quick_recon"
         private const val KEY_PROMPT_EXPLAIN_JS = "prompt.explain_js"
@@ -519,6 +539,8 @@ class AgentSettingsRepository(api: MontoyaApi) {
         private const val KEY_BOUNTY_PROMPT_AUTO_CREATE_ISSUES = "bountyprompt.auto.issue"
         private const val KEY_BOUNTY_PROMPT_CONFIDENCE_THRESHOLD = "bountyprompt.issue.threshold"
         private const val KEY_BOUNTY_PROMPT_ENABLED_IDS = "bountyprompt.enabled.ids"
+        private const val KEY_AI_LOGGER_ENABLED = "ai.logger.enabled"
+        private const val KEY_AI_LOGGER_MAX_ENTRIES = "ai.logger.max.entries"
         private const val KEY_SETTINGS_SCHEMA_VERSION = "settings.schema.version"
         private const val CURRENT_SETTINGS_SCHEMA_VERSION = 2
 
@@ -586,6 +608,10 @@ class AgentSettingsRepository(api: MontoyaApi) {
 
         private fun defaultOpenAiCompatTimeoutSeconds(): Int {
             return Defaults.CLI_PROCESS_TIMEOUT_SECONDS
+        }
+
+        private fun defaultCopilotCmd(): String {
+            return "copilot"
         }
 
         private fun defaultBountyPromptDir(): String {

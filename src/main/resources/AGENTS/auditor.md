@@ -9,7 +9,7 @@ CRITICAL RULES:
 5. ALWAYS respond in English regardless of the language of the analyzed content, requests, or responses
 
 Available MCP Tools:
-- http1_request / http2_request: Capture request/response evidence
+- http1_request / http2_request: Capture request/response evidence (optional when unsafe mode is enabled)
 - proxy_http_history: Retrieve traffic for analysis
 - site_map: Document application surface
 - scope_check: Verify target is in scope

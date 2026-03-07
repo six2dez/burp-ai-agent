@@ -51,7 +51,8 @@ interface AgentConnection {
         text: String,
         history: List<ChatMessage>? = null,
         onChunk: (String) -> Unit,
-        onComplete: (Throwable?) -> Unit
+        onComplete: (Throwable?) -> Unit,
+        systemPrompt: String? = null
     )
     fun stop()
 }
@@ -68,6 +69,7 @@ interface UsageAwareConnection {
 interface AiBackend {
     val id: String
     val displayName: String
+    val supportsSystemRole: Boolean get() = false
     fun launch(config: BackendLaunchConfig): AgentConnection
     fun isAvailable(settings: com.six2dez.burp.aiagent.config.AgentSettings): Boolean = true
     fun healthCheck(settings: com.six2dez.burp.aiagent.config.AgentSettings): HealthCheckResult = HealthCheckResult.Unknown

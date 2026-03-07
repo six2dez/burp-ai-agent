@@ -529,11 +529,10 @@ $resolvedUserPrompt
     }
 
     private fun hasExistingIssue(api: MontoyaApi, name: String, baseUrl: String): Boolean {
-        return IssueUtils.hasExistingIssue(
+        return IssueUtils.hasEquivalentIssue(
             name = name,
             baseUrl = baseUrl,
-            issues = api.siteMap().issues().map { issue -> issue.name() to issue.baseUrl() },
-            ignoreCase = true
+            issues = api.siteMap().issues().map { issue -> issue.name() to issue.baseUrl() }
         )
     }
 

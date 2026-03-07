@@ -1,6 +1,7 @@
 package com.six2dez.burp.aiagent.mcp
 
 import burp.api.montoya.MontoyaApi
+import com.six2dez.burp.aiagent.audit.AiRequestLogger
 import com.six2dez.burp.aiagent.config.McpSettings
 import com.six2dez.burp.aiagent.mcp.tools.registerTools
 import com.six2dez.burp.aiagent.redact.PrivacyMode
@@ -15,6 +16,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.io.asSink
 import kotlinx.io.asSource
 import kotlinx.io.buffered
@@ -27,6 +29,10 @@ class McpStdioBridge(
     private var job: Job? = null
     private var server: Server? = null
     private var transport: StdioServerTransport? = null
+
+    fun setAiRequestLogger(logger: AiRequestLogger) {
+        contextFactory.aiRequestLogger = logger
+    }
 
     fun start(settings: McpSettings, privacyMode: PrivacyMode, determinismMode: Boolean) {
         stop()
@@ -64,11 +70,9 @@ class McpStdioBridge(
         val currentServer = server
         transport = null
         server = null
-        if (currentTransport != null) {
-            runBlocking { currentTransport.close() }
-        }
-        if (currentServer != null) {
-            runBlocking { currentServer.close() }
+        runBlocking {
+            withTimeoutOrNull(5000) { currentTransport?.close() }
+            withTimeoutOrNull(5000) { currentServer?.close() }
         }
     }
 }

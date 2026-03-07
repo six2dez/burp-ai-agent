@@ -42,7 +42,8 @@ data class BackendConfigState(
     val openAiCompatModel: String = "",
     val openAiCompatApiKey: String = "",
     val openAiCompatHeaders: String = "",
-    val openAiCompatTimeoutSeconds: String = ""
+    val openAiCompatTimeoutSeconds: String = "",
+    val copilotCmd: String = ""
 )
 
 class BackendConfigPanel(
@@ -77,6 +78,7 @@ class BackendConfigPanel(
     private val openAiCompatApiKey = JPasswordField(initialState.openAiCompatApiKey)
     private val openAiCompatHeaders = JTextArea(initialState.openAiCompatHeaders, 3, 20)
     private val openAiCompatTimeout = JTextField(initialState.openAiCompatTimeoutSeconds)
+    private val copilotCmd = JTextField(initialState.copilotCmd)
 
     init {
         background = UiTheme.Colors.surface
@@ -104,6 +106,7 @@ class BackendConfigPanel(
         applyFieldStyle(openAiCompatApiKey)
         applyAreaStyle(openAiCompatHeaders)
         applyFieldStyle(openAiCompatTimeout)
+        applyFieldStyle(copilotCmd)
 
         codexCmd.toolTipText = "Command used to launch Codex CLI."
         geminiCmd.toolTipText = "Command used to launch Gemini CLI."
@@ -129,6 +132,7 @@ class BackendConfigPanel(
         openAiCompatApiKey.toolTipText = "API key (Authorization: Bearer ...)."
         openAiCompatHeaders.toolTipText = "Extra headers (one per line: Header: value)."
         openAiCompatTimeout.toolTipText = "Request timeout in seconds."
+        copilotCmd.toolTipText = "Command used to launch Copilot CLI (e.g., copilot)."
 
         cards.add(buildSingleFieldPanelWithCli("Codex CLI command", codexCmd, "codex-cli") { codexCmd.text.trim() }, "codex-cli")
         cards.add(buildSingleFieldPanelWithCli("Gemini CLI command", geminiCmd, "gemini-cli") { geminiCmd.text.trim() }, "gemini-cli")
@@ -137,6 +141,7 @@ class BackendConfigPanel(
         cards.add(buildOllamaPanel(), "ollama")
         cards.add(buildLmStudioPanel(), "lmstudio")
         cards.add(buildOpenAiCompatPanel(), "openai-compatible")
+        cards.add(buildSingleFieldPanelWithCli("Copilot CLI command", copilotCmd, "copilot-cli") { copilotCmd.text.trim() }, "copilot-cli")
 
         add(cards, BorderLayout.CENTER)
     }
@@ -170,7 +175,8 @@ class BackendConfigPanel(
             openAiCompatModel = openAiCompatModel.text.trim(),
             openAiCompatApiKey = String(openAiCompatApiKey.password).trim(),
             openAiCompatHeaders = openAiCompatHeaders.text.trim(),
-            openAiCompatTimeoutSeconds = openAiCompatTimeout.text.trim()
+            openAiCompatTimeoutSeconds = openAiCompatTimeout.text.trim(),
+            copilotCmd = copilotCmd.text.trim()
         )
     }
 
@@ -199,6 +205,7 @@ class BackendConfigPanel(
         openAiCompatApiKey.text = state.openAiCompatApiKey
         openAiCompatHeaders.text = state.openAiCompatHeaders
         openAiCompatTimeout.text = state.openAiCompatTimeoutSeconds
+        copilotCmd.text = state.copilotCmd
     }
 
     private fun buildSingleFieldPanel(labelText: String, field: JComponent): JPanel {

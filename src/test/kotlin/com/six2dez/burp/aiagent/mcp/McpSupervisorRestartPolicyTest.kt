@@ -1,6 +1,7 @@
 package com.six2dez.burp.aiagent.mcp
 
 import burp.api.montoya.MontoyaApi
+import com.six2dez.burp.aiagent.audit.AiRequestLogger
 import com.six2dez.burp.aiagent.config.McpSettings
 import com.six2dez.burp.aiagent.redact.PrivacyMode
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -142,6 +143,8 @@ class McpSupervisorRestartPolicyTest {
     ) : McpServerManager {
         val startCalls = AtomicInteger(0)
         private val startLatch = CountDownLatch(expectedStarts)
+
+        override fun setAiRequestLogger(logger: AiRequestLogger) = Unit
 
         override fun start(
             settings: McpSettings,

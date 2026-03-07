@@ -4,7 +4,10 @@ import burp.api.montoya.MontoyaApi
 import burp.api.montoya.ui.contextmenu.ContextMenuItemsProvider
 import burp.api.montoya.ui.contextmenu.ContextMenuEvent
 import burp.api.montoya.ui.contextmenu.AuditIssueContextMenuEvent
+import com.six2dez.burp.aiagent.audit.ActivityType
+import com.six2dez.burp.aiagent.audit.AiRequestLogger
 import com.six2dez.burp.aiagent.audit.AuditLogger
+import com.six2dez.burp.aiagent.audit.RollingLogConfig
 import com.six2dez.burp.aiagent.backends.BackendDiagnostics
 import com.six2dez.burp.aiagent.backends.BackendRegistry
 import com.six2dez.burp.aiagent.agents.AgentProfileLoader
@@ -20,6 +23,7 @@ import com.six2dez.burp.aiagent.supervisor.AgentSupervisor
 import com.six2dez.burp.aiagent.ui.MainTab
 import com.six2dez.burp.aiagent.ui.UiActions
 import com.six2dez.burp.aiagent.alerts.Alerting
+import java.nio.file.Paths
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
@@ -43,6 +47,8 @@ object App {
     lateinit var activeAiScanner: ActiveAiScanner
         private set
     private var mainTab: MainTab? = null
+    lateinit var aiRequestLogger: AiRequestLogger
+        private set
 
     private lateinit var settingsRepo: AgentSettingsRepository
 
@@ -59,14 +65,35 @@ object App {
         auditLogger = AuditLogger(api)
         AuditLogger.registerGlobalEmitter { type, payload -> auditLogger.logEvent(type, payload) }
         supervisor = AgentSupervisor(api, backendRegistry, auditLogger, workerPool)
+        aiRequestLogger = AiRequestLogger()
+        supervisor.aiRequestLogger = aiRequestLogger
         mcpSupervisor = McpSupervisor(api)
+        mcpSupervisor.setAiRequestLogger(aiRequestLogger)
         contextCollector = ContextCollector(api)
         passiveAiScanner = PassiveAiScanner(api, supervisor, auditLogger) { settingsRepo.load() }
+        passiveAiScanner.aiRequestLogger = aiRequestLogger
         activeAiScanner = ActiveAiScanner(api, supervisor, auditLogger) { settingsRepo.load() }
         
         AgentProfileLoader.ensureBundledProfilesInstalled()
         val settings = settingsRepo.load()
         AgentProfileLoader.setActiveProfile(settings.agentProfile)
+        aiRequestLogger.enabled = settings.aiRequestLoggerEnabled
+        aiRequestLogger.maxEntries = settings.aiRequestLoggerMaxEntries
+        configureRollingLoggerFromProperties()
+        BackendDiagnostics.retry = { event ->
+            aiRequestLogger.log(
+                type = ActivityType.RETRY,
+                source = "backend",
+                backendId = event.backendId,
+                detail = "Retry attempt ${event.attempt} in ${event.delayMs}ms: ${event.reason ?: "unknown"}",
+                durationMs = event.delayMs,
+                metadata = mapOf(
+                    "attempt" to event.attempt.toString(),
+                    "delayMs" to event.delayMs.toString(),
+                    "reason" to (event.reason ?: "")
+                )
+            )
+        }
         auditLogger.setEnabled(settings.auditEnabled)
         supervisor.applySettings(settings)
         mcpSupervisor.applySettings(settings.mcpSettings, settings.privacyMode, settings.determinismMode)
@@ -90,7 +117,7 @@ object App {
         activeAiScanner.useCollaborator = settings.activeAiUseCollaborator
         activeAiScanner.setEnabled(settings.activeAiEnabled)
 
-        val ui = MainTab(api, backendRegistry, supervisor, auditLogger, mcpSupervisor, passiveAiScanner, activeAiScanner)
+        val ui = MainTab(api, backendRegistry, supervisor, auditLogger, mcpSupervisor, passiveAiScanner, activeAiScanner, aiRequestLogger)
         mainTab = ui
         api.userInterface().registerSuiteTab("AI Agent", ui.root) //  [oai_citation:4‡PortSwigger](https://portswigger.net/burp/documentation/desktop/extend-burp/extensions/creating/first-extension?utm_source=chatgpt.com)
 
@@ -120,7 +147,7 @@ object App {
             api.logging().logToOutput("AI ScanCheck registered with Burp Scanner (Pro feature)")
         } catch (e: Exception) {
             // Expected to fail on Community edition
-            api.logging().logToOutput("AI ScanCheck not registered (Burp Pro required for Scanner API)")
+            api.logging().logToOutput("AI ScanCheck not registered (Burp Pro required): ${e.message}")
         }
 
         api.logging().logToOutput("AI Agent extension loaded. Backends discovered: ${backendRegistry.listBackendIds(settingsRepo.load()).joinToString(", ")}")
@@ -129,6 +156,7 @@ object App {
     fun shutdown() {
         safeShutdownStep("MainTab") { mainTab?.shutdown() }
         mainTab = null
+        safeShutdownStep("AI Request Logger") { aiRequestLogger.shutdown() }
         safeShutdownStep("Passive scanner") {
             passiveAiScanner.setEnabled(false)
             passiveAiScanner.shutdown()
@@ -140,6 +168,7 @@ object App {
         safeShutdownStep("Supervisor") { supervisor.shutdown() }
         safeShutdownStep("MCP supervisor") { mcpSupervisor.shutdown() }
         safeShutdownStep("Backend registry") { backendRegistry.shutdown() }
+        BackendDiagnostics.retry = null
         safeShutdownStep("Worker pool") {
             workerPool.shutdown()
             try {
@@ -154,6 +183,31 @@ object App {
         safeShutdownStep("Alerting client") { Alerting.shutdownClient() }
         safeShutdownStep("Redaction mappings") { Redaction.clearMappings() }
         AuditLogger.registerGlobalEmitter(null)
+    }
+
+    private fun configureRollingLoggerFromProperties() {
+        val enabled = System.getProperty("burp.ai.logger.rolling.enabled")?.toBooleanStrictOrNull() ?: false
+        if (!enabled) {
+            aiRequestLogger.configureRollingPersistence(null)
+            return
+        }
+
+        val directory = System.getProperty("burp.ai.logger.rolling.dir")
+            ?.takeIf { it.isNotBlank() }
+            ?: Paths.get(System.getProperty("user.home"), ".burp-ai-agent", "logs").toString()
+        val maxBytes = System.getProperty("burp.ai.logger.rolling.maxBytes")?.toLongOrNull()
+            ?: AiRequestLogger.DEFAULT_ROLLING_MAX_FILE_BYTES
+        val maxFiles = System.getProperty("burp.ai.logger.rolling.maxFiles")?.toIntOrNull()
+            ?: AiRequestLogger.DEFAULT_ROLLING_MAX_FILES
+
+        aiRequestLogger.configureRollingPersistence(
+            RollingLogConfig(
+                directory = Paths.get(directory),
+                maxFileBytes = maxBytes,
+                maxFiles = maxFiles
+            )
+        )
+        api.logging().logToOutput("AI logger rolling persistence enabled at $directory")
     }
 
     private fun safeShutdownStep(component: String, action: () -> Unit) {

@@ -16,7 +16,9 @@ class PrivacyConfigPanel(
     private val privacyWarning: JComponent,
     private val privacyActiveWarning: JComponent,
     private val privacyRiskWarning: JComponent,
-    private val saveFeedback: JComponent
+    private val saveFeedback: JComponent,
+    private val aiLoggerEnabled: JComponent? = null,
+    private val aiLoggerMaxEntries: JComponent? = null
 ) : ConfigPanel {
     override fun build(): JPanel {
         val grid = formGrid()
@@ -24,6 +26,14 @@ class PrivacyConfigPanel(
         addSpacerRow(grid, 4)
         addRowFull(grid, "Audit logging", auditEnabled)
         addSpacerRow(grid, 4)
+        if (aiLoggerEnabled != null) {
+            addRowFull(grid, "AI request logger", aiLoggerEnabled)
+            addSpacerRow(grid, 4)
+        }
+        if (aiLoggerMaxEntries != null) {
+            addRowFull(grid, "Logger max entries", aiLoggerMaxEntries)
+            addSpacerRow(grid, 4)
+        }
         addRowFull(grid, "Auto-restart", autoRestart)
         addSpacerRow(grid, 4)
         addRowFull(grid, "Determinism mode", determinism)
@@ -39,7 +49,7 @@ class PrivacyConfigPanel(
         addRowFull(grid, "Save feedback", saveFeedback)
         return sectionPanel(
             "Privacy & Logging",
-            "Controls redaction and stable ordering of context.",
+            "Controls redaction, logging and stable ordering of context.",
             grid
         )
     }

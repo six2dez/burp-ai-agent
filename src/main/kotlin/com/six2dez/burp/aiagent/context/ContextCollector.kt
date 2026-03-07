@@ -7,13 +7,16 @@ import com.fasterxml.jackson.databind.MapperFeature
 import com.fasterxml.jackson.databind.SerializationFeature
 import com.fasterxml.jackson.databind.json.JsonMapper
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
+import com.six2dez.burp.aiagent.config.Defaults
 import com.six2dez.burp.aiagent.redact.Redaction
 import com.six2dez.burp.aiagent.redact.RedactionPolicy
 import java.net.URI
+import java.util.logging.Logger
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 
 class ContextCollector(private val api: MontoyaApi) {
+    private val log = Logger.getLogger(ContextCollector::class.java.name)
     private val mapper = JsonMapper.builder()
         .enable(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY)
         .enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS)
@@ -48,13 +51,16 @@ class ContextCollector(private val api: MontoyaApi) {
             if (options.deterministic) list.sortedBy { stableKey(it) } else list
         }
 
+        // Global context cap: drop trailing items if total serialized size exceeds limit
+        val cappedItems = capItemsBySize(items)
+
         val env = BurpContextEnvelope(
             capturedAtEpochMs = System.currentTimeMillis(),
-            items = items
+            items = cappedItems
         )
 
         val json = toJson(env, options.compactJson)
-        val preview = buildHttpPreview(items, policy, options)
+        val preview = buildHttpPreview(cappedItems, policy, options)
 
         return ContextCapture(contextJson = json, previewText = preview)
     }
@@ -196,6 +202,22 @@ ${sampleLines.ifEmpty { listOf("- (none)") }.joinToString(separator = "\n") { " 
         val body = raw.substring(bodyStart)
         if (body.length <= maxBodyChars) return raw
         return raw.substring(0, bodyStart) + body.take(maxBodyChars) + "\n...[body truncated]..."
+    }
+
+    private fun <T> capItemsBySize(items: List<T>): List<T> {
+        if (items.size <= 1) return items
+        var totalChars = 0
+        val result = mutableListOf<T>()
+        for (item in items) {
+            val itemJson = mapper.writeValueAsString(item)
+            if (totalChars + itemJson.length > Defaults.MAX_CONTEXT_TOTAL_CHARS && result.isNotEmpty()) {
+                log.warning("[ContextCollector] Context cap reached at ${result.size}/${items.size} items (${totalChars} chars). Dropping ${items.size - result.size} trailing item(s).")
+                break
+            }
+            totalChars += itemJson.length
+            result.add(item)
+        }
+        return result
     }
 
     private companion object {

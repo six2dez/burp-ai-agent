@@ -9,7 +9,10 @@ import javax.swing.JTabbedPane
 import javax.swing.border.EmptyBorder
 import javax.swing.border.LineBorder
 
-class BottomTabsPanel(private val settingsPanel: SettingsPanel) {
+class BottomTabsPanel(
+    private val settingsPanel: SettingsPanel,
+    private val aiLoggerPanel: AiLoggerPanel? = null
+) {
     val root: JComponent = JPanel(BorderLayout())
 
     private val tabbedPane = JTabbedPane()
@@ -48,6 +51,9 @@ class BottomTabsPanel(private val settingsPanel: SettingsPanel) {
         tabbedPane.addTab("Burp Integration", settingsPanel.burpIntegrationTabComponent())
         tabbedPane.addTab("Prompt Templates", settingsPanel.promptsTabComponent())
         tabbedPane.addTab("Privacy & Logging", settingsPanel.privacyTabComponent())
+        if (aiLoggerPanel != null) {
+            tabbedPane.addTab("AI Logger", aiLoggerPanel.root)
+        }
         tabbedPane.addTab("Help", settingsPanel.helpTabComponent())
 
         saveButton.font = UiTheme.Typography.label

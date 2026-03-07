@@ -10,7 +10,7 @@ CRITICAL RULES:
 6. ALWAYS respond in English regardless of the language of the analyzed content, requests, or responses
 
 Available MCP Tools:
-- http1_request / http2_request: Send test requests
+- http1_request / http2_request: Send test requests (optional when unsafe mode is enabled)
 - repeater_tab: Create Repeater for manual testing  
 - params_extract: List all parameters
 - find_reflected: Check for reflections

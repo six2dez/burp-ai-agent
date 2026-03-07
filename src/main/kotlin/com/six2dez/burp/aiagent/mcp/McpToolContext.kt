@@ -2,6 +2,7 @@ package com.six2dez.burp.aiagent.mcp
 
 import burp.api.montoya.MontoyaApi
 import burp.api.montoya.core.BurpSuiteEdition
+import com.six2dez.burp.aiagent.audit.AiRequestLogger
 import com.six2dez.burp.aiagent.mcp.tools.LimitedStringBuilder
 import com.six2dez.burp.aiagent.redact.PrivacyMode
 import com.six2dez.burp.aiagent.redact.Redaction
@@ -18,7 +19,8 @@ data class McpToolContext(
     val enabledUnsafeTools: Set<String>,
     val limiter: McpRequestLimiter,
     val edition: BurpSuiteEdition,
-    val maxBodyBytes: Int
+    val maxBodyBytes: Int,
+    val aiRequestLogger: AiRequestLogger? = null
 ) {
     fun isToolEnabled(name: String): Boolean = toolToggles[name] ?: false
     fun isUnsafeTool(name: String): Boolean = unsafeTools.contains(name)

@@ -24,6 +24,7 @@ import java.util.concurrent.atomic.AtomicReference
 class LmStudioBackend : AiBackend {
     override val id: String = "lmstudio"
     override val displayName: String = "LM Studio (local)"
+    override val supportsSystemRole: Boolean = true
 
     private val mapper = ObjectMapper().registerKotlinModule()
 
@@ -88,7 +89,8 @@ class LmStudioBackend : AiBackend {
             text: String,
             history: List<com.six2dez.burp.aiagent.backends.ChatMessage>?,
             onChunk: (String) -> Unit,
-            onComplete: (Throwable?) -> Unit
+            onComplete: (Throwable?) -> Unit,
+            systemPrompt: String?
         ) {
             if (!isAlive()) {
                 onComplete(IllegalStateException("Connection closed"))
@@ -101,6 +103,7 @@ class LmStudioBackend : AiBackend {
                     if (history != null) {
                         conversationHistory.setHistory(history)
                     }
+                    conversationHistory.setSystemPrompt(systemPrompt)
                     val maxAttempts = 6
                     var attempt = 0
                     var lastError: Exception? = null
@@ -189,6 +192,7 @@ class LmStudioBackend : AiBackend {
                                 throw e
                             }
                             val delayMs = HttpBackendSupport.retryDelayMs(attempt)
+                            BackendDiagnostics.logRetry("lmstudio", attempt + 1, delayMs, e.message)
                             debugLog("retrying in ${delayMs}ms after: ${e.message}")
                             try {
                                 Thread.sleep(delayMs)

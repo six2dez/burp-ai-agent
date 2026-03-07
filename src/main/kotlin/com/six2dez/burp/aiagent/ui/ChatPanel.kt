@@ -1,11 +1,13 @@
 package com.six2dez.burp.aiagent.ui
 
 import burp.api.montoya.MontoyaApi
+import com.six2dez.burp.aiagent.audit.ActivityType
 import com.six2dez.burp.aiagent.backends.AgentConnection
 import com.six2dez.burp.aiagent.agents.AgentProfileLoader
 import com.six2dez.burp.aiagent.backends.ChatMessage
 import com.six2dez.burp.aiagent.backends.UsageAwareConnection
 import com.six2dez.burp.aiagent.config.AgentSettings
+import com.six2dez.burp.aiagent.config.Defaults
 import com.six2dez.burp.aiagent.context.ContextCapture
 import com.six2dez.burp.aiagent.mcp.McpRequestLimiter
 import com.six2dez.burp.aiagent.mcp.McpToolCatalog
@@ -18,14 +20,15 @@ import com.six2dez.burp.aiagent.ui.components.PrivacyPill
 import com.six2dez.burp.aiagent.ui.components.ToolInvocationDialog
 import com.six2dez.burp.aiagent.util.TokenTracker
 import java.awt.BorderLayout
+import java.awt.Color
 import java.awt.Dimension
+import java.awt.Graphics
 import java.awt.event.InputEvent
 import java.awt.event.KeyEvent
 import java.net.URI
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -38,6 +41,7 @@ import javax.swing.JList
 import javax.swing.JPanel
 import javax.swing.BoxLayout
 import javax.swing.JScrollPane
+import javax.swing.JSeparator
 import javax.swing.JTextArea
 import javax.swing.ListSelectionModel
 import javax.swing.SwingUtilities
@@ -96,7 +100,10 @@ class ChatPanel(
     private var suppressDraftSync = false
     private val usageStatsLine1 = JLabel("No usage yet")
     private val usageStatsLine2 = JLabel("")
-    private val usageStatsLine3 = JLabel("")
+    private val sessionTokenLabel = JLabel("")
+    private val globalTokenLabel = JLabel("")
+    private val sessionTokenBar = TokenBar()
+    private val globalTokenBar = TokenBar()
 
     init {
         root.background = UiTheme.Colors.surface
@@ -189,11 +196,34 @@ class ChatPanel(
         usageFooter.layout = BoxLayout(usageFooter, BoxLayout.Y_AXIS)
         usageFooter.isOpaque = false
         usageFooter.border = EmptyBorder(4, 12, 8, 12)
-        for (lbl in listOf(usageStatsLine1, usageStatsLine2, usageStatsLine3)) {
+        for (lbl in listOf(usageStatsLine1, usageStatsLine2)) {
             lbl.font = smallFont
             lbl.foreground = dimColor
             usageFooter.add(lbl)
         }
+        val sep1 = JSeparator()
+        sep1.maximumSize = Dimension(Int.MAX_VALUE, 1)
+        usageFooter.add(sep1)
+        val sessionHeader = JLabel("── Session tokens ──")
+        sessionHeader.font = smallFont
+        sessionHeader.foreground = dimColor
+        usageFooter.add(sessionHeader)
+        sessionTokenBar.maximumSize = Dimension(Int.MAX_VALUE, 6)
+        sessionTokenBar.preferredSize = Dimension(0, 6)
+        usageFooter.add(sessionTokenBar)
+        sessionTokenLabel.font = smallFont
+        sessionTokenLabel.foreground = dimColor
+        usageFooter.add(sessionTokenLabel)
+        val globalHeader = JLabel("── Global tokens ──")
+        globalHeader.font = smallFont
+        globalHeader.foreground = dimColor
+        usageFooter.add(globalHeader)
+        globalTokenBar.maximumSize = Dimension(Int.MAX_VALUE, 6)
+        globalTokenBar.preferredSize = Dimension(0, 6)
+        usageFooter.add(globalTokenBar)
+        globalTokenLabel.font = smallFont
+        globalTokenLabel.foreground = dimColor
+        usageFooter.add(globalTokenLabel)
         updateUsageStatsLabel()
 
         sessionsPanel.add(listHeader, BorderLayout.NORTH)
@@ -359,7 +389,9 @@ class ChatPanel(
         contextJson: String?,
         allowToolCalls: Boolean,
         actionName: String? = null,
-        onCompleted: ((String, Throwable?) -> Unit)? = null
+        onCompleted: ((String, Throwable?) -> Unit)? = null,
+        toolIterationsLeft: Int = MAX_AUTO_TOOL_ITERATIONS,
+        traceId: String = "chat-turn-" + UUID.randomUUID().toString()
     ) {
         val settings = getSettings()
         updatePrivacyPill()
@@ -392,12 +424,32 @@ class ChatPanel(
         val state = sessionStates.getOrPut(sessionId) { ToolSessionState() }
         val toolContext = if (state.toolsMode) buildToolContext(settings, sessionId) else null
         val toolPreamble = if (state.toolsMode) buildToolPreamble(toolContext, state, mutateState = true) else null
-        val prompt = buildContextPayload(userText, contextJson, actionName)
+        // Only include context JSON on the first turn — history already carries it
+        val effectiveContextJson = if (session != null && session.contextSent) null else contextJson
+        if (effectiveContextJson != null && session != null) {
+            session.contextSent = true
+        }
+        // Extract agent instructions as system prompt for HTTP backends
+        val agentBlock = com.six2dez.burp.aiagent.agents.AgentProfileLoader.buildInstructionBlock(actionName)
+        val backendObj = supervisor.getBackend(backendId)
+        val systemPrompt: String?
+        val prompt: String
+        if (backendObj != null && backendObj.supportsSystemRole && !agentBlock.isNullOrBlank()) {
+            // Send agent instructions via system role, not in user prompt
+            systemPrompt = agentBlock
+            prompt = buildContextPayloadNoAgent(userText, effectiveContextJson)
+        } else {
+            systemPrompt = null
+            prompt = buildContextPayload(userText, effectiveContextJson, actionName)
+        }
         val finalPrompt = listOfNotNull(
             toolPreamble?.takeIf { it.isNotBlank() },
             prompt.takeIf { it.isNotBlank() }
         ).joinToString("\n\n")
         val promptChars = finalPrompt.length
+        if (promptChars > Defaults.LARGE_PROMPT_THRESHOLD) {
+            api.logging().logToOutput("[ChatPanel] Large prompt warning: ${promptChars} chars exceeds threshold (${Defaults.LARGE_PROMPT_THRESHOLD})")
+        }
 
         val responseBuffer = StringBuilder()
         val history = session?.messages?.let { msgs ->
@@ -420,6 +472,8 @@ class ChatPanel(
             contextJson = contextJson,
             privacyMode = settings.privacyMode,
             determinismMode = settings.determinismMode,
+            traceId = traceId,
+            systemPrompt = systemPrompt,
             onChunk = { chunk ->
                 responseBuffer.append(chunk)
                 SwingUtilities.invokeLater { assistant.appendChunk(chunk) }
@@ -443,6 +497,14 @@ class ChatPanel(
                     inputTokensActual = usage?.inputTokens,
                     outputTokensActual = usage?.outputTokens
                 )
+                if (session != null) {
+                    val tokIn = usage?.inputTokens?.toLong()
+                        ?: TokenTracker.estimateTokens(promptChars, backendId).toLong()
+                    val tokOut = usage?.outputTokens?.toLong()
+                        ?: TokenTracker.estimateTokens(responseBuffer.length, backendId).toLong()
+                    session.totalTokensIn += tokIn
+                    session.totalTokensOut += tokOut
+                }
                 if (err != null) {
                     SwingUtilities.invokeLater { assistant.append("\n[Error] ${err.message}") }
                     onCompleted?.invoke(responseBuffer.toString(), err)
@@ -457,16 +519,22 @@ class ChatPanel(
                         refreshSessionList()
                         onResponseReady()
                     }
-                    if (allowToolCalls && state.toolsMode && toolContext != null) {
+                    val chained = if (allowToolCalls && state.toolsMode && toolContext != null) {
                         maybeExecuteToolCall(
                             sessionId = sessionId,
                             userText = userText,
                             responseText = finalResp,
                             context = toolContext,
-                            settings = settings
+                            remainingToolIterations = toolIterationsLeft,
+                            traceId = traceId,
+                            onCompleted = onCompleted
                         )
+                    } else {
+                        false
                     }
-                    onCompleted?.invoke(finalResp, null)
+                    if (!chained) {
+                        onCompleted?.invoke(finalResp, null)
+                    }
                 }
             }
         )
@@ -474,10 +542,13 @@ class ChatPanel(
         inFlightConnection.set(connection)
     }
 
+    private fun sanitizeTitle(raw: String): String =
+        raw.replace(Regex("[\\t\\n\\r\\u0000-\\u001F]"), " ").trim()
+
     private fun createSession(title: String): ChatSession {
         val id = "chat-" + UUID.randomUUID().toString()
         val backendId = getSettings().preferredBackendId
-        val session = ChatSession(id, title, System.currentTimeMillis(), lastBackendId = backendId)
+        val session = ChatSession(id, sanitizeTitle(title), System.currentTimeMillis(), lastBackendId = backendId)
         sessionsModel.addElement(session)
         sessionsById[id] = session
         sessionDrafts[id] = ""
@@ -522,7 +593,7 @@ class ChatPanel(
             if (index != -1) {
                 // To update the list view we need to replace the element or trigger update
                 // Since ChatSession is immutable (data class), we create a copy
-                val updated = session.copy(title = newName.trim())
+                val updated = session.copy(title = sanitizeTitle(newName))
                 sessionsModel.set(index, updated)
                 sessionsById[session.id] = updated
             }
@@ -537,20 +608,23 @@ class ChatPanel(
             javax.swing.JOptionPane.YES_NO_OPTION
         )
         if (confirm == javax.swing.JOptionPane.YES_OPTION) {
-            supervisor.removeChatSession(session.id)
-            val removedPanel = sessionPanels.remove(session.id)
-            if (removedPanel != null) {
-                chatCards.remove(removedPanel.root)
-            }
-            sessionStates.remove(session.id)
-            sessionsById.remove(session.id)
-            sessionDrafts.remove(session.id)
-            sessionsModel.removeElement(session)
-            // Clean persisted data
             try {
-                chatPrefs().setString(SESSION_MSG_KEY_PREFIX + session.id, "")
-            } catch (_: Exception) {}
-            
+                supervisor.removeChatSession(session.id)
+                val removedPanel = sessionPanels.remove(session.id)
+                if (removedPanel != null) {
+                    chatCards.remove(removedPanel.root)
+                }
+            } finally {
+                sessionStates.remove(session.id)
+                sessionsById.remove(session.id)
+                sessionDrafts.remove(session.id)
+                sessionsModel.removeElement(session)
+                // Clean persisted data
+                try {
+                    chatPrefs().setString(SESSION_MSG_KEY_PREFIX + session.id, "")
+                } catch (_: Exception) {}
+            }
+
             if (sessionsModel.isEmpty()) {
                 // Create a default session if all gone
                 createSession("Chat 1")
@@ -763,7 +837,15 @@ class ChatPanel(
 
     private fun buildContextPayload(userText: String, contextJson: String?, actionName: String?): String {
         val agentBlock = AgentProfileLoader.buildInstructionBlock(actionName)
-        val base = if (contextJson.isNullOrBlank()) {
+        val base = buildContextPayloadNoAgent(userText, contextJson)
+        return listOfNotNull(
+            agentBlock?.takeIf { it.isNotBlank() },
+            base.takeIf { it.isNotBlank() }
+        ).joinToString("\n\n")
+    }
+
+    private fun buildContextPayloadNoAgent(userText: String, contextJson: String?): String {
+        return if (contextJson.isNullOrBlank()) {
             userText
         } else {
             buildString {
@@ -773,10 +855,6 @@ class ChatPanel(
                 append(contextJson)
             }
         }
-        return listOfNotNull(
-            agentBlock?.takeIf { it.isNotBlank() },
-            base.takeIf { it.isNotBlank() }
-        ).joinToString("\n\n")
     }
 
     private fun extractSourceFromPreview(preview: String): String {
@@ -874,6 +952,8 @@ class ChatPanel(
     }
 
     companion object {
+        private const val MAX_AUTO_TOOL_ITERATIONS = 8
+
         fun formatSessionDate(epochMs: Long): String {
             val now = java.util.Calendar.getInstance()
             val then = java.util.Calendar.getInstance().apply { timeInMillis = epochMs }
@@ -887,6 +967,39 @@ class ChatPanel(
             val daysDiff = ((System.currentTimeMillis() - epochMs) / 86_400_000).toInt()
             if (daysDiff <= 7) return "${daysDiff}d ago"
             return java.text.SimpleDateFormat("MMM d").format(java.util.Date(epochMs))
+        }
+    }
+
+    private class TokenBar : JPanel() {
+        private var ratio = 0f
+
+        init {
+            isOpaque = false
+        }
+
+        fun setRatio(value: Float) {
+            ratio = value.coerceIn(0f, 1f)
+            repaint()
+        }
+
+        override fun paintComponent(g: Graphics) {
+            super.paintComponent(g)
+            val w = width
+            val h = height
+            if (w <= 0 || h <= 0) return
+            // Background track
+            g.color = Color(80, 80, 80)
+            g.fillRoundRect(0, 0, w, h, h, h)
+            // Filled portion
+            val fillW = (w * ratio).toInt().coerceAtLeast(0)
+            if (fillW > 0) {
+                g.color = when {
+                    ratio < 0.4f -> Color(76, 175, 80)   // green
+                    ratio < 0.7f -> Color(255, 193, 7)    // yellow
+                    else -> Color(255, 152, 0)             // orange
+                }
+                g.fillRoundRect(0, 0, fillW, h, h, h)
+            }
         }
     }
 
@@ -906,15 +1019,34 @@ class ChatPanel(
         if (stats.totalMessages == 0) {
             usageStatsLine1.text = "No usage yet"
             usageStatsLine2.text = ""
-            usageStatsLine3.text = ""
+            sessionTokenLabel.text = "In: 0 | Out: 0"
+            globalTokenLabel.text = "In: 0 | Out: 0"
+            sessionTokenBar.setRatio(0f)
+            globalTokenBar.setRatio(0f)
         } else {
             usageStatsLine1.text = "${stats.totalMessages} msgs | In: ${formatChars(stats.totalCharsIn)} | Out: ${formatChars(stats.totalCharsOut)}"
             usageStatsLine2.text = stats.perBackend.entries
                 .sortedByDescending { it.value }
                 .joinToString(", ") { "${it.key}: ${it.value}" }
-            val estIn = estimatedTokens(stats.totalCharsIn)
-            val estOut = estimatedTokens(stats.totalCharsOut)
-            usageStatsLine3.text = "Est tokens | In: ${formatChars(estIn)} | Out: ${formatChars(estOut)}"
+
+            // Per-session tokens
+            val activeSession = activeSessionId?.let { sessionsById[it] }
+            val sessIn = activeSession?.totalTokensIn ?: 0L
+            val sessOut = activeSession?.totalTokensOut ?: 0L
+            val sessTotal = sessIn + sessOut
+            sessionTokenLabel.text = "In: ${formatChars(sessIn)} | Out: ${formatChars(sessOut)} | Total: ${formatChars(sessTotal)}"
+
+            // Global tokens from TokenTracker
+            val snapshots = TokenTracker.snapshot()
+            val globalIn = snapshots.sumOf { it.inputTokensEstimated }
+            val globalOut = snapshots.sumOf { it.outputTokensEstimated }
+            val globalTotal = globalIn + globalOut
+            globalTokenLabel.text = "In: ${formatChars(globalIn)} | Out: ${formatChars(globalOut)} | Total: ${formatChars(globalTotal)}"
+
+            // Bar ratios: session relative to global, global fills fully
+            val sessionRatio = if (globalTotal > 0) sessTotal.toFloat() / globalTotal.toFloat() else 0f
+            sessionTokenBar.setRatio(sessionRatio.coerceIn(0f, 1f))
+            globalTokenBar.setRatio(if (globalTotal > 0) 1f else 0f)
         }
     }
 
@@ -924,12 +1056,6 @@ class ChatPanel(
             chars >= 1_000 -> String.format("%.1fK", chars / 1_000.0)
             else -> "${chars}"
         }
-    }
-
-    private fun estimatedTokens(chars: Long): Long {
-        if (chars <= 0) return 0
-        val capped = chars.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
-        return TokenTracker.estimateTokens(capped).toLong()
     }
 
     private fun normalizeRole(role: String): String {
@@ -1185,7 +1311,10 @@ class ChatPanel(
         var messageCount: Int = 0,
         var totalCharsIn: Long = 0,
         var totalCharsOut: Long = 0,
-        val messages: MutableList<ChatMessage> = mutableListOf()
+        var totalTokensIn: Long = 0,
+        var totalTokensOut: Long = 0,
+        val messages: MutableList<ChatMessage> = mutableListOf(),
+        var contextSent: Boolean = false
     ) {
         override fun toString(): String = title
     }
@@ -1536,8 +1665,8 @@ class ChatPanel(
         fun appendChunk(text: String) {
             isStreaming = true
             synchronized(pendingText) { pendingText.append(text) }
-            if (coalescingTimer != null && !coalescingTimer!!.isRunning) {
-                coalescingTimer?.restart()
+            coalescingTimer?.let { timer ->
+                if (!timer.isRunning) timer.restart()
             }
         }
 
@@ -1631,11 +1760,57 @@ class ChatPanel(
         userText: String,
         responseText: String,
         context: McpToolContext,
-        settings: AgentSettings
-    ) {
-        val call = extractToolCall(responseText) ?: return
-        val panel = sessionPanels[sessionId] ?: return
-        val result = McpToolExecutor.executeTool(call.tool, call.argsJson, context)
+        remainingToolIterations: Int,
+        traceId: String,
+        onCompleted: ((String, Throwable?) -> Unit)?
+    ): Boolean {
+        if (remainingToolIterations <= 0) return false
+        val call = ToolCallParser.extractFirst(responseText) ?: return false
+        val panel = sessionPanels[sessionId] ?: return false
+        val backendId = sessionsById[sessionId]?.lastBackendId ?: getSettings().preferredBackendId
+        val chainStep = (MAX_AUTO_TOOL_ITERATIONS - remainingToolIterations + 1).coerceAtLeast(1)
+        val startedAt = System.currentTimeMillis()
+        val resultOutcome = runCatching { McpToolExecutor.executeTool(call.tool, call.argsJson, context) }
+        val durationMs = System.currentTimeMillis() - startedAt
+        if (resultOutcome.isFailure) {
+            val errorMessage = resultOutcome.exceptionOrNull()?.message ?: "Unknown MCP tool error"
+            supervisor.aiRequestLogger?.log(
+                type = ActivityType.MCP_TOOL_CALL,
+                source = "chat",
+                backendId = backendId,
+                sessionId = sessionId,
+                detail = "Tool ${call.tool} failed: $errorMessage",
+                durationMs = durationMs,
+                metadata = mapOf(
+                    "operation" to "tool_chain",
+                    "status" to "error",
+                    "traceId" to traceId,
+                    "step" to chainStep.toString(),
+                    "toolName" to call.tool,
+                    "errorClass" to (resultOutcome.exceptionOrNull()?.javaClass?.simpleName ?: "Exception")
+                )
+            )
+            panel.addMessage("Tool result: ${call.tool}", "Error: $errorMessage")
+            return false
+        }
+        val result = resultOutcome.getOrThrow()
+        val status = if (result.startsWith("Error:")) "error" else "ok"
+        supervisor.aiRequestLogger?.log(
+            type = ActivityType.MCP_TOOL_CALL,
+            source = "chat",
+            backendId = backendId,
+            sessionId = sessionId,
+            detail = "Tool ${call.tool} executed",
+            durationMs = durationMs,
+            metadata = mapOf(
+                "operation" to "tool_chain",
+                "status" to status,
+                "traceId" to traceId,
+                "step" to chainStep.toString(),
+                "toolName" to call.tool,
+                "resultChars" to result.length.toString()
+            )
+        )
         panel.addMessage("Tool result: ${call.tool}", result)
         val followup = buildString {
             appendLine("Tool result for ${call.tool}:")
@@ -1650,84 +1825,13 @@ class ChatPanel(
             sessionId,
             followup,
             contextJson = null,
-            allowToolCalls = false,
-            actionName = "Tool Followup"
+            allowToolCalls = remainingToolIterations > 1,
+            actionName = "Tool Followup",
+            onCompleted = onCompleted,
+            toolIterationsLeft = (remainingToolIterations - 1).coerceAtLeast(0),
+            traceId = traceId
         )
-    }
-
-    private data class ToolCall(val tool: String, val argsJson: String?)
-
-    private fun extractToolCall(text: String): ToolCall? {
-        val toolBlock = extractToolBlockJson(text)
-        if (toolBlock != null) {
-            val call = parseToolJson(toolBlock)
-            if (call != null) return call
-        }
-        val trimmed = text.trim()
-        if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
-            return parseToolJson(trimmed)
-        }
-        return null
-    }
-
-    private fun extractToolBlockJson(text: String): String? {
-        val regex = Regex("```tool\\s*([\\s\\S]*?)\\s*```", RegexOption.IGNORE_CASE)
-        val match = regex.find(text) ?: return null
-        val payload = match.groupValues.getOrNull(1)?.trim().orEmpty()
-        if (!payload.startsWith("{") || !payload.endsWith("}")) return null
-        return payload
-    }
-
-    private fun parseToolJson(jsonText: String): ToolCall? {
-        return try {
-            val element = Json.parseToJsonElement(jsonText)
-            val obj = element.jsonObject
-            val tool = resolveToolName(obj) ?: return null
-            val args = resolveToolArgs(obj)
-            ToolCall(tool, args)
-        } catch (e: Exception) {
-            api.logging().logToOutput("[ChatPanel] Invalid tool JSON payload: ${e.message}")
-            null
-        }
-    }
-
-    private fun resolveToolName(obj: kotlinx.serialization.json.JsonObject): String? {
-        val directTool = obj["tool"]?.jsonPrimitive?.contentOrNull?.trim()
-        if (!directTool.isNullOrBlank()) return directTool
-
-        val directName = obj["name"]?.jsonPrimitive?.contentOrNull?.trim()
-        if (!directName.isNullOrBlank()) return directName
-
-        val functionName = obj["function"]
-            ?.let { runCatching { it.jsonObject["name"]?.jsonPrimitive?.contentOrNull?.trim() }.getOrNull() }
-        if (!functionName.isNullOrBlank()) return functionName
-
-        return null
-    }
-
-    private fun resolveToolArgs(obj: kotlinx.serialization.json.JsonObject): String? {
-        val directArgs = obj["args"]
-        if (directArgs != null) return normalizeArgsJson(directArgs)
-
-        val arguments = obj["arguments"]
-        if (arguments != null) return normalizeArgsJson(arguments)
-
-        val input = obj["input"]
-        if (input != null) return normalizeArgsJson(input)
-
-        val functionArgs = obj["function"]
-            ?.let { runCatching { it.jsonObject["arguments"] }.getOrNull() }
-        return normalizeArgsJson(functionArgs)
-    }
-
-    private fun normalizeArgsJson(value: JsonElement?): String? {
-        if (value == null) return null
-        val primitive = runCatching { value.jsonPrimitive }.getOrNull()
-        if (primitive != null && primitive.isString) {
-            val raw = primitive.contentOrNull?.trim().orEmpty()
-            return raw.ifBlank { null }
-        }
-        return value.toString()
+        return true
     }
 
     private fun buildToolPreamble(

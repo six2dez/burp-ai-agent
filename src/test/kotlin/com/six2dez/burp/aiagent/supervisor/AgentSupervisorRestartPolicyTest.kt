@@ -107,7 +107,8 @@ class AgentSupervisorRestartPolicyTest {
             text: String,
             history: List<com.six2dez.burp.aiagent.backends.ChatMessage>?,
             onChunk: (String) -> Unit,
-            onComplete: (Throwable?) -> Unit
+            onComplete: (Throwable?) -> Unit,
+            systemPrompt: String?
         ) {
             onComplete(IllegalStateException("dead"))
         }

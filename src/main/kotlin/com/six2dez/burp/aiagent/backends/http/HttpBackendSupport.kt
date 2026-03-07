@@ -5,7 +5,7 @@ import com.six2dez.burp.aiagent.config.Defaults
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.EOFException
-import java.net.Proxy
+import java.net.ProxySelector
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedDeque
 
@@ -13,13 +13,20 @@ object HttpBackendSupport {
     const val CIRCUIT_FAILURE_THRESHOLD: Int = 5
     const val CIRCUIT_RESET_TIMEOUT_MS: Long = 30_000
     const val CIRCUIT_HALF_OPEN_MAX_ATTEMPTS: Int = 1
+    /** Max idle time before a cached client is eligible for eviction */
+    private const val CLIENT_EVICTION_AGE_MS: Long = 10 * 60 * 1000 // 10 minutes
 
     private data class ClientKey(
         val baseUrl: String,
         val timeoutSeconds: Long
     )
 
-    private val sharedClients = ConcurrentHashMap<ClientKey, OkHttpClient>()
+    private data class ClientEntry(
+        val client: OkHttpClient,
+        @Volatile var lastUsedAt: Long = System.currentTimeMillis()
+    )
+
+    private val sharedClients = ConcurrentHashMap<ClientKey, ClientEntry>()
 
     fun buildClient(timeoutSeconds: Long): OkHttpClient {
         return OkHttpClient.Builder()
@@ -27,7 +34,8 @@ object HttpBackendSupport {
             .writeTimeout(java.time.Duration.ofSeconds(30))
             .readTimeout(java.time.Duration.ofSeconds(timeoutSeconds))
             .callTimeout(java.time.Duration.ofSeconds(timeoutSeconds))
-            .proxy(Proxy.NO_PROXY)
+            // Use system proxy settings (respects Burp/JVM proxy config)
+            .proxySelector(ProxySelector.getDefault() ?: ProxySelector.of(null))
             .build()
     }
 
@@ -37,16 +45,36 @@ object HttpBackendSupport {
             baseUrl = baseUrl.orEmpty().trim().lowercase(),
             timeoutSeconds = safeTimeout
         )
-        return sharedClients.computeIfAbsent(key) { buildClient(safeTimeout) }
+        val entry = sharedClients.computeIfAbsent(key) { ClientEntry(buildClient(safeTimeout)) }
+        entry.lastUsedAt = System.currentTimeMillis()
+        // Opportunistic eviction of stale clients
+        evictStaleClients()
+        return entry.client
     }
 
     fun shutdownSharedClients() {
-        val clients = sharedClients.values.toList()
+        val entries = sharedClients.values.toList()
         sharedClients.clear()
-        clients.forEach { client ->
-            client.dispatcher.executorService.shutdown()
-            client.connectionPool.evictAll()
-            client.cache?.close()
+        entries.forEach { entry ->
+            entry.client.dispatcher.executorService.shutdown()
+            entry.client.connectionPool.evictAll()
+            entry.client.cache?.close()
+        }
+    }
+
+    /** Evict clients not used in the last CLIENT_EVICTION_AGE_MS */
+    private fun evictStaleClients() {
+        val now = System.currentTimeMillis()
+        val iterator = sharedClients.entries.iterator()
+        while (iterator.hasNext()) {
+            val (_, entry) = iterator.next()
+            if (now - entry.lastUsedAt > CLIENT_EVICTION_AGE_MS) {
+                iterator.remove()
+                try {
+                    entry.client.connectionPool.evictAll()
+                    entry.client.dispatcher.executorService.shutdown()
+                } catch (_: Exception) {}
+            }
         }
     }
 
@@ -120,42 +148,60 @@ class ConversationHistory(
     private val maxTotalChars: Int = Defaults.MAX_HISTORY_TOTAL_CHARS
 ) {
     private val history = ConcurrentLinkedDeque<Map<String, String>>()
+    private val lock = Any()
+    private var runningTotalChars: Int = 0
 
-    fun addUser(content: String) {
-        history.addLast(mapOf("role" to "user", "content" to content))
+    @Volatile
+    private var systemPromptEntry: Map<String, String>? = null
+
+    fun addUser(content: String) { synchronized(lock) {
+        val entry = mapOf("role" to "user", "content" to content)
+        history.addLast(entry)
+        runningTotalChars += entryChars(entry)
         trim()
+    }}
+
+    fun addAssistant(content: String) { synchronized(lock) {
+        val entry = mapOf("role" to "assistant", "content" to content)
+        history.addLast(entry)
+        runningTotalChars += entryChars(entry)
+        trim()
+    }}
+
+    fun setSystemPrompt(prompt: String?) {
+        systemPromptEntry = if (prompt.isNullOrBlank()) null else mapOf("role" to "system", "content" to prompt)
     }
 
-    fun addAssistant(content: String) {
-        history.addLast(mapOf("role" to "assistant", "content" to content))
-        trim()
-    }
+    fun snapshot(): List<Map<String, String>> { synchronized(lock) {
+        val sys = systemPromptEntry
+        val msgs = history.toList()
+        return if (sys != null) listOf(sys) + msgs else msgs
+    }}
 
-    fun snapshot(): List<Map<String, String>> = history.toList()
-
-    fun setHistory(newHistory: List<com.six2dez.burp.aiagent.backends.ChatMessage>) {
+    fun setHistory(newHistory: List<com.six2dez.burp.aiagent.backends.ChatMessage>) { synchronized(lock) {
         history.clear()
+        runningTotalChars = 0
         newHistory.forEach { msg ->
-            history.addLast(mapOf("role" to msg.role, "content" to msg.content))
+            val entry = mapOf("role" to msg.role, "content" to msg.content)
+            history.addLast(entry)
+            runningTotalChars += entryChars(entry)
         }
         trim()
-    }
+    }}
 
     private fun trim() {
         while (history.size > maxMessages) {
-            history.pollFirst()
+            val removed = history.pollFirst() ?: break
+            runningTotalChars -= entryChars(removed)
         }
-        while (history.size > MIN_MESSAGES_TO_KEEP && totalChars() > maxTotalChars) {
-            history.pollFirst()
+        while (history.size > MIN_MESSAGES_TO_KEEP && runningTotalChars > maxTotalChars) {
+            val removed = history.pollFirst() ?: break
+            runningTotalChars -= entryChars(removed)
         }
     }
 
-    private fun totalChars(): Int {
-        return history.sumOf { entry ->
-            val role = entry["role"].orEmpty()
-            val content = entry["content"].orEmpty()
-            role.length + content.length + 2
-        }
+    private fun entryChars(entry: Map<String, String>): Int {
+        return entry["role"].orEmpty().length + entry["content"].orEmpty().length + 2
     }
 
     private companion object {

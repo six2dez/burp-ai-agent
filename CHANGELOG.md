@@ -4,6 +4,36 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] - 2026-03-06
+
+
+- **Copilot CLI Backend**:
+  - New GitHub Copilot CLI backend with non-interactive prompt mode (`-p`), quiet output (`--quiet`), and large prompt file-based fallback for payloads exceeding 32k chars.
+  - Configurable command in AI Backend settings tab; registered via ServiceLoader for drop-in availability.
+- **AI Request Logger**:
+  - Real-time activity logger (`AiRequestLogger`) capturing all AI interactions: prompts, responses, MCP tool calls, retries, errors, and scanner dispatches.
+  - Trace ID correlation across chat (`chat-turn-{UUID}`), scanner (`scanner-job-{UUID}`), and agent (`agent-turn-{UUID}`) flows for end-to-end observability.
+  - Structured `AiActivityEntry` with timestamp, activity type, source, backend, duration, character counts, token usage, and arbitrary metadata.
+  - Integration in `AgentSupervisor` (prompt/response/error), `PassiveAiScanner` (send/timeout/error/completion), `McpToolHandlers` (per-tool call with policy decisions and arg/result hashes), and `ChatPanel` (tool chain steps).
+- **AI Logger UI Tab**:
+  - New "AI Logger" tab in bottom settings panel with live filterable table, detail inspector pane, and JSON export.
+  - Preset filters (Errors only, Slow >=3s, Tool failures), type/source dropdowns, and trace ID search for quick diagnosis.
+- **Rolling JSONL Persistence**:
+  - Optional file-based persistence for the AI Request Logger with configurable rotation via JVM system properties (`burp.ai.logger.rolling.enabled`, `.dir`, `.maxBytes`, `.maxFiles`).
+- **Auto Tool Chaining**:
+  - Chat automatically chains up to 8 sequential MCP tool calls per interaction when the AI response contains a tool call JSON payload.
+  - All chained calls share the same trace ID for end-to-end correlation in the AI Logger.
+- **ToolCallParser**:
+  - Robust JSON tool call extraction from AI responses supporting fenced code blocks (`json`/`tool`), bare JSON objects, and nested OpenAI-style `tool_calls`/`function_call` formats.
+- **System Prompt Support**:
+  - `AgentConnection.send()` now accepts a `systemPrompt` parameter; HTTP backends (Ollama, LM Studio, OpenAI-compatible) receive agent profile instructions via the system role instead of inlining them in user prompts.
+- **Per-Session Token Tracking**:
+  - Chat sessions track cumulative input/output token counts with visual token bars showing session-level and global usage in the sidebar.
+- **Context Collection Size Cap**:
+  - `ContextCollector` caps total serialized size of context items to prevent oversized payloads from exceeding prompt limits.
+- **Backend Retry Diagnostics**:
+  - `BackendDiagnostics.RetryEvent` model with structured metadata (attempt number, delay, reason) logged to the AI Request Logger as `RETRY` activities.
+
 ## [0.3.0] - 2026-02-24
 
 ### Added
@@ -54,6 +84,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Changed
 
+- **System Proxy Support**:
+  - HTTP backends now use `ProxySelector.getDefault()` instead of `Proxy.NO_PROXY`, respecting Burp/JVM proxy configuration.
+- **Passive Scanner Prompt Improvements**:
+  - Updated prompt with explicit severity definitions (Critical/High/Medium/Low), concrete DO NOT REPORT rules (missing headers, potential issues without evidence, generic reflection, rate limiting absence), and step-by-step evidence chain requirement in reasoning.
+  - AI responses with "Critical" severity are now mapped to Burp's `HIGH` severity level.
+- **Agent Profile Tool Descriptions**:
+  - Agent profiles now mark `http1_request`/`http2_request` tools as "(optional when unsafe mode is enabled)".
+  - Tool validation suppresses warnings for catalog-only tools that require Unsafe mode.
+- **Chat Context Dedup**:
+  - Follow-up messages in the same session skip re-sending context JSON, reducing prompt size on subsequent turns.
+- **Issue Consolidation**:
+  - `AiScanCheck` now uses canonical issue names and normalized URLs for cross-scanner dedup consistency.
+  - `hasExistingIssue` renamed to `hasEquivalentIssue` for clarity across active scanner and UI actions.
+- **ConversationHistory System Prompt**:
+  - Added `setSystemPrompt()` method; system prompt is prepended in conversation snapshots for HTTP backends.
 - **Duplicate Issue Logic Consolidation**:
   - Replaced duplicated issue matching/canonicalization code in Passive Scanner, Active Scanner, MCP tools, and UI actions with `IssueUtils`.
 - **Shutdown Reliability and Consistency**:
@@ -108,6 +153,38 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
   - Fixed repeated per-request HTTP client construction that prevented efficient connection reuse.
 - **Legacy Settings Drift**:
   - Fixed legacy preference normalization for MCP allowed origins and old Gemini default command values during migration.
+- **Pre-Release Stability Hardening (Round 1)**:
+  - Fixed `McpStdioBridge.stop()` potential deadlock by adding `withTimeoutOrNull(5s)` around transport/server close calls.
+  - Fixed `KtorMcpServerManager.shutdown()` missing `shutdownNow()` fallback when `awaitTermination` times out.
+  - Fixed `CliBackend` session ID race condition by replacing `@Volatile` with `AtomicReference` + `compareAndSet`.
+  - Fixed `ChatPanel.deleteSession()` partial cleanup by wrapping in `try-finally` to guarantee map/model consistency.
+  - Fixed `ChatPanel` unsafe `!!` on `coalescingTimer` with null-safe `?.let` pattern.
+  - Fixed `ActiveAiScanner.startProcessing()` executor leak by calling `stopProcessing()` before creating new executors.
+  - Fixed `McpSupervisor.shutdown()` ordering: scheduler now stops first with `awaitTermination` before server/bridge shutdown.
+  - Fixed `AgentSupervisor.tryCapture()` missing `waitFor` timeout that could hang Burp startup on broken shell configs.
+  - Fixed `McpSupervisor` HTTP connection leak in probe/shutdown methods by moving `disconnect()` to `finally` blocks.
+  - Fixed `AgentSupervisor` service reader stream leak by wrapping `bufferedReader()` in `.use {}`.
+  - Fixed `CliConnection` init resource leak by wrapping `readerExec.submit` in try-catch that calls `stop()` on failure.
+  - Fixed `AiScanCheck` evidence showing "nullms" for time-based detection by adding null-coalescing fallback.
+  - Fixed Gradle build failure on JDK 25 by pinning `org.gradle.java.home` to JDK 21.
+- **Pre-Release Stability Hardening (Round 2)**:
+  - Fixed `ConversationHistory.runningTotalChars` data race by replacing non-atomic `@Volatile +=` with `synchronized` block.
+  - Fixed `NonInteractiveCliConnection.send()` crash after `stop()` by catching `RejectedExecutionException` and routing to `onComplete`.
+  - Fixed `SettingsPanel` status refresh timer leak by promoting to class field with proper `shutdown()` lifecycle.
+  - Fixed swallowed exception context in `AiScanCheck` registration log (now includes `e.message`).
+  - Fixed chat session title serialization corruption when titles contain tab/control characters by adding `sanitizeTitle()`.
+- **Additional Stability Hardening**:
+  - Fixed agent profile cache torn reads by consolidating three `@Volatile` fields into single `AtomicReference<CacheEntry>`.
+  - Fixed settings repository concurrent load performance by caching loaded settings via `AtomicReference`.
+  - Fixed HTTP shared client pool accumulation by adding idle eviction after 10 minutes of inactivity.
+  - Fixed active scanner issue creation race condition by protecting check-then-create with `ReentrantLock`.
+  - Fixed active scanner dedup race condition by using atomic `putIfAbsent` instead of separate read-then-write.
+  - Fixed CLI connection `stop()` missing executor termination wait by adding `awaitTermination` and `destroyForcibly()` fallback.
+  - Fixed temporary prompt file permissions by setting POSIX owner-only read/write (600) before writing content.
+  - Fixed agent supervisor concurrent lifecycle transitions by adding explicit `Starting` state and split-lock pattern.
+  - Fixed cached CLI PATH initialization race by using `AtomicReference.compareAndSet` instead of `@Volatile`.
+  - Fixed passive scanner regex recompilation in hot paths by promoting to pre-compiled companion object patterns.
+  - Fixed CLI backend availability log spam by deduplicating with `AtomicBoolean.compareAndSet`.
 
 ## [0.2.0] - 2026-02-09
 

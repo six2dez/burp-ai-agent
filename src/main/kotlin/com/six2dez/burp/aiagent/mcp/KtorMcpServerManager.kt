@@ -17,6 +17,7 @@ import io.modelcontextprotocol.kotlin.sdk.ServerCapabilities
 import io.modelcontextprotocol.kotlin.sdk.server.Server
 import io.modelcontextprotocol.kotlin.sdk.server.ServerOptions
 import io.modelcontextprotocol.kotlin.sdk.server.mcp
+import com.six2dez.burp.aiagent.audit.AiRequestLogger
 import com.six2dez.burp.aiagent.config.McpSettings
 import com.six2dez.burp.aiagent.mcp.tools.registerTools
 import com.six2dez.burp.aiagent.redact.PrivacyMode
@@ -33,6 +34,10 @@ class KtorMcpServerManager(
     private var server: EmbeddedServer<*, *>? = null
     private val executor: ExecutorService = Executors.newSingleThreadExecutor()
     private data class CorsAllowedHost(val hostAndPort: String, val scheme: String)
+
+    override fun setAiRequestLogger(logger: AiRequestLogger) {
+        contextFactory.aiRequestLogger = logger
+    }
 
     override fun start(settings: McpSettings, privacyMode: PrivacyMode, determinismMode: Boolean, callback: (McpServerState) -> Unit) {
         callback(McpServerState.Starting)
@@ -212,7 +217,9 @@ class KtorMcpServerManager(
         server?.stop(1000, 5000)
         server = null
         executor.shutdown()
-        executor.awaitTermination(10, TimeUnit.SECONDS)
+        if (!executor.awaitTermination(10, TimeUnit.SECONDS)) {
+            executor.shutdownNow()
+        }
     }
 
     private fun isAuthorized(authHeader: String, token: String): Boolean {

@@ -1,10 +1,13 @@
 package com.six2dez.burp.aiagent.mcp
 
 import burp.api.montoya.MontoyaApi
+import com.six2dez.burp.aiagent.audit.AiRequestLogger
 import com.six2dez.burp.aiagent.config.McpSettings
 import com.six2dez.burp.aiagent.redact.PrivacyMode
 
 class McpRuntimeContextFactory(private val api: MontoyaApi) {
+
+    var aiRequestLogger: AiRequestLogger? = null
 
     fun create(
         settings: McpSettings,
@@ -27,7 +30,8 @@ class McpRuntimeContextFactory(private val api: MontoyaApi) {
             enabledUnsafeTools = settings.enabledUnsafeTools,
             limiter = limiter,
             edition = api.burpSuite().version().edition(),
-            maxBodyBytes = settings.maxBodyBytes
+            maxBodyBytes = settings.maxBodyBytes,
+            aiRequestLogger = aiRequestLogger
         )
     }
 }

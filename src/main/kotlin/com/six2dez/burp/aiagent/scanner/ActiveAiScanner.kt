@@ -17,6 +17,7 @@ import java.util.concurrent.*
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.locks.ReentrantLock
 import kotlin.math.abs
 
 data class ActiveAiFinding(
@@ -41,6 +42,7 @@ class ActiveAiScanner(
     private val scanning = AtomicBoolean(false)
     private val scanQueue = ConcurrentLinkedQueue<ActiveScanTarget>()
     private val processedTargets = ConcurrentHashMap<String, Long>()  // Dedup
+    private val issueLock = ReentrantLock()
     private val scansCompleted = AtomicInteger(0)
     private val vulnsConfirmed = AtomicInteger(0)
     private val currentTarget = AtomicReference<String?>(null)
@@ -129,13 +131,17 @@ class ActiveAiScanner(
             return
         }
         
-        // Dedup - don't scan same target twice within 1 hour
+        // Dedup - don't scan same target twice within 1 hour (atomic putIfAbsent)
         val now = System.currentTimeMillis()
-        val lastScan = processedTargets[target.id]
-        if (lastScan != null && (now - lastScan) < Defaults.DEDUP_WINDOW_MS) {
+        val existing = processedTargets.putIfAbsent(target.id, now)
+        if (existing != null && (now - existing) < Defaults.DEDUP_WINDOW_MS) {
             return
         }
-        
+        if (existing != null) {
+            // Expired entry — update timestamp
+            processedTargets[target.id] = now
+        }
+
         if (!offerIfQueueNotFull(target)) return
         api.logging().logToOutput("[ActiveAiScanner] Queued: ${target.vulnHint.vulnClass} in ${target.injectionPoint.name}")
     }
@@ -225,11 +231,12 @@ class ActiveAiScanner(
     }
 
     private fun startProcessing() {
-        if (scanning.getAndSet(true)) return  // Already running
-        
+        stopProcessing()
+        scanning.set(true)
+
         executor = Executors.newFixedThreadPool(maxConcurrent)
         scheduledExecutor = Executors.newSingleThreadScheduledExecutor()
-        
+
         scheduledExecutor?.scheduleWithFixedDelay({
             processQueue()
         }, 0, 500, TimeUnit.MILLISECONDS)
@@ -905,24 +912,29 @@ class ActiveAiScanner(
         }
         
         try {
-            if (hasExistingIssue(title, target.originalRequest.request().url())) {
-                api.logging().logToOutput("[ActiveAiScanner] Consolidated duplicate issue: $title")
-                return
+            issueLock.lock()
+            try {
+                if (hasExistingIssue(title, target.originalRequest.request().url())) {
+                    api.logging().logToOutput("[ActiveAiScanner] Consolidated duplicate issue: $title")
+                    return
+                }
+                val issue = AuditIssue.auditIssue(
+                    title,
+                    detail,
+                    ScannerIssueSupport.remediation(target.vulnHint.vulnClass),
+                    target.originalRequest.request().url(),
+                    severity,
+                    confidence,
+                    null,
+                    null,
+                    severity,
+                    listOf(target.originalRequest, confirmation.exploitResponse)
+                )
+
+                api.siteMap().add(issue)
+            } finally {
+                issueLock.unlock()
             }
-            val issue = AuditIssue.auditIssue(
-                title,
-                detail,
-                ScannerIssueSupport.remediation(target.vulnHint.vulnClass),
-                target.originalRequest.request().url(),
-                severity,
-                confidence,
-                null,
-                null,
-                severity,
-                listOf(target.originalRequest, confirmation.exploitResponse)
-            )
-            
-            api.siteMap().add(issue)
             api.logging().logToOutput("[ActiveAiScanner] CONFIRMED: ${target.vulnHint.vulnClass.name} in '${target.injectionPoint.name}' (${confirmation.confidence}%)")
 
             val finding = ActiveAiFinding(
@@ -934,10 +946,10 @@ class ActiveAiScanner(
                 confidence = confirmation.confidence
             )
             synchronized(confirmations) {
-            if (confirmations.size >= Defaults.FINDINGS_BUFFER_SIZE) confirmations.removeFirst()
+                if (confirmations.size >= Defaults.FINDINGS_BUFFER_SIZE) confirmations.removeFirst()
                 confirmations.addLast(finding)
             }
-            
+
         } catch (e: Exception) {
             api.logging().logToError("[ActiveAiScanner] Failed to create issue: ${e.message}")
         }
@@ -993,7 +1005,7 @@ class ActiveAiScanner(
     }
 
     private fun hasExistingIssue(name: String, baseUrl: String): Boolean {
-        return IssueUtils.hasExistingIssue(
+        return IssueUtils.hasEquivalentIssue(
             name = name,
             baseUrl = baseUrl,
             issues = api.siteMap().issues().map { issue -> issue.name() to issue.baseUrl() }

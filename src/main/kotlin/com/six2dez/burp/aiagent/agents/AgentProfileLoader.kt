@@ -4,6 +4,7 @@ import com.six2dez.burp.aiagent.backends.BackendDiagnostics
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
+import java.util.concurrent.atomic.AtomicReference
 
 data class AgentProfile(
     val global: String,
@@ -24,16 +25,22 @@ object AgentProfileLoader {
         "auditor.md"
     )
 
-    @Volatile
-    private var cachedProfile: AgentProfile? = null
+    /** Atomically-cached profile entry: path + modification time + parsed profile */
+    private data class CacheEntry(
+        val path: Path,
+        val modified: Long,
+        val profile: AgentProfile
+    )
 
-    @Volatile
-    private var cachedPath: Path? = null
-
-    @Volatile
-    private var cachedModified: Long = -1L
+    private val cacheRef = AtomicReference<CacheEntry?>(null)
 
     private const val MAX_INSTRUCTION_CHARS = 8_000
+
+    private data class ReferencedTools(
+        val all: Set<String>,
+        val catalog: Set<String>,
+        val explicit: Set<String>
+    )
 
     fun setActiveProfile(profileName: String) {
         val normalized = normalizeProfileName(profileName)
@@ -85,19 +92,32 @@ object AgentProfileLoader {
             return emptyList()
         }
         val referencedTools = extractReferencedTools(text)
-        if (referencedTools.isEmpty()) return emptyList()
-        val missing = referencedTools
+        if (referencedTools.all.isEmpty()) return emptyList()
+        val missing = referencedTools.all
             .filter { it !in availableTools }
             .sorted()
         if (missing.isEmpty()) return emptyList()
-        return missing.map { tool ->
+        return missing.mapNotNull { tool ->
             val reason = disabledReasons[tool]
+            if (reason != null && shouldSuppressMissingWarning(tool, reason, referencedTools)) {
+                return@mapNotNull null
+            }
             if (reason != null) {
                 "Profile references MCP tool '$tool': $reason"
             } else {
                 "Profile references MCP tool '$tool' but it is disabled or unavailable."
             }
         }
+    }
+
+    private fun shouldSuppressMissingWarning(
+        tool: String,
+        reason: String,
+        referencedTools: ReferencedTools
+    ): Boolean {
+        val fromCatalogOnly = tool in referencedTools.catalog && tool !in referencedTools.explicit
+        if (!fromCatalogOnly) return false
+        return reason.contains("requires Unsafe mode", ignoreCase = true)
     }
 
     fun ensureBundledProfilesInstalled() {
@@ -180,8 +200,10 @@ object AgentProfileLoader {
             BackendDiagnostics.logError("Failed to read AGENTS profile timestamp: ${profilePath}. ${e.message}")
             -1L
         }
-        if (profilePath == cachedPath && modified == cachedModified) {
-            return cachedProfile
+        // Atomic read of the entire cache entry — no torn reads
+        val cached = cacheRef.get()
+        if (cached != null && profilePath == cached.path && modified == cached.modified) {
+            return cached.profile
         }
 
         val text = try {
@@ -191,9 +213,8 @@ object AgentProfileLoader {
             return null
         }
         val parsed = parseProfile(text)
-        cachedProfile = parsed
-        cachedPath = profilePath
-        cachedModified = modified
+        // Atomic write of all three fields together
+        cacheRef.set(CacheEntry(path = profilePath, modified = modified, profile = parsed))
         return parsed
     }
 
@@ -233,9 +254,7 @@ object AgentProfileLoader {
     }
 
     private fun invalidateCache() {
-        cachedProfile = null
-        cachedPath = null
-        cachedModified = -1L
+        cacheRef.set(null)
     }
 
     private fun baseDir(): Path {
@@ -308,8 +327,9 @@ object AgentProfileLoader {
         return AgentProfile(global = global, sections = parsedSections)
     }
 
-    private fun extractReferencedTools(text: String): Set<String> {
-        val tools = linkedSetOf<String>()
+    private fun extractReferencedTools(text: String): ReferencedTools {
+        val catalogTools = linkedSetOf<String>()
+        val explicitTools = linkedSetOf<String>()
         val lines = text.replace("\r\n", "\n").replace("\r", "\n").lines()
         val toolListHeaderPattern = Regex("^\\s*Available\\s+MCP\\s+Tools\\s*:\\s*$", RegexOption.IGNORE_CASE)
         val sectionHeaderPattern = Regex("^\\s*\\[[A-Za-z0-9_\\-]+]\\s*$")
@@ -330,14 +350,22 @@ object AgentProfileLoader {
                 } else {
                     bulletEntryPattern.find(line)?.groupValues?.getOrNull(1)?.let { toolExpr ->
                         toolTokenPattern.findAll(toolExpr).forEach { token ->
-                            tools.add(token.value.lowercase())
+                            catalogTools.add(token.value.lowercase())
                         }
                     }
                 }
             }
-            slashToolPattern.findAll(line).forEach { m -> tools.add(m.groupValues[1].lowercase()) }
-            jsonToolPattern.findAll(line).forEach { m -> tools.add(m.groupValues[1].lowercase()) }
+            slashToolPattern.findAll(line).forEach { m -> explicitTools.add(m.groupValues[1].lowercase()) }
+            jsonToolPattern.findAll(line).forEach { m -> explicitTools.add(m.groupValues[1].lowercase()) }
         }
-        return tools
+        val allTools = linkedSetOf<String>().apply {
+            addAll(catalogTools)
+            addAll(explicitTools)
+        }
+        return ReferencedTools(
+            all = allTools,
+            catalog = catalogTools,
+            explicit = explicitTools
+        )
     }
 }
