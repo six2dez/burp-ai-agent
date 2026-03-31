@@ -221,6 +221,10 @@ class SettingsPanel(
         preferredSize = java.awt.Dimension(120, preferredSize.height)
         maximumSize = java.awt.Dimension(120, preferredSize.height)
     }
+    private val mcpAllowUnpreprocessedProxyHistory = JCheckBox(
+        "Allow AI to request unpreprocessed proxy responses",
+        settings.mcpSettings.allowUnpreprocessedProxyHistory
+    )
     private val mcpUnsafe = JCheckBox("Unsafe mode (allow write/mutation tools)", settings.mcpSettings.unsafeEnabled)
     private val preprocessProxyHistory = ToggleSwitch(settings.preprocessProxyHistory)
     private val preprocessMaxResponseSizeKb = JSpinner(
@@ -465,6 +469,8 @@ class SettingsPanel(
             "Maximum number of proxy HTTP history items AI can request in one call."
         mcpProxyHistorySortOrder.toolTipText =
             "Default order for proxy HTTP history listings."
+        mcpAllowUnpreprocessedProxyHistory.toolTipText =
+            "Allow or block AI access to unpreprocessed proxy history responses."
         mcpUnsafe.toolTipText = "Allow tools that modify Burp state or send active requests."
         mcpTokenRegenerate.font = UiTheme.Typography.label
         mcpTokenRegenerate.isFocusPainted = false
@@ -927,6 +933,7 @@ class SettingsPanel(
                 ?: Defaults.MCP_PROXY_HISTORY_MAX_ITEMS_PER_REQUEST,
             proxyHistoryNewestFirst =
                 (mcpProxyHistorySortOrder.selectedItem as? String) != "Oldest first",
+            allowUnpreprocessedProxyHistory = mcpAllowUnpreprocessedProxyHistory.isSelected,
             toolToggles = collectMcpToolToggles(),
             enabledUnsafeTools = collectEnabledUnsafeTools(),
             unsafeEnabled = mcpUnsafe.isSelected
@@ -1112,6 +1119,7 @@ class SettingsPanel(
         mcpProxyHistoryMaxItems.value = updated.mcpSettings.proxyHistoryMaxItemsPerRequest
         mcpProxyHistorySortOrder.selectedItem =
             if (updated.mcpSettings.proxyHistoryNewestFirst) "Newest first" else "Oldest first"
+        mcpAllowUnpreprocessedProxyHistory.isSelected = updated.mcpSettings.allowUnpreprocessedProxyHistory
         mcpUnsafe.isSelected = updated.mcpSettings.unsafeEnabled
         preprocessProxyHistory.isSelected = updated.preprocessProxyHistory
         preprocessMaxResponseSizeKb.value = updated.preprocessMaxResponseSizeKb
@@ -1885,6 +1893,7 @@ class SettingsPanel(
             mcpMaxBodyMb = mcpMaxBodyMb,
             mcpProxyHistoryMaxItems = mcpProxyHistoryMaxItems,
             mcpProxyHistorySortOrder = mcpProxyHistorySortOrder,
+            mcpAllowUnpreprocessedProxyHistory = mcpAllowUnpreprocessedProxyHistory,
             mcpUnsafe = mcpUnsafe,
             preprocessProxyHistory = preprocessProxyHistory,
             preprocessMaxResponseSizeKb = preprocessMaxResponseSizeKb,

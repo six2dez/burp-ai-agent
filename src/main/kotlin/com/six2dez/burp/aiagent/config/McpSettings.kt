@@ -23,6 +23,7 @@ data class McpSettings(
     val maxBodyBytes: Int,
     val proxyHistoryMaxItemsPerRequest: Int = Defaults.MCP_PROXY_HISTORY_MAX_ITEMS_PER_REQUEST,
     val proxyHistoryNewestFirst: Boolean = Defaults.MCP_PROXY_HISTORY_NEWEST_FIRST,
+    val allowUnpreprocessedProxyHistory: Boolean = Defaults.MCP_ALLOW_UNPREPROCESSED_PROXY_HISTORY,
     val toolToggles: Map<String, Boolean>,
     val enabledUnsafeTools: Set<String>,
     val unsafeEnabled: Boolean

@@ -27,6 +27,7 @@ class McpConfigPanel(
     private val mcpMaxBodyMb: JComponent,
     private val mcpProxyHistoryMaxItems: JComponent,
     private val mcpProxyHistorySortOrder: JComponent,
+    private val mcpAllowUnpreprocessedProxyHistory: JComponent,
     private val mcpUnsafe: JComponent,
     private val preprocessProxyHistory: JComponent,
     private val preprocessMaxResponseSizeKb: JComponent,
@@ -76,6 +77,8 @@ class McpConfigPanel(
         addRowFull(grid, "Unsafe mode", mcpUnsafe)
         addSpacerRow(grid, 4)
         addRowFull(grid, "Proxy history preprocessing (master switch)", preprocessProxyHistory)
+        addSpacerRow(grid, 4)
+        addRowFull(grid, "↳ Allow unpreprocessed proxy history", mcpAllowUnpreprocessedProxyHistory)
         addSpacerRow(grid, 4)
         addRowFull(grid, "↳ Max response size (KB)", preprocessMaxResponseSizeKb)
         addSpacerRow(grid, 4)

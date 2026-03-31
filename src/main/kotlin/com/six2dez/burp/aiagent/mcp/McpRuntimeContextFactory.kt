@@ -35,6 +35,7 @@ class McpRuntimeContextFactory(private val api: MontoyaApi) {
             maxBodyBytes = settings.maxBodyBytes,
             proxyHistoryMaxItemsPerRequest = settings.proxyHistoryMaxItemsPerRequest,
             proxyHistoryNewestFirst = settings.proxyHistoryNewestFirst,
+            allowUnpreprocessedProxyHistory = settings.allowUnpreprocessedProxyHistory,
             preprocessProxyHistory = preprocessSettings.preprocessProxyHistory,
             preprocessMaxResponseSizeKb = preprocessSettings.preprocessMaxResponseSizeKb,
             preprocessFilterBinaryContent = preprocessSettings.preprocessFilterBinaryContent,

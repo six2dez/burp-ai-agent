@@ -102,7 +102,7 @@ internal fun Server.registerToolHandler(toolId: String, context: McpToolContext)
     addTool(
         name = descriptor.id,
         description = descriptor.description,
-        inputSchema = McpToolExecutor.inputSchema(descriptor.id),
+        inputSchema = McpToolExecutor.inputSchema(descriptor.id, context),
         handler = { request ->
             val argsJson = request.arguments.toString().takeIf { it != "null" }
             val startMs = System.currentTimeMillis()

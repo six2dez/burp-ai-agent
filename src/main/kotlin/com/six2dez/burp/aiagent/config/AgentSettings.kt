@@ -554,6 +554,7 @@ class AgentSettingsRepository(api: MontoyaApi) {
         private const val KEY_MCP_MAX_BODY_BYTES = "mcp.max.body.bytes"
         private const val KEY_MCP_PROXY_HISTORY_MAX_ITEMS = "mcp.proxy.history.max.items"
         private const val KEY_MCP_PROXY_HISTORY_NEWEST_FIRST = "mcp.proxy.history.newest.first"
+        private const val KEY_MCP_ALLOW_UNPREPROCESSED_PROXY_HISTORY = "mcp.proxy.history.allow.unpreprocessed"
         private const val KEY_MCP_TOOL_TOGGLES = "mcp.tools.toggles"
         private const val KEY_MCP_UNSAFE_TOOLS = "mcp.unsafe.tools"
         private const val KEY_MCP_UNSAFE = "mcp.unsafe.enabled"
@@ -844,6 +845,7 @@ Response Language: English.
                 maxBodyBytes = 2 * 1024 * 1024,
                 proxyHistoryMaxItemsPerRequest = Defaults.MCP_PROXY_HISTORY_MAX_ITEMS_PER_REQUEST,
                 proxyHistoryNewestFirst = Defaults.MCP_PROXY_HISTORY_NEWEST_FIRST,
+                allowUnpreprocessedProxyHistory = Defaults.MCP_ALLOW_UNPREPROCESSED_PROXY_HISTORY,
                 toolToggles = emptyMap(),
                 enabledUnsafeTools = emptySet(),
                 unsafeEnabled = false
@@ -937,6 +939,9 @@ Response Language: English.
                     ?: Defaults.MCP_PROXY_HISTORY_MAX_ITEMS_PER_REQUEST).coerceIn(1, 500),
             proxyHistoryNewestFirst =
                 prefs.getBoolean(KEY_MCP_PROXY_HISTORY_NEWEST_FIRST) ?: Defaults.MCP_PROXY_HISTORY_NEWEST_FIRST,
+            allowUnpreprocessedProxyHistory =
+                prefs.getBoolean(KEY_MCP_ALLOW_UNPREPROCESSED_PROXY_HISTORY)
+                    ?: Defaults.MCP_ALLOW_UNPREPROCESSED_PROXY_HISTORY,
             toolToggles = toolToggles,
             enabledUnsafeTools = enabledUnsafeTools,
             unsafeEnabled = prefs.getBoolean(KEY_MCP_UNSAFE) ?: false
@@ -967,6 +972,7 @@ Response Language: English.
             settings.proxyHistoryMaxItemsPerRequest.coerceIn(1, 500)
         )
         prefs.setBoolean(KEY_MCP_PROXY_HISTORY_NEWEST_FIRST, settings.proxyHistoryNewestFirst)
+        prefs.setBoolean(KEY_MCP_ALLOW_UNPREPROCESSED_PROXY_HISTORY, settings.allowUnpreprocessedProxyHistory)
         prefs.setString(KEY_MCP_TOOL_TOGGLES, McpSettings.serializeToolToggles(settings.toolToggles))
         prefs.setString(KEY_MCP_UNSAFE_TOOLS, McpSettings.serializeUnsafeToolSet(settings.enabledUnsafeTools))
         prefs.setBoolean(KEY_MCP_UNSAFE, settings.unsafeEnabled)
