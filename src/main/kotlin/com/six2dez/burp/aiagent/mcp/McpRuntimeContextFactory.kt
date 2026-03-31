@@ -33,6 +33,8 @@ class McpRuntimeContextFactory(private val api: MontoyaApi) {
             limiter = limiter,
             edition = api.burpSuite().version().edition(),
             maxBodyBytes = settings.maxBodyBytes,
+            proxyHistoryMaxItemsPerRequest = settings.proxyHistoryMaxItemsPerRequest,
+            proxyHistoryNewestFirst = settings.proxyHistoryNewestFirst,
             preprocessProxyHistory = preprocessSettings.preprocessProxyHistory,
             preprocessMaxResponseSizeKb = preprocessSettings.preprocessMaxResponseSizeKb,
             preprocessFilterBinaryContent = preprocessSettings.preprocessFilterBinaryContent,

@@ -587,14 +587,11 @@ private fun Server.registerToolsLegacy(api: MontoyaApi, context: McpToolContext)
         context,
         toolName = "proxy_http_history"
     ) {
+        ensureAllowedProxyHistoryCount(count, context.proxyHistoryMaxItemsPerRequest)
         val items = api.proxy().history()
-        val seq = if (context.determinismMode) {
-            items.sortedBy { it.request()?.toString().orEmpty() }.asSequence()
-        } else {
-            items.asSequence()
-        }
+        val seq = orderedProxyHistory(items, context) { it.request()?.toString().orEmpty() }
         val preprocess = context.responsePreprocessorSettings().copy(
-            preprocessProxyHistory = !includeUnprocessedResponse
+            preprocessProxyHistory = !includeUnpreprocessedResponse
         )
         seq.map { truncateIfNeeded(toolJson.encodeToString(it.toSerializableForm(preprocess)), context.maxBodyBytes) }
     }
@@ -604,15 +601,12 @@ private fun Server.registerToolsLegacy(api: MontoyaApi, context: McpToolContext)
         context,
         toolName = "proxy_http_history_regex"
     ) {
+        ensureAllowedProxyHistoryCount(count, context.proxyHistoryMaxItemsPerRequest)
         val compiledRegex = Pattern.compile(regex)
         val items = api.proxy().history { it.contains(compiledRegex) }
-        val seq = if (context.determinismMode) {
-            items.sortedBy { it.request()?.toString().orEmpty() }.asSequence()
-        } else {
-            items.asSequence()
-        }
+        val seq = orderedProxyHistory(items, context) { it.request()?.toString().orEmpty() }
         val preprocess = context.responsePreprocessorSettings().copy(
-            preprocessProxyHistory = !includeUnprocessedResponse
+            preprocessProxyHistory = !includeUnpreprocessedResponse
         )
         seq.map { truncateIfNeeded(toolJson.encodeToString(it.toSerializableForm(preprocess)), context.maxBodyBytes) }
     }
@@ -960,6 +954,26 @@ private fun truncateIfNeeded(serialized: String, maxBodyBytes: Int): String {
     if (bytes.size <= limit) return serialized
     val truncated = String(bytes, 0, limit, Charsets.UTF_8)
     return "$truncated... (truncated ${bytes.size} bytes to ${limit} bytes)"
+}
+
+private fun ensureAllowedProxyHistoryCount(requestedCount: Int, maxAllowedCount: Int) {
+    if (requestedCount <= maxAllowedCount) return
+    throw IllegalArgumentException(
+        "Requested count $requestedCount exceeds MCP proxy history limit $maxAllowedCount. " +
+            "Reduce count."
+    )
+}
+
+private fun <T> orderedProxyHistory(
+    items: List<T>,
+    context: McpToolContext,
+    deterministicKey: (T) -> String
+): Sequence<T> {
+    return if (context.determinismMode) {
+        items.sortedBy(deterministicKey).asSequence()
+    } else {
+        if (context.proxyHistoryNewestFirst) items.asReversed().asSequence() else items.asSequence()
+    }
 }
 
 private fun decodeJwt(token: String): String {
@@ -1579,15 +1593,12 @@ object McpToolExecutor {
                 }
                 "proxy_http_history" -> {
                     val input = decode<GetProxyHttpHistory>(normalizedArgs)
+                    ensureAllowedProxyHistoryCount(input.count, context.proxyHistoryMaxItemsPerRequest)
                     val items = api.proxy().history()
                     val preprocess = context.responsePreprocessorSettings().copy(
-                        preprocessProxyHistory = !input.includeUnprocessedResponse
+                        preprocessProxyHistory = !input.includeUnpreprocessedResponse
                     )
-                    val seq = if (context.determinismMode) {
-                        items.sortedBy { it.request()?.toString().orEmpty() }.asSequence()
-                    } else {
-                        items.asSequence()
-                    }
+                    val seq = orderedProxyHistory(items, context) { it.request()?.toString().orEmpty() }
                     context.limitedJoin(
                         seq.drop(input.offset)
                             .take(input.count)
@@ -1596,16 +1607,13 @@ object McpToolExecutor {
                 }
                 "proxy_http_history_regex" -> {
                     val input = decode<GetProxyHttpHistoryRegex>(normalizedArgs)
+                    ensureAllowedProxyHistoryCount(input.count, context.proxyHistoryMaxItemsPerRequest)
                     val compiledRegex = Pattern.compile(input.regex)
                     val items = api.proxy().history { it.contains(compiledRegex) }
                     val preprocess = context.responsePreprocessorSettings().copy(
-                        preprocessProxyHistory = !input.includeUnprocessedResponse
+                        preprocessProxyHistory = !input.includeUnpreprocessedResponse
                     )
-                    val seq = if (context.determinismMode) {
-                        items.sortedBy { it.request()?.toString().orEmpty() }.asSequence()
-                    } else {
-                        items.asSequence()
-                    }
+                    val seq = orderedProxyHistory(items, context) { it.request()?.toString().orEmpty() }
                     context.limitedJoin(
                         seq.drop(input.offset)
                             .take(input.count)
@@ -2208,7 +2216,7 @@ data class GenerateScannerReport(
 data class GetProxyHttpHistory(
     override val count: Int = 5,
     override val offset: Int = 0,
-    val includeUnprocessedResponse: Boolean = false
+    val includeUnpreprocessedResponse: Boolean = false
 ) : Paginated
 
 @Serializable
@@ -2216,7 +2224,7 @@ data class GetProxyHttpHistoryRegex(
     val regex: String,
     override val count: Int = 5,
     override val offset: Int = 0,
-    val includeUnprocessedResponse: Boolean = false
+    val includeUnpreprocessedResponse: Boolean = false
 ) : Paginated
 
 @Serializable

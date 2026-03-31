@@ -210,6 +210,17 @@ class SettingsPanel(
         preferredSize = java.awt.Dimension(70, preferredSize.height)
         maximumSize = java.awt.Dimension(70, preferredSize.height)
     }
+    private val mcpProxyHistoryMaxItems = JSpinner(
+        SpinnerNumberModel(settings.mcpSettings.proxyHistoryMaxItemsPerRequest, 1, 500, 1)
+    ).apply {
+        preferredSize = java.awt.Dimension(70, preferredSize.height)
+        maximumSize = java.awt.Dimension(70, preferredSize.height)
+    }
+    private val mcpProxyHistorySortOrder = JComboBox(arrayOf("Newest first", "Oldest first")).apply {
+        selectedItem = if (settings.mcpSettings.proxyHistoryNewestFirst) "Newest first" else "Oldest first"
+        preferredSize = java.awt.Dimension(120, preferredSize.height)
+        maximumSize = java.awt.Dimension(120, preferredSize.height)
+    }
     private val mcpUnsafe = JCheckBox("Unsafe mode (allow write/mutation tools)", settings.mcpSettings.unsafeEnabled)
     private val preprocessProxyHistory = ToggleSwitch(settings.preprocessProxyHistory)
     private val preprocessMaxResponseSizeKb = JSpinner(
@@ -409,6 +420,7 @@ class SettingsPanel(
 
         styleCombo(privacyMode)
         styleCombo(profilePicker)
+        styleCombo(mcpProxyHistorySortOrder)
         preferredBackend.toolTipText = "Default backend used for new sessions and context actions."
         profilePicker.toolTipText = "Select the AGENTS profile used for system instructions."
         refreshProfilesBtn.toolTipText = "Reload AGENTS profiles from disk."
@@ -449,6 +461,10 @@ class SettingsPanel(
         mcpKeystorePassword.toolTipText = "Password for the TLS keystore."
         mcpMaxConcurrent.toolTipText = "Maximum number of concurrent MCP tool requests."
         mcpMaxBodyMb.toolTipText = "Max tool output size in MB."
+        mcpProxyHistoryMaxItems.toolTipText =
+            "Maximum number of proxy HTTP history items AI can request in one call."
+        mcpProxyHistorySortOrder.toolTipText =
+            "Default order for proxy HTTP history listings."
         mcpUnsafe.toolTipText = "Allow tools that modify Burp state or send active requests."
         mcpTokenRegenerate.font = UiTheme.Typography.label
         mcpTokenRegenerate.isFocusPainted = false
@@ -906,6 +922,11 @@ class SettingsPanel(
             collaboratorClientTtlMinutes = settings.mcpSettings.collaboratorClientTtlMinutes,
             maxConcurrentRequests = (mcpMaxConcurrent.value as? Int) ?: 4,
             maxBodyBytes = ((mcpMaxBodyMb.value as? Int) ?: 2).coerceAtLeast(1) * 1024 * 1024,
+            proxyHistoryMaxItemsPerRequest = (mcpProxyHistoryMaxItems.value as? Int)
+                ?.coerceIn(1, 500)
+                ?: Defaults.MCP_PROXY_HISTORY_MAX_ITEMS_PER_REQUEST,
+            proxyHistoryNewestFirst =
+                (mcpProxyHistorySortOrder.selectedItem as? String) != "Oldest first",
             toolToggles = collectMcpToolToggles(),
             enabledUnsafeTools = collectEnabledUnsafeTools(),
             unsafeEnabled = mcpUnsafe.isSelected
@@ -1088,6 +1109,9 @@ class SettingsPanel(
         mcpKeystorePassword.text = updated.mcpSettings.tlsKeystorePassword
         mcpMaxConcurrent.value = updated.mcpSettings.maxConcurrentRequests
         mcpMaxBodyMb.value = (updated.mcpSettings.maxBodyBytes / (1024 * 1024)).coerceAtLeast(1)
+        mcpProxyHistoryMaxItems.value = updated.mcpSettings.proxyHistoryMaxItemsPerRequest
+        mcpProxyHistorySortOrder.selectedItem =
+            if (updated.mcpSettings.proxyHistoryNewestFirst) "Newest first" else "Oldest first"
         mcpUnsafe.isSelected = updated.mcpSettings.unsafeEnabled
         preprocessProxyHistory.isSelected = updated.preprocessProxyHistory
         preprocessMaxResponseSizeKb.value = updated.preprocessMaxResponseSizeKb
@@ -1859,6 +1883,8 @@ class SettingsPanel(
             mcpRiskWarning = mcpRiskWarning,
             mcpMaxConcurrent = mcpMaxConcurrent,
             mcpMaxBodyMb = mcpMaxBodyMb,
+            mcpProxyHistoryMaxItems = mcpProxyHistoryMaxItems,
+            mcpProxyHistorySortOrder = mcpProxyHistorySortOrder,
             mcpUnsafe = mcpUnsafe,
             preprocessProxyHistory = preprocessProxyHistory,
             preprocessMaxResponseSizeKb = preprocessMaxResponseSizeKb,

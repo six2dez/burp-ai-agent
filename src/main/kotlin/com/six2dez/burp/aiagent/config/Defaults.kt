@@ -25,6 +25,8 @@ object Defaults {
     const val PREPROCESS_PROXY_HISTORY_ENABLED = true
     const val PREPROCESS_MAX_RESPONSE_SIZE_KB = 20
     const val PREPROCESS_FILTER_BINARY_CONTENT = true
+    const val MCP_PROXY_HISTORY_MAX_ITEMS_PER_REQUEST = 20
+    const val MCP_PROXY_HISTORY_NEWEST_FIRST = true
     val PREPROCESS_ALLOWED_CONTENT_TYPES: Set<String> = setOf(
         "text/",
         "application/json",

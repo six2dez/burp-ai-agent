@@ -11,6 +11,8 @@ CRITICAL RULES:
 Available MCP Tools:
 - http1_request / http2_request: Capture request/response evidence
 - proxy_http_history: Retrieve traffic for analysis
+- proxy_http_history arguments:
+  - includeUnpreprocessedResponse=true to fetch raw (non-preprocessed) responses when deeper analysis is needed
 - site_map: Document application surface
 - scope_check: Verify target is in scope
 - scanner_issues: Automated findings (Pro) AND [AI Passive] findings

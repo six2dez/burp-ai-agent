@@ -25,6 +25,8 @@ class McpConfigPanel(
     private val mcpRiskWarning: JComponent,
     private val mcpMaxConcurrent: JComponent,
     private val mcpMaxBodyMb: JComponent,
+    private val mcpProxyHistoryMaxItems: JComponent,
+    private val mcpProxyHistorySortOrder: JComponent,
     private val mcpUnsafe: JComponent,
     private val preprocessProxyHistory: JComponent,
     private val preprocessMaxResponseSizeKb: JComponent,
@@ -68,6 +70,8 @@ class McpConfigPanel(
         addRowFull(grid, "Max concurrent requests", mcpMaxConcurrent)
         addSpacerRow(grid, 4)
         addRowFull(grid, "Max body size (MB)", mcpMaxBodyMb)
+        addSpacerRow(grid, 4)
+        addRowPair(grid, "Proxy history max items", mcpProxyHistoryMaxItems, "Proxy history sort", mcpProxyHistorySortOrder)
         addSpacerRow(grid, 4)
         addRowFull(grid, "Unsafe mode", mcpUnsafe)
         addSpacerRow(grid, 4)
