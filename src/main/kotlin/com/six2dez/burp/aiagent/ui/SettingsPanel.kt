@@ -95,6 +95,11 @@ class SettingsPanel(
             openAiCompatApiKey = settings.openAiCompatibleApiKey,
             openAiCompatHeaders = settings.openAiCompatibleHeaders,
             openAiCompatTimeoutSeconds = settings.openAiCompatibleTimeoutSeconds.toString(),
+            nvidiaNimUrl = settings.nvidiaNimUrl,
+            nvidiaNimModel = settings.nvidiaNimModel,
+            nvidiaNimApiKey = settings.nvidiaNimApiKey,
+            nvidiaNimHeaders = settings.nvidiaNimHeaders,
+            nvidiaNimTimeoutSeconds = settings.nvidiaNimTimeoutSeconds.toString(),
             copilotCmd = settings.copilotCmd
         )
     )
@@ -858,6 +863,10 @@ class SettingsPanel(
             backendState.openAiCompatTimeoutSeconds,
             settings.openAiCompatibleTimeoutSeconds
         )
+        val nvidiaNimTimeoutSeconds = parseTimeoutSeconds(
+            backendState.nvidiaNimTimeoutSeconds,
+            settings.nvidiaNimTimeoutSeconds
+        )
         return AgentSettings(
             codexCmd = backendState.codexCmd,
             geminiCmd = backendState.geminiCmd,
@@ -885,6 +894,11 @@ class SettingsPanel(
             openAiCompatibleApiKey = backendState.openAiCompatApiKey,
             openAiCompatibleHeaders = backendState.openAiCompatHeaders,
             openAiCompatibleTimeoutSeconds = openAiCompatTimeoutSeconds,
+            nvidiaNimUrl = backendState.nvidiaNimUrl,
+            nvidiaNimModel = backendState.nvidiaNimModel,
+            nvidiaNimApiKey = backendState.nvidiaNimApiKey,
+            nvidiaNimHeaders = backendState.nvidiaNimHeaders,
+            nvidiaNimTimeoutSeconds = nvidiaNimTimeoutSeconds,
             copilotCmd = backendState.copilotCmd,
             requestPromptTemplate = promptRequest.text.trim(),
             issuePromptTemplate = promptIssueFull.text.trim(),
@@ -971,6 +985,11 @@ class SettingsPanel(
                 openAiCompatApiKey = updated.openAiCompatibleApiKey,
                 openAiCompatHeaders = updated.openAiCompatibleHeaders,
                 openAiCompatTimeoutSeconds = updated.openAiCompatibleTimeoutSeconds.toString(),
+                nvidiaNimUrl = updated.nvidiaNimUrl,
+                nvidiaNimModel = updated.nvidiaNimModel,
+                nvidiaNimApiKey = updated.nvidiaNimApiKey,
+                nvidiaNimHeaders = updated.nvidiaNimHeaders,
+                nvidiaNimTimeoutSeconds = updated.nvidiaNimTimeoutSeconds.toString(),
                 copilotCmd = updated.copilotCmd
             )
         )

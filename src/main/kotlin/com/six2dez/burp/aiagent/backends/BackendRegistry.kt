@@ -8,6 +8,7 @@ import com.six2dez.burp.aiagent.backends.cli.ClaudeCliBackendFactory
 import com.six2dez.burp.aiagent.backends.cli.CopilotCliBackendFactory
 import com.six2dez.burp.aiagent.backends.http.HttpBackendSupport
 import com.six2dez.burp.aiagent.backends.lmstudio.LmStudioBackendFactory
+import com.six2dez.burp.aiagent.backends.nvidia.NvidiaNimBackendFactory
 import com.six2dez.burp.aiagent.backends.ollama.OllamaBackendFactory
 import com.six2dez.burp.aiagent.backends.openai.OpenAiCompatibleBackendFactory
 import com.six2dez.burp.aiagent.config.AgentSettings
@@ -43,6 +44,7 @@ class BackendRegistry(private val api: MontoyaApi) {
                 ClaudeCliBackendFactory(),
                 LmStudioBackendFactory(),
                 OllamaBackendFactory(),
+                NvidiaNimBackendFactory(),
                 OpenAiCompatibleBackendFactory(),
                 CopilotCliBackendFactory()
             ).forEach { f ->

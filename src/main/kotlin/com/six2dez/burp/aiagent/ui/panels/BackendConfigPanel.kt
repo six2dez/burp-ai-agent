@@ -43,6 +43,11 @@ data class BackendConfigState(
     val openAiCompatApiKey: String = "",
     val openAiCompatHeaders: String = "",
     val openAiCompatTimeoutSeconds: String = "",
+    val nvidiaNimUrl: String = "https://integrate.api.nvidia.com",
+    val nvidiaNimModel: String = "",
+    val nvidiaNimApiKey: String = "",
+    val nvidiaNimHeaders: String = "",
+    val nvidiaNimTimeoutSeconds: String = "",
     val copilotCmd: String = ""
 )
 
@@ -78,6 +83,11 @@ class BackendConfigPanel(
     private val openAiCompatApiKey = JPasswordField(initialState.openAiCompatApiKey)
     private val openAiCompatHeaders = JTextArea(initialState.openAiCompatHeaders, 3, 20)
     private val openAiCompatTimeout = JTextField(initialState.openAiCompatTimeoutSeconds)
+    private val nvidiaNimUrl = JTextField(initialState.nvidiaNimUrl)
+    private val nvidiaNimModel = JTextField(initialState.nvidiaNimModel)
+    private val nvidiaNimApiKey = JPasswordField(initialState.nvidiaNimApiKey)
+    private val nvidiaNimHeaders = JTextArea(initialState.nvidiaNimHeaders, 3, 20)
+    private val nvidiaNimTimeout = JTextField(initialState.nvidiaNimTimeoutSeconds)
     private val copilotCmd = JTextField(initialState.copilotCmd)
 
     init {
@@ -106,6 +116,11 @@ class BackendConfigPanel(
         applyFieldStyle(openAiCompatApiKey)
         applyAreaStyle(openAiCompatHeaders)
         applyFieldStyle(openAiCompatTimeout)
+        applyFieldStyle(nvidiaNimUrl)
+        applyFieldStyle(nvidiaNimModel)
+        applyFieldStyle(nvidiaNimApiKey)
+        applyAreaStyle(nvidiaNimHeaders)
+        applyFieldStyle(nvidiaNimTimeout)
         applyFieldStyle(copilotCmd)
 
         codexCmd.toolTipText = "Command used to launch Codex CLI."
@@ -132,6 +147,11 @@ class BackendConfigPanel(
         openAiCompatApiKey.toolTipText = "API key (Authorization: Bearer ...)."
         openAiCompatHeaders.toolTipText = "Extra headers (one per line: Header: value)."
         openAiCompatTimeout.toolTipText = "Request timeout in seconds."
+        nvidiaNimUrl.toolTipText = "Base URL for NVIDIA NIM. Leave the default unless you use a custom endpoint."
+        nvidiaNimModel.toolTipText = "Model name sent to NVIDIA NIM (for example, moonshotai/kimi-k2.5)."
+        nvidiaNimApiKey.toolTipText = "NVIDIA API key (Authorization: Bearer ...)."
+        nvidiaNimHeaders.toolTipText = "Extra headers (one per line: Header: value)."
+        nvidiaNimTimeout.toolTipText = "Request timeout in seconds."
         copilotCmd.toolTipText = "Command used to launch Copilot CLI (e.g., copilot)."
 
         cards.add(buildSingleFieldPanelWithCli("Codex CLI command", codexCmd, "codex-cli") { codexCmd.text.trim() }, "codex-cli")
@@ -141,6 +161,7 @@ class BackendConfigPanel(
         cards.add(buildOllamaPanel(), "ollama")
         cards.add(buildLmStudioPanel(), "lmstudio")
         cards.add(buildOpenAiCompatPanel(), "openai-compatible")
+        cards.add(buildNvidiaNimPanel(), "nvidia-nim")
         cards.add(buildSingleFieldPanelWithCli("Copilot CLI command", copilotCmd, "copilot-cli") { copilotCmd.text.trim() }, "copilot-cli")
 
         add(cards, BorderLayout.CENTER)
@@ -176,6 +197,11 @@ class BackendConfigPanel(
             openAiCompatApiKey = String(openAiCompatApiKey.password).trim(),
             openAiCompatHeaders = openAiCompatHeaders.text.trim(),
             openAiCompatTimeoutSeconds = openAiCompatTimeout.text.trim(),
+            nvidiaNimUrl = nvidiaNimUrl.text.trim(),
+            nvidiaNimModel = nvidiaNimModel.text.trim(),
+            nvidiaNimApiKey = String(nvidiaNimApiKey.password).trim(),
+            nvidiaNimHeaders = nvidiaNimHeaders.text.trim(),
+            nvidiaNimTimeoutSeconds = nvidiaNimTimeout.text.trim(),
             copilotCmd = copilotCmd.text.trim()
         )
     }
@@ -205,6 +231,11 @@ class BackendConfigPanel(
         openAiCompatApiKey.text = state.openAiCompatApiKey
         openAiCompatHeaders.text = state.openAiCompatHeaders
         openAiCompatTimeout.text = state.openAiCompatTimeoutSeconds
+        nvidiaNimUrl.text = state.nvidiaNimUrl
+        nvidiaNimModel.text = state.nvidiaNimModel
+        nvidiaNimApiKey.text = state.nvidiaNimApiKey
+        nvidiaNimHeaders.text = state.nvidiaNimHeaders
+        nvidiaNimTimeout.text = state.nvidiaNimTimeoutSeconds
         copilotCmd.text = state.copilotCmd
     }
 
@@ -304,6 +335,20 @@ class BackendConfigPanel(
         addRow(panel, 3, "API key (Bearer)", openAiCompatApiKey)
         addRow(panel, 4, "Extra headers", JScrollPane(openAiCompatHeaders))
         addRow(panel, 5, "Timeout (seconds)", openAiCompatTimeout)
+        addVerticalFiller(panel, 6)
+        return panel
+    }
+
+    private fun buildNvidiaNimPanel(): JPanel {
+        val panel = JPanel(GridBagLayout())
+        panel.background = UiTheme.Colors.surface
+        panel.border = EmptyBorder(8, 8, 8, 8)
+        addRow(panel, 0, "Base URL", nvidiaNimUrl)
+        addButtonRow(panel, 1, buildButtonRowPanel(buildTestConnectionButton("nvidia-nim")))
+        addRow(panel, 2, "Model", nvidiaNimModel)
+        addRow(panel, 3, "API key (Bearer)", nvidiaNimApiKey)
+        addRow(panel, 4, "Extra headers", JScrollPane(nvidiaNimHeaders))
+        addRow(panel, 5, "Timeout (seconds)", nvidiaNimTimeout)
         addVerticalFiller(panel, 6)
         return panel
     }

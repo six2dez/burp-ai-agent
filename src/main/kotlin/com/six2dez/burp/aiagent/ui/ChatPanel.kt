@@ -506,7 +506,7 @@ class ChatPanel(
                     session.totalTokensOut += tokOut
                 }
                 if (err != null) {
-                    SwingUtilities.invokeLater { assistant.append("\n[Error] ${err.message}") }
+                    SwingUtilities.invokeLater { assistant.finish("\n[Error] ${err.message}") }
                     onCompleted?.invoke(responseBuffer.toString(), err)
                 } else {
                     val finalResp = responseBuffer.toString()
@@ -1438,6 +1438,14 @@ class ChatPanel(
 
         fun appendChunk(text: String) {
             append(text)
+        }
+
+        fun finish(text: String) {
+            if (firstChunk) {
+                message.hideSpinner()
+                firstChunk = false
+            }
+            message.append(text)
         }
     }
 

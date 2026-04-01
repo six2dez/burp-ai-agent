@@ -641,6 +641,31 @@ class AgentSupervisor(
                     cliSessionId = cliSessionId
                 )
             }
+            "nvidia-nim" -> {
+                val url = (settings?.nvidiaNimUrl ?: prefs.getString("nvidia.nim.url") ?: "https://integrate.api.nvidia.com").trim()
+                val model = (settings?.nvidiaNimModel ?: prefs.getString("nvidia.nim.model") ?: "").trim()
+                val timeoutSeconds = settings?.nvidiaNimTimeoutSeconds
+                    ?: (prefs.getInteger("nvidia.nim.timeoutSeconds") ?: Defaults.CLI_PROCESS_TIMEOUT_SECONDS)
+                val apiKey = settings?.nvidiaNimApiKey ?: prefs.getString("nvidia.nim.apiKey").orEmpty()
+                val rawHeaders = settings?.nvidiaNimHeaders ?: prefs.getString("nvidia.nim.headers").orEmpty()
+                val headers = HeaderParser.withBearerToken(
+                    apiKey,
+                    HeaderParser.parse(rawHeaders)
+                )
+                BackendLaunchConfig(
+                    backendId = backendId,
+                    displayName = "NVIDIA NIM",
+                    baseUrl = url,
+                    model = model,
+                    headers = headers,
+                    requestTimeoutSeconds = timeoutSeconds.toLong(),
+                    embeddedMode = embeddedMode,
+                    sessionId = sessionId,
+                    determinismMode = determinism,
+                    env = baseEnv,
+                    cliSessionId = cliSessionId
+                )
+            }
             "copilot-cli" -> {
                 val cmd = (settings?.copilotCmd ?: prefs.getString("copilot.cmd") ?: "copilot").trim()
                 val env = embeddedCliEnv(baseEnv, embeddedMode)

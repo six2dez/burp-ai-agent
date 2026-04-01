@@ -9,7 +9,7 @@ Burp AI Agent is an extension for Burp Suite that integrates AI into your securi
 
 ## Highlights
 
-- **7 AI Backends** — Ollama, LM Studio, Generic OpenAI-compatible, Gemini CLI, Claude CLI, Codex CLI, OpenCode CLI.
+- **9 AI Backends** — Ollama, LM Studio, NVIDIA NIM, Generic OpenAI-compatible, Gemini CLI, Claude CLI, Codex CLI, OpenCode CLI, Copilot CLI.
 - **53+ MCP Tools** — Let Claude Desktop (or any MCP client) drive Burp autonomously.
 - **62 Vulnerability Classes** — Passive and Active AI scanners across injection, auth, crypto, and more.
 - **3 Privacy Modes** — STRICT / BALANCED / OFF. Redact sensitive data before it leaves Burp.
@@ -50,11 +50,24 @@ Open the **AI Agent** tab and go to **Settings**. Pick a backend:
 | :--- | :--- | :--- |
 | **Ollama** | Local HTTP | Install [Ollama](https://ollama.com), run `ollama serve`, pull a model (`ollama pull llama3.1`). |
 | **LM Studio** | Local HTTP | Install [LM Studio](https://lmstudio.ai), load a model, start the server. |
+| **NVIDIA NIM** | HTTP | Use the default `https://integrate.api.nvidia.com` endpoint, set your NVIDIA API key, and choose a model such as `moonshotai/kimi-k2.5`. |
 | **Generic OpenAI-compatible** | HTTP | Provide a base URL and model for any OpenAI-compatible provider. |
 | **Gemini CLI** | Cloud CLI | Install `gemini`, run `gemini auth login`. |
 | **Claude CLI** | Cloud CLI | Install `claude`, set `ANTHROPIC_API_KEY` or run `claude login`. |
 | **Codex CLI** | Cloud CLI | Install `codex`, set `OPENAI_API_KEY`. |
 | **OpenCode CLI** | Cloud CLI | Install `opencode`, configure provider credentials. |
+| **Copilot CLI** | Cloud CLI | Install `copilot` and sign in with your GitHub account. |
+
+For **NVIDIA NIM**, the backend expects the same chat-completions style flow as the NVIDIA hosted endpoint. A working configuration is:
+
+```text
+Backend: NVIDIA NIM
+Base URL: https://integrate.api.nvidia.com
+Model: moonshotai/kimi-k2.5
+API Key: <your nvapi token>
+```
+
+Leave extra headers empty unless your gateway requires them. The extension sends requests to `/v1/chat/completions` and uses the configured bearer token automatically.
 
 ### 5. Run Your First Analysis
 

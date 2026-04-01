@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.4.1] - 2026-03-26
+
+### Added
+
+- **NVIDIA NIM Backend**:
+  - New NVIDIA NIM backend with SSE streaming, `chat_template_kwargs.thinking` support, and POST-based health checks against the chat completions endpoint.
+  - Backend configuration fields in the UI for NVIDIA NIM URL, model, API key, custom headers, and timeout.
+  - `OpenAiCompatibleBackend` now supports streaming mode, payload customization hooks, default headers, and custom health check providers, enabling new OpenAI-compatible backends with minimal boilerplate.
+
+### Changed
+
+- **HTTP 429 Chat Error Handling**:
+  - Improved chat error handling so HTTP 429 and other error responses no longer leave the UI stuck on "Thinking...".
+
 ## [0.4.0] - 2026-03-06
 
 

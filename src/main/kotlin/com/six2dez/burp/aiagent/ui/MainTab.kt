@@ -601,6 +601,13 @@ class MainTab(
                     else -> null
                 }
             }
+            "nvidia-nim" -> {
+                when {
+                    settings.nvidiaNimUrl.isBlank() -> "NVIDIA NIM URL is empty."
+                    settings.nvidiaNimModel.isBlank() -> "NVIDIA NIM model is empty."
+                    else -> null
+                }
+            }
             else -> "Unsupported backend: ${settings.preferredBackendId}"
         }
     }

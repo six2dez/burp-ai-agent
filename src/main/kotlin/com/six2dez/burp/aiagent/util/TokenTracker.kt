@@ -105,7 +105,7 @@ object TokenTracker {
 
     private fun charsPerTokenForBackend(backendId: String?): Double {
         return when (backendId?.trim()?.lowercase()) {
-            "openai-compatible" -> 3.6
+            "openai-compatible", "nvidia-nim" -> 3.6
             "ollama", "lmstudio" -> 3.8
             "claude-cli" -> 3.5
             "gemini-cli" -> 3.7

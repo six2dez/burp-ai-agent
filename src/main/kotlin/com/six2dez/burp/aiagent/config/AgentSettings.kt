@@ -47,6 +47,11 @@ data class AgentSettings(
     val openAiCompatibleApiKey: String,
     val openAiCompatibleHeaders: String,
     val openAiCompatibleTimeoutSeconds: Int,
+    val nvidiaNimUrl: String = "https://integrate.api.nvidia.com",
+    val nvidiaNimModel: String = "",
+    val nvidiaNimApiKey: String = "",
+    val nvidiaNimHeaders: String = "",
+    val nvidiaNimTimeoutSeconds: Int = 60,
     val copilotCmd: String = "",
     val requestPromptTemplate: String,
     val issuePromptTemplate: String,
@@ -148,6 +153,14 @@ class AgentSettingsRepository(api: MontoyaApi) {
             openAiCompatibleHeaders = prefs.getString(KEY_OPENAI_COMPAT_HEADERS).orEmpty(),
             openAiCompatibleTimeoutSeconds = (prefs.getInteger(KEY_OPENAI_COMPAT_TIMEOUT) ?: defaultOpenAiCompatTimeoutSeconds())
                 .coerceIn(30, 3600),
+            nvidiaNimUrl = (prefs.getString(KEY_NVIDIA_NIM_URL) ?: defaultNvidiaNimUrl()).trim().ifBlank {
+                defaultNvidiaNimUrl()
+            },
+            nvidiaNimModel = prefs.getString(KEY_NVIDIA_NIM_MODEL).orEmpty().trim(),
+            nvidiaNimApiKey = prefs.getString(KEY_NVIDIA_NIM_API_KEY).orEmpty().trim(),
+            nvidiaNimHeaders = prefs.getString(KEY_NVIDIA_NIM_HEADERS).orEmpty(),
+            nvidiaNimTimeoutSeconds = (prefs.getInteger(KEY_NVIDIA_NIM_TIMEOUT) ?: defaultNvidiaNimTimeoutSeconds())
+                .coerceIn(30, 3600),
             copilotCmd = prefs.getString(KEY_COPILOT_CMD).orEmpty().trim().ifBlank { defaultCopilotCmd() },
             requestPromptTemplate = prefs.getString(KEY_PROMPT_FIND_VULNS).orEmpty().ifBlank { defaultRequestPrompt() },
             issuePromptTemplate = prefs.getString(KEY_PROMPT_FULL_REPORT).orEmpty().ifBlank { defaultIssuePrompt() },
@@ -239,6 +252,11 @@ class AgentSettingsRepository(api: MontoyaApi) {
             openAiCompatibleApiKey = "",
             openAiCompatibleHeaders = "",
             openAiCompatibleTimeoutSeconds = defaultOpenAiCompatTimeoutSeconds(),
+            nvidiaNimUrl = defaultNvidiaNimUrl(),
+            nvidiaNimModel = "",
+            nvidiaNimApiKey = "",
+            nvidiaNimHeaders = "",
+            nvidiaNimTimeoutSeconds = defaultNvidiaNimTimeoutSeconds(),
             copilotCmd = defaultCopilotCmd(),
             requestPromptTemplate = defaultRequestPrompt(),
             issuePromptTemplate = defaultIssuePrompt(),
@@ -323,6 +341,11 @@ class AgentSettingsRepository(api: MontoyaApi) {
         prefs.setString(KEY_OPENAI_COMPAT_API_KEY, settings.openAiCompatibleApiKey)
         prefs.setString(KEY_OPENAI_COMPAT_HEADERS, settings.openAiCompatibleHeaders)
         prefs.setInteger(KEY_OPENAI_COMPAT_TIMEOUT, settings.openAiCompatibleTimeoutSeconds.coerceIn(30, 3600))
+        prefs.setString(KEY_NVIDIA_NIM_URL, settings.nvidiaNimUrl)
+        prefs.setString(KEY_NVIDIA_NIM_MODEL, settings.nvidiaNimModel)
+        prefs.setString(KEY_NVIDIA_NIM_API_KEY, settings.nvidiaNimApiKey)
+        prefs.setString(KEY_NVIDIA_NIM_HEADERS, settings.nvidiaNimHeaders)
+        prefs.setInteger(KEY_NVIDIA_NIM_TIMEOUT, settings.nvidiaNimTimeoutSeconds.coerceIn(30, 3600))
         prefs.setString(KEY_COPILOT_CMD, settings.copilotCmd)
         prefs.setString(KEY_PROMPT_FIND_VULNS, settings.requestPromptTemplate)
         prefs.setString(KEY_PROMPT_FULL_REPORT, settings.issuePromptTemplate)
@@ -472,6 +495,11 @@ class AgentSettingsRepository(api: MontoyaApi) {
         private const val KEY_OPENAI_COMPAT_API_KEY = "openai.compat.apiKey"
         private const val KEY_OPENAI_COMPAT_HEADERS = "openai.compat.headers"
         private const val KEY_OPENAI_COMPAT_TIMEOUT = "openai.compat.timeoutSeconds"
+        private const val KEY_NVIDIA_NIM_URL = "nvidia.nim.url"
+        private const val KEY_NVIDIA_NIM_MODEL = "nvidia.nim.model"
+        private const val KEY_NVIDIA_NIM_API_KEY = "nvidia.nim.apiKey"
+        private const val KEY_NVIDIA_NIM_HEADERS = "nvidia.nim.headers"
+        private const val KEY_NVIDIA_NIM_TIMEOUT = "nvidia.nim.timeoutSeconds"
         private const val KEY_COPILOT_CMD = "copilot.cmd"
         private const val KEY_PROMPT_FIND_VULNS = "prompt.find_vulns"
         private const val KEY_PROMPT_QUICK_RECON = "prompt.quick_recon"
@@ -607,6 +635,14 @@ class AgentSettingsRepository(api: MontoyaApi) {
         }
 
         private fun defaultOpenAiCompatTimeoutSeconds(): Int {
+            return Defaults.CLI_PROCESS_TIMEOUT_SECONDS
+        }
+
+        private fun defaultNvidiaNimUrl(): String {
+            return "https://integrate.api.nvidia.com"
+        }
+
+        private fun defaultNvidiaNimTimeoutSeconds(): Int {
             return Defaults.CLI_PROCESS_TIMEOUT_SECONDS
         }
 
