@@ -19,6 +19,7 @@ import io.modelcontextprotocol.kotlin.sdk.server.ServerOptions
 import io.modelcontextprotocol.kotlin.sdk.server.mcp
 import com.six2dez.burp.aiagent.audit.AiRequestLogger
 import com.six2dez.burp.aiagent.config.McpSettings
+import com.six2dez.burp.aiagent.mcp.tools.ResponsePreprocessorSettings
 import com.six2dez.burp.aiagent.mcp.tools.registerTools
 import com.six2dez.burp.aiagent.redact.PrivacyMode
 import java.security.MessageDigest
@@ -39,7 +40,13 @@ class KtorMcpServerManager(
         contextFactory.aiRequestLogger = logger
     }
 
-    override fun start(settings: McpSettings, privacyMode: PrivacyMode, determinismMode: Boolean, callback: (McpServerState) -> Unit) {
+    override fun start(
+        settings: McpSettings,
+        privacyMode: PrivacyMode,
+        determinismMode: Boolean,
+        preprocessSettings: ResponsePreprocessorSettings,
+        callback: (McpServerState) -> Unit
+    ) {
         callback(McpServerState.Starting)
         executor.submit {
             try {
@@ -53,7 +60,7 @@ class KtorMcpServerManager(
                     throw IllegalStateException("MCP host must be loopback when external access is disabled.")
                 }
 
-                val context = contextFactory.create(settings, privacyMode, determinismMode)
+                val context = contextFactory.create(settings, privacyMode, determinismMode, preprocessSettings)
                 val externalCorsHosts = parseExternalCorsHosts(settings.allowedOrigins)
                 if (settings.externalEnabled && externalCorsHosts.isEmpty()) {
                     api.logging().logToOutput(

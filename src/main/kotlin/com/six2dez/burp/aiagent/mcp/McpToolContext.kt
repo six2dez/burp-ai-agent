@@ -3,7 +3,9 @@ package com.six2dez.burp.aiagent.mcp
 import burp.api.montoya.MontoyaApi
 import burp.api.montoya.core.BurpSuiteEdition
 import com.six2dez.burp.aiagent.audit.AiRequestLogger
+import com.six2dez.burp.aiagent.config.Defaults
 import com.six2dez.burp.aiagent.mcp.tools.LimitedStringBuilder
+import com.six2dez.burp.aiagent.mcp.tools.ResponsePreprocessorSettings
 import com.six2dez.burp.aiagent.redact.PrivacyMode
 import com.six2dez.burp.aiagent.redact.Redaction
 import com.six2dez.burp.aiagent.redact.RedactionPolicy
@@ -20,6 +22,13 @@ data class McpToolContext(
     val limiter: McpRequestLimiter,
     val edition: BurpSuiteEdition,
     val maxBodyBytes: Int,
+    val proxyHistoryMaxItemsPerRequest: Int = Defaults.MCP_PROXY_HISTORY_MAX_ITEMS_PER_REQUEST,
+    val proxyHistoryNewestFirst: Boolean = Defaults.MCP_PROXY_HISTORY_NEWEST_FIRST,
+    val allowUnpreprocessedProxyHistory: Boolean = Defaults.MCP_ALLOW_UNPREPROCESSED_PROXY_HISTORY,
+    val preprocessProxyHistory: Boolean = Defaults.PREPROCESS_PROXY_HISTORY_ENABLED,
+    val preprocessMaxResponseSizeKb: Int = Defaults.PREPROCESS_MAX_RESPONSE_SIZE_KB,
+    val preprocessFilterBinaryContent: Boolean = Defaults.PREPROCESS_FILTER_BINARY_CONTENT,
+    val preprocessAllowedContentTypes: Set<String> = Defaults.PREPROCESS_ALLOWED_CONTENT_TYPES,
     val aiRequestLogger: AiRequestLogger? = null
 ) {
     fun isToolEnabled(name: String): Boolean = toolToggles[name] ?: false
@@ -59,5 +68,14 @@ data class McpToolContext(
             first = false
         }
         return builder.build()
+    }
+
+    fun responsePreprocessorSettings(): ResponsePreprocessorSettings {
+        return ResponsePreprocessorSettings(
+            preprocessProxyHistory = preprocessProxyHistory,
+            preprocessMaxResponseSizeKb = preprocessMaxResponseSizeKb,
+            preprocessFilterBinaryContent = preprocessFilterBinaryContent,
+            preprocessAllowedContentTypes = preprocessAllowedContentTypes
+        )
     }
 }

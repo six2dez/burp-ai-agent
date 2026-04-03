@@ -3,6 +3,7 @@ package com.six2dez.burp.aiagent.mcp
 import burp.api.montoya.MontoyaApi
 import com.six2dez.burp.aiagent.audit.AiRequestLogger
 import com.six2dez.burp.aiagent.config.McpSettings
+import com.six2dez.burp.aiagent.mcp.tools.ResponsePreprocessorSettings
 import com.six2dez.burp.aiagent.redact.PrivacyMode
 
 class McpRuntimeContextFactory(private val api: MontoyaApi) {
@@ -12,7 +13,8 @@ class McpRuntimeContextFactory(private val api: MontoyaApi) {
     fun create(
         settings: McpSettings,
         privacyMode: PrivacyMode,
-        determinismMode: Boolean
+        determinismMode: Boolean,
+        preprocessSettings: ResponsePreprocessorSettings
     ): McpToolContext {
         val tools = McpToolCatalog.mergeWithDefaults(settings.toolToggles)
         val unsafeTools = McpToolCatalog.unsafeToolIds()
@@ -31,6 +33,13 @@ class McpRuntimeContextFactory(private val api: MontoyaApi) {
             limiter = limiter,
             edition = api.burpSuite().version().edition(),
             maxBodyBytes = settings.maxBodyBytes,
+            proxyHistoryMaxItemsPerRequest = settings.proxyHistoryMaxItemsPerRequest,
+            proxyHistoryNewestFirst = settings.proxyHistoryNewestFirst,
+            allowUnpreprocessedProxyHistory = settings.allowUnpreprocessedProxyHistory,
+            preprocessProxyHistory = preprocessSettings.preprocessProxyHistory,
+            preprocessMaxResponseSizeKb = preprocessSettings.preprocessMaxResponseSizeKb,
+            preprocessFilterBinaryContent = preprocessSettings.preprocessFilterBinaryContent,
+            preprocessAllowedContentTypes = preprocessSettings.preprocessAllowedContentTypes,
             aiRequestLogger = aiRequestLogger
         )
     }

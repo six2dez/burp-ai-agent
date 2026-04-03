@@ -3,6 +3,7 @@ package com.six2dez.burp.aiagent.mcp
 import burp.api.montoya.MontoyaApi
 import com.six2dez.burp.aiagent.audit.AiRequestLogger
 import com.six2dez.burp.aiagent.config.McpSettings
+import com.six2dez.burp.aiagent.mcp.tools.ResponsePreprocessorSettings
 import com.six2dez.burp.aiagent.redact.PrivacyMode
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -48,7 +49,12 @@ class McpSupervisorRestartPolicyTest {
             takeoverRetryDelayMs = 10
         )
 
-        supervisor.applySettings(settings(enabled = true), PrivacyMode.STRICT, determinismMode = false)
+        supervisor.applySettings(
+            settings(enabled = true),
+            PrivacyMode.STRICT,
+            determinismMode = false,
+            preprocessSettings = ResponsePreprocessorSettings()
+        )
 
         assertTrue(manager.awaitStarts(timeoutMs = 1_000))
         assertEquals(2, manager.startCalls.get())
@@ -84,7 +90,12 @@ class McpSupervisorRestartPolicyTest {
             takeoverRetryDelayMs = 10
         )
 
-        supervisor.applySettings(settings(enabled = true), PrivacyMode.STRICT, determinismMode = false)
+        supervisor.applySettings(
+            settings(enabled = true),
+            PrivacyMode.STRICT,
+            determinismMode = false,
+            preprocessSettings = ResponsePreprocessorSettings()
+        )
 
         assertTrue(manager.awaitStarts(timeoutMs = 1_000))
         Thread.sleep(50)
@@ -150,6 +161,7 @@ class McpSupervisorRestartPolicyTest {
             settings: McpSettings,
             privacyMode: PrivacyMode,
             determinismMode: Boolean,
+            preprocessSettings: ResponsePreprocessorSettings,
             callback: (McpServerState) -> Unit
         ) {
             startCalls.incrementAndGet()

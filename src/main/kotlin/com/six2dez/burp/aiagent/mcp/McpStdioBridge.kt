@@ -3,6 +3,7 @@ package com.six2dez.burp.aiagent.mcp
 import burp.api.montoya.MontoyaApi
 import com.six2dez.burp.aiagent.audit.AiRequestLogger
 import com.six2dez.burp.aiagent.config.McpSettings
+import com.six2dez.burp.aiagent.mcp.tools.ResponsePreprocessorSettings
 import com.six2dez.burp.aiagent.mcp.tools.registerTools
 import com.six2dez.burp.aiagent.redact.PrivacyMode
 import io.modelcontextprotocol.kotlin.sdk.Implementation
@@ -34,9 +35,14 @@ class McpStdioBridge(
         contextFactory.aiRequestLogger = logger
     }
 
-    fun start(settings: McpSettings, privacyMode: PrivacyMode, determinismMode: Boolean) {
+    fun start(
+        settings: McpSettings,
+        privacyMode: PrivacyMode,
+        determinismMode: Boolean,
+        preprocessSettings: ResponsePreprocessorSettings
+    ) {
         stop()
-        val context = contextFactory.create(settings, privacyMode, determinismMode)
+        val context = contextFactory.create(settings, privacyMode, determinismMode, preprocessSettings)
 
         val mcpServer = Server(
             serverInfo = Implementation("burp-ai-agent", "0.1.0"),

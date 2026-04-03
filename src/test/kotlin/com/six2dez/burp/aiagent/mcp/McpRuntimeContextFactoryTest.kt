@@ -3,6 +3,7 @@ package com.six2dez.burp.aiagent.mcp
 import burp.api.montoya.MontoyaApi
 import burp.api.montoya.core.BurpSuiteEdition
 import com.six2dez.burp.aiagent.config.McpSettings
+import com.six2dez.burp.aiagent.mcp.tools.ResponsePreprocessorSettings
 import com.six2dez.burp.aiagent.redact.PrivacyMode
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -33,7 +34,8 @@ class McpRuntimeContextFactoryTest {
         val context = factory.create(
             settings = settings,
             privacyMode = PrivacyMode.STRICT,
-            determinismMode = true
+            determinismMode = true,
+            preprocessSettings = ResponsePreprocessorSettings()
         )
 
         assertEquals("mcp-token-123456", context.hostSalt)

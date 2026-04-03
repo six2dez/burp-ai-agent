@@ -6,6 +6,7 @@ import com.six2dez.burp.aiagent.audit.AuditLogger
 import com.six2dez.burp.aiagent.backends.HealthCheckResult
 import com.six2dez.burp.aiagent.backends.BackendRegistry
 import com.six2dez.burp.aiagent.config.AgentSettingsRepository
+import com.six2dez.burp.aiagent.config.toPreprocessorSettings
 import com.six2dez.burp.aiagent.context.ContextCapture
 import com.six2dez.burp.aiagent.mcp.McpSupervisor
 import com.six2dez.burp.aiagent.redact.PrivacyMode
@@ -91,7 +92,12 @@ class MainTab(
                 aiRequestLogger?.enabled = settings.aiRequestLoggerEnabled
                 aiRequestLogger?.maxEntries = settings.aiRequestLoggerMaxEntries
                 supervisor.applySettings(settings)
-                mcpSupervisor.applySettings(settings.mcpSettings, settings.privacyMode, settings.determinismMode)
+                mcpSupervisor.applySettings(
+                    settings.mcpSettings,
+                    settings.privacyMode,
+                    settings.determinismMode,
+                    settings.toPreprocessorSettings()
+                )
             },
             validateBackend = { validateBackendCommand(it) },
             ensureBackendReady = { ensureBackendReady(it) },
@@ -375,7 +381,12 @@ class MainTab(
             val settings = settingsPanel.currentSettings()
             val updated = settings.copy(mcpSettings = settings.mcpSettings.copy(enabled = enabled))
             settingsRepo.save(updated)
-            mcpSupervisor.applySettings(updated.mcpSettings, updated.privacyMode, updated.determinismMode)
+            mcpSupervisor.applySettings(
+                updated.mcpSettings,
+                updated.privacyMode,
+                updated.determinismMode,
+                updated.toPreprocessorSettings()
+            )
             renderStatus()
         }
         settingsPanel.onPassiveAiEnabledChanged = passiveSync@{ enabled ->
@@ -404,7 +415,12 @@ class MainTab(
             val settings = settingsPanel.currentSettings()
             val updated = settings.copy(mcpSettings = settings.mcpSettings.copy(enabled = enabled))
             settingsRepo.save(updated)
-            mcpSupervisor.applySettings(updated.mcpSettings, updated.privacyMode, updated.determinismMode)
+            mcpSupervisor.applySettings(
+                updated.mcpSettings,
+                updated.privacyMode,
+                updated.determinismMode,
+                updated.toPreprocessorSettings()
+            )
             renderStatus()
         }
         passiveToggle.addActionListener {

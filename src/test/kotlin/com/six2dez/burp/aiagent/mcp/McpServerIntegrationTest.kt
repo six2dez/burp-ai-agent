@@ -3,6 +3,7 @@ package com.six2dez.burp.aiagent.mcp
 import burp.api.montoya.MontoyaApi
 import burp.api.montoya.core.BurpSuiteEdition
 import com.six2dez.burp.aiagent.config.McpSettings
+import com.six2dez.burp.aiagent.mcp.tools.ResponsePreprocessorSettings
 import com.six2dez.burp.aiagent.redact.PrivacyMode
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -48,7 +49,12 @@ class McpServerIntegrationTest {
 
         val terminalState = AtomicReference<McpServerState?>()
         val started = CountDownLatch(1)
-        manager.start(settings, PrivacyMode.STRICT, determinismMode = false) { state ->
+        manager.start(
+            settings,
+            PrivacyMode.STRICT,
+            determinismMode = false,
+            preprocessSettings = ResponsePreprocessorSettings()
+        ) { state ->
             if (state is McpServerState.Running || state is McpServerState.Failed) {
                 terminalState.set(state)
                 started.countDown()

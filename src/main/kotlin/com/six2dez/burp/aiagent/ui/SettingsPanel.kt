@@ -6,8 +6,10 @@ import com.six2dez.burp.aiagent.backends.BackendRegistry
 import com.six2dez.burp.aiagent.backends.HealthCheckResult
 import com.six2dez.burp.aiagent.config.AgentSettings
 import com.six2dez.burp.aiagent.config.AgentSettingsRepository
+import com.six2dez.burp.aiagent.config.Defaults
 import com.six2dez.burp.aiagent.config.McpSettings
 import com.six2dez.burp.aiagent.config.SeverityLevel
+import com.six2dez.burp.aiagent.config.toPreprocessorSettings
 import com.six2dez.burp.aiagent.mcp.McpSupervisor
 import com.six2dez.burp.aiagent.mcp.McpToolCatalog
 import com.six2dez.burp.aiagent.agents.AgentProfileLoader
@@ -213,7 +215,38 @@ class SettingsPanel(
         preferredSize = java.awt.Dimension(70, preferredSize.height)
         maximumSize = java.awt.Dimension(70, preferredSize.height)
     }
+    private val mcpProxyHistoryMaxItems = JSpinner(
+        SpinnerNumberModel(settings.mcpSettings.proxyHistoryMaxItemsPerRequest, 1, 500, 1)
+    ).apply {
+        preferredSize = java.awt.Dimension(70, preferredSize.height)
+        maximumSize = java.awt.Dimension(70, preferredSize.height)
+    }
+    private val mcpProxyHistorySortOrder = JComboBox(arrayOf("Newest first", "Oldest first")).apply {
+        selectedItem = if (settings.mcpSettings.proxyHistoryNewestFirst) "Newest first" else "Oldest first"
+        preferredSize = java.awt.Dimension(120, preferredSize.height)
+        maximumSize = java.awt.Dimension(120, preferredSize.height)
+    }
+    private val mcpAllowUnpreprocessedProxyHistory = JCheckBox(
+        "Allow AI to request unpreprocessed proxy responses",
+        settings.mcpSettings.allowUnpreprocessedProxyHistory
+    )
     private val mcpUnsafe = JCheckBox("Unsafe mode (allow write/mutation tools)", settings.mcpSettings.unsafeEnabled)
+    private val preprocessProxyHistory = ToggleSwitch(settings.preprocessProxyHistory)
+    private val preprocessMaxResponseSizeKb = JSpinner(
+        SpinnerNumberModel(settings.preprocessMaxResponseSizeKb, 1, 10_240, 1)
+    ).apply {
+        preferredSize = java.awt.Dimension(80, preferredSize.height)
+        maximumSize = java.awt.Dimension(80, preferredSize.height)
+    }
+    private val preprocessFilterBinaryContent = JCheckBox(
+        "Filter binary content (images, video, audio)",
+        settings.preprocessFilterBinaryContent
+    )
+    private val preprocessAllowedContentTypes = JTextArea(
+        settings.preprocessAllowedContentTypes.joinToString(","),
+        3,
+        20
+    )
     private val mcpToolCheckboxes = mutableMapOf<String, JCheckBox>()
     private val mcpUnsafeApprovalCheckboxes = mutableMapOf<String, JCheckBox>()
     
@@ -381,6 +414,7 @@ class SettingsPanel(
         applyFieldStyle(mcpKeystorePath)
         applyFieldStyle(mcpToken)
         applyAreaStyle(mcpAllowedOrigins)
+        applyAreaStyle(preprocessAllowedContentTypes)
         applyAreaStyle(promptRequest)
         applyAreaStyle(promptSummary)
         applyAreaStyle(promptJs)
@@ -395,6 +429,7 @@ class SettingsPanel(
 
         styleCombo(privacyMode)
         styleCombo(profilePicker)
+        styleCombo(mcpProxyHistorySortOrder)
         preferredBackend.toolTipText = "Default backend used for new sessions and context actions."
         profilePicker.toolTipText = "Select the AGENTS profile used for system instructions."
         refreshProfilesBtn.toolTipText = "Reload AGENTS profiles from disk."
@@ -435,6 +470,12 @@ class SettingsPanel(
         mcpKeystorePassword.toolTipText = "Password for the TLS keystore."
         mcpMaxConcurrent.toolTipText = "Maximum number of concurrent MCP tool requests."
         mcpMaxBodyMb.toolTipText = "Max tool output size in MB."
+        mcpProxyHistoryMaxItems.toolTipText =
+            "Maximum number of proxy HTTP history items AI can request in one call."
+        mcpProxyHistorySortOrder.toolTipText =
+            "Default order for proxy HTTP history listings."
+        mcpAllowUnpreprocessedProxyHistory.toolTipText =
+            "Allow or block AI access to unpreprocessed proxy history responses."
         mcpUnsafe.toolTipText = "Allow tools that modify Burp state or send active requests."
         mcpTokenRegenerate.font = UiTheme.Typography.label
         mcpTokenRegenerate.isFocusPainted = false
@@ -470,6 +511,14 @@ class SettingsPanel(
         mcpStdio.font = UiTheme.Typography.body
         mcpUnsafe.font = UiTheme.Typography.body
         mcpUnsafe.toolTipText = "Allows tools that modify Burp state, write files, or send active requests."
+        preprocessProxyHistory.toolTipText =
+            "Preprocess proxy history before MCP returns it, reducing context-window overflow from large or binary responses."
+        preprocessMaxResponseSizeKb.toolTipText =
+            "Maximum response body size in KB before truncating with [SNIP - ...]."
+        preprocessFilterBinaryContent.toolTipText =
+            "Replace unreadable binary response bodies with a content-type placeholder."
+        preprocessAllowedContentTypes.toolTipText =
+            "Comma-separated allowed readable content-type prefixes (e.g. text/,application/json)."
         mcpCorsWarning.font = UiTheme.Typography.body
         mcpCorsWarning.foreground = UiTheme.Colors.onPrimary
         mcpCorsWarning.background = UiTheme.Colors.statusTerminal
@@ -884,6 +933,12 @@ class SettingsPanel(
             collaboratorClientTtlMinutes = settings.mcpSettings.collaboratorClientTtlMinutes,
             maxConcurrentRequests = (mcpMaxConcurrent.value as? Int) ?: 4,
             maxBodyBytes = ((mcpMaxBodyMb.value as? Int) ?: 2).coerceAtLeast(1) * 1024 * 1024,
+            proxyHistoryMaxItemsPerRequest = (mcpProxyHistoryMaxItems.value as? Int)
+                ?.coerceIn(1, 500)
+                ?: Defaults.MCP_PROXY_HISTORY_MAX_ITEMS_PER_REQUEST,
+            proxyHistoryNewestFirst =
+                (mcpProxyHistorySortOrder.selectedItem as? String) != "Oldest first",
+            allowUnpreprocessedProxyHistory = mcpAllowUnpreprocessedProxyHistory.isSelected,
             toolToggles = collectMcpToolToggles(),
             enabledUnsafeTools = collectEnabledUnsafeTools(),
             unsafeEnabled = mcpUnsafe.isSelected
@@ -954,6 +1009,14 @@ class SettingsPanel(
             autoRestart = autoRestart.isSelected,
             auditEnabled = auditEnabled.isSelected,
             mcpSettings = mcpSettings,
+            preprocessProxyHistory = preprocessProxyHistory.isSelected,
+            preprocessMaxResponseSizeKb = (preprocessMaxResponseSizeKb.value as? Int)
+                ?: Defaults.PREPROCESS_MAX_RESPONSE_SIZE_KB,
+            preprocessFilterBinaryContent = preprocessFilterBinaryContent.isSelected,
+            preprocessAllowedContentTypes = parseContentTypePrefixesInput(
+                preprocessAllowedContentTypes.text,
+                Defaults.PREPROCESS_ALLOWED_CONTENT_TYPES
+            ),
             passiveAiEnabled = passiveAiEnabled.isSelected,
             passiveAiRateSeconds = (passiveAiRateSpinner.value as? Int) ?: 5,
             passiveAiScopeOnly = passiveAiScopeOnly.isSelected,
@@ -1072,7 +1135,15 @@ class SettingsPanel(
         mcpKeystorePassword.text = updated.mcpSettings.tlsKeystorePassword
         mcpMaxConcurrent.value = updated.mcpSettings.maxConcurrentRequests
         mcpMaxBodyMb.value = (updated.mcpSettings.maxBodyBytes / (1024 * 1024)).coerceAtLeast(1)
+        mcpProxyHistoryMaxItems.value = updated.mcpSettings.proxyHistoryMaxItemsPerRequest
+        mcpProxyHistorySortOrder.selectedItem =
+            if (updated.mcpSettings.proxyHistoryNewestFirst) "Newest first" else "Oldest first"
+        mcpAllowUnpreprocessedProxyHistory.isSelected = updated.mcpSettings.allowUnpreprocessedProxyHistory
         mcpUnsafe.isSelected = updated.mcpSettings.unsafeEnabled
+        preprocessProxyHistory.isSelected = updated.preprocessProxyHistory
+        preprocessMaxResponseSizeKb.value = updated.preprocessMaxResponseSizeKb
+        preprocessFilterBinaryContent.isSelected = updated.preprocessFilterBinaryContent
+        preprocessAllowedContentTypes.text = updated.preprocessAllowedContentTypes.joinToString(",")
         applyMcpToolToggles(updated.mcpSettings.toolToggles)
         applyUnsafeToolApprovals(updated.mcpSettings.enabledUnsafeTools)
 
@@ -1159,6 +1230,16 @@ class SettingsPanel(
             .toList()
     }
 
+    private fun parseContentTypePrefixesInput(raw: String, fallback: Set<String>): Set<String> {
+        val parsed = raw
+            .split('\n', ',', ';')
+            .asSequence()
+            .map { it.trim().lowercase() }
+            .filter { it.isNotBlank() }
+            .toSet()
+        return if (parsed.isEmpty()) fallback else parsed
+    }
+
     private fun applyAndSaveSettings(updated: AgentSettings) {
         settings = updated
         settingsRepo.save(updated)
@@ -1166,7 +1247,12 @@ class SettingsPanel(
         backends.reload()
         supervisor.applySettings(updated)
         audit.setEnabled(updated.auditEnabled)
-        mcpSupervisor.applySettings(updated.mcpSettings, updated.privacyMode, updated.determinismMode)
+        mcpSupervisor.applySettings(
+            updated.mcpSettings,
+            updated.privacyMode,
+            updated.determinismMode,
+            updated.toPreprocessorSettings()
+        )
         
         // Apply passive AI scanner settings
         passiveAiScanner.rateLimitSeconds = updated.passiveAiRateSeconds
@@ -1819,7 +1905,18 @@ class SettingsPanel(
             mcpRiskWarning = mcpRiskWarning,
             mcpMaxConcurrent = mcpMaxConcurrent,
             mcpMaxBodyMb = mcpMaxBodyMb,
+            mcpProxyHistoryMaxItems = mcpProxyHistoryMaxItems,
+            mcpProxyHistorySortOrder = mcpProxyHistorySortOrder,
+            mcpAllowUnpreprocessedProxyHistory = mcpAllowUnpreprocessedProxyHistory,
             mcpUnsafe = mcpUnsafe,
+            preprocessProxyHistory = preprocessProxyHistory,
+            preprocessMaxResponseSizeKb = preprocessMaxResponseSizeKb,
+            preprocessFilterBinaryContent = preprocessFilterBinaryContent,
+            preprocessAllowedContentTypes = JScrollPane(preprocessAllowedContentTypes).apply {
+                border = LineBorder(UiTheme.Colors.outline, 1, true)
+                verticalScrollBarPolicy = JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED
+                horizontalScrollBarPolicy = JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
+            },
             tokenPanelFactory = ::tokenPanel,
             quickActionsFactory = ::mcpQuickActions
         ).build()

@@ -4,6 +4,8 @@ import burp.api.montoya.proxy.ProxyHttpRequestResponse
 import burp.api.montoya.proxy.ProxyWebSocketMessage
 import burp.api.montoya.scanner.audit.issues.AuditIssue
 import burp.api.montoya.websocket.Direction
+import com.six2dez.burp.aiagent.mcp.tools.ResponsePreprocessor
+import com.six2dez.burp.aiagent.mcp.tools.ResponsePreprocessorSettings
 import kotlinx.serialization.Serializable
 
 fun AuditIssue.toSerializableForm(): IssueDetails {
@@ -43,10 +45,19 @@ fun burp.api.montoya.http.message.HttpRequestResponse.toSerializableForm(): Http
     )
 }
 
-fun ProxyHttpRequestResponse.toSerializableForm(): HttpRequestResponse {
+fun ProxyHttpRequestResponse.toSerializableForm(
+    preprocessorSettings: ResponsePreprocessorSettings? = null
+): HttpRequestResponse {
+    val rawResponse = response()?.toString() ?: "<no response>"
+    val processedResponse = if (preprocessorSettings != null && rawResponse != "<no response>") {
+        ResponsePreprocessor.preprocessResponse(rawResponse, preprocessorSettings)
+    } else {
+        rawResponse
+    }
+
     return HttpRequestResponse(
         request = request()?.toString() ?: "<no request>",
-        response = response()?.toString() ?: "<no response>",
+        response = processedResponse,
         notes = annotations().notes()
     )
 }

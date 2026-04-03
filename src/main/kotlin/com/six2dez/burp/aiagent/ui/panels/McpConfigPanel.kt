@@ -25,7 +25,14 @@ class McpConfigPanel(
     private val mcpRiskWarning: JComponent,
     private val mcpMaxConcurrent: JComponent,
     private val mcpMaxBodyMb: JComponent,
+    private val mcpProxyHistoryMaxItems: JComponent,
+    private val mcpProxyHistorySortOrder: JComponent,
+    private val mcpAllowUnpreprocessedProxyHistory: JComponent,
     private val mcpUnsafe: JComponent,
+    private val preprocessProxyHistory: JComponent,
+    private val preprocessMaxResponseSizeKb: JComponent,
+    private val preprocessFilterBinaryContent: JComponent,
+    private val preprocessAllowedContentTypes: JComponent,
     private val tokenPanelFactory: () -> JPanel,
     private val quickActionsFactory: () -> JPanel
 ) : ConfigPanel {
@@ -65,7 +72,19 @@ class McpConfigPanel(
         addSpacerRow(grid, 4)
         addRowFull(grid, "Max body size (MB)", mcpMaxBodyMb)
         addSpacerRow(grid, 4)
+        addRowPair(grid, "Proxy history max items", mcpProxyHistoryMaxItems, "Proxy history sort", mcpProxyHistorySortOrder)
+        addSpacerRow(grid, 4)
         addRowFull(grid, "Unsafe mode", mcpUnsafe)
+        addSpacerRow(grid, 4)
+        addRowFull(grid, "Proxy history preprocessing (master switch)", preprocessProxyHistory)
+        addSpacerRow(grid, 4)
+        addRowFull(grid, "↳ Allow unpreprocessed proxy history", mcpAllowUnpreprocessedProxyHistory)
+        addSpacerRow(grid, 4)
+        addRowFull(grid, "↳ Max response size (KB)", preprocessMaxResponseSizeKb)
+        addSpacerRow(grid, 4)
+        addRowFull(grid, "↳ Filter binary content", preprocessFilterBinaryContent)
+        addSpacerRow(grid, 4)
+        addRowFull(grid, "↳ Allowed content type prefixes", preprocessAllowedContentTypes)
         addSpacerRow(grid, 6)
 
         val container = JPanel(BorderLayout())

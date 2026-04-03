@@ -12,6 +12,7 @@ import com.six2dez.burp.aiagent.audit.RollingLogConfig
 import com.six2dez.burp.aiagent.backends.BackendDiagnostics
 import com.six2dez.burp.aiagent.backends.BackendRegistry
 import com.six2dez.burp.aiagent.agents.AgentProfileLoader
+import com.six2dez.burp.aiagent.config.toPreprocessorSettings
 import com.six2dez.burp.aiagent.config.AgentSettingsRepository
 import com.six2dez.burp.aiagent.context.ContextCollector
 import com.six2dez.burp.aiagent.mcp.McpSupervisor
@@ -97,7 +98,12 @@ object App {
         }
         auditLogger.setEnabled(settings.auditEnabled)
         supervisor.applySettings(settings)
-        mcpSupervisor.applySettings(settings.mcpSettings, settings.privacyMode, settings.determinismMode)
+        mcpSupervisor.applySettings(
+            settings.mcpSettings,
+            settings.privacyMode,
+            settings.determinismMode,
+            settings.toPreprocessorSettings()
+        )
         
         // Initialize passive AI scanner
         passiveAiScanner.rateLimitSeconds = settings.passiveAiRateSeconds
