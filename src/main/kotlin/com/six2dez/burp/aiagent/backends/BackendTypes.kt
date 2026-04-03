@@ -1,5 +1,7 @@
 package com.six2dez.burp.aiagent.backends
 
+import com.six2dez.burp.aiagent.backends.http.MontoyaHttpTransport
+
 data class BackendLaunchConfig(
     val backendId: String,
     val displayName: String,
@@ -13,7 +15,8 @@ data class BackendLaunchConfig(
     val determinismMode: Boolean = false,
     val env: Map<String, String> = emptyMap(),
     val cliSessionId: String? = null,        // for CLI session resume (e.g. Claude --resume)
-    val contextWindow: Int? = null
+    val contextWindow: Int? = null,
+    val transport: MontoyaHttpTransport? = null
 )
 
 data class ChatMessage(val role: String, val content: String)
@@ -52,7 +55,9 @@ interface AgentConnection {
         history: List<ChatMessage>? = null,
         onChunk: (String) -> Unit,
         onComplete: (Throwable?) -> Unit,
-        systemPrompt: String? = null
+        systemPrompt: String? = null,
+        jsonMode: Boolean = false,
+        maxOutputTokens: Int? = null
     )
     fun stop()
 }
@@ -65,6 +70,8 @@ interface DiagnosableConnection {
 interface UsageAwareConnection {
     fun lastTokenUsage(): TokenUsage?
 }
+
+interface JsonModeCapable
 
 interface AiBackend {
     val id: String

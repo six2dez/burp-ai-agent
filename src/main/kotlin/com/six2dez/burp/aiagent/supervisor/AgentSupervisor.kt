@@ -12,6 +12,7 @@ import com.six2dez.burp.aiagent.backends.HealthCheckResult
 import com.six2dez.burp.aiagent.config.AgentSettings
 import com.six2dez.burp.aiagent.config.Defaults
 import com.six2dez.burp.aiagent.redact.PrivacyMode
+import com.six2dez.burp.aiagent.backends.http.MontoyaHttpTransport
 import com.six2dez.burp.aiagent.util.HeaderParser
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -53,6 +54,7 @@ class AgentSupervisor(
     private val autoRestartSuppressed = AtomicReference<String?>(null)
     private val immediateCrashCount = AtomicInteger(0)
     private val chatSessionManager = ChatSessionManager()
+    internal val httpTransport = MontoyaHttpTransport(api)
     private val services = java.util.concurrent.ConcurrentHashMap<String, Process>()
     private val lifecycleLock = ReentrantLock()
     private val monitorExec = Executors.newSingleThreadScheduledExecutor()
@@ -70,6 +72,8 @@ class AgentSupervisor(
         settingsRef.set(settings)
     }
 
+    fun isAiEnabled(): Boolean = try { api.ai().isEnabled() } catch (_: Exception) { false }
+
     fun currentSessionId(): String? {
         return (stateRef.get() as? AgentState.Running)?.sessionId
     }
@@ -77,6 +81,13 @@ class AgentSupervisor(
     fun lastStartError(): String? = lastErrorRef.get()
 
     fun startOrAttach(backendId: String): Boolean {
+        if (!isAiEnabled()) {
+            val msg = "AI features are disabled in Burp Suite settings. Enable 'Use AI' for extensions."
+            lastErrorRef.set(msg)
+            api.logging().logToOutput(msg)
+            return false
+        }
+
         // Phase 1: Acquire lock, transition state, prepare config — then release lock
         val backend: com.six2dez.burp.aiagent.backends.AiBackend
         val sessionId: String
@@ -229,8 +240,15 @@ class AgentSupervisor(
         onChunk: (String) -> Unit,
         onComplete: (Throwable?) -> Unit,
         traceId: String? = null,
-        systemPrompt: String? = null
+        systemPrompt: String? = null,
+        jsonMode: Boolean = false,
+        maxOutputTokens: Int? = null
     ) {
+        if (!isAiEnabled()) {
+            onComplete(IllegalStateException("AI features are disabled in Burp Suite settings."))
+            return
+        }
+
         val current = stateRef.get()
         if (current !is AgentState.Running) {
             onComplete(IllegalStateException("No active session"))
@@ -287,6 +305,8 @@ class AgentSupervisor(
                 audit.logEvent("agent_chunk", mapOf("backendId" to backendId, "chunk" to chunk))
                 onChunk(chunk)
             },
+            jsonMode = jsonMode,
+            maxOutputTokens = maxOutputTokens,
             onComplete = { err ->
                 val durationMs = System.currentTimeMillis() - sendStartMs
                 audit.logEvent("prompt_complete", mapOf("backendId" to backendId, "error" to err?.message))
@@ -342,8 +362,14 @@ class AgentSupervisor(
         onChunk: (String) -> Unit,
         onComplete: (Throwable?) -> Unit,
         traceId: String? = null,
-        systemPrompt: String? = null
+        systemPrompt: String? = null,
+        maxOutputTokens: Int? = null
     ): com.six2dez.burp.aiagent.backends.AgentConnection? {
+        if (!isAiEnabled()) {
+            onComplete(IllegalStateException("AI features are disabled in Burp Suite settings."))
+            return null
+        }
+
         lastErrorRef.set(null)
         val resolvedTraceId = traceId ?: "chat-turn-" + UUID.randomUUID().toString()
         val backend = registry.get(backendId)
@@ -399,6 +425,7 @@ class AgentSupervisor(
                 onChunk(chunk)
             },
             systemPrompt = systemPrompt,
+            maxOutputTokens = maxOutputTokens,
             onComplete = { err ->
                 val durationMs = System.currentTimeMillis() - chatSendStartMs
                 audit.logEvent("prompt_complete", mapOf("backendId" to backendId, "error" to err?.message))
@@ -449,6 +476,11 @@ class AgentSupervisor(
 
     fun removeChatSession(chatSessionId: String) {
         chatSessionManager.removeSession(chatSessionId)
+    }
+
+    /** Shutdown all live chat connections (e.g. on project change). */
+    fun shutdownAllChatSessions() {
+        chatSessionManager.shutdown()
     }
 
     fun status(): Status {
@@ -506,6 +538,13 @@ class AgentSupervisor(
         ) + mcpEnv
 
         return when (backendId) {
+            "burp-ai" -> BackendLaunchConfig(
+                backendId = backendId,
+                displayName = "Burp AI (built-in)",
+                sessionId = sessionId,
+                determinismMode = determinism,
+                env = baseEnv
+            )
             "codex-cli" -> {
                 val cmd = (settings?.codexCmd ?: prefs.getString("codex.cmd") ?: "codex").trim()
                 val env = embeddedCliEnv(baseEnv, embeddedMode)
@@ -588,7 +627,8 @@ class AgentSupervisor(
                     env = baseEnv,
                     cliSessionId = cliSessionId,
                     contextWindow = settings?.ollamaContextWindow
-                        ?: prefs.getInteger("ollama.contextWindow")
+                        ?: prefs.getInteger("ollama.contextWindow"),
+                    transport = httpTransport
                 )
             }
             "lmstudio" -> {
@@ -613,7 +653,8 @@ class AgentSupervisor(
                     sessionId = sessionId,
                     determinismMode = determinism,
                     env = baseEnv,
-                    cliSessionId = cliSessionId
+                    cliSessionId = cliSessionId,
+                    transport = httpTransport
                 )
             }
             "openai-compatible" -> {
@@ -638,7 +679,8 @@ class AgentSupervisor(
                     sessionId = sessionId,
                     determinismMode = determinism,
                     env = baseEnv,
-                    cliSessionId = cliSessionId
+                    cliSessionId = cliSessionId,
+                    transport = httpTransport
                 )
             }
             "nvidia-nim" -> {

@@ -15,6 +15,7 @@ import javax.net.ssl.HostnameVerifier
 import javax.net.ssl.HttpsURLConnection
 import javax.net.ssl.SSLSocketFactory
 
+@Suppress("DEPRECATION")
 class McpSupervisorConnectionTest {
 
     private val supervisor = McpSupervisor(mock<MontoyaApi>())

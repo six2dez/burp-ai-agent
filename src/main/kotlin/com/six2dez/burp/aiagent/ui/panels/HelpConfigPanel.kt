@@ -14,7 +14,7 @@ class HelpConfigPanel(
         val helpHtml = """
             <html>
               <body style="font-family: sans-serif; font-size: 12px;">
-                <b>Burp AI Agent - Quick Start</b><br/>
+                <b>Custom AI Agent - Quick Start</b><br/>
                 1. Toggle MCP on in the top bar.<br/>
                 2. Select your AI backend.<br/>
                 3. Right-click requests/issues for AI analysis.<br/>

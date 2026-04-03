@@ -4,9 +4,102 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [0.4.1] - 2026-03-26
+## [0.5.0] - 2026-04-02
 
 ### Added
+
+- **JS Endpoint Discovery**:
+  - New `JsEndpointExtractor` that extracts API endpoints from JavaScript responses using 8 regex patterns (fetch, axios, ajax, XMLHttpRequest, `/api/`, `/vN/`, variable assignments, and path literals).
+  - Automatic extraction in the passive scanner for JS MIME responses passing through the proxy, with LRU dedup cache (2000 entries).
+  - "Extract JS Endpoints" context menu entry for manual extraction with a scrollable results dialog.
+- **403 Bypass Testing**:
+  - New `ACCESS_CONTROL_BYPASS` vulnerability class in the active scanner with 3 bypass techniques: IP spoofing headers (9 headers), path manipulation (7 variations), and HTTP method switching.
+  - "Test 403 Bypass" context menu entry that filters selected requests to 403 status and queues them for active bypass testing.
+- **Keyword-Priority Response Sampling**:
+  - `PassiveAiScanner` and `ContextCollector` now append a `=== SECURITY-RELEVANT EXCERPTS ===` section when response bodies are truncated, surfacing security-relevant lines (tokens, keys, errors, auth headers) from beyond the truncation point.
+- **Finding Request/Response Markers**:
+  - New `IssueMarkerSupport` utility that adds Montoya API byte-range markers to audit issue evidence, highlighting injected payloads in requests and evidence strings in responses.
+  - Integrated in `ActiveAiScanner`, `AiScanCheck`, and `PassiveAiScanner` so findings show highlighted regions in Burp's request/response viewer.
+- **Site Map Tree Node Selection**:
+  - Context menu actions now work when right-clicking directory or root nodes in the site map tree (not just individual requests).
+  - Falls back to `api.siteMap().requestResponses()` when `selectedRequestResponses()` returns empty in `SITE_MAP_TREE` context, with "(site map - N)" labels indicating broader scope.
+
+- **Custom Targeted Tests** (#31):
+  - New "Custom..." item in the Targeted Tests context menu that opens a multi-select dialog with all 55+ vulnerability classes.
+  - Select All / Deselect All buttons for quick selection.
+- **Excluded File Extensions Filter** (#33):
+  - New configurable "Excluded extensions" setting in the passive scanner that skips requests to static files (CSS, JS, images, fonts, archives, etc.) by URL path extension.
+  - Default exclusion list covers 30+ common static file extensions to reduce unnecessary API calls and token usage.
+  - Persisted in Burp preferences and applied via `applyOptimizationSettings()`.
+
+- **MCP `issue_create` Tool Fix**:
+  - Fixed `issue_create` MCP tool returning "Unknown tool" because its execution handler was missing from the `executeToolResult()` dispatcher after the refactoring to the handler-based registration system.
+
+- **Batch Analysis (Passive Scanner)**:
+  - New `BatchAnalysisQueue` groups 3-5 proxy requests into a single AI call, reducing API calls by 60-70%.
+  - Batch prompt includes cross-request analysis instructions for detecting IDOR/BAC patterns across endpoints.
+  - Configurable via `Batch size (1=off)` setting (range: 1-5, default: 3).
+  - Flush triggers when batch is full or timeout expires (5s, checked on next request); explicit flush on shutdown.
+  - Fallback to individual single-request analysis if batch call fails (timeout, backend error, or backend unavailable).
+
+- **Structured Output (JSON Mode)**:
+  - HTTP backends (OpenAI-compatible, LM Studio, Ollama) now request structured JSON output (`response_format: json_object` / `format: json`) for scanner analysis calls.
+  - New `JsonModeCapable` marker interface and `jsonMode` parameter on `AgentConnection.send()`.
+  - Eliminates JSON parsing errors from markdown wrapping, code fences, or mixed text in AI responses.
+  - CLI backends gracefully ignore the flag; existing text-based parsing remains as fallback.
+
+- **Persistent Prompt Cache**:
+  - New `PersistentPromptCache` stores AI analysis results to disk (`~/.burp-ai-agent/cache/`) as individual JSON files keyed by prompt hash.
+  - Results survive Burp restarts — same target scanned in different sessions returns instant cached results.
+  - Configurable TTL (1-168 hours, default: 24h) and max disk size (10-500 MB, default: 50 MB) with LRU eviction.
+  - Two-tier lookup: in-memory cache first, disk fallback, then AI call. Disk hits are promoted to in-memory.
+
+- **Cross-Scanner Knowledge Sharing**:
+  - New `ScanKnowledgeBase` singleton shared across passive scanner, active scanner, and chat.
+  - Passive scanner records tech stack hints (from `Server`, `X-Powered-By`, `X-ASPNet-Version` headers), auth patterns (session cookies, auth headers, API keys), and vulnerability signals per endpoint.
+  - Active scanner records confirmed findings and database technology hints (MySQL, PostgreSQL, MSSQL, Oracle, SQLite) from error pattern evidence.
+  - Knowledge base context (`=== PRIOR KNOWLEDGE ===`) is included in passive scanner AI prompts with tech stack, previous findings, and error patterns.
+  - Active scanner boosts priority (+20) for targets with high-priority signals in the knowledge base.
+
+- **Burp Scan Skill** (`skills/burp-scan/SKILL.md`):
+  - Standalone skill file that lets any AI coding assistant (Claude Code, Gemini CLI, Codex, etc.) operate Burp's MCP tools as a scanner from the terminal.
+  - 53+ MCP tools reorganized by scanning action (discover, analyze, send payloads, OOB, report).
+  - Passive analysis protocol with 4 deterministic local checks (request smuggling, CSRF, deserialization, file upload) and full analysis checklist.
+  - Active testing payload library: 200+ payloads for 62 vuln classes with detection patterns, confidence scores, and unique markers (`XSS-BURP-AI-1337`, `97601`, `evil-burp-ai-test.com`).
+  - End-to-end scanning workflow: scope -> passive -> active confirmation -> OOB (Collaborator) -> issue creation.
+  - Issue creation protocol with severity/confidence mapping and remediation reference for all vuln classes.
+  - Installable as a Claude Code skill (`~/.claude/skills/burp-scan/`) or usable as context with any AI assistant.
+
+- **AI Adaptive Payload Generation**:
+  - New `AdaptivePayloadEngine` generates context-aware payloads using AI based on detected tech stack, error patterns, and parameter context from `ScanKnowledgeBase`.
+  - Generated payloads are cached per `vulnClass:techStack` key (30-minute TTL) to avoid redundant AI calls.
+  - Safety: destructive payloads (DROP, DELETE, TRUNCATE, ALTER, SHUTDOWN, rm) are rejected by regex validation.
+  - Opt-in via `AI adaptive payloads` setting in Active AI Scanner tab (default: off).
+  - Static payloads always included; adaptive payloads are merged and deduplicated.
+
+- **Cache Normalization**:
+  - Response fingerprint now strips dynamic values (UUIDs, MongoDB ObjectIds, Unix timestamps, ISO 8601 dates, long tokens/nonces) before hashing, improving cache hit rate by 15-30%.
+  - Endpoint dedup key now includes sorted query parameter names (excluding cache-busting params like `_`, `ts`, `nonce`) for more accurate dedup across parameter ordering variations.
+
+- **Project-Scoped Chat Sessions**:
+  - Chat sessions are now stored in Burp's `extensionData()` (project-scoped) instead of global `preferences()`. Each Burp project has its own independent chat history.
+  - One-time automatic migration of existing global sessions to the first project opened after update.
+  - "Clear Chat" now fully resets: messages, context flag, counters, drafts, tool state, and persisted message blobs.
+
+- **Project Change Detection**:
+  - Automatic detection of Burp project switches via `api.project().id()` polling (30-second interval).
+  - On project change: saves current sessions, clears in-memory state, reloads sessions from new project, clears `ScanKnowledgeBase`, and shuts down all live chat backend connections.
+  - Prevents cross-project contamination of chat history, scanner knowledge, and cached results.
+
+- **Output Token Limits (`max_tokens` / `num_predict`)**:
+  - All HTTP backends (OpenAI-compatible, LM Studio, Ollama) now set explicit output token limits to prevent truncated responses.
+  - Chat: 4096 tokens, Scanner (single): 2048, Scanner (batch): 4096, Adaptive payloads: 1024.
+  - New `maxOutputTokens` parameter threaded through `AgentConnection.send()` -> `AgentSupervisor` -> all backends.
+  - Ollama maps to `num_predict` in options; OpenAI/LM Studio map to `max_tokens` in payload. CLI backends ignore (managed by CLI tool).
+
+- **Scanner Project Isolation**:
+  - `ScanKnowledgeBase` is now cleared when the passive scanner is disabled, preventing accumulated tech stack and vulnerability data from bleeding across scopes.
+  - `PersistentPromptCache` is now namespaced per Burp project (`~/.burp-ai-agent/cache/{projectId}/`), preventing cached analysis from one project from being served in another.
 
 - **NVIDIA NIM Backend**:
   - New NVIDIA NIM backend with SSE streaming, `chat_template_kwargs.thinking` support, and POST-based health checks against the chat completions endpoint.
@@ -15,8 +108,72 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Changed
 
+- **Passive Scanner Settings UI**:
+  - Added `Batch size (1=off)` spinner, `Persistent cache` checkbox, `Persistent TTL (hrs)` and `Persistent max (MB)` spinners to the AI Passive Scanner settings tab.
+- **Active Scanner Settings UI**:
+  - Added `AI adaptive payloads` checkbox to the AI Active Scanner settings tab.
 - **HTTP 429 Chat Error Handling**:
   - Improved chat error handling so HTTP 429 and other error responses no longer leave the UI stuck on "Thinking...".
+
+### Fixed
+
+- **Batch analysis silent request loss**:
+  - `flushBatch()` now falls back to individual single-request analysis when the batch call fails (timeout, backend error, or backend unavailable), instead of silently discarding the requests.
+- **403 bypass false positives on path manipulation and method switching**:
+  - Added `MIN_BYPASS_BODY_DELTA` (50 bytes) body length difference check to path manipulation and HTTP method switching techniques, matching the existing check on IP spoofing headers. Prevents generic 200 pages or wildcard routes from being reported as confirmed bypasses.
+- **CLI session ID race condition**:
+  - Replaced unsafe `!!` assertion on `_cliSessionId.get()` after failed CAS with a safe `?:` throw, preventing potential `NullPointerException` if another thread calls `stop()` between the CAS failure and the read.
+- **External backend JAR classloader leak**:
+  - `URLClassLoader` in `BackendRegistry.loadExternalBackendJars()` is now explicitly closed in the catch block if `ServiceLoader` loading fails, preventing file descriptor leaks.
+- **Webhook delivery crash**:
+  - `Alerting.sendWebhook()` is now wrapped in try-catch, preventing network errors from propagating to callers. Webhook delivery is best-effort.
+- **AI enabled check fail-open**:
+  - `isAiEnabled()` fallback changed from `true` to `false` when `api.ai().isEnabled()` throws an exception. Ensures AI requests are blocked when the AI API is unavailable (BApp Store compliance: fail-closed).
+
+- **Burp Suite shutdown hang after chat usage** (#34):
+  - Added `ChatPanel.shutdown()` that cancels in-flight backend connections and stops all active Swing timers (spinner, coalescing, copy button reset) across all session panels.
+  - `MainTab.shutdown()` now calls `chatPanel.shutdown()` before saving sessions.
+  - Fixed anonymous copy button timer leak by tracking it in a field.
+  - Fixed `McpStdioBridge.stop()` not canceling its `CoroutineScope`'s `SupervisorJob`, which kept coroutines alive after extension unload.
+- **TLS certificate generation error on JDK 25** (#35):
+  - Replaced Netty's `SelfSignedCertificate` (which required BouncyCastle or unsupported internal JDK APIs) with JDK's built-in `keytool` command.
+  - Works on all JDK versions (8-25+) and all platforms (macOS, Linux, Windows) without additional dependencies.
+- **CLI backends not visible in UI** (#38):
+  - Backend dropdown now shows all registered backends regardless of CLI binary availability, using new `BackendRegistry.listAllBackendIds()`.
+  - Users can now select and configure CLI backends (Claude, Gemini, Codex, OpenCode, Copilot) even when the binary is not in PATH; errors are reported at usage time via health check.
+- **Codex CLI Windows integration** (#42):
+  - Fixed `CreateProcess error=193` when running npm-installed CLI tools (Codex, Gemini, Copilot) on Windows.
+  - `normalizeWindowsCommand()` now generically resolves `.cmd` shim siblings for all CLI backends, not just OpenCode.
+  - For absolute paths to npm shell script shims without a Windows-executable extension, the resolver tries the `.cmd` sibling first, then falls back to a `cmd /c` wrapper.
+- **OpenCode blank messages and unrendered responses** (#40):
+  - Fixed `readOpenCodeOutput()` filtering out actual AI response content by matching short prompt lines (e.g., "SQL Injection", "Analyze the request") against output.
+  - Prompt-line dedup threshold raised to 40+ characters to avoid false positives on common short strings.
+  - OpenCode metadata filter generalized: all `> ` prefixed lines under 120 characters are now treated as status/metadata, replacing the previous hardcoded list of 7 specific prefixes.
+  - Idle timeout before process termination increased from 10 seconds to 30 seconds (`Defaults.OPENCODE_IDLE_TIMEOUT_MS`), preventing premature kill during long model inference.
+- **Burp AI backend not usable from chat**:
+  - Added missing `"burp-ai"` case in `validateBackendCommand()`, which caused "Unsupported backend: burp-ai" when sending messages.
+- **Backend picker change not applied to scanners**:
+  - Changing the backend in the top bar now immediately persists to settings repository, so passive/active scanners use the selected backend instead of the previous one.
+- **CLI path resolution log spam**:
+  - Removed verbose "Resolved absolute" diagnostic log from `resolveCommand()` that fired every 5 seconds via health timer. Error-case logging ("Absolute path not found") is preserved.
+- **Finding marker range calculation**:
+  - Fixed `IssueMarkerSupport.markResponseEvidence()` using the wrong prefix length when a shorter evidence prefix was matched, causing incorrect byte-range highlights in Burp's response viewer.
+  - Added bounds check in `markResponseFromDetail()` to prevent marker end exceeding response length.
+
+### Changed
+
+- **PortSwigger Compliance Rename**:
+  - All user-facing strings renamed from "Burp AI Agent" to "Custom AI Agent" (UI title, help panel, log prefixes).
+  - Internal identifiers (thread names, temp files, config directory) unchanged.
+- **UI Emoji Cleanup**:
+  - Removed all decorative emojis from context menu items, status panel labels, logger activity types, and warning dialogs across `UiActions`, `SettingsPanel`, and `AiLoggerPanel`.
+  - Functional unicode symbols (arrows, toggles, spinners) are preserved.
+- **MCP Settings Optimization**:
+  - `McpSupervisor.applySettings()` now skips server restart when settings, privacy mode, and determinism mode are unchanged, reducing unnecessary MCP restarts during settings apply.
+- **MCP Tool Call Prompt Format**:
+  - Chat system prompt for MCP tools changed from inline description to JSON code block format with explicit invocation instructions.
+  - Tool descriptions now include parameter schemas (`includeSchemas: true`) for better AI tool usage accuracy.
+
 
 ## [0.4.0] - 2026-03-06
 

@@ -34,7 +34,7 @@ object IssueUtils {
         }
     }
 
-    private fun normalizePathSegments(path: String): String {
+    fun normalizePathSegments(path: String): String {
         if (path.isBlank()) return "/"
         return path.split('/')
             .joinToString("/") { segment ->

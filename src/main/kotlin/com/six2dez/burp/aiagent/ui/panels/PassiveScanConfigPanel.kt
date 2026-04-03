@@ -11,6 +11,7 @@ import javax.swing.JComboBox
 import javax.swing.JLabel
 import javax.swing.JPanel
 import javax.swing.JSpinner
+import javax.swing.JTextField
 import javax.swing.border.EmptyBorder
 import javax.swing.border.LineBorder
 
@@ -35,6 +36,11 @@ class PassiveScanConfigPanel(
     private val passiveAiResponseBodyMaxCharsSpinner: JSpinner,
     private val passiveAiHeaderMaxCountSpinner: JSpinner,
     private val passiveAiParamMaxCountSpinner: JSpinner,
+    private val passiveAiExcludedExtensionsField: JTextField,
+    private val passiveAiBatchSizeSpinner: JSpinner,
+    private val passiveAiPersistentCacheEnabled: JCheckBox,
+    private val passiveAiPersistentCacheTtlSpinner: JSpinner,
+    private val passiveAiPersistentCacheMaxMbSpinner: JSpinner,
     private val contextRequestBodyMaxCharsSpinner: JSpinner,
     private val contextResponseBodyMaxCharsSpinner: JSpinner,
     private val contextCompactJson: JCheckBox,
@@ -97,6 +103,23 @@ class PassiveScanConfigPanel(
 
         passiveAiParamMaxCountSpinner.font = UiTheme.Typography.body
         passiveAiParamMaxCountSpinner.toolTipText = "Max parameters included in prompt metadata."
+
+        passiveAiExcludedExtensionsField.font = UiTheme.Typography.body
+        passiveAiExcludedExtensionsField.toolTipText = "Comma-separated file extensions to skip (e.g. css,js,png,woff,ico). Leave empty to disable."
+
+        passiveAiBatchSizeSpinner.font = UiTheme.Typography.body
+        passiveAiBatchSizeSpinner.toolTipText = "Group N requests per AI call (1 = disabled). Reduces API calls by 60-70%."
+
+        passiveAiPersistentCacheEnabled.font = UiTheme.Typography.body
+        passiveAiPersistentCacheEnabled.background = UiTheme.Colors.surface
+        passiveAiPersistentCacheEnabled.foreground = UiTheme.Colors.onSurface
+        passiveAiPersistentCacheEnabled.toolTipText = "Cache AI results to disk for reuse across Burp sessions."
+
+        passiveAiPersistentCacheTtlSpinner.font = UiTheme.Typography.body
+        passiveAiPersistentCacheTtlSpinner.toolTipText = "Hours before persistent cache entries expire (1-168)."
+
+        passiveAiPersistentCacheMaxMbSpinner.font = UiTheme.Typography.body
+        passiveAiPersistentCacheMaxMbSpinner.toolTipText = "Maximum disk space for persistent cache in MB."
 
         contextRequestBodyMaxCharsSpinner.font = UiTheme.Typography.body
         contextRequestBodyMaxCharsSpinner.toolTipText = "Max request body characters in manual context actions."
@@ -177,6 +200,20 @@ class PassiveScanConfigPanel(
             passiveAiHeaderMaxCountSpinner,
             "Max params",
             passiveAiParamMaxCountSpinner
+        )
+        addSpacerRow(grid, 4)
+        addRowFull(grid, "Excluded extensions", passiveAiExcludedExtensionsField)
+        addSpacerRow(grid, 4)
+        addRowFull(grid, "Batch size (1=off)", passiveAiBatchSizeSpinner)
+        addSpacerRow(grid, 4)
+        addRowFull(grid, "Persistent cache", passiveAiPersistentCacheEnabled)
+        addSpacerRow(grid, 4)
+        addRowPair(
+            grid,
+            "Persistent TTL (hrs)",
+            passiveAiPersistentCacheTtlSpinner,
+            "Persistent max (MB)",
+            passiveAiPersistentCacheMaxMbSpinner
         )
         addSpacerRow(grid, 4)
         addRowPair(

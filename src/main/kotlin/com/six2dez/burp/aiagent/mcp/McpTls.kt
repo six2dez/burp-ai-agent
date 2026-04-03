@@ -1,9 +1,7 @@
 package com.six2dez.burp.aiagent.mcp
 
 import com.six2dez.burp.aiagent.config.McpSettings
-import io.netty.handler.ssl.util.SelfSignedCertificate
 import java.io.File
-import java.io.FileOutputStream
 import java.security.KeyStore
 
 data class McpTlsMaterial(
@@ -36,20 +34,40 @@ object McpTls {
 
     private fun generateSelfSigned(keystoreFile: File, password: CharArray) {
         keystoreFile.parentFile?.mkdirs()
-        val ssc = SelfSignedCertificate("burp-mcp")
-        val keyStore = KeyStore.getInstance("PKCS12")
-        keyStore.load(null, password)
-        keyStore.setKeyEntry("mcp", ssc.key(), password, arrayOf(ssc.cert()))
-        FileOutputStream(keystoreFile).use { out ->
-            keyStore.store(out, password)
+        val passStr = String(password)
+
+        // Use keytool from the running JDK - available in all JDK versions
+        val keytoolPath = findKeytool()
+        val process = ProcessBuilder(
+            keytoolPath,
+            "-genkeypair",
+            "-alias", "mcp",
+            "-keyalg", "RSA",
+            "-keysize", "2048",
+            "-validity", "365",
+            "-storetype", "PKCS12",
+            "-keystore", keystoreFile.absolutePath,
+            "-storepass", passStr,
+            "-keypass", passStr,
+            "-dname", "CN=burp-mcp",
+            "-sigalg", "SHA256withRSA"
+        ).redirectErrorStream(true).start()
+
+        val output = process.inputStream.bufferedReader().readText()
+        val exitCode = process.waitFor()
+        if (exitCode != 0) {
+            throw RuntimeException("keytool failed (exit $exitCode): $output")
         }
-        cleanupSelfSigned(ssc)
     }
 
-    private fun cleanupSelfSigned(cert: SelfSignedCertificate) {
-        try {
-            cert.delete()
-        } catch (_: Exception) {
-        }
+    private fun findKeytool(): String {
+        val javaHome = System.getProperty("java.home")
+        val keytool = File(javaHome, "bin/keytool")
+        if (keytool.exists()) return keytool.absolutePath
+        // Windows
+        val keytoolExe = File(javaHome, "bin/keytool.exe")
+        if (keytoolExe.exists()) return keytoolExe.absolutePath
+        // Fallback to PATH
+        return "keytool"
     }
 }

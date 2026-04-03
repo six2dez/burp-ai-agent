@@ -10,6 +10,7 @@ import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import com.six2dez.burp.aiagent.config.Defaults
 import com.six2dez.burp.aiagent.redact.Redaction
 import com.six2dez.burp.aiagent.redact.RedactionPolicy
+import com.six2dez.burp.aiagent.util.SecurityExcerpts
 import java.net.URI
 import java.util.logging.Logger
 import java.nio.charset.StandardCharsets
@@ -201,7 +202,14 @@ ${sampleLines.ifEmpty { listOf("- (none)") }.joinToString(separator = "\n") { " 
         if (bodyStart >= raw.length) return raw
         val body = raw.substring(bodyStart)
         if (body.length <= maxBodyChars) return raw
-        return raw.substring(0, bodyStart) + body.take(maxBodyChars) + "\n...[body truncated]..."
+        val truncated = body.take(maxBodyChars)
+        val excerpts = SecurityExcerpts.extract(body, truncated.length)
+        val suffix = if (excerpts.isNullOrBlank()) {
+            "\n...[body truncated]..."
+        } else {
+            "\n...[body truncated]...\n\n=== SECURITY-RELEVANT EXCERPTS ===\n$excerpts"
+        }
+        return raw.substring(0, bodyStart) + truncated + suffix
     }
 
     private fun <T> capItemsBySize(items: List<T>): List<T> {

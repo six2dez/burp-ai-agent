@@ -154,6 +154,7 @@ class BackendConfigPanel(
         nvidiaNimTimeout.toolTipText = "Request timeout in seconds."
         copilotCmd.toolTipText = "Command used to launch Copilot CLI (e.g., copilot)."
 
+        cards.add(buildBurpAiPanel(), "burp-ai")
         cards.add(buildSingleFieldPanelWithCli("Codex CLI command", codexCmd, "codex-cli") { codexCmd.text.trim() }, "codex-cli")
         cards.add(buildSingleFieldPanelWithCli("Gemini CLI command", geminiCmd, "gemini-cli") { geminiCmd.text.trim() }, "gemini-cli")
         cards.add(buildOpenCodePanel(), "opencode-cli")
@@ -267,6 +268,34 @@ class BackendConfigPanel(
             )
         )
         addVerticalFiller(panel, 2)
+        return panel
+    }
+
+    private fun buildBurpAiPanel(): JPanel {
+        val panel = JPanel(GridBagLayout())
+        panel.background = UiTheme.Colors.surface
+        panel.border = EmptyBorder(8, 8, 8, 8)
+        var row = 0
+
+        val info = JTextArea(
+            "Burp AI uses the built-in AI provider. No configuration needed.\n\n" +
+            "Requires Burp Suite Professional with AI features enabled.\n" +
+            "Go to Extensions > Settings and enable 'Use AI'."
+        ).apply {
+            isEditable = false
+            isOpaque = false
+            lineWrap = true
+            wrapStyleWord = true
+            font = UiTheme.Typography.body
+            border = null
+        }
+        val gbc = GridBagConstraints().apply {
+            gridx = 0; gridy = row++; gridwidth = 2
+            fill = GridBagConstraints.HORIZONTAL; insets = Insets(4, 0, 4, 0)
+            weightx = 1.0
+        }
+        panel.add(info, gbc)
+        addVerticalFiller(panel, row)
         return panel
     }
 

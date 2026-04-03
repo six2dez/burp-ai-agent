@@ -309,6 +309,9 @@ class PayloadGenerator {
             Payload("/api/internal/", VulnClass.API_VERSION_BYPASS, DetectionMethod.CONTENT_BASED, PayloadRisk.SAFE, "Internal API"),
         ),
 
+        // ==================== 403 BYPASS / ACCESS CONTROL BYPASS ====================
+        VulnClass.ACCESS_CONTROL_BYPASS to listOf(), // Uses custom execute403Bypass() logic, not standard payloads
+
         // ==================== MISCONFIGURATION DETECTION ====================
         // These are passive checks, not active payloads
         VulnClass.DEBUG_ENDPOINT to listOf(),

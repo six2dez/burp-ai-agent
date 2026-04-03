@@ -30,6 +30,7 @@ class ActiveScanConfigPanel(
     private val activeAiRiskLevelCombo: JComboBox<*>,
     private val activeAiScanModeCombo: JComboBox<*>,
     private val activeAiUseCollaborator: JCheckBox,
+    private val activeAiAdaptivePayloads: JCheckBox,
     private val activeAiRiskDescription: JLabel,
     private val activeAiStatusLabel: JLabel,
     private val activeAiViewFindings: JButton,
@@ -85,6 +86,11 @@ class ActiveScanConfigPanel(
         activeAiUseCollaborator.foreground = UiTheme.Colors.onSurface
         activeAiUseCollaborator.toolTipText = "Use Burp Collaborator for SSRF confirmation (out-of-band)."
 
+        activeAiAdaptivePayloads.font = UiTheme.Typography.body
+        activeAiAdaptivePayloads.background = UiTheme.Colors.surface
+        activeAiAdaptivePayloads.foreground = UiTheme.Colors.onSurface
+        activeAiAdaptivePayloads.toolTipText = "Use AI to generate context-aware payloads based on detected tech stack and error patterns."
+
         activeAiStatusLabel.font = UiTheme.Typography.body
         activeAiStatusLabel.foreground = UiTheme.Colors.onSurfaceVariant
 
@@ -128,6 +134,8 @@ class ActiveScanConfigPanel(
         addRowFull(grid, "Risk level details", activeAiRiskDescription)
         addSpacerRow(grid, 4)
         addRowFull(grid, "SSRF OAST", activeAiUseCollaborator)
+        addSpacerRow(grid, 4)
+        addRowFull(grid, "Adaptive payloads", activeAiAdaptivePayloads)
         addSpacerRow(grid, 8)
         addRowFull(grid, "Status", activeAiStatusLabel)
         addSpacerRow(grid, 4)

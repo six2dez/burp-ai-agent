@@ -12,7 +12,7 @@ import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
 import java.net.HttpURLConnection
 import java.net.ServerSocket
-import java.net.URL
+import java.net.URI
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
@@ -95,7 +95,7 @@ class McpServerIntegrationTest {
         url: String,
         headers: Map<String, String> = emptyMap()
     ): HttpResponse {
-        val connection = URL(url).openConnection() as HttpURLConnection
+        val connection = URI(url).toURL().openConnection() as HttpURLConnection
         connection.requestMethod = method
         connection.connectTimeout = 3_000
         connection.readTimeout = 3_000

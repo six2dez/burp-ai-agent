@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "com.six2dez.burp"
-version = "0.4.1"
+version = "0.5.0"
 
 repositories {
     mavenCentral()
@@ -18,7 +18,7 @@ repositories {
 
 dependencies {
     // Burp Montoya API (compileOnly, Burp provides it at runtime)
-    compileOnly("net.portswigger.burp.extensions:montoya-api:2025.12")
+    compileOnly("net.portswigger.burp.extensions:montoya-api:2026.2")
 
     // JSON
     implementation("com.fasterxml.jackson.core:jackson-databind:2.17.2")
@@ -45,7 +45,7 @@ dependencies {
 
     testImplementation(kotlin("test"))
     testImplementation("org.junit.jupiter:junit-jupiter:5.11.3")
-    testImplementation("net.portswigger.burp.extensions:montoya-api:2025.12")
+    testImplementation("net.portswigger.burp.extensions:montoya-api:2026.2")
     testImplementation("org.mockito.kotlin:mockito-kotlin:5.4.0")
 }
 
@@ -67,7 +67,7 @@ tasks.jar {
 }
 
 tasks.shadowJar {
-    archiveBaseName.set("Burp-AI-Agent")
+    archiveBaseName.set("Custom-AI-Agent")
     archiveClassifier.set("")
     mergeServiceFiles()
     isZip64 = true

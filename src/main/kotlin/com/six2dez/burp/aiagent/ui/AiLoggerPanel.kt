@@ -310,10 +310,10 @@ class AiLoggerPanel(private val logger: AiRequestLogger) {
         private fun formatType(type: ActivityType): String = when (type) {
             ActivityType.PROMPT_SENT -> "→ Prompt"
             ActivityType.RESPONSE_COMPLETE -> "← Response"
-            ActivityType.MCP_TOOL_CALL -> "⚙ MCP Tool"
+            ActivityType.MCP_TOOL_CALL -> "MCP Tool"
             ActivityType.RETRY -> "↻ Retry"
             ActivityType.ERROR -> "✗ Error"
-            ActivityType.SCANNER_SEND -> "🔍 Scanner"
+            ActivityType.SCANNER_SEND -> "Scanner"
         }
     }
 

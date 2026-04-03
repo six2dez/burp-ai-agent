@@ -395,6 +395,10 @@ class ChatPanel(
     ) {
         val settings = getSettings()
         updatePrivacyPill()
+        if (!supervisor.isAiEnabled()) {
+            showError("AI features are disabled in Burp Suite settings. Enable 'Use AI' for extensions.")
+            return
+        }
         if (!ensureBackendReady(settings)) return
         val error = validateBackend(settings)
         if (error != null) {
@@ -474,6 +478,7 @@ class ChatPanel(
             determinismMode = settings.determinismMode,
             traceId = traceId,
             systemPrompt = systemPrompt,
+            maxOutputTokens = Defaults.CHAT_MAX_OUTPUT_TOKENS,
             onChunk = { chunk ->
                 responseBuffer.append(chunk)
                 SwingUtilities.invokeLater { assistant.appendChunk(chunk) }
@@ -621,7 +626,7 @@ class ChatPanel(
                 sessionsModel.removeElement(session)
                 // Clean persisted data
                 try {
-                    chatPrefs().setString(SESSION_MSG_KEY_PREFIX + session.id, "")
+                    projectData().setString(SESSION_MSG_KEY_PREFIX + session.id, "")
                 } catch (_: Exception) {}
             }
 
@@ -792,10 +797,22 @@ class ChatPanel(
         val panel = sessionPanels[selected.id] ?: return
         panel.clearMessages()
         supervisor.removeChatSession(selected.id)
+        // Clear logical message history so the backend doesn't receive stale context
+        selected.messages.clear()
+        selected.contextSent = false
+        selected.messageCount = 0
+        selected.totalCharsIn = 0
+        selected.totalCharsOut = 0
+        selected.totalTokensIn = 0
+        selected.totalTokensOut = 0
+        sessionDrafts[selected.id] = ""
         val state = sessionStates[selected.id]
         if (state != null) {
             state.toolCatalogSent = false
+            state.toolsMode = true
         }
+        // Remove persisted messages for this session
+        try { projectData().deleteString(SESSION_MSG_KEY_PREFIX + selected.id) } catch (_: Exception) {}
     }
 
     private fun buildActionCard(
@@ -891,20 +908,27 @@ class ChatPanel(
                 val obj = item.jsonObject
                 val url = obj["url"]?.jsonPrimitive?.contentOrNull
                 val method = obj["method"]?.jsonPrimitive?.contentOrNull ?: "GET"
-                
+
                 if (url != null) {
                     val uri = runCatching { URI(url) }.getOrNull()
                     if (uri != null) {
                         val path = uri.path?.takeIf { it.isNotBlank() } ?: "/"
                         val query = uri.query?.let { "?${it.take(30)}${if (it.length > 30) "..." else ""}" } ?: ""
-                        // Truncate path if too long
                         val displayPath = if (path.length > 50) "...${path.takeLast(47)}" else path
                         "$method $displayPath$query"
                     } else {
                         "$method $url"
                     }
                 } else {
-                    null
+                    // Audit issue items: extract issue name + host
+                    val name = obj["name"]?.jsonPrimitive?.contentOrNull
+                    if (name != null) {
+                        val host = obj["affectedHost"]?.jsonPrimitive?.contentOrNull
+                        val displayName = if (name.length > 60) name.take(57) + "..." else name
+                        if (!host.isNullOrBlank()) "$displayName @ $host" else displayName
+                    } else {
+                        null
+                    }
                 }
             }.firstOrNull()
         } catch (e: Exception) {
@@ -1074,25 +1098,33 @@ class ChatPanel(
     private val SESSION_DRAFTS_KEY = "chat.drafts"
     private val MIGRATED_KEY = "chat.migrated_to_project"
 
-    private fun chatPrefs(): burp.api.montoya.persistence.Preferences {
-        val project = projectPrefsOrNull()
-        return project ?: api.persistence().preferences()
+    /** Project-scoped storage: extensionData() is saved inside the .burp project file. */
+    private fun projectData(): burp.api.montoya.persistence.PersistedObject =
+        api.persistence().extensionData()
+
+    fun shutdown() {
+        cancelInFlightRequest()
+        sessionPanels.values.forEach { it.stopAllTimers() }
     }
 
-    private fun projectPrefsOrNull(): burp.api.montoya.persistence.Preferences? {
-        return try {
-            val persistence = api.persistence()
-            val method = persistence.javaClass.methods.firstOrNull { it.name == "projectPreferences" && it.parameterCount == 0 }
-            method?.invoke(persistence) as? burp.api.montoya.persistence.Preferences
-        } catch (_: Exception) {
-            null
-        }
+    /**
+     * Clear all in-memory session state without touching persisted storage.
+     * Called when the Burp project changes so stale sessions don't bleed across projects.
+     */
+    fun clearInMemorySessionState() {
+        cancelInFlightRequest()
+        sessionPanels.values.forEach { it.stopAllTimers() }
+        sessionsById.clear()
+        sessionPanels.clear()
+        sessionStates.clear()
+        sessionDrafts.clear()
+        sessionsModel.clear()
     }
 
     fun saveSessions() {
         try {
             persistActiveSessionDraft()
-            val prefs = chatPrefs()
+            val prefs = projectData()
             val sessionList = sessionsById.values.map { s ->
                 buildString {
                     append(s.id)
@@ -1133,7 +1165,7 @@ class ChatPanel(
 
     fun restoreSessions() {
         try {
-            val prefs = chatPrefs()
+            val prefs = projectData()
             maybeMigrateGlobalToProject(prefs)
             val raw = prefs.getString(SESSIONS_KEY) ?: return
             if (raw.isBlank()) return
@@ -1233,15 +1265,15 @@ class ChatPanel(
         }
     }
 
-    private fun maybeMigrateGlobalToProject(projectPrefs: burp.api.montoya.persistence.Preferences) {
+    private fun maybeMigrateGlobalToProject(projectStore: burp.api.montoya.persistence.PersistedObject) {
         try {
-            val already = projectPrefs.getBoolean(MIGRATED_KEY) ?: false
+            val already = projectStore.getBoolean(MIGRATED_KEY) ?: false
             if (already) return
 
             val globalPrefs = api.persistence().preferences()
             val raw = globalPrefs.getString(SESSIONS_KEY).orEmpty()
             if (raw.isNotBlank()) {
-                projectPrefs.setString(SESSIONS_KEY, raw)
+                projectStore.setString(SESSIONS_KEY, raw)
                 val lines = raw.split('\n').filter { it.isNotBlank() }
                 for (line in lines) {
                     val parts = line.split('\t')
@@ -1250,13 +1282,13 @@ class ChatPanel(
                     if (id.isBlank()) continue
                     val msgRaw = globalPrefs.getString(SESSION_MSG_KEY_PREFIX + id)
                     if (!msgRaw.isNullOrBlank()) {
-                        projectPrefs.setString(SESSION_MSG_KEY_PREFIX + id, msgRaw)
+                        projectStore.setString(SESSION_MSG_KEY_PREFIX + id, msgRaw)
                     }
                 }
 
                 val draftsRaw = globalPrefs.getString(SESSION_DRAFTS_KEY)
                 if (!draftsRaw.isNullOrBlank()) {
-                    projectPrefs.setString(SESSION_DRAFTS_KEY, draftsRaw)
+                    projectStore.setString(SESSION_DRAFTS_KEY, draftsRaw)
                 }
 
                 // Clear global after migration
@@ -1272,7 +1304,7 @@ class ChatPanel(
                 }
             }
 
-            projectPrefs.setBoolean(MIGRATED_KEY, true)
+            projectStore.setBoolean(MIGRATED_KEY, true)
         } catch (e: Exception) {
             api.logging().logToError("[ChatPanel] Failed to migrate global chat sessions: ${e.message}")
         }
@@ -1371,6 +1403,7 @@ class ChatPanel(
         val root: JComponent = JPanel(BorderLayout())
         private val messages = JPanel()
         private val scroll = JScrollPane(messages)
+        private val messagePanels = mutableListOf<ChatMessagePanel>()
 
         init {
             root.background = UiTheme.Colors.surface
@@ -1385,6 +1418,7 @@ class ChatPanel(
 
         fun addMessage(role: String, text: String) {
             val message = ChatMessagePanel(role, text)
+            messagePanels.add(message)
             messages.add(message.root)
             messages.add(javax.swing.Box.createRigidArea(Dimension(0, 4)))
             refreshScroll()
@@ -1405,6 +1439,7 @@ class ChatPanel(
 
         fun addStreamingMessage(role: String): StreamingMessage {
             val message = ChatMessagePanel(role, "")
+            messagePanels.add(message)
             messages.add(message.root)
             messages.add(javax.swing.Box.createRigidArea(Dimension(0, 4)))
             refreshScroll()
@@ -1412,9 +1447,15 @@ class ChatPanel(
         }
 
         fun clearMessages() {
+            messagePanels.forEach { it.stopTimers() }
+            messagePanels.clear()
             messages.removeAll()
             messages.revalidate()
             messages.repaint()
+        }
+
+        fun stopAllTimers() {
+            messagePanels.forEach { it.stopTimers() }
         }
 
         private fun refreshScroll() {
@@ -1466,6 +1507,7 @@ class ChatPanel(
         private var spinnerIndex = 0
         private val pendingText = StringBuilder()
         private var coalescingTimer: javax.swing.Timer? = null
+        private var copyResetTimer: javax.swing.Timer? = null
         private var isStreaming = false
         private var lastRenderedLength = 0
         private val timestamp = java.text.SimpleDateFormat("h:mm a").format(java.util.Date())
@@ -1545,7 +1587,8 @@ class ChatPanel(
                 val clipboard = java.awt.Toolkit.getDefaultToolkit().systemClipboard
                 clipboard.setContents(java.awt.datatransfer.StringSelection(rawText.toString()), null)
                 copyBtn.text = "Copied!"
-                javax.swing.Timer(1500) { copyBtn.text = "Copy" }.also { it.isRepeats = false; it.start() }
+                copyResetTimer?.stop()
+                copyResetTimer = javax.swing.Timer(1500) { copyBtn.text = "Copy" }.also { it.isRepeats = false; it.start() }
             }
             header.add(copyBtn, BorderLayout.EAST)
 
@@ -1667,6 +1710,15 @@ class ChatPanel(
             spinnerTimer = null
             spinnerLabel.isVisible = false
             editorPane.isVisible = true
+        }
+
+        fun stopTimers() {
+            spinnerTimer?.stop()
+            spinnerTimer = null
+            coalescingTimer?.stop()
+            coalescingTimer = null
+            copyResetTimer?.stop()
+            copyResetTimer = null
         }
 
         /** Buffer incoming chunks, coalesce re-renders */
@@ -1849,17 +1901,25 @@ class ChatPanel(
     ): String? {
         if (context == null) return null
         val header = """
-Tool mode is enabled.
-Use enabled MCP tools when needed.
-For confirmed vulnerabilities that should be recorded, call `issue_create` with concrete evidence.
-Tool call JSON format: `tool`+`args` (or `name`+`arguments`).
-After a tool call, wait for the tool result, then continue.
+You have access to MCP tools via a text-based protocol. To call a tool, output ONLY a JSON code block in this exact format:
+
+```json
+{"tool": "tool_name", "args": {"param1": "value1"}}
+```
+
+The system will parse your JSON, execute the tool, and return the result. Then you continue your analysis using that result.
+
+IMPORTANT:
+- When making a tool call, output ONLY the JSON block and nothing else in that message.
+- Do NOT say you cannot use tools. You CAN use them by outputting JSON as shown above.
+- After receiving a tool result, continue your analysis or make another tool call.
+- For confirmed vulnerabilities, call `issue_create` with concrete evidence.
         """.trim()
         if (state.toolCatalogSent) return header
         if (mutateState) {
             state.toolCatalogSent = true
         }
-        val list = McpToolExecutor.describeTools(context, includeSchemas = false, includeDisabled = false)
+        val list = McpToolExecutor.describeTools(context, includeSchemas = true, includeDisabled = false)
         return header + "\n\n" + list
     }
 

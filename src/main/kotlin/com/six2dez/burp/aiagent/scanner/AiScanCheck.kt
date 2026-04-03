@@ -1,6 +1,7 @@
 package com.six2dez.burp.aiagent.scanner
 
 import burp.api.montoya.MontoyaApi
+import burp.api.montoya.http.RequestOptions
 import burp.api.montoya.http.message.HttpRequestResponse
 import burp.api.montoya.scanner.AuditResult
 import burp.api.montoya.scanner.ConsolidationAction
@@ -166,13 +167,13 @@ class AiScanCheck(
         // Measure baseline if needed for time-based
         val baselineTime = if (payload.detectionMethod == DetectionMethod.BLIND_TIME) {
             val start = System.currentTimeMillis()
-            api.http().sendRequest(baseRequestResponse.request())
+            api.http().sendRequest(baseRequestResponse.request(), RequestOptions.requestOptions().withUpstreamTLSVerification())
             System.currentTimeMillis() - start
         } else 0L
-        
+
         // Send attack request
         val startTime = System.currentTimeMillis()
-        val attackResponse = api.http().sendRequest(attackRequest)
+        val attackResponse = api.http().sendRequest(attackRequest, RequestOptions.requestOptions().withUpstreamTLSVerification())
         val responseTime = System.currentTimeMillis() - startTime
         
         val attackRequestResponse = HttpRequestResponse.httpRequestResponse(attackRequest, attackResponse.response())
@@ -199,6 +200,11 @@ class AiScanCheck(
         // Build evidence
         val evidence = buildEvidence(baseRequestResponse, attackRequestResponse, payload, vulnClass, responseTime, baselineTime)
         
+        // Add markers to highlight payload in request and evidence in response
+        val markedAttack = IssueMarkerSupport.markRequestPayload(
+            attackRequestResponse, payload.value
+        ).let { IssueMarkerSupport.markResponseEvidence(it, evidence) }
+
         // Create Burp issue
         return AuditIssue.auditIssue(
             "[AI Active] ${vulnClass.name} (Burp Scanner)",
@@ -208,9 +214,9 @@ class AiScanCheck(
             ScannerIssueSupport.mapSeverity(vulnClass),
             mapConfidence(payload),
             null,  // background
-            null,  // remediationBackground  
+            null,  // remediationBackground
             ScannerIssueSupport.mapSeverity(vulnClass),
-            listOf(baseRequestResponse, attackRequestResponse)
+            listOf(baseRequestResponse, markedAttack)
         )
     }
 

@@ -8,11 +8,13 @@ import com.six2dez.burp.aiagent.backends.AiBackend
 import com.six2dez.burp.aiagent.backends.BackendDiagnostics
 import com.six2dez.burp.aiagent.backends.BackendLaunchConfig
 import com.six2dez.burp.aiagent.backends.HealthCheckResult
+import com.six2dez.burp.aiagent.backends.JsonModeCapable
 import com.six2dez.burp.aiagent.backends.TokenUsage
 import com.six2dez.burp.aiagent.backends.UsageAwareConnection
 import com.six2dez.burp.aiagent.backends.http.CircuitBreaker
 import com.six2dez.burp.aiagent.backends.http.ConversationHistory
 import com.six2dez.burp.aiagent.backends.http.HttpBackendSupport
+import com.six2dez.burp.aiagent.backends.http.MontoyaHttpTransport
 import com.six2dez.burp.aiagent.config.AgentSettings
 import com.six2dez.burp.aiagent.util.HeaderParser
 import okhttp3.MediaType.Companion.toMediaType
@@ -61,6 +63,8 @@ class OpenAiCompatibleBackend(
             circuitBreaker = HttpBackendSupport.newCircuitBreaker(),
             streaming = streaming,
             payloadCustomizer = payloadCustomizer,
+            transport = config.transport,
+            timeoutSeconds = timeoutSeconds,
             debugLog = { BackendDiagnostics.log("[$id] $it") },
             errorLog = { BackendDiagnostics.logError("[$id] $it") }
         )
@@ -98,9 +102,11 @@ class OpenAiCompatibleBackend(
         private val circuitBreaker: CircuitBreaker,
         private val streaming: Boolean,
         private val payloadCustomizer: ((MutableMap<String, Any?>) -> Unit)?,
+        private val transport: MontoyaHttpTransport?,
+        private val timeoutSeconds: Long,
         private val debugLog: (String) -> Unit,
         private val errorLog: (String) -> Unit
-    ) : AgentConnection, UsageAwareConnection {
+    ) : AgentConnection, UsageAwareConnection, JsonModeCapable {
         private val alive = AtomicBoolean(true)
         private val exec = Executors.newSingleThreadExecutor { runnable ->
             Thread(runnable, "$backendId-connection").apply { isDaemon = true }
@@ -117,7 +123,9 @@ class OpenAiCompatibleBackend(
             history: List<com.six2dez.burp.aiagent.backends.ChatMessage>?,
             onChunk: (String) -> Unit,
             onComplete: (Throwable?) -> Unit,
-            systemPrompt: String?
+            systemPrompt: String?,
+            jsonMode: Boolean,
+            maxOutputTokens: Int?
         ) {
             if (!isAlive()) {
                 onComplete(IllegalStateException("Connection closed"))
@@ -156,46 +164,87 @@ class OpenAiCompatibleBackend(
                                 "temperature" to if (determinismMode) 0.0 else 0.7
                             )
                             payloadCustomizer?.invoke(payload)
+                            if (maxOutputTokens != null) {
+                                payload["max_tokens"] = maxOutputTokens
+                            }
+                            if (jsonMode) {
+                                payload["response_format"] = mapOf("type" to "json_object")
+                            }
 
                             val json = mapper.writeValueAsString(payload)
                             val endpointUrl = buildChatCompletionsUrl(baseUrl)
-                            val req = Request.Builder()
-                                .url(endpointUrl)
-                                .post(json.toRequestBody("application/json".toMediaType()))
-                                .apply {
-                                    headers.forEach { (name, value) ->
-                                        header(name, value)
-                                    }
-                                    if (!sessionId.isNullOrBlank()) {
-                                        header("X-Session-Id", sessionId)
-                                    }
-                                }
-                                .build()
 
-                            debugLog("request -> ${req.url}")
-                            client.newCall(req).execute().use { resp ->
-                                if (!resp.isSuccessful) {
-                                    val bodyText = resp.body?.string().orEmpty()
-                                    errorLog("HTTP ${resp.code}: ${bodyText.take(500)}")
-                                    val retryAfter = resp.header("Retry-After")
-                                    val message = when (resp.code) {
-                                        429 -> {
-                                            val retryHint = retryAfter?.takeIf { it.isNotBlank() }?.let { " Retry after: $it." }.orEmpty()
-                                            "$backendDisplayName rate limited (HTTP 429). Check quota/capacity or retry later.$retryHint"
-                                        }
-                                        else -> "$backendDisplayName HTTP ${resp.code}: $bodyText"
-                                    }
-                                    onComplete(IllegalStateException(message))
-                                    return@submit
+                            val allHeaders = buildMap {
+                                putAll(headers)
+                                if (!sessionId.isNullOrBlank()) {
+                                    put("X-Session-Id", sessionId)
                                 }
-                                if (streaming) {
-                                    handleStreamingResponse(resp, onChunk, onComplete)
-                                } else {
-                                    handleNonStreamingResponse(resp, onChunk, onComplete)
-                                }
-                                return@submit
                             }
-                        } catch (e: Exception) {
+
+                              debugLog("request -> $endpointUrl")
+
+                              if (transport != null) {
+                                  val resp = transport.post(endpointUrl, allHeaders, json, timeoutSeconds * 1000)
+                                  if (!resp.isSuccessful) {
+                                      errorLog("HTTP ${resp.statusCode}: ${resp.body.take(500)}")
+                                      val message = when (resp.statusCode) {
+                                          429 -> "$backendDisplayName rate limited (HTTP 429). Check quota/capacity or retry later."
+                                          else -> "$backendDisplayName HTTP ${resp.statusCode}: ${resp.body}"
+                                      }
+                                      onComplete(IllegalStateException(message))
+                                      return@submit
+                                  }
+                                  val body = resp.body
+                                  if (body.isBlank()) {
+                                      onComplete(IllegalStateException("$backendDisplayName response body was empty"))
+                                      return@submit
+                                  }
+                                  val node = mapper.readTree(body)
+                                  val content = node.path("choices").path(0).path("message").path("content").asText()
+                                  extractUsage(node)?.let { lastTokenUsageRef.set(it) }
+                                  if (content.isBlank()) {
+                                      onComplete(IllegalStateException("$backendDisplayName response content was empty"))
+                                      return@submit
+                                  }
+                                  debugLog("response <- ${content.take(200)}")
+                                  conversationHistory.addAssistant(content)
+                                  circuitBreaker.recordSuccess()
+                                  onChunk(content)
+                                  onComplete(null)
+                              } else {
+                                  val req = Request.Builder()
+                                      .url(endpointUrl)
+                                      .post(json.toRequestBody("application/json".toMediaType()))
+                                      .apply {
+                                          allHeaders.forEach { (name, value) ->
+                                              header(name, value)
+                                          }
+                                      }
+                                      .build()
+                                  client.newCall(req).execute().use { resp ->
+                                      if (!resp.isSuccessful) {
+                                          val bodyText = resp.body?.string().orEmpty()
+                                          errorLog("HTTP ${resp.code}: ${bodyText.take(500)}")
+                                          val retryAfter = resp.header("Retry-After")
+                                          val message = when (resp.code) {
+                                              429 -> {
+                                                  val retryHint = retryAfter?.takeIf { it.isNotBlank() }?.let { " Retry after: $it." }.orEmpty()
+                                                  "$backendDisplayName rate limited (HTTP 429). Check quota/capacity or retry later.$retryHint"
+                                              }
+                                              else -> "$backendDisplayName HTTP ${resp.code}: $bodyText"
+                                          }
+                                          onComplete(IllegalStateException(message))
+                                          return@submit
+                                      }
+                                      if (streaming) {
+                                          handleStreamingResponse(resp, onChunk, onComplete)
+                                      } else {
+                                          handleNonStreamingResponse(resp, onChunk, onComplete)
+                                      }
+                                  }
+                              }
+                              return@submit
+                          } catch (e: Exception) {
                             lastError = e
                             val retryable = HttpBackendSupport.isRetryableConnectionError(e)
                             if (retryable) {

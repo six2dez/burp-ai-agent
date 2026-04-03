@@ -7,6 +7,7 @@ import burp.api.montoya.scanner.audit.issues.AuditIssueConfidence
 import burp.api.montoya.scanner.audit.issues.AuditIssueSeverity
 import burp.api.montoya.ui.contextmenu.AuditIssueContextMenuEvent
 import burp.api.montoya.ui.contextmenu.ContextMenuEvent
+import burp.api.montoya.ui.contextmenu.InvocationType
 import com.six2dez.burp.aiagent.audit.AuditLogger
 import com.six2dez.burp.aiagent.config.AgentSettings
 import com.six2dez.burp.aiagent.context.ContextCapture
@@ -21,11 +22,14 @@ import com.six2dez.burp.aiagent.prompts.bountyprompt.BountyPromptOutputParser
 import com.six2dez.burp.aiagent.prompts.bountyprompt.BountyPromptOutputType
 import com.six2dez.burp.aiagent.prompts.bountyprompt.BountyPromptTagResolver
 import com.six2dez.burp.aiagent.scanner.ActiveAiScanner
+import com.six2dez.burp.aiagent.scanner.JsEndpointExtractor
 import com.six2dez.burp.aiagent.scanner.PassiveAiScanner
 import com.six2dez.burp.aiagent.scanner.VulnClass
 import com.six2dez.burp.aiagent.util.IssueUtils
 import com.six2dez.burp.aiagent.util.IssueText
 import java.awt.BorderLayout
+import java.awt.GridLayout
+import javax.swing.BoxLayout
 import javax.swing.JCheckBox
 import javax.swing.JMenu
 import javax.swing.JMenuItem
@@ -54,15 +58,41 @@ object UiActions {
     ): List<JMenuItem> {
         val selected = event.selectedRequestResponses()
         val editorSelection = event.messageEditorRequestResponse().map { it.requestResponse() }
-        val targets = if (selected.isNotEmpty()) {
-            selected
+        val targets: List<HttpRequestResponse>
+        val siteMapFallback: Boolean
+
+        if (event.isFrom(InvocationType.SITE_MAP_TREE)) {
+            // Tree node selected — expand to all requests under the selected URL prefix(es)
+            val prefixes = selected.mapNotNull { rr ->
+                try { rr.request()?.url() } catch (_: Exception) { null }
+            }.filter { it.isNotBlank() }
+
+            targets = if (prefixes.isNotEmpty()) {
+                val filter = burp.api.montoya.sitemap.SiteMapFilter { node ->
+                    val url = node.url()
+                    prefixes.any { prefix -> url.startsWith(prefix) }
+                }
+                api.siteMap().requestResponses(filter).ifEmpty { selected }
+            } else {
+                api.logging().logToOutput("[UiActions] SITE_MAP_TREE: no URL prefixes extracted from selection, skipping to avoid scanning entire site map.")
+                selected.ifEmpty { emptyList() }
+            }
+            siteMapFallback = targets.size > selected.size
+        } else if (selected.isNotEmpty()) {
+            targets = selected
+            siteMapFallback = false
+        } else if (editorSelection.isPresent) {
+            targets = listOf(editorSelection.get())
+            siteMapFallback = false
         } else {
-            editorSelection.map { listOf(it) }.orElse(emptyList())
+            return emptyList()
         }
         if (targets.isEmpty()) return emptyList()
 
+        val targetLabel = if (siteMapFallback) "site map - ${targets.size}" else "${targets.size}"
+
         // AI Vulnerability Scan option (Passive)
-        val aiScan = JMenuItem("🔍 AI Passive Scan (${targets.size})")
+        val aiScan = JMenuItem("AI Passive Scan ($targetLabel)")
         aiScan.addActionListener {
             val count = passiveAiScanner.manualScan(targets)
             JOptionPane.showMessageDialog(
@@ -74,7 +104,7 @@ object UiActions {
         }
 
         // AI Active Scan option
-        val aiActiveScan = JMenuItem("⚡ AI Active Scan (${targets.size})")
+        val aiActiveScan = JMenuItem("AI Active Scan ($targetLabel)")
         aiActiveScan.addActionListener {
             if (!ensureActiveScannerEnabled(tab, activeAiScanner)) return@addActionListener
             val scanner = activeAiScanner ?: return@addActionListener
@@ -116,14 +146,14 @@ object UiActions {
                 "Queued $count target(s) for AI active testing.\n\n" +
                     "Queue size: $preQueue -> $postQueue\n" +
                     "Queue max: ${scanner.maxQueueSize}\n" +
-                    "⚠️ This will send test payloads to the server.\n" +
+                    "This will send test payloads to the server.\n" +
                     "Confirmed findings will appear in Target → Issues with [AI] Confirmed prefix.",
                 "AI Active Scan Started",
                 JOptionPane.INFORMATION_MESSAGE
             )
         }
 
-        val targetedTestsMenu = buildTargetedTestsMenu(tab, targets, activeAiScanner)
+        val targetedTestsMenu = buildTargetedTestsMenu(tab, targets, activeAiScanner, targetLabel)
         val bountyPromptMenu = buildBountyPromptMenu(api, tab, mcpSupervisor, targets, audit)
 
         val findVulns = JMenuItem("Find vulnerabilities")
@@ -165,6 +195,75 @@ object UiActions {
             tab.openChatWithContext(ctx, settings.explainJsPrompt, "Explain JS")
         }
 
+        val extractJsEndpoints = JMenuItem("Extract JS Endpoints ($targetLabel)")
+        extractJsEndpoints.addActionListener {
+            val allEndpoints = mutableSetOf<String>()
+            for (target in targets) {
+                val body = runCatching { target.response()?.bodyToString().orEmpty() }.getOrDefault("")
+                if (body.isBlank()) continue
+                val raw = JsEndpointExtractor.extract(body)
+                if (raw.isNotEmpty()) {
+                    allEndpoints.addAll(JsEndpointExtractor.resolveEndpoints(raw, target.request().url()))
+                }
+            }
+            if (allEndpoints.isEmpty()) {
+                JOptionPane.showMessageDialog(
+                    tab.root,
+                    "No API endpoints found in the selected response(s).",
+                    "JS Endpoint Extraction",
+                    JOptionPane.INFORMATION_MESSAGE
+                )
+                return@addActionListener
+            }
+            val sorted = allEndpoints.sorted()
+            val textArea = JTextArea(sorted.joinToString("\n"), 20, 60)
+            textArea.isEditable = false
+            val scrollPane = JScrollPane(textArea)
+            JOptionPane.showMessageDialog(
+                tab.root,
+                scrollPane,
+                "JS Endpoints Discovered (${sorted.size})",
+                JOptionPane.INFORMATION_MESSAGE
+            )
+            api.logging().logToOutput("[JsEndpointExtractor] Manual extraction: ${sorted.size} endpoint(s) found")
+            sorted.take(20).forEach { api.logging().logToOutput("[JsEndpointExtractor]   -> $it") }
+        }
+
+        val test403Bypass = JMenuItem("Test 403 Bypass ($targetLabel)")
+        test403Bypass.addActionListener {
+            if (!ensureActiveScannerEnabled(tab, activeAiScanner)) return@addActionListener
+            val scanner = activeAiScanner ?: return@addActionListener
+            val forbidden = targets.filter { (it.response()?.statusCode()?.toInt() ?: 0) == 403 }
+            if (forbidden.isEmpty()) {
+                JOptionPane.showMessageDialog(
+                    tab.root,
+                    "No requests with 403 status found in the selection.\nSelect requests that returned HTTP 403.",
+                    "Test 403 Bypass",
+                    JOptionPane.WARNING_MESSAGE
+                )
+                return@addActionListener
+            }
+            val confirmed = JOptionPane.showConfirmDialog(
+                tab.root,
+                "This will test ${forbidden.size} request(s) with 403 bypass techniques:\n" +
+                    "- IP spoofing headers (X-Forwarded-For, X-Real-IP, etc.)\n" +
+                    "- Path manipulation (/path/, /path/., ..;, case swap)\n" +
+                    "- HTTP method switching\n\n" +
+                    "Continue?",
+                "Confirm 403 Bypass Test",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.WARNING_MESSAGE
+            )
+            if (confirmed != JOptionPane.YES_OPTION) return@addActionListener
+            val count = scanner.manualScan(forbidden, listOf(VulnClass.ACCESS_CONTROL_BYPASS))
+            JOptionPane.showMessageDialog(
+                tab.root,
+                "Queued $count target(s) for 403 bypass testing.\nResults will appear in Target → Issues.",
+                "403 Bypass Test Started",
+                JOptionPane.INFORMATION_MESSAGE
+            )
+        }
+
         val accessControl = JMenuItem("Access control")
         accessControl.addActionListener {
             if (!ensureMcpRunning(tab, mcpSupervisor)) return@addActionListener
@@ -199,6 +298,8 @@ object UiActions {
             findVulns,
             analyzeRequest,
             explainJs,
+            extractJsEndpoints,
+            test403Bypass,
             accessControl,
             login
         )
@@ -417,6 +518,10 @@ $resolvedUserPrompt
         var skippedByThreshold = 0
         val threshold = settings.bountyPromptIssueConfidenceThreshold.coerceIn(0, 100)
         val requestResponses = targets.take(20)
+        if (requestResponses.isEmpty()) {
+            api.logging().logToError("[BountyPrompt] No targets selected - skipping issue creation for ${definition.title}")
+            return
+        }
 
         for (finding in findings) {
             if (finding.confidence < threshold) {
@@ -549,7 +654,7 @@ $resolvedUserPrompt
         JOptionPane.showMessageDialog(
             tab.root,
             "Enable MCP Server to use AI features.",
-            "AI Agent",
+            "Custom AI Agent",
             JOptionPane.WARNING_MESSAGE
         )
         return false
@@ -606,14 +711,14 @@ $resolvedUserPrompt
 
     private fun ensureActiveScannerEnabled(tab: MainTab, activeAiScanner: ActiveAiScanner?): Boolean {
         if (activeAiScanner == null) {
-            JOptionPane.showMessageDialog(tab.root, "Active Scanner not available.", "AI Agent", JOptionPane.WARNING_MESSAGE)
+            JOptionPane.showMessageDialog(tab.root, "Active Scanner not available.", "Custom AI Agent", JOptionPane.WARNING_MESSAGE)
             return false
         }
         if (!activeAiScanner.isEnabled()) {
             val enable = JOptionPane.showConfirmDialog(
                 tab.root,
                 "Active Scanner is disabled. Enable it now?",
-                "AI Agent",
+                "Custom AI Agent",
                 JOptionPane.YES_NO_OPTION
             )
             if (enable == JOptionPane.YES_OPTION) {
@@ -628,7 +733,8 @@ $resolvedUserPrompt
     private fun buildTargetedTestsMenu(
         tab: MainTab,
         targets: List<HttpRequestResponse>,
-        activeAiScanner: ActiveAiScanner?
+        activeAiScanner: ActiveAiScanner?,
+        targetLabel: String = "${targets.size}"
     ): JMenu {
         val menu = JMenu("Targeted tests")
 
@@ -647,7 +753,7 @@ $resolvedUserPrompt
         )
 
         for ((label, classes) in definitions) {
-            val item = JMenuItem("⚡ $label (${targets.size})")
+            val item = JMenuItem("$label ($targetLabel)")
             item.addActionListener {
                 if (!ensureActiveScannerEnabled(tab, activeAiScanner)) return@addActionListener
                 val scanner = activeAiScanner ?: return@addActionListener
@@ -688,7 +794,7 @@ $resolvedUserPrompt
                     "Queued $count target(s) for AI active testing: $label.\n\n" +
                         "Queue size: $preQueue -> $postQueue\n" +
                         "Queue max: ${scanner.maxQueueSize}\n" +
-                        "⚠️ This will send test payloads to the server.\n" +
+                        "This will send test payloads to the server.\n" +
                         "Confirmed findings will appear in Target → Issues with [AI] Confirmed prefix.",
                     "AI Targeted Test Started",
                     JOptionPane.INFORMATION_MESSAGE
@@ -697,7 +803,75 @@ $resolvedUserPrompt
             menu.add(item)
         }
 
+        menu.addSeparator()
+
+        val customItem = JMenuItem("Custom... ($targetLabel)")
+        customItem.addActionListener {
+            if (!ensureActiveScannerEnabled(tab, activeAiScanner)) return@addActionListener
+            val scanner = activeAiScanner ?: return@addActionListener
+            val validTargets = filterValidTargets(targets)
+            if (validTargets.isEmpty()) {
+                JOptionPane.showMessageDialog(tab.root, "No valid HTTP targets found.", "AI Targeted Test", JOptionPane.WARNING_MESSAGE)
+                return@addActionListener
+            }
+            val selected = showVulnClassSelectionDialog(tab) ?: return@addActionListener
+            if (selected.isEmpty()) return@addActionListener
+            val label = if (selected.size <= 3) selected.joinToString(", ") { it.name } else "${selected.size} vulnerability classes"
+            val preQueue = scanner.getStatus().queueSize
+            val confirmed = JOptionPane.showConfirmDialog(
+                tab.root,
+                "This will run custom active tests ($label) on ${validTargets.size} target(s).\nCurrent queue: $preQueue\n\nDo you want to continue?",
+                "Confirm Custom Targeted Test",
+                JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE
+            )
+            if (confirmed != JOptionPane.YES_OPTION) return@addActionListener
+            val count = scanner.manualScan(validTargets, selected)
+            if (count == 0) {
+                JOptionPane.showMessageDialog(tab.root, "No targets were queued.", "AI Targeted Test", JOptionPane.WARNING_MESSAGE)
+                return@addActionListener
+            }
+            JOptionPane.showMessageDialog(
+                tab.root,
+                "Queued $count target(s) for custom AI active testing.\nQueue size: $preQueue -> ${scanner.getStatus().queueSize}",
+                "AI Targeted Test Started", JOptionPane.INFORMATION_MESSAGE
+            )
+        }
+        menu.add(customItem)
+
         return menu
+    }
+
+    private fun showVulnClassSelectionDialog(tab: MainTab): List<VulnClass>? {
+        val checkboxes = VulnClass.entries.map { vc ->
+            JCheckBox(vc.name.replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() }).apply {
+                actionCommand = vc.name
+                font = UiTheme.Typography.body
+            }
+        }
+        val panel = JPanel(BorderLayout())
+        val grid = JPanel(GridLayout(0, 3, 4, 2))
+        checkboxes.forEach { grid.add(it) }
+        val scroll = JScrollPane(grid)
+        scroll.preferredSize = java.awt.Dimension(600, 400)
+        panel.add(scroll, BorderLayout.CENTER)
+
+        val selectPanel = JPanel()
+        selectPanel.layout = BoxLayout(selectPanel, BoxLayout.X_AXIS)
+        val selectAll = javax.swing.JButton("Select All")
+        val deselectAll = javax.swing.JButton("Deselect All")
+        selectAll.addActionListener { checkboxes.forEach { it.isSelected = true } }
+        deselectAll.addActionListener { checkboxes.forEach { it.isSelected = false } }
+        selectPanel.add(selectAll)
+        selectPanel.add(javax.swing.Box.createRigidArea(java.awt.Dimension(8, 0)))
+        selectPanel.add(deselectAll)
+        panel.add(selectPanel, BorderLayout.SOUTH)
+
+        val result = JOptionPane.showConfirmDialog(
+            tab.root, panel, "Select vulnerability classes to test",
+            JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE
+        )
+        if (result != JOptionPane.OK_OPTION) return null
+        return checkboxes.filter { it.isSelected }.map { VulnClass.valueOf(it.actionCommand) }
     }
 
     private fun filterValidTargets(targets: List<HttpRequestResponse>): List<HttpRequestResponse> {

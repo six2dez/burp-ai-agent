@@ -4,6 +4,7 @@ import burp.api.montoya.MontoyaApi
 import burp.api.montoya.ui.contextmenu.ContextMenuItemsProvider
 import burp.api.montoya.ui.contextmenu.ContextMenuEvent
 import burp.api.montoya.ui.contextmenu.AuditIssueContextMenuEvent
+import com.six2dez.burp.aiagent.alerts.Alerting
 import com.six2dez.burp.aiagent.audit.ActivityType
 import com.six2dez.burp.aiagent.audit.AiRequestLogger
 import com.six2dez.burp.aiagent.audit.AuditLogger
@@ -22,7 +23,6 @@ import com.six2dez.burp.aiagent.scanner.PayloadRisk
 import com.six2dez.burp.aiagent.supervisor.AgentSupervisor
 import com.six2dez.burp.aiagent.ui.MainTab
 import com.six2dez.burp.aiagent.ui.UiActions
-import com.six2dez.burp.aiagent.alerts.Alerting
 import java.nio.file.Paths
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -65,6 +65,7 @@ object App {
         auditLogger = AuditLogger(api)
         AuditLogger.registerGlobalEmitter { type, payload -> auditLogger.logEvent(type, payload) }
         supervisor = AgentSupervisor(api, backendRegistry, auditLogger, workerPool)
+        Alerting.transport = supervisor.httpTransport
         aiRequestLogger = AiRequestLogger()
         supervisor.aiRequestLogger = aiRequestLogger
         mcpSupervisor = McpSupervisor(api)
@@ -119,7 +120,7 @@ object App {
 
         val ui = MainTab(api, backendRegistry, supervisor, auditLogger, mcpSupervisor, passiveAiScanner, activeAiScanner, aiRequestLogger)
         mainTab = ui
-        api.userInterface().registerSuiteTab("AI Agent", ui.root) //  [oai_citation:4‡PortSwigger](https://portswigger.net/burp/documentation/desktop/extend-burp/extensions/creating/first-extension?utm_source=chatgpt.com)
+        api.userInterface().registerSuiteTab("Custom AI Agent", ui.root)
 
         // Context menu: requests/responses (all editions)
         api.userInterface().registerContextMenuItemsProvider(object : ContextMenuItemsProvider {

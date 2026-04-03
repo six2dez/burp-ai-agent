@@ -97,6 +97,9 @@ enum class VulnClass {
     // ===== API Security =====
     API_VERSION_BYPASS,       // Accessing old/deprecated API versions
 
+    // ===== Access Control Bypass =====
+    ACCESS_CONTROL_BYPASS,    // 403 bypass via headers, path manipulation, method switching
+
     // ===== Other =====
     OPEN_REDIRECT,
     HEADER_INJECTION,
@@ -163,7 +166,8 @@ object ScanPolicy {
             VulnClass.CACHE_DECEPTION,
             VulnClass.OPEN_REDIRECT,
             VulnClass.PRICE_MANIPULATION,
-            VulnClass.RACE_CONDITION_TOCTOU
+            VulnClass.RACE_CONDITION_TOCTOU,
+            VulnClass.ACCESS_CONTROL_BYPASS
         )
     }
 

@@ -8,6 +8,7 @@ import burp.api.montoya.core.BurpSuiteEdition
 import burp.api.montoya.core.Range
 import burp.api.montoya.http.HttpMode
 import burp.api.montoya.http.HttpService
+import burp.api.montoya.http.RequestOptions
 import burp.api.montoya.http.message.HttpHeader
 import burp.api.montoya.http.message.requests.HttpRequest
 import burp.api.montoya.intruder.HttpRequestTemplate
@@ -78,7 +79,7 @@ private fun Server.registerToolsLegacy(api: MontoyaApi, context: McpToolContext)
         api.logging().logToOutput("MCP HTTP/1.1 request: ${context.resolveHost(targetHostname)}:$targetPort")
         val fixedContent = normalizeHttpRequest(content)
         val request = HttpRequest.httpRequest(toMontoyaService(context::resolveHost), fixedContent)
-        val response = api.http().sendRequest(request)
+        val response = api.http().sendRequest(request, RequestOptions.requestOptions().withUpstreamTLSVerification())
         response?.toString() ?: "<no response>"
     }
 
@@ -105,7 +106,7 @@ private fun Server.registerToolsLegacy(api: MontoyaApi, context: McpToolContext)
 
         val headerList = (fixedPseudoHeaders + headers).map { HttpHeader.httpHeader(it.key.lowercase(), it.value) }
         val request = HttpRequest.http2Request(toMontoyaService(context::resolveHost), headerList, requestBody)
-        val response = api.http().sendRequest(request, HttpMode.HTTP_2)
+        val response = api.http().sendRequest(request, RequestOptions.requestOptions().withUpstreamTLSVerification().withHttpMode(HttpMode.HTTP_2))
 
         response?.toString() ?: "<no response>"
     }
@@ -800,70 +801,97 @@ private fun Server.registerToolsLegacy(api: MontoyaApi, context: McpToolContext)
         context,
         toolName = "issue_create"
     ) {
-        val severityEnum = try {
-            burp.api.montoya.scanner.audit.issues.AuditIssueSeverity.valueOf(severity.uppercase())
-        } catch (_: Exception) {
-            return@mcpTool "Invalid severity: $severity. Use: HIGH, MEDIUM, LOW, INFORMATION"
-        }
-        val confidenceEnum = try {
-            burp.api.montoya.scanner.audit.issues.AuditIssueConfidence.valueOf(confidence.uppercase())
-        } catch (_: Exception) {
-            return@mcpTool "Invalid confidence: $confidence. Use: CERTAIN, FIRM, TENTATIVE"
-        }
-        val typicalSeverityEnum = try {
-            burp.api.montoya.scanner.audit.issues.AuditIssueSeverity.valueOf((typicalSeverity ?: severity).uppercase())
-        } catch (_: Exception) {
-            severityEnum
-        }
-
-        val requestResponseList = if (httpRequest != null) {
-            val service = toMontoyaServiceOrNull(context::resolveHost)
-            if (service == null) {
-                return@mcpTool "Error: targetHostname/targetPort/usesHttps required when providing httpRequest"
-            }
-            val fixedRequest = httpRequest.replace("\r", "").replace("\n", "\r\n")
-            val request = HttpRequest.httpRequest(service, fixedRequest)
-            val httpResponse = if (httpResponseContent != null) {
-                val fixedResponse = httpResponseContent.replace("\r", "").replace("\n", "\r\n")
-                burp.api.montoya.http.message.responses.HttpResponse.httpResponse(fixedResponse)
-            } else {
-                null
-            }
-            val rr = if (httpResponse != null) {
-                burp.api.montoya.http.message.HttpRequestResponse.httpRequestResponse(request, httpResponse)
-            } else {
-                burp.api.montoya.http.message.HttpRequestResponse.httpRequestResponse(request, null)
-            }
-            listOf(rr)
-        } else {
-            emptyList()
-        }
-
-        val issueNameWithPrefix = withAiIssuePrefix(name)
-        if (hasEquivalentIssue(api, issueNameWithPrefix, baseUrl)) {
-            return@mcpTool "Issue already exists: $issueNameWithPrefix"
-        }
-        val sanitizedDetail = IssueText.sanitize(detail)
-        val sanitizedRemediation = IssueText.sanitize(remediation ?: "")
-        val sanitizedBackground = IssueText.sanitize(background ?: "")
-        val sanitizedRemediationBackground = IssueText.sanitize(remediationBackground ?: "")
-        
-        val issue = burp.api.montoya.scanner.audit.issues.AuditIssue.auditIssue(
-            issueNameWithPrefix,
-            sanitizedDetail,
-            sanitizedRemediation,
-            baseUrl,
-            severityEnum,
-            confidenceEnum,
-            sanitizedBackground,
-            sanitizedRemediationBackground,
-            typicalSeverityEnum,
-            requestResponseList
-        )
-
-        api.siteMap().add(issue)
-        "Issue created: $issueNameWithPrefix (Severity: $severity, Confidence: $confidence)"
+        executeIssueCreate(this, api, context)
     }
+}
+
+private fun executeIssueCreate(input: CreateAuditIssue, api: MontoyaApi, context: McpToolContext): String {
+    val severityEnum = try {
+        burp.api.montoya.scanner.audit.issues.AuditIssueSeverity.valueOf(input.severity.uppercase())
+    } catch (_: Exception) {
+        return "Invalid severity: ${input.severity}. Use: HIGH, MEDIUM, LOW, INFORMATION"
+    }
+    val confidenceEnum = try {
+        burp.api.montoya.scanner.audit.issues.AuditIssueConfidence.valueOf(input.confidence.uppercase())
+    } catch (_: Exception) {
+        return "Invalid confidence: ${input.confidence}. Use: CERTAIN, FIRM, TENTATIVE"
+    }
+    val typicalSeverityEnum = try {
+        burp.api.montoya.scanner.audit.issues.AuditIssueSeverity.valueOf((input.typicalSeverity ?: input.severity).uppercase())
+    } catch (_: Exception) {
+        severityEnum
+    }
+
+    val requestResponseList = if (input.httpRequest != null) {
+        val service = input.toMontoyaServiceOrNull(context::resolveHost)
+            ?: return "Error: targetHostname/targetPort/usesHttps required when providing httpRequest"
+        val fixedRequest = input.httpRequest.replace("\r", "").replace("\n", "\r\n")
+        val request = HttpRequest.httpRequest(service, fixedRequest)
+        val httpResponse = if (input.httpResponseContent != null) {
+            val fixedResponse = input.httpResponseContent.replace("\r", "").replace("\n", "\r\n")
+            burp.api.montoya.http.message.responses.HttpResponse.httpResponse(fixedResponse)
+        } else {
+            null
+        }
+        val rr = if (httpResponse != null) {
+            burp.api.montoya.http.message.HttpRequestResponse.httpRequestResponse(request, httpResponse)
+        } else {
+            burp.api.montoya.http.message.HttpRequestResponse.httpRequestResponse(request, null)
+        }
+        listOf(rr)
+    } else {
+        findProxyHistoryMatch(api, input.baseUrl)
+    }
+
+    val issueNameWithPrefix = withAiIssuePrefix(input.name)
+    if (hasEquivalentIssue(api, issueNameWithPrefix, input.baseUrl)) {
+        return "Issue already exists: $issueNameWithPrefix"
+    }
+    val sanitizedDetail = IssueText.sanitize(input.detail)
+    val sanitizedRemediation = IssueText.sanitize(input.remediation ?: "")
+    val sanitizedBackground = IssueText.sanitize(input.background ?: "")
+    val sanitizedRemediationBackground = IssueText.sanitize(input.remediationBackground ?: "")
+
+    val issue = burp.api.montoya.scanner.audit.issues.AuditIssue.auditIssue(
+        issueNameWithPrefix,
+        sanitizedDetail,
+        sanitizedRemediation,
+        input.baseUrl,
+        severityEnum,
+        confidenceEnum,
+        sanitizedBackground,
+        sanitizedRemediationBackground,
+        typicalSeverityEnum,
+        requestResponseList
+    )
+
+    api.siteMap().add(issue)
+    return "Issue created: $issueNameWithPrefix (Severity: ${input.severity}, Confidence: ${input.confidence})"
+}
+
+private fun findProxyHistoryMatch(api: MontoyaApi, baseUrl: String): List<burp.api.montoya.http.message.HttpRequestResponse> {
+    return runCatching {
+        val baseUri = java.net.URI(baseUrl)
+        val baseScheme = baseUri.scheme?.lowercase()
+        val baseHost = baseUri.host?.lowercase() ?: return@runCatching emptyList()
+        val basePort = baseUri.port
+        val basePath = baseUri.path.orEmpty()
+
+        api.proxy().history()
+            .firstOrNull { entry ->
+                val entryUrl = entry.request()?.url() ?: return@firstOrNull false
+                val entryUri = runCatching { java.net.URI(entryUrl) }.getOrNull() ?: return@firstOrNull false
+                entryUri.scheme?.lowercase() == baseScheme &&
+                    entryUri.host?.lowercase() == baseHost &&
+                    (basePort < 0 || entryUri.port == basePort) &&
+                    entryUri.path.orEmpty().startsWith(basePath)
+            }
+            ?.let { proxy ->
+                listOf(burp.api.montoya.http.message.HttpRequestResponse.httpRequestResponse(
+                    proxy.request(), proxy.response()
+                ))
+            } ?: emptyList()
+    }.getOrDefault(emptyList())
 }
 
 private fun withAiIssuePrefix(rawName: String): String {
@@ -1156,7 +1184,7 @@ object McpToolExecutor {
                     api.logging().logToOutput("MCP HTTP/1.1 request: ${context.resolveHost(input.targetHostname)}:${input.targetPort}")
                     val fixedContent = normalizeHttpRequest(input.content)
                     val request = HttpRequest.httpRequest(input.toMontoyaService(context::resolveHost), fixedContent)
-                    val response = api.http().sendRequest(request)
+                    val response = api.http().sendRequest(request, RequestOptions.requestOptions().withUpstreamTLSVerification())
                     response?.toString() ?: "<no response>"
                 }
                 "http2_request" -> {
@@ -1179,7 +1207,7 @@ object McpToolExecutor {
                         HttpHeader.httpHeader(it.key.lowercase(), it.value)
                     }
                     val request = HttpRequest.http2Request(input.toMontoyaService(context::resolveHost), headerList, input.requestBody)
-                    val response = api.http().sendRequest(request, HttpMode.HTTP_2)
+                    val response = api.http().sendRequest(request, RequestOptions.requestOptions().withUpstreamTLSVerification().withHttpMode(HttpMode.HTTP_2))
                     response?.toString() ?: "<no response>"
                 }
                 "repeater_tab" -> {
@@ -1715,6 +1743,10 @@ object McpToolExecutor {
                     editor.text = input.text
                     "Editor text has been set"
                 }
+                "issue_create" -> {
+                    val input = decode<CreateAuditIssue>(normalizedArgs)
+                    executeIssueCreate(input, api, context)
+                }
                 else -> "Unknown tool: $name"
             }
             context.redactIfNeeded(output)
@@ -1752,6 +1784,7 @@ object McpToolExecutor {
         )
     }
 
+    @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
     private inline fun <reified T : Any> decode(raw: String?): T {
         val jsonText = raw?.trim().orEmpty().ifBlank { "{}" }
         val element = decodeJson.parseToJsonElement(jsonText)

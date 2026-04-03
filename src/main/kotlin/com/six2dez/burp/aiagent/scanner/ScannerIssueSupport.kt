@@ -12,6 +12,7 @@ object ScannerIssueSupport {
             VulnClass.GIT_EXPOSURE, VulnClass.SUBDOMAIN_TAKEOVER, VulnClass.HOST_HEADER_INJECTION,
             VulnClass.CACHE_POISONING -> AuditIssueSeverity.HIGH
 
+            VulnClass.ACCESS_CONTROL_BYPASS,
             VulnClass.XSS_REFLECTED, VulnClass.XSS_STORED, VulnClass.XSS_DOM,
             VulnClass.LFI, VulnClass.SSRF, VulnClass.IDOR, VulnClass.PATH_TRAVERSAL,
             VulnClass.BOLA, VulnClass.BFLA, VulnClass.BAC_HORIZONTAL, VulnClass.BAC_VERTICAL,
@@ -89,6 +90,7 @@ object ScannerIssueSupport {
             VulnClass.S3_MISCONFIGURATION -> "Use private bucket policies by default. Enable S3 Block Public Access. Audit bucket policies regularly. Use presigned URLs for temporary access."
             VulnClass.SUBDOMAIN_TAKEOVER -> "Remove dangling DNS records. Monitor for unclaimed resources. Use CNAME verification before DNS changes."
             VulnClass.API_VERSION_BYPASS -> "Deprecate old API versions completely. Don't leave deprecated versions accessible. Use consistent security across all versions."
+            VulnClass.ACCESS_CONTROL_BYPASS -> "Don't rely on client IP headers for access control. Implement proper authentication and authorization. Use consistent access control across path variations and HTTP methods."
         }
     }
 }

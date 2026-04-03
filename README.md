@@ -12,6 +12,7 @@ Burp AI Agent is an extension for Burp Suite that integrates AI into your securi
 - **9 AI Backends** — Ollama, LM Studio, NVIDIA NIM, Generic OpenAI-compatible, Gemini CLI, Claude CLI, Codex CLI, OpenCode CLI, Copilot CLI.
 - **53+ MCP Tools** — Let Claude Desktop (or any MCP client) drive Burp autonomously.
 - **62 Vulnerability Classes** — Passive and Active AI scanners across injection, auth, crypto, and more.
+- **Burp Scan Skill** — Use your preferred AI coding assistant (Claude Code, Gemini CLI, Codex, etc.) as a scanner via MCP.
 - **3 Privacy Modes** — STRICT / BALANCED / OFF. Redact sensitive data before it leaves Burp.
 - **Audit Logging** — JSONL with SHA-256 integrity hashing for compliance.
 
@@ -104,6 +105,54 @@ Enable the MCP server in **Settings > MCP Server** and add this to your Claude D
 
 > Requires Node.js 18+. If you enable **External Access**, the MCP client must send `Authorization: Bearer <token>` on every request.
 
+## Burp Scan Skill (Terminal AI Scanning)
+
+The `burp-scan` skill lets you use any AI coding assistant (Claude Code, Gemini CLI, Codex, etc.) as a Burp scanner from your terminal. Instead of the plugin's built-in AI, **your terminal AI becomes the reasoning engine** while Burp provides the tools via MCP.
+
+### What It Contains
+
+- 53+ MCP tool reference organized by scanning action
+- Passive analysis protocol (traffic analysis without sending requests)
+- Active testing payload library (200+ payloads for 62 vuln classes with detection patterns)
+- End-to-end scanning workflow (scope -> passive -> active -> OOB -> report)
+- Issue creation protocol with severity/confidence mapping
+
+### Install for Claude Code
+
+Copy the skill to your Claude Code skills directory:
+
+```bash
+# Global (available in all projects)
+cp -r skills/burp-scan ~/.claude/skills/burp-scan
+
+# Or project-specific
+cp -r skills/burp-scan .claude/skills/burp-scan
+```
+
+Then use `/burp-scan` in Claude Code or let it trigger automatically when you mention Burp scanning.
+
+### Install for Other AI Assistants
+
+The skill is a standalone Markdown file at [`skills/burp-scan/SKILL.md`](skills/burp-scan/SKILL.md). You can use it with any AI assistant that supports system prompts or context files:
+
+- **Gemini CLI / Codex / OpenCode**: Add as a context file or paste into your system prompt
+- **Custom MCP clients**: Include the skill content as system context alongside your MCP connection
+- **Any LLM**: The file is self-contained — feed it as context along with your MCP tool definitions
+
+### Usage Example
+
+```
+You: Connect to Burp MCP at localhost:9876 and scan the proxy history for IDOR vulnerabilities
+
+AI: [Uses proxy_http_history to pull traffic]
+    [Identifies endpoints with numeric IDs]
+    [Sends http1_request with ID+1, ID-1 payloads]
+    [Compares responses for different user data]
+    [Creates issue_create for confirmed IDOR]
+```
+
+> The skill and the plugin's built-in scanner are complementary: the plugin runs automated background scanning, while the skill enables interactive, analyst-guided scanning from your terminal.
+
 ## Documentation
 
 Full documentation is available at **[burp-ai-agent.six2dez.com](https://burp-ai-agent.six2dez.com)**.
@@ -118,6 +167,7 @@ Full documentation is available at **[burp-ai-agent.six2dez.com](https://burp-ai
 - [Privacy Modes](https://burp-ai-agent.six2dez.com/privacy/privacy-modes)
 - [Settings Reference](https://burp-ai-agent.six2dez.com/reference/settings-reference)
 - [Troubleshooting](https://burp-ai-agent.six2dez.com/reference/troubleshooting)
+- [Burp Scan Skill](https://burp-ai-agent.six2dez.com/user-guide/burp-scan-skill)
 
 ## Operator Playbooks
 

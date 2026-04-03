@@ -25,7 +25,7 @@ class McpStdioBridge(
     private val api: MontoyaApi,
     private val contextFactory: McpRuntimeContextFactory = McpRuntimeContextFactory(api)
 ) {
-    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private var scope: CoroutineScope? = null
     private var job: Job? = null
     private var server: Server? = null
     private var transport: StdioServerTransport? = null
@@ -55,7 +55,9 @@ class McpStdioBridge(
         server = mcpServer
         transport = stdioTransport
 
-        job = scope.launch {
+        val newScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+        scope = newScope
+        job = newScope.launch {
             mcpServer.connect(stdioTransport)
             stdioTransport.start()
         }
@@ -68,11 +70,14 @@ class McpStdioBridge(
         job = null
         val currentTransport = transport
         val currentServer = server
+        val currentScope = scope
         transport = null
         server = null
+        scope = null
         runBlocking {
             withTimeoutOrNull(5000) { currentTransport?.close() }
             withTimeoutOrNull(5000) { currentServer?.close() }
         }
+        currentScope?.coroutineContext?.get(kotlinx.coroutines.Job)?.cancel()
     }
 }

@@ -6,6 +6,7 @@ import com.six2dez.burp.aiagent.backends.cli.GeminiCliBackendFactory
 import com.six2dez.burp.aiagent.backends.cli.OpenCodeCliBackendFactory
 import com.six2dez.burp.aiagent.backends.cli.ClaudeCliBackendFactory
 import com.six2dez.burp.aiagent.backends.cli.CopilotCliBackendFactory
+import com.six2dez.burp.aiagent.backends.burpai.BurpAiBackend
 import com.six2dez.burp.aiagent.backends.http.HttpBackendSupport
 import com.six2dez.burp.aiagent.backends.lmstudio.LmStudioBackendFactory
 import com.six2dez.burp.aiagent.backends.nvidia.NvidiaNimBackendFactory
@@ -58,6 +59,14 @@ class BackendRegistry(private val api: MontoyaApi) {
             }
         }
 
+        // Burp AI backend (requires MontoyaApi, registered directly)
+        try {
+            val burpAi = BurpAiBackend(api)
+            backends[burpAi.id] = burpAi
+        } catch (e: Exception) {
+            api.logging().logToOutput("Burp AI backend not available: ${e.message}")
+        }
+
         // Optional drop-in backend JARs
         loadExternalBackendJars()
 
@@ -73,6 +82,13 @@ class BackendRegistry(private val api: MontoyaApi) {
                 val cacheKey = Pair(backend.id, settingsHash)
                 availabilityCache.getOrPut(cacheKey) { backend.isAvailable(settings) }
             }
+            .sortedBy { it.displayName }
+            .map { it.id }
+    }
+
+    /** Returns all registered backend IDs regardless of availability. */
+    fun listAllBackendIds(): List<String> {
+        return backends.values
             .sortedBy { it.displayName }
             .map { it.id }
     }
@@ -107,8 +123,8 @@ class BackendRegistry(private val api: MontoyaApi) {
         val jars = externalBackendDir.listFiles { f -> f.isFile && f.extension.lowercase() == "jar" }?.toList().orEmpty()
         if (jars.isEmpty()) return
 
+        val cl = URLClassLoader(jars.map { it.toURI().toURL() }.toTypedArray(), this::class.java.classLoader)
         try {
-            val cl = URLClassLoader(jars.map { it.toURI().toURL() }.toTypedArray(), this::class.java.classLoader)
             ServiceLoader.load(AiBackendFactory::class.java, cl).forEach { f ->
                 val b = f.create()
                 backends[b.id] = b
@@ -116,6 +132,7 @@ class BackendRegistry(private val api: MontoyaApi) {
             externalClassLoader = cl
             api.logging().logToOutput("Loaded external backend JARs: ${jars.joinToString { it.name }}")
         } catch (e: Exception) {
+            try { cl.close() } catch (_: Exception) {}
             api.logging().logToError("Failed loading external backend JARs: ${e.message}")
         }
     }

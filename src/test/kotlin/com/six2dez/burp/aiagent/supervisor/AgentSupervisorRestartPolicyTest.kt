@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.mockito.Answers
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.whenever
 import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.AbstractExecutorService
@@ -24,6 +25,7 @@ class AgentSupervisorRestartPolicyTest {
     @Test
     fun repeatedImmediateCrashesSuppressAutoRestart() {
         val api = mock<MontoyaApi>(defaultAnswer = Answers.RETURNS_DEEP_STUBS)
+        whenever(api.ai().isEnabled()).thenReturn(true)
         val registry = BackendRegistry(api)
         val launches = AtomicInteger(0)
         val failingBackend = FailingBackend(launches)
@@ -108,7 +110,9 @@ class AgentSupervisorRestartPolicyTest {
             history: List<com.six2dez.burp.aiagent.backends.ChatMessage>?,
             onChunk: (String) -> Unit,
             onComplete: (Throwable?) -> Unit,
-            systemPrompt: String?
+            systemPrompt: String?,
+            jsonMode: Boolean,
+            maxOutputTokens: Int?
         ) {
             onComplete(IllegalStateException("dead"))
         }

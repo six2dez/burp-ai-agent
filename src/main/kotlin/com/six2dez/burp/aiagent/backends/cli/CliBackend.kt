@@ -56,7 +56,7 @@ class CliBackend(
         val file = java.io.File(executable)
         val available = file.exists() && file.canExecute()
         if (available && availabilityLogged.compareAndSet(false, true)) {
-            com.six2dez.burp.aiagent.backends.BackendDiagnostics.log("[Burp AI Agent] Found $displayName: $executable")
+            com.six2dez.burp.aiagent.backends.BackendDiagnostics.log("[Custom AI Agent] Found $displayName: $executable")
         }
         return available
     }
@@ -87,7 +87,9 @@ class CliBackend(
             history: List<ChatMessage>?,
             onChunk: (String) -> Unit,
             onComplete: (Throwable?) -> Unit,
-            systemPrompt: String?
+            systemPrompt: String?,
+            jsonMode: Boolean,
+            maxOutputTokens: Int?
         ) {
             try {
             executor.submit {
@@ -175,7 +177,7 @@ class CliBackend(
                         while (true) {
                             if (process.waitFor(200, TimeUnit.MILLISECONDS)) break
                             val idleMs = System.currentTimeMillis() - lastOutputAt.get()
-                            if (hasOutput.get() && idleMs > 10000) {
+                            if (hasOutput.get() && idleMs > Defaults.OPENCODE_IDLE_TIMEOUT_MS) {
                                 terminatedAfterIdle = true
                                 process.destroyForcibly()
                                 break
@@ -383,23 +385,26 @@ class CliBackend(
         }
 
         private fun readOpenCodeOutput(stdout: String, prompt: String): String {
-            val inputLines = prompt.lines().map { it.trim() }.filter { it.isNotBlank() }.toSet()
+            // Only dedup long prompt lines (>=40 chars) — short lines match real content too often
+            val inputLines = prompt.lines()
+                .map { it.trim() }
+                .filter { it.length >= 40 }
+                .toSet()
             return stdout.lineSequence()
                 .map { it.trim() }
                 .filter { it.isNotBlank() && !inputLines.contains(it) }
-                .filterNot { line ->
-                    val lower = line.lowercase()
-                    // Filter OpenCode metadata lines that start with ">"
-                    lower.startsWith("> build") ||
-                    lower.startsWith("> pulling") ||
-                    lower.startsWith("> hashing") ||
-                    lower.startsWith("> loading") ||
-                    lower.startsWith("> downloading") ||
-                    lower.startsWith("> thinking") ||
-                    lower.startsWith("> verifying")
-                }
+                .filterNot { isOpenCodeNoiseLine(it) }
                 .joinToString("\n")
                 .trim()
+        }
+
+        private fun isOpenCodeNoiseLine(line: String): Boolean {
+            val lower = line.lowercase()
+            // All short "> " prefixed lines are OpenCode status/metadata
+            if (lower.startsWith("> ") && line.length < 120) return true
+            // Version banners and session IDs
+            if (lower.startsWith("opencode v") || lower.startsWith("session:")) return true
+            return false
         }
 
         private fun buildClaudeCommand(cmd: List<String>): List<String> {
@@ -425,7 +430,8 @@ class CliBackend(
                 } else {
                     // Another thread won the race — resume their session
                     args.add("--resume")
-                    args.add(_cliSessionId.get()!!)
+                    args.add(_cliSessionId.get()
+                        ?: throw IllegalStateException("CLI session ID lost between CAS and read"))
                 }
             }
             return args
@@ -515,7 +521,9 @@ class CliBackend(
             history: List<ChatMessage>?,
             onChunk: (String) -> Unit,
             onComplete: (Throwable?) -> Unit,
-            systemPrompt: String?
+            systemPrompt: String?,
+            jsonMode: Boolean,
+            maxOutputTokens: Int?
         ) {
             if (!isAlive()) {
                 onComplete(buildExitError())
@@ -694,20 +702,36 @@ class CliBackend(
 private fun normalizeWindowsCommand(cmd: List<String>): List<String> {
     if (!isWindows() || cmd.isEmpty()) return cmd
     val first = cmd.first()
-    if (first.contains("\\") || first.contains("/")) return cmd
     val lower = first.lowercase(Locale.ROOT)
-    return if (lower.endsWith(".exe")) {
-        listOf(first.dropLast(4)) + cmd.drop(1)
-    } else if (lower == "opencode" || lower == "opencode.cmd") {
-        val resolved = resolveWindowsNpmShim("opencode.cmd")
-        if (resolved != null) {
-            listOf(resolved) + cmd.drop(1)
-        } else {
-            cmd
-        }
-    } else {
-        cmd
+
+    // Strip redundant .exe suffix
+    if (lower.endsWith(".exe")) {
+        return listOf(first.dropLast(4)) + cmd.drop(1)
     }
+
+    // For absolute paths: check if it's a non-executable npm shim
+    if (first.contains("\\") || first.contains("/")) {
+        val file = java.io.File(first)
+        if (file.isAbsolute && file.exists() && !hasWindowsExeExtension(lower)) {
+            val cmdSibling = java.io.File(first + ".cmd")
+            if (cmdSibling.exists()) return listOf(cmdSibling.absolutePath) + cmd.drop(1)
+            // Fallback: wrap with cmd /c for shell script shims
+            return listOf("cmd", "/c", first) + cmd.drop(1)
+        }
+        return cmd
+    }
+
+    // For bare command names: resolve npm .cmd shim
+    val baseName = if (lower.endsWith(".cmd")) lower.dropLast(4) else lower
+    val resolved = resolveWindowsNpmShim("$baseName.cmd")
+    if (resolved != null) return listOf(resolved) + cmd.drop(1)
+
+    return cmd
+}
+
+private fun hasWindowsExeExtension(path: String): Boolean {
+    val l = path.lowercase(Locale.ROOT)
+    return l.endsWith(".exe") || l.endsWith(".cmd") || l.endsWith(".bat")
 }
 
 private fun buildCliHistory(history: List<ChatMessage>?): String {
@@ -747,10 +771,9 @@ private fun resolveCommand(cmd: List<String>, env: Map<String, String>): List<St
     val firstFile = java.io.File(first)
     if (firstFile.isAbsolute) {
         return if (firstFile.exists()) {
-            com.six2dez.burp.aiagent.backends.BackendDiagnostics.log("[Burp AI Agent] Resolved absolute: $first")
             cmd
         } else {
-            com.six2dez.burp.aiagent.backends.BackendDiagnostics.log("[Burp AI Agent] Absolute path not found: $first")
+            com.six2dez.burp.aiagent.backends.BackendDiagnostics.log("[Custom AI Agent] Absolute path not found: $first")
             emptyList()
         }
     }

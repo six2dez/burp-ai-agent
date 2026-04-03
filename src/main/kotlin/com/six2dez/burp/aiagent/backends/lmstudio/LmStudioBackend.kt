@@ -7,11 +7,13 @@ import com.six2dez.burp.aiagent.backends.AiBackend
 import com.six2dez.burp.aiagent.backends.BackendDiagnostics
 import com.six2dez.burp.aiagent.backends.BackendLaunchConfig
 import com.six2dez.burp.aiagent.backends.HealthCheckResult
+import com.six2dez.burp.aiagent.backends.JsonModeCapable
 import com.six2dez.burp.aiagent.backends.TokenUsage
 import com.six2dez.burp.aiagent.backends.UsageAwareConnection
 import com.six2dez.burp.aiagent.backends.http.CircuitBreaker
 import com.six2dez.burp.aiagent.backends.http.ConversationHistory
 import com.six2dez.burp.aiagent.backends.http.HttpBackendSupport
+import com.six2dez.burp.aiagent.backends.http.MontoyaHttpTransport
 import com.six2dez.burp.aiagent.config.AgentSettings
 import com.six2dez.burp.aiagent.util.HeaderParser
 import okhttp3.MediaType.Companion.toMediaType
@@ -42,6 +44,8 @@ class LmStudioBackend : AiBackend {
             config.determinismMode,
             config.sessionId,
             HttpBackendSupport.newCircuitBreaker(),
+            transport = config.transport,
+            timeoutSeconds = timeoutSeconds,
             debugLog = { BackendDiagnostics.log("[lmstudio] $it") },
             errorLog = { BackendDiagnostics.logError("[lmstudio] $it") }
         )
@@ -71,9 +75,11 @@ class LmStudioBackend : AiBackend {
         private val determinismMode: Boolean,
         private val sessionId: String?,
         private val circuitBreaker: CircuitBreaker,
+        private val transport: MontoyaHttpTransport?,
+        private val timeoutSeconds: Long,
         private val debugLog: (String) -> Unit,
         private val errorLog: (String) -> Unit
-    ) : AgentConnection, UsageAwareConnection {
+    ) : AgentConnection, UsageAwareConnection, JsonModeCapable {
         private val alive = AtomicBoolean(true)
         private val exec = Executors.newSingleThreadExecutor { runnable ->
             Thread(runnable, "lmstudio-connection").apply { isDaemon = true }
@@ -90,7 +96,9 @@ class LmStudioBackend : AiBackend {
             history: List<com.six2dez.burp.aiagent.backends.ChatMessage>?,
             onChunk: (String) -> Unit,
             onComplete: (Throwable?) -> Unit,
-            systemPrompt: String?
+            systemPrompt: String?,
+            jsonMode: Boolean,
+            maxOutputTokens: Int?
         ) {
             if (!isAlive()) {
                 onComplete(IllegalStateException("Connection closed"))
@@ -123,65 +131,90 @@ class LmStudioBackend : AiBackend {
                             // Add user message to conversation history
                             conversationHistory.addUser(text)
                             val messages = conversationHistory.snapshot()
-                            val payload = mapOf(
+                            val payload = mutableMapOf<String, Any>(
                                 "model" to model,
                                 "messages" to messages,
                                 "stream" to false,
                                 "temperature" to if (determinismMode) 0.0 else 0.7
                             )
+                            if (maxOutputTokens != null) {
+                                payload["max_tokens"] = maxOutputTokens
+                            }
+                            if (jsonMode) {
+                                payload["response_format"] = mapOf("type" to "json_object")
+                            }
 
                             val json = mapper.writeValueAsString(payload)
-                            val req = Request.Builder()
-                                .url("$baseUrl/v1/chat/completions")
-                                .post(json.toRequestBody("application/json".toMediaType()))
-                                .apply {
-                                    headers.forEach { (name, value) ->
-                                        header(name, value)
-                                    }
-                                    if (!sessionId.isNullOrBlank()) {
-                                        header("X-Session-Id", sessionId)
-                                    }
-                                }
-                                .build()
+                            val endpointUrl = "$baseUrl/v1/chat/completions"
 
-                            debugLog("request -> ${req.url}")
-                            client.newCall(req).execute().use { resp ->
+                            val allHeaders = buildMap {
+                                putAll(headers)
+                                if (!sessionId.isNullOrBlank()) {
+                                    put("X-Session-Id", sessionId)
+                                }
+                            }
+
+                            debugLog("request -> $endpointUrl")
+
+                            val body: String
+                            if (transport != null) {
+                                val resp = transport.post(endpointUrl, allHeaders, json, timeoutSeconds * 1000)
                                 if (!resp.isSuccessful) {
-                                    val bodyText = resp.body?.string().orEmpty()
-                                    errorLog("HTTP ${resp.code}: ${bodyText.take(500)}")
-                                    onComplete(IllegalStateException("LM Studio HTTP ${resp.code}: $bodyText"))
+                                    errorLog("HTTP ${resp.statusCode}: ${resp.body.take(500)}")
+                                    onComplete(IllegalStateException("LM Studio HTTP ${resp.statusCode}: ${resp.body}"))
                                     return@submit
                                 }
-                                val body = resp.body?.string().orEmpty()
-                                if (body.isBlank()) {
-                                    onComplete(IllegalStateException("LM Studio response body was empty"))
-                                    return@submit
+                                body = resp.body
+                            } else {
+                                val req = Request.Builder()
+                                    .url(endpointUrl)
+                                    .post(json.toRequestBody("application/json".toMediaType()))
+                                    .apply {
+                                        allHeaders.forEach { (name, value) ->
+                                            header(name, value)
+                                        }
+                                    }
+                                    .build()
+                                val okResp = client.newCall(req).execute()
+                                okResp.use { resp ->
+                                    if (!resp.isSuccessful) {
+                                        val bodyText = resp.body?.string().orEmpty()
+                                        errorLog("HTTP ${resp.code}: ${bodyText.take(500)}")
+                                        onComplete(IllegalStateException("LM Studio HTTP ${resp.code}: $bodyText"))
+                                        return@submit
+                                    }
+                                    body = resp.body?.string().orEmpty()
                                 }
-                                val node = mapper.readTree(body)
-                                val content = node.path("choices").path(0).path("message").path("content").asText()
-                                val usageNode = node.path("usage")
-                                val promptTokens = usageNode.path("prompt_tokens").asInt(-1)
-                                val completionTokens = usageNode.path("completion_tokens").asInt(-1)
-                                if (promptTokens >= 0 || completionTokens >= 0) {
-                                    lastTokenUsageRef.set(
-                                        TokenUsage(
-                                            inputTokens = promptTokens.coerceAtLeast(0),
-                                            outputTokens = completionTokens.coerceAtLeast(0)
-                                        )
-                                    )
-                                }
-                                if (content.isBlank()) {
-                                    onComplete(IllegalStateException("LM Studio response content was empty"))
-                                    return@submit
-                                }
-                                debugLog("response <- ${content.take(200)}")
-                                // Add assistant response to conversation history
-                                conversationHistory.addAssistant(content)
-                                circuitBreaker.recordSuccess()
-                                onChunk(content)
-                                onComplete(null)
+                            }
+
+                            if (body.isBlank()) {
+                                onComplete(IllegalStateException("LM Studio response body was empty"))
                                 return@submit
                             }
+                            val node = mapper.readTree(body)
+                            val content = node.path("choices").path(0).path("message").path("content").asText()
+                            val usageNode = node.path("usage")
+                            val promptTokens = usageNode.path("prompt_tokens").asInt(-1)
+                            val completionTokens = usageNode.path("completion_tokens").asInt(-1)
+                            if (promptTokens >= 0 || completionTokens >= 0) {
+                                lastTokenUsageRef.set(
+                                    TokenUsage(
+                                        inputTokens = promptTokens.coerceAtLeast(0),
+                                        outputTokens = completionTokens.coerceAtLeast(0)
+                                    )
+                                )
+                            }
+                            if (content.isBlank()) {
+                                onComplete(IllegalStateException("LM Studio response content was empty"))
+                                return@submit
+                            }
+                            debugLog("response <- ${content.take(200)}")
+                            // Add assistant response to conversation history
+                            conversationHistory.addAssistant(content)
+                            circuitBreaker.recordSuccess()
+                            onChunk(content)
+                            onComplete(null)
+                            return@submit
                         } catch (e: Exception) {
                             lastError = e
                             val retryable = HttpBackendSupport.isRetryableConnectionError(e)

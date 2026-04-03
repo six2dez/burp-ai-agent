@@ -1,6 +1,7 @@
 package com.six2dez.burp.aiagent.scanner
 
 import burp.api.montoya.MontoyaApi
+import burp.api.montoya.http.RequestOptions
 import burp.api.montoya.http.message.HttpRequestResponse
 import burp.api.montoya.http.message.requests.HttpRequest
 import burp.api.montoya.scanner.audit.issues.AuditIssue
@@ -49,6 +50,7 @@ class ActiveAiScanner(
     private val confirmations = ArrayDeque<ActiveAiFinding>(Defaults.FINDINGS_BUFFER_SIZE)
     
     private val payloadGenerator = PayloadGenerator()
+    private val adaptivePayloadEngine = AdaptivePayloadEngine(supervisor)
     private val responseAnalyzer = ResponseAnalyzer()
     private val requestExecutor = Executors.newCachedThreadPool()
 
@@ -122,7 +124,7 @@ class ActiveAiScanner(
      * Called by PassiveAiScanner when it detects a potential vulnerability
      */
     fun queueTarget(target: ActiveScanTarget) {
-        if (!enabled.get()) return
+        if (!enabled.get() || !supervisor.isAiEnabled()) return
         if (target.vulnHint.vulnClass in ScanPolicy.PASSIVE_ONLY_VULN_CLASSES) return
         if (!ScanPolicy.isAllowedForMode(scanMode, target.vulnHint.vulnClass)) return
         
@@ -142,8 +144,15 @@ class ActiveAiScanner(
             processedTargets[target.id] = now
         }
 
-        if (!offerIfQueueNotFull(target)) return
-        api.logging().logToOutput("[ActiveAiScanner] Queued: ${target.vulnHint.vulnClass} in ${target.injectionPoint.name}")
+        // Boost priority if knowledge base has prior signals for this endpoint
+        val boostedTarget = if (ScanKnowledgeBase.hasHighPrioritySignals(target.originalRequest.request().url())) {
+            target.copy(priority = (target.priority + 20).coerceAtMost(100))
+        } else {
+            target
+        }
+
+        if (!offerIfQueueNotFull(boostedTarget)) return
+        api.logging().logToOutput("[ActiveAiScanner] Queued: ${boostedTarget.vulnHint.vulnClass} in ${boostedTarget.injectionPoint.name}")
     }
 
     /**
@@ -306,6 +315,12 @@ class ActiveAiScanner(
             baselineResponse.response()
         )
 
+        // 403 bypass testing: only trigger when explicitly requested via ACCESS_CONTROL_BYPASS
+        val baselineStatus = baselineRequestResponse.response()?.statusCode()?.toInt() ?: 0
+        if (vulnClass == VulnClass.ACCESS_CONTROL_BYPASS) {
+            return execute403Bypass(target, baselineRequestResponse)
+        }
+
         val authzConfirmation = if (vulnClass in ScanPolicy.AUTHZ_BYPASS_CLASSES) {
             executeAuthzBypassCheck(target, baselineRequestResponse)
         } else null
@@ -319,12 +334,21 @@ class ActiveAiScanner(
         // Get payloads for this vulnerability class
         val quickPayloads = payloadGenerator.getQuickPayloads(vulnClass, maxRiskLevel)
         val contextPayloads = payloadGenerator.generateContextAwarePayloads(
-            vulnClass, 
+            vulnClass,
             target.injectionPoint.originalValue,
             5
         )
-        
-        val allPayloads = (quickPayloads + contextPayloads)
+
+        // Generate adaptive AI payloads if enabled
+        val adaptivePayloads = if (settings.activeAiAdaptivePayloads) {
+            val host = runCatching { java.net.URI(target.originalRequest.request().url()).host.orEmpty() }.getOrDefault("")
+            adaptivePayloadEngine.generateAdaptivePayloads(
+                vulnClass, host, target.injectionPoint.name, target.injectionPoint.originalValue, 5,
+                privacyMode = settings.privacyMode
+            )
+        } else emptyList()
+
+        val allPayloads = (quickPayloads + contextPayloads + adaptivePayloads)
             .distinctBy { it.value }
             .take(maxPayloadsPerPoint)
         
@@ -849,9 +873,13 @@ class ActiveAiScanner(
         return null
     }
 
+    private val tlsRequestOptions by lazy { RequestOptions.requestOptions().withUpstreamTLSVerification() }
+
     private fun sendRequestWithTimeout(request: HttpRequest): HttpRequestResponse? {
         val timeout = timeoutSeconds.coerceAtLeast(5).toLong()
-        val future = requestExecutor.submit(Callable { api.http().sendRequest(request) })
+        val future = requestExecutor.submit(Callable {
+            api.http().sendRequest(request, tlsRequestOptions)
+        })
         return try {
             future.get(timeout, TimeUnit.SECONDS)
         } catch (e: TimeoutException) {
@@ -870,7 +898,23 @@ class ActiveAiScanner(
         if (confirmation != null && confirmation.confirmed) {
             vulnsConfirmed.incrementAndGet()
             createConfirmedIssue(confirmation)
-            
+
+            // Record error patterns as tech hints for adaptive payloads
+            val host = runCatching {
+                java.net.URI(confirmation.target.originalRequest.request().url()).host.orEmpty()
+            }.getOrDefault("")
+            if (host.isNotBlank()) {
+                val evidence = confirmation.evidence.lowercase()
+                val dbHints = mutableSetOf<String>()
+                if (evidence.contains("mysql") || evidence.contains("mariadb")) dbHints.add("MySQL")
+                if (evidence.contains("postgresql") || evidence.contains("pg_query")) dbHints.add("PostgreSQL")
+                if (evidence.contains("mssql") || evidence.contains("sql server")) dbHints.add("MSSQL")
+                if (evidence.contains("oracle") || evidence.contains("ora-")) dbHints.add("Oracle")
+                if (evidence.contains("sqlite")) dbHints.add("SQLite")
+                if (dbHints.isNotEmpty()) ScanKnowledgeBase.recordTechStack(host, dbHints)
+                ScanKnowledgeBase.recordErrorPattern(host, confirmation.evidence.take(100))
+            }
+
             audit.logEvent("active_scan_confirmed", mapOf(
                 "vuln_class" to confirmation.target.vulnHint.vulnClass.name,
                 "url" to confirmation.target.originalRequest.request().url(),
@@ -918,6 +962,11 @@ class ActiveAiScanner(
                     api.logging().logToOutput("[ActiveAiScanner] Consolidated duplicate issue: $title")
                     return
                 }
+                // Add markers to highlight payload in request and evidence in response
+                val markedExploit = IssueMarkerSupport.markRequestPayload(
+                    confirmation.exploitResponse, payload.value
+                ).let { IssueMarkerSupport.markResponseEvidence(it, confirmation.evidence) }
+
                 val issue = AuditIssue.auditIssue(
                     title,
                     detail,
@@ -928,7 +977,7 @@ class ActiveAiScanner(
                     null,
                     null,
                     severity,
-                    listOf(target.originalRequest, confirmation.exploitResponse)
+                    listOf(target.originalRequest, markedExploit)
                 )
 
                 api.siteMap().add(issue)
@@ -936,6 +985,16 @@ class ActiveAiScanner(
                 issueLock.unlock()
             }
             api.logging().logToOutput("[ActiveAiScanner] CONFIRMED: ${target.vulnHint.vulnClass.name} in '${target.injectionPoint.name}' (${confirmation.confidence}%)")
+
+            // Record in knowledge base
+            ScanKnowledgeBase.recordVulnSignal(ScanKnowledgeBase.VulnSignal(
+                endpoint = target.originalRequest.request().url(),
+                vulnClass = target.vulnHint.vulnClass.name,
+                severity = ScannerIssueSupport.mapSeverity(target.vulnHint.vulnClass).name,
+                confidence = confirmation.confidence,
+                source = "active",
+                evidence = confirmation.evidence.take(200)
+            ))
 
             val finding = ActiveAiFinding(
                 timestamp = System.currentTimeMillis(),
@@ -1080,6 +1139,211 @@ class ActiveAiScanner(
                 request.withBody(newBody)
             }
         }
+    }
+
+    // ==================== 403 BYPASS ====================
+
+    private val MIN_BYPASS_BODY_DELTA = 50 // minimum body length difference to consider bypass meaningful
+
+    private val bypassHeaders = listOf(
+        "X-Forwarded-For" to "127.0.0.1",
+        "X-Real-IP" to "127.0.0.1",
+        "X-Originating-IP" to "127.0.0.1",
+        "X-Remote-IP" to "127.0.0.1",
+        "X-Remote-Addr" to "127.0.0.1",
+        "X-Client-IP" to "127.0.0.1",
+        "X-Forwarded-Host" to "127.0.0.1",
+        "X-Original-URL" to "/",
+        "X-Rewrite-URL" to "/",
+    )
+
+    /**
+     * Attempt to bypass 403 responses using:
+     * 1. IP spoofing headers (X-Forwarded-For, X-Real-IP, etc.)
+     * 2. Path manipulation (/path/ , /path/., /path/..;/path, etc.)
+     * 3. HTTP method switching (GET <-> POST)
+     */
+    private fun execute403Bypass(
+        target: ActiveScanTarget,
+        baseline: HttpRequestResponse
+    ): ActiveScanResult {
+        val baselineStatus = baseline.response()?.statusCode()?.toInt() ?: 0
+        if (baselineStatus != 403) {
+            return ActiveScanResult(target, 0, null, "Baseline is not 403")
+        }
+
+        val request = target.originalRequest.request()
+        val path = request.path()
+        var attemptCount = 0
+
+        // === Technique 1: IP spoofing headers ===
+        val baselineBodyLen = baseline.response()?.body()?.length() ?: 0
+        for ((headerName, headerValue) in bypassHeaders) {
+            try {
+                val modifiedRequest = request.withAddedHeader(headerName, headerValue)
+                val response = sendRequestWithTimeout(modifiedRequest) ?: continue
+                attemptCount++
+
+                val status = response.response()?.statusCode()?.toInt() ?: 0
+                // Only accept 2xx as potential bypass; redirects (301/302) are not evidence of access
+                if (status in 200..299) {
+                    val modifiedRR = HttpRequestResponse.httpRequestResponse(modifiedRequest, response.response())
+                    // Reject auth errors (login pages, WWW-Authenticate, etc.)
+                    if (isAuthError(modifiedRR)) continue
+                    // Require meaningful body length difference from baseline
+                    val responseBodyLen = response.response()?.body()?.length() ?: 0
+                    val lenDelta = kotlin.math.abs(responseBodyLen - baselineBodyLen)
+                    if (lenDelta < MIN_BYPASS_BODY_DELTA) continue
+
+                    val payload = Payload(
+                        value = "$headerName: $headerValue",
+                        vulnClass = VulnClass.ACCESS_CONTROL_BYPASS,
+                        detectionMethod = DetectionMethod.CONTENT_BASED,
+                        risk = PayloadRisk.SAFE,
+                        expectedEvidence = "403 bypassed with header"
+                    )
+                    return ActiveScanResult(target, attemptCount, VulnConfirmation(
+                        target = target,
+                        payload = payload,
+                        originalResponse = baseline,
+                        exploitResponse = modifiedRR,
+                        confidence = 75,
+                        evidence = "403 bypass via $headerName header: 403 -> $status (body delta: $lenDelta bytes)",
+                        confirmed = true
+                    ))
+                }
+                Thread.sleep(requestDelayMs)
+            } catch (e: Exception) {
+                api.logging().logToError("[ActiveAiScanner] 403 bypass header error: ${e.message}")
+            }
+        }
+
+        // === Technique 2: Path manipulation ===
+        val pathVariations = buildPathVariations(path)
+        for (variation in pathVariations) {
+            try {
+                val modifiedRequest = request.withPath(variation)
+                val response = sendRequestWithTimeout(modifiedRequest) ?: continue
+                attemptCount++
+
+                val status = response.response()?.statusCode()?.toInt() ?: 0
+                if (status in 200..299) {
+                    // Verify the response is not just a generic page (e.g., 200 but login redirect)
+                    val modifiedRR = HttpRequestResponse.httpRequestResponse(modifiedRequest, response.response())
+                    if (isAuthError(modifiedRR)) continue
+                    // Require meaningful body length difference from baseline
+                    val responseBodyLen = response.response()?.body()?.length() ?: 0
+                    val lenDelta = kotlin.math.abs(responseBodyLen - baselineBodyLen)
+                    if (lenDelta < MIN_BYPASS_BODY_DELTA) continue
+
+                    val payload = Payload(
+                        value = variation,
+                        vulnClass = VulnClass.ACCESS_CONTROL_BYPASS,
+                        detectionMethod = DetectionMethod.CONTENT_BASED,
+                        risk = PayloadRisk.SAFE,
+                        expectedEvidence = "403 bypassed with path variation"
+                    )
+                    return ActiveScanResult(target, attemptCount, VulnConfirmation(
+                        target = target,
+                        payload = payload,
+                        originalResponse = baseline,
+                        exploitResponse = modifiedRR,
+                        confidence = 90,
+                        evidence = "403 bypass via path manipulation: $path -> $variation (403 -> $status, body delta: $lenDelta bytes)",
+                        confirmed = true
+                    ))
+                }
+                Thread.sleep(requestDelayMs)
+            } catch (e: Exception) {
+                api.logging().logToError("[ActiveAiScanner] 403 bypass path error: ${e.message}")
+            }
+        }
+
+        // === Technique 3: HTTP method switching ===
+        val alternativeMethods = when (request.method().uppercase()) {
+            "GET" -> listOf("POST", "PUT")
+            "POST" -> listOf("GET", "PUT")
+            else -> listOf("GET", "POST")
+        }
+        for (method in alternativeMethods) {
+            try {
+                val modifiedRequest = request.withMethod(method)
+                val response = sendRequestWithTimeout(modifiedRequest) ?: continue
+                attemptCount++
+
+                val status = response.response()?.statusCode()?.toInt() ?: 0
+                if (status in 200..299) {
+                    val modifiedRR = HttpRequestResponse.httpRequestResponse(modifiedRequest, response.response())
+                    if (isAuthError(modifiedRR)) continue
+                    // Require meaningful body length difference from baseline
+                    val responseBodyLen = response.response()?.body()?.length() ?: 0
+                    val lenDelta = kotlin.math.abs(responseBodyLen - baselineBodyLen)
+                    if (lenDelta < MIN_BYPASS_BODY_DELTA) continue
+
+                    val payload = Payload(
+                        value = method,
+                        vulnClass = VulnClass.ACCESS_CONTROL_BYPASS,
+                        detectionMethod = DetectionMethod.CONTENT_BASED,
+                        risk = PayloadRisk.SAFE,
+                        expectedEvidence = "403 bypassed with method switch"
+                    )
+                    return ActiveScanResult(target, attemptCount, VulnConfirmation(
+                        target = target,
+                        payload = payload,
+                        originalResponse = baseline,
+                        exploitResponse = modifiedRR,
+                        confidence = 85,
+                        evidence = "403 bypass via method switch: ${request.method()} -> $method (403 -> $status, body delta: $lenDelta bytes)",
+                        confirmed = true
+                    ))
+                }
+                Thread.sleep(requestDelayMs)
+            } catch (e: Exception) {
+                api.logging().logToError("[ActiveAiScanner] 403 bypass method error: ${e.message}")
+            }
+        }
+
+        return ActiveScanResult(target, attemptCount, null)
+    }
+
+    private fun buildPathVariations(path: String): List<String> {
+        val variations = mutableListOf<String>()
+        val cleanPath = path.substringBefore("?")
+        val query = if (path.contains("?")) "?" + path.substringAfter("?") else ""
+
+        // Trailing slash
+        if (!cleanPath.endsWith("/")) {
+            variations.add("$cleanPath/$query")
+        }
+        // Trailing dot
+        variations.add("$cleanPath/.$query")
+        // Double slash prefix
+        variations.add("/$cleanPath$query")
+        // Path traversal bypass
+        variations.add("$cleanPath/..;$cleanPath$query")
+        // URL-encoded space
+        variations.add("$cleanPath%20$query")
+        // Case variation on last segment
+        val segments = cleanPath.split("/")
+        if (segments.size >= 2) {
+            val lastSegment = segments.last()
+            if (lastSegment.isNotBlank() && lastSegment.any { it.isLetter() }) {
+                val caseSwapped = lastSegment.mapIndexed { i, c ->
+                    if (i == 0 && c.isLowerCase()) c.uppercaseChar()
+                    else if (i == 0 && c.isUpperCase()) c.lowercaseChar()
+                    else c
+                }.joinToString("")
+                variations.add((segments.dropLast(1) + caseSwapped).joinToString("/") + query)
+            }
+        }
+        // .json suffix
+        if (!cleanPath.endsWith(".json")) {
+            variations.add("$cleanPath.json$query")
+        }
+        // Semicolon suffix
+        variations.add("$cleanPath;$query")
+
+        return variations.distinct()
     }
 
     private fun extractInjectionPoints(requestResponse: HttpRequestResponse): List<InjectionPoint> {

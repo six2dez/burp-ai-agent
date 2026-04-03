@@ -85,6 +85,11 @@ data class AgentSettings(
     val passiveAiResponseBodyMaxChars: Int = 4_000,
     val passiveAiHeaderMaxCount: Int = 40,
     val passiveAiParamMaxCount: Int = 15,
+    val passiveAiExcludedExtensions: String = Defaults.DEFAULT_EXCLUDED_EXTENSIONS_CSV,
+    val passiveAiBatchSize: Int = 3,
+    val passiveAiPersistentCacheEnabled: Boolean = true,
+    val passiveAiPersistentCacheTtlHours: Int = 24,
+    val passiveAiPersistentCacheMaxMb: Int = 50,
     val contextRequestBodyMaxChars: Int = 4_000,
     val contextResponseBodyMaxChars: Int = 8_000,
     val contextCompactJson: Boolean = true,
@@ -99,6 +104,7 @@ data class AgentSettings(
     val activeAiAutoFromPassive: Boolean = true,  // Auto-queue passive findings
     val activeAiScanMode: ScanMode = ScanMode.FULL,
     val activeAiUseCollaborator: Boolean = false,  // SSRF OAST confirmation
+    val activeAiAdaptivePayloads: Boolean = false,
     // BountyPrompt integration settings
     val bountyPromptEnabled: Boolean = false,
     val bountyPromptDir: String = "",
@@ -176,7 +182,7 @@ class AgentSettingsRepository(api: MontoyaApi) {
                 prefs.setString(KEY_HOST_SALT, generated)
                 generated
             },
-            preferredBackendId = (prefs.getString(KEY_PREFERRED_BACKEND) ?: "codex-cli").trim(),
+            preferredBackendId = (prefs.getString(KEY_PREFERRED_BACKEND) ?: "burp-ai").trim(),
             privacyMode = privacy,
             determinismMode = prefs.getBoolean(KEY_DETERMINISM) ?: false,
             autoRestart = prefs.getBoolean(KEY_AUTORESTART) ?: true,
@@ -197,6 +203,13 @@ class AgentSettingsRepository(api: MontoyaApi) {
             passiveAiResponseBodyMaxChars = (prefs.getInteger(KEY_PASSIVE_AI_RESPONSE_BODY_MAX_CHARS) ?: 4_000).coerceIn(512, 40_000),
             passiveAiHeaderMaxCount = (prefs.getInteger(KEY_PASSIVE_AI_HEADER_MAX_COUNT) ?: 40).coerceIn(5, 120),
             passiveAiParamMaxCount = (prefs.getInteger(KEY_PASSIVE_AI_PARAM_MAX_COUNT) ?: 15).coerceIn(5, 100),
+            passiveAiExcludedExtensions = prefs.getString(KEY_PASSIVE_AI_EXCLUDED_EXTENSIONS).orEmpty().ifBlank {
+                Defaults.DEFAULT_EXCLUDED_EXTENSIONS_CSV
+            },
+            passiveAiBatchSize = (prefs.getInteger(KEY_PASSIVE_AI_BATCH_SIZE) ?: 3).coerceIn(1, 5),
+            passiveAiPersistentCacheEnabled = prefs.getBoolean(KEY_PASSIVE_AI_PERSISTENT_CACHE_ENABLED) ?: true,
+            passiveAiPersistentCacheTtlHours = (prefs.getInteger(KEY_PASSIVE_AI_PERSISTENT_CACHE_TTL_HOURS) ?: 24).coerceIn(1, 168),
+            passiveAiPersistentCacheMaxMb = (prefs.getInteger(KEY_PASSIVE_AI_PERSISTENT_CACHE_MAX_MB) ?: 50).coerceIn(10, 500),
             contextRequestBodyMaxChars = (prefs.getInteger(KEY_CONTEXT_REQUEST_BODY_MAX_CHARS) ?: 4_000).coerceIn(256, 40_000),
             contextResponseBodyMaxChars = (prefs.getInteger(KEY_CONTEXT_RESPONSE_BODY_MAX_CHARS) ?: 8_000).coerceIn(512, 80_000),
             contextCompactJson = prefs.getBoolean(KEY_CONTEXT_COMPACT_JSON) ?: true,
@@ -210,6 +223,7 @@ class AgentSettingsRepository(api: MontoyaApi) {
             activeAiAutoFromPassive = prefs.getBoolean(KEY_ACTIVE_AI_AUTO_PASSIVE) ?: true,
             activeAiScanMode = ScanMode.fromString(prefs.getString(KEY_ACTIVE_AI_SCAN_MODE)),
             activeAiUseCollaborator = prefs.getBoolean(KEY_ACTIVE_AI_USE_COLLABORATOR) ?: false,
+            activeAiAdaptivePayloads = prefs.getBoolean(KEY_ACTIVE_AI_ADAPTIVE_PAYLOADS) ?: false,
             bountyPromptEnabled = prefs.getBoolean(KEY_BOUNTY_PROMPT_ENABLED) ?: false,
             bountyPromptDir = prefs.getString(KEY_BOUNTY_PROMPT_DIR).orEmpty().trim().ifBlank { defaultBountyPromptDir() },
             bountyPromptAutoCreateIssues = prefs.getBoolean(KEY_BOUNTY_PROMPT_AUTO_CREATE_ISSUES) ?: true,
@@ -268,7 +282,7 @@ class AgentSettingsRepository(api: MontoyaApi) {
             accessControlPrompt = defaultAccessControlPrompt(),
             loginSequencePrompt = defaultLoginSequencePrompt(),
             hostAnonymizationSalt = McpSettings.generateToken(),
-            preferredBackendId = "codex-cli",
+            preferredBackendId = "burp-ai",
             privacyMode = PrivacyMode.OFF,
             determinismMode = false,
             autoRestart = true,
@@ -405,6 +419,11 @@ class AgentSettingsRepository(api: MontoyaApi) {
             KEY_PASSIVE_AI_PARAM_MAX_COUNT,
             settings.passiveAiParamMaxCount.coerceIn(5, 100)
         )
+        prefs.setString(KEY_PASSIVE_AI_EXCLUDED_EXTENSIONS, settings.passiveAiExcludedExtensions)
+        prefs.setInteger(KEY_PASSIVE_AI_BATCH_SIZE, settings.passiveAiBatchSize)
+        prefs.setBoolean(KEY_PASSIVE_AI_PERSISTENT_CACHE_ENABLED, settings.passiveAiPersistentCacheEnabled)
+        prefs.setInteger(KEY_PASSIVE_AI_PERSISTENT_CACHE_TTL_HOURS, settings.passiveAiPersistentCacheTtlHours)
+        prefs.setInteger(KEY_PASSIVE_AI_PERSISTENT_CACHE_MAX_MB, settings.passiveAiPersistentCacheMaxMb)
         prefs.setInteger(
             KEY_CONTEXT_REQUEST_BODY_MAX_CHARS,
             settings.contextRequestBodyMaxChars.coerceIn(256, 40_000)
@@ -424,6 +443,7 @@ class AgentSettingsRepository(api: MontoyaApi) {
         prefs.setBoolean(KEY_ACTIVE_AI_AUTO_PASSIVE, settings.activeAiAutoFromPassive)
         prefs.setString(KEY_ACTIVE_AI_SCAN_MODE, settings.activeAiScanMode.name)
         prefs.setBoolean(KEY_ACTIVE_AI_USE_COLLABORATOR, settings.activeAiUseCollaborator)
+        prefs.setBoolean(KEY_ACTIVE_AI_ADAPTIVE_PAYLOADS, settings.activeAiAdaptivePayloads)
         prefs.setBoolean(KEY_BOUNTY_PROMPT_ENABLED, settings.bountyPromptEnabled)
         prefs.setString(KEY_BOUNTY_PROMPT_DIR, settings.bountyPromptDir)
         prefs.setBoolean(KEY_BOUNTY_PROMPT_AUTO_CREATE_ISSUES, settings.bountyPromptAutoCreateIssues)
@@ -549,6 +569,11 @@ class AgentSettingsRepository(api: MontoyaApi) {
         private const val KEY_PASSIVE_AI_RESPONSE_BODY_MAX_CHARS = "passive.ai.response.body.max.chars"
         private const val KEY_PASSIVE_AI_HEADER_MAX_COUNT = "passive.ai.header.max.count"
         private const val KEY_PASSIVE_AI_PARAM_MAX_COUNT = "passive.ai.param.max.count"
+        private const val KEY_PASSIVE_AI_EXCLUDED_EXTENSIONS = "passive.ai.excluded.extensions"
+        private const val KEY_PASSIVE_AI_BATCH_SIZE = "passive.ai.batch.size"
+        private const val KEY_PASSIVE_AI_PERSISTENT_CACHE_ENABLED = "passive.ai.persistent.cache.enabled"
+        private const val KEY_PASSIVE_AI_PERSISTENT_CACHE_TTL_HOURS = "passive.ai.persistent.cache.ttl.hours"
+        private const val KEY_PASSIVE_AI_PERSISTENT_CACHE_MAX_MB = "passive.ai.persistent.cache.max.mb"
         private const val KEY_CONTEXT_REQUEST_BODY_MAX_CHARS = "context.request.body.max.chars"
         private const val KEY_CONTEXT_RESPONSE_BODY_MAX_CHARS = "context.response.body.max.chars"
         private const val KEY_CONTEXT_COMPACT_JSON = "context.compact.json"
@@ -562,6 +587,7 @@ class AgentSettingsRepository(api: MontoyaApi) {
         private const val KEY_ACTIVE_AI_AUTO_PASSIVE = "active.ai.auto.passive"
         private const val KEY_ACTIVE_AI_SCAN_MODE = "active.ai.scan.mode"
         private const val KEY_ACTIVE_AI_USE_COLLABORATOR = "active.ai.use.collaborator"
+        private const val KEY_ACTIVE_AI_ADAPTIVE_PAYLOADS = "active.ai.adaptive.payloads"
         private const val KEY_BOUNTY_PROMPT_ENABLED = "bountyprompt.enabled"
         private const val KEY_BOUNTY_PROMPT_DIR = "bountyprompt.dir"
         private const val KEY_BOUNTY_PROMPT_AUTO_CREATE_ISSUES = "bountyprompt.auto.issue"
@@ -802,7 +828,7 @@ Response Language: English.
         private fun defaultMcpSettings(): McpSettings {
             val defaultPath = java.io.File(System.getProperty("user.home"), ".burp-ai-agent/certs/mcp-keystore.p12")
             return McpSettings(
-                enabled = true,
+                enabled = false,
                 host = "127.0.0.1",
                 port = 9876,
                 externalEnabled = false,
@@ -871,7 +897,7 @@ Response Language: English.
             prefs.setBoolean(KEY_MCP_TLS_ENABLED, true)
         }
         return McpSettings(
-            enabled = prefs.getBoolean(KEY_MCP_ENABLED) ?: true,
+            enabled = prefs.getBoolean(KEY_MCP_ENABLED) ?: false,
             host = (prefs.getString(KEY_MCP_HOST) ?: "127.0.0.1").trim().ifBlank { "127.0.0.1" },
             port = (prefs.getInteger(KEY_MCP_PORT) ?: 9876).coerceIn(1, 65535),
             externalEnabled = externalEnabled,

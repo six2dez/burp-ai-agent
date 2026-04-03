@@ -20,11 +20,12 @@ import com.six2dez.burp.aiagent.config.Defaults
 import com.six2dez.burp.aiagent.redact.Redaction
 import com.six2dez.burp.aiagent.redact.RedactionPolicy
 import com.six2dez.burp.aiagent.supervisor.AgentSupervisor
+import com.six2dez.burp.aiagent.audit.Hashing
 import com.six2dez.burp.aiagent.util.IssueUtils
 import com.six2dez.burp.aiagent.util.IssueText
+import com.six2dez.burp.aiagent.util.SecurityExcerpts
 import com.six2dez.burp.aiagent.util.TokenTracker
 import java.net.URI
-import java.security.MessageDigest
 import java.util.LinkedHashMap
 import java.util.UUID
 import java.util.concurrent.CountDownLatch
@@ -143,6 +144,12 @@ class PassiveAiScanner(
             field = value.coerceIn(MIN_PARAMS_MAX_COUNT, MAX_PARAMS_MAX_COUNT)
         }
 
+    @Volatile
+    var excludedExtensions: Set<String> = DEFAULT_EXCLUDED_EXTENSIONS
+        set(value) {
+            field = value.map { it.lowercase().removePrefix(".") }.toSet()
+        }
+
     private val allowedMimeTypes = setOf(
         "html", "json", "javascript", "xml", "text", "unknown", "script"
     )
@@ -163,13 +170,20 @@ class PassiveAiScanner(
     )
     private val authCookieHint = Regex("(session|auth|token|sid|jwt|remember)", RegexOption.IGNORE_CASE)
     private val cacheBustingParamRegex = Regex("^(?:_|t|ts|timestamp|cachebust|cb|rnd|nonce)$", RegexOption.IGNORE_CASE)
+    private val dynamicValueStripRegex = Regex(
+        listOf(
+            """\b[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}\b""",  // UUID
+            """\b[a-f0-9]{24}\b""",                                                                 // MongoDB ObjectId
+            """\b\d{10,13}\b""",                                                                    // Unix timestamps (sec/ms)
+            """\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[^\s"',}\]]*""",                               // ISO 8601
+            """(?<=[":=])\s*"?[A-Za-z0-9_\-]{20,}"?""",                                            // Long tokens/nonces
+        ).joinToString("|"),
+        RegexOption.IGNORE_CASE
+    )
     private val staticAssetPathRegex = Regex(
         "\\.(?:css|js|map|png|jpg|jpeg|gif|svg|ico|woff2?|ttf|eot)(?:\\?|$)",
         RegexOption.IGNORE_CASE
     )
-    private val uuidLikeRegex = Regex("^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$", RegexOption.IGNORE_CASE)
-    private val objectIdLikeRegex = Regex("^[a-f0-9]{24}$", RegexOption.IGNORE_CASE)
-    private val numericIdRegex = Regex("^\\d{2,}$")
     private val requestHeaderAllowlist = setOf(
         "authorization",
         "cookie",
@@ -238,9 +252,12 @@ class PassiveAiScanner(
         }
     }
 
+    private val batchQueue = BatchAnalysisQueue()
+    private var persistentCache: com.six2dez.burp.aiagent.cache.PersistentPromptCache? = null
+
     private val handler = object : ProxyResponseHandler {
         override fun handleResponseReceived(response: InterceptedResponse): ProxyResponseReceivedAction {
-            if (!enabled.get()) {
+            if (!enabled.get() || !supervisor.isAiEnabled()) {
                 return ProxyResponseReceivedAction.continueWith(response)
             }
 
@@ -259,6 +276,11 @@ class PassiveAiScanner(
             val mime = response.statedMimeType().name.lowercase()
             val inferredMime = response.inferredMimeType().name.lowercase()
             if (mime !in allowedMimeTypes && inferredMime !in allowedMimeTypes) {
+                return ProxyResponseReceivedAction.continueWith(response)
+            }
+
+            // Check excluded file extensions
+            if (hasExcludedExtension(response.initiatingRequest().url())) {
                 return ProxyResponseReceivedAction.continueWith(response)
             }
 
@@ -294,12 +316,14 @@ class PassiveAiScanner(
     }
 
     fun setEnabled(on: Boolean) {
-        enabled.set(on)
+        val wasEnabled = enabled.getAndSet(on)
         if (on && registered.compareAndSet(false, true)) {
             api.proxy().registerResponseHandler(handler)
             api.logging().logToOutput("[PassiveAiScanner] Enabled - analyzing proxy traffic")
-        } else if (!on) {
-            api.logging().logToOutput("[PassiveAiScanner] Disabled")
+        } else if (!on && wasEnabled) {
+            // Clear accumulated knowledge to prevent cross-scope contamination
+            ScanKnowledgeBase.clear()
+            api.logging().logToOutput("[PassiveAiScanner] Disabled — knowledge base cleared")
         }
     }
 
@@ -335,6 +359,36 @@ class PassiveAiScanner(
         }
         if (paramMaxCount != settings.passiveAiParamMaxCount) {
             paramMaxCount = settings.passiveAiParamMaxCount
+        }
+        val newExcluded = settings.passiveAiExcludedExtensions
+            .split(",")
+            .map { it.trim().lowercase().removePrefix(".") }
+            .filter { it.isNotEmpty() }
+            .toSet()
+        if (excludedExtensions != newExcluded) {
+            excludedExtensions = newExcluded
+        }
+        // Apply batch size
+        val newBatchSize = settings.passiveAiBatchSize.coerceIn(1, 5)
+        if (batchQueue.maxBatchSize != newBatchSize) {
+            batchQueue.maxBatchSize = newBatchSize
+        }
+        // Initialize or update persistent cache (project-namespaced)
+        if (settings.passiveAiPersistentCacheEnabled) {
+            val wantMaxBytes = settings.passiveAiPersistentCacheMaxMb.toLong() * 1024 * 1024
+            val wantTtlMs = settings.passiveAiPersistentCacheTtlHours.toLong() * 60 * 60 * 1000
+            val current = persistentCache
+            if (current == null || current.maxDiskBytes != wantMaxBytes || current.ttlMs != wantTtlMs) {
+                val projectSlug = try { api.project().id().take(8) } catch (_: Exception) { "default" }
+                val cacheDir = java.io.File(System.getProperty("user.home"), ".burp-ai-agent/cache/$projectSlug")
+                persistentCache = com.six2dez.burp.aiagent.cache.PersistentPromptCache(
+                    cacheDir = cacheDir,
+                    maxDiskBytes = wantMaxBytes,
+                    ttlMs = wantTtlMs
+                )
+            }
+        } else {
+            persistentCache = null
         }
     }
     
@@ -402,6 +456,8 @@ class PassiveAiScanner(
 
     fun shutdown() {
         enabled.set(false)
+        try { flushBatch(getSettings()) } catch (_: Exception) {}
+        batchQueue.clear()
         executor.shutdown()
         try {
             if (!executor.awaitTermination(3, java.util.concurrent.TimeUnit.SECONDS)) {
@@ -478,6 +534,10 @@ class PassiveAiScanner(
     private fun analyzeInBackground(requestResponse: HttpRequestResponse) {
         try {
             doAnalysis(requestResponse)
+            // Flush batch if timeout expired (handles case where no new requests arrive)
+            if (batchQueue.shouldFlush()) {
+                flushBatch(getSettings())
+            }
         } catch (e: Exception) {
             api.logging().logToError("[PassiveAiScanner] Error: ${e.message}")
         }
@@ -572,10 +632,39 @@ class PassiveAiScanner(
                 }
                 .map { "${it.name()}: ${it.value().take(50)}..." }
 
+            // Parse URI once for host and path extraction
+            val parsedUri = runCatching { java.net.URI(request.url()) }.getOrNull()
+            val host = parsedUri?.host.orEmpty()
+            if (host.isNotBlank() && response != null) {
+                val techHints = mutableSetOf<String>()
+                response.headers().forEach { h ->
+                    val name = h.name().lowercase()
+                    val value = h.value().trim()
+                    when (name) {
+                        "server" -> if (value.isNotBlank()) techHints.add(value.split("/").first().trim())
+                        "x-powered-by" -> if (value.isNotBlank()) techHints.add(value.split("/").first().trim())
+                        "x-aspnet-version" -> techHints.add("ASP.NET")
+                        "x-generator" -> if (value.isNotBlank()) techHints.add(value.split(" ").first().trim())
+                    }
+                }
+                if (techHints.isNotEmpty()) ScanKnowledgeBase.recordTechStack(host, techHints)
+
+                val authCookieNames = cookies
+                    .mapNotNull { it.split("=").firstOrNull()?.trim() }
+                    .filter { authCookieHint.containsMatchIn(it) }
+                    .toSet()
+                if (authHeaders.isNotEmpty() || authCookieNames.isNotEmpty()) {
+                    ScanKnowledgeBase.recordAuthInfo(host, ScanKnowledgeBase.AuthInfo(
+                        hasSessionCookies = authCookieNames.isNotEmpty(),
+                        hasAuthHeader = authHeaders.any { it.startsWith("Authorization:", ignoreCase = true) },
+                        hasApiKey = authHeaders.any { it.contains("API-Key", ignoreCase = true) || it.contains("X-API", ignoreCase = true) },
+                        authCookieNames = authCookieNames
+                    ))
+                }
+            }
+
             // Extract path segments for IDOR/BOLA analysis
-            val urlPath = try {
-                java.net.URI(request.url()).path ?: ""
-            } catch (_: Exception) { "" }
+            val urlPath = parsedUri?.path.orEmpty()
 
             // Look for potential object IDs in URL
             val potentialIds = POTENTIAL_IDS_REGEX
@@ -585,12 +674,31 @@ class PassiveAiScanner(
                 .take(POTENTIAL_IDS_MAX_COUNT)
                 .toList()
 
+            // Extract JS endpoints from JavaScript responses
+            val mime = response?.statedMimeType()?.name?.lowercase().orEmpty()
+            val inferredMime = response?.inferredMimeType()?.name?.lowercase().orEmpty()
+            val isJsResponse = mime == "javascript" || mime == "script" || inferredMime == "javascript" || inferredMime == "script"
+            if (isJsResponse) {
+                extractAndLogJsEndpoints(request, responseBodyRaw)
+                // Skip AI analysis for JS assets — endpoint extraction is sufficient
+                requestsAnalyzed.incrementAndGet()
+                lastAnalysisTime.set(System.currentTimeMillis())
+                return
+            }
+
             val redactionPolicy = RedactionPolicy.fromMode(settings.privacyMode)
             val displayUrl = redactUrlForPrompt(request.url(), redactionPolicy, settings.hostAnonymizationSalt)
             val requestBody = buildCompactRequestBody(requestBodyRaw, request.headerValue("Content-Type").orEmpty())
             val responseBody = buildCompactResponseBody(responseBodyRaw, response?.headerValue("Content-Type").orEmpty())
 
             val metadataText = buildString {
+                // Include knowledge base context if available
+                val kbSummary = ScanKnowledgeBase.buildContextSummary(host)
+                if (!kbSummary.isNullOrBlank()) {
+                    appendLine("=== PRIOR KNOWLEDGE ===")
+                    appendLine(kbSummary)
+                    appendLine()
+                }
                 appendLine("URL: $displayUrl")
                 appendLine("Path: $urlPath")
                 appendLine("Method: ${request.method()}")
@@ -643,9 +751,10 @@ class PassiveAiScanner(
                 )
             }
 
-            val prompt = buildAnalysisPrompt(safeMetadataText, settings.passiveAiMinSeverity.name)
-            val promptHash = sha256Hex(prompt)
-            val cachedIssues = promptResultCacheValue(promptHash)
+            // Single-item prompt cache check
+            val singlePrompt = buildAnalysisPrompt(safeMetadataText, settings.passiveAiMinSeverity.name)
+            val singlePromptHash = sha256Hex(singlePrompt)
+            val cachedIssues = promptResultCacheValue(singlePromptHash)
             if (cachedIssues != null) {
                 handleParsedAiIssues(cachedIssues, requestResponse, settings.passiveAiMinSeverity.name)
                 requestsAnalyzed.incrementAndGet()
@@ -653,7 +762,7 @@ class PassiveAiScanner(
                 TokenTracker.record(
                     flow = "passive_scanner",
                     backendId = settings.preferredBackendId,
-                    inputChars = prompt.length,
+                    inputChars = singlePrompt.length,
                     outputChars = 0,
                     cacheHit = true
                 )
@@ -663,14 +772,29 @@ class PassiveAiScanner(
                         "url" to request.url(),
                         "method" to request.method(),
                         "status" to (response?.statusCode() ?: 0).toString(),
-                        "promptChars" to prompt.length.toString(),
+                        "promptChars" to singlePrompt.length.toString(),
                         "issues" to cachedIssues.size.toString()
                     )
                 )
                 return
             }
 
-            // Send to AI backend
+            // Batch mode: enqueue and flush when ready
+            val batchSize = settings.passiveAiBatchSize.coerceIn(1, 5)
+            if (batchSize > 1) {
+                batchQueue.enqueue(PendingAnalysis(
+                    metadata = safeMetadataText,
+                    requestResponse = requestResponse,
+                    minSeverity = settings.passiveAiMinSeverity.name,
+                    host = host.lowercase()
+                ))
+                if (batchQueue.shouldFlush()) {
+                    flushBatch(settings)
+                }
+                return
+            }
+
+            // Single-request mode: send directly to AI backend
             val responseBuffer = StringBuilder()
             val completionLatch = CountDownLatch(1)
             val errorRef = AtomicReference<String?>(null)
@@ -678,7 +802,7 @@ class PassiveAiScanner(
             val sendStartMs = System.currentTimeMillis()
 
             supervisor.send(
-                text = prompt,
+                text = singlePrompt,
                 history = emptyList(),
                 contextJson = null,
                 privacyMode = settings.privacyMode,
@@ -688,7 +812,9 @@ class PassiveAiScanner(
                     errorRef.set(err?.message)
                     completionLatch.countDown()
                 },
-                traceId = traceId
+                traceId = traceId,
+                jsonMode = true,
+                maxOutputTokens = Defaults.SCANNER_MAX_OUTPUT_TOKENS
             )
 
             aiRequestLogger?.log(
@@ -696,7 +822,7 @@ class PassiveAiScanner(
                 source = "passive_scanner",
                 backendId = settings.preferredBackendId,
                 detail = "Passive scan: ${request.method()} ${request.url().take(80)}",
-                promptChars = prompt.length,
+                promptChars = singlePrompt.length,
                 metadata = mapOf(
                     "operation" to "scanner_job",
                     "status" to "sent",
@@ -720,7 +846,7 @@ class PassiveAiScanner(
                     backendId = settings.preferredBackendId,
                     detail = "Passive scan timeout: ${request.method()} ${request.url().take(80)}",
                     durationMs = durationMs,
-                    promptChars = prompt.length,
+                    promptChars = singlePrompt.length,
                     metadata = mapOf(
                         "operation" to "scanner_job",
                         "status" to "timeout",
@@ -743,7 +869,7 @@ class PassiveAiScanner(
                     backendId = settings.preferredBackendId,
                     detail = "Passive scan error: ${err.take(200)}",
                     durationMs = durationMs,
-                    promptChars = prompt.length,
+                    promptChars = singlePrompt.length,
                     metadata = mapOf(
                         "operation" to "scanner_job",
                         "status" to "error",
@@ -754,7 +880,7 @@ class PassiveAiScanner(
                 )
             } else if (responseBuffer.isNotEmpty()) {
                 val issues = parseIssuesFromAiResponse(responseBuffer.toString())
-                putPromptResultCacheValue(promptHash, issues)
+                putPromptResultCacheValue(singlePromptHash, issues)
                 handleParsedAiIssues(issues, requestResponse, settings.passiveAiMinSeverity.name)
                 aiRequestLogger?.log(
                     type = ActivityType.RESPONSE_COMPLETE,
@@ -762,7 +888,7 @@ class PassiveAiScanner(
                     backendId = settings.preferredBackendId,
                     detail = "Passive scan completed with ${issues.size} issue(s)",
                     durationMs = durationMs,
-                    promptChars = prompt.length,
+                    promptChars = singlePrompt.length,
                     responseChars = responseBuffer.length,
                     metadata = mapOf(
                         "operation" to "scanner_job",
@@ -778,7 +904,7 @@ class PassiveAiScanner(
             TokenTracker.record(
                 flow = "passive_scanner",
                 backendId = settings.preferredBackendId,
-                inputChars = prompt.length,
+                inputChars = singlePrompt.length,
                 outputChars = responseBuffer.length
             )
 
@@ -786,12 +912,66 @@ class PassiveAiScanner(
                 "url" to request.url(),
                 "method" to request.method(),
                 "status" to (response?.statusCode() ?: 0).toString(),
-                "promptChars" to prompt.length.toString(),
+                "promptChars" to singlePrompt.length.toString(),
                 "responseChars" to responseBuffer.length.toString()
             ))
         } catch (e: Exception) {
             api.logging().logToError("[PassiveAiScanner] Error: ${e.javaClass.simpleName}: ${e.message}")
         }
+    }
+
+    // JS endpoint discovery cache (track already-discovered endpoints to avoid duplicate logging)
+    private val discoveredJsEndpoints = object : LinkedHashMap<String, Long>(512, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Long>?): Boolean {
+            return size > JS_ENDPOINTS_CACHE_MAX
+        }
+    }
+
+    private fun extractAndLogJsEndpoints(
+        request: burp.api.montoya.http.message.requests.HttpRequest,
+        jsBody: String
+    ) {
+        if (jsBody.length < JS_MIN_BODY_FOR_EXTRACTION) return
+
+        val endpoints = JsEndpointExtractor.extract(jsBody)
+        if (endpoints.isEmpty()) return
+
+        val resolved = JsEndpointExtractor.resolveEndpoints(endpoints, request.url())
+        val newEndpoints = mutableListOf<String>()
+
+        synchronized(discoveredJsEndpoints) {
+            val now = System.currentTimeMillis()
+            for (ep in resolved) {
+                val prev = discoveredJsEndpoints[ep]
+                if (prev == null || now - prev > endpointDedupWindowMs()) {
+                    discoveredJsEndpoints[ep] = now
+                    newEndpoints.add(ep)
+                }
+            }
+        }
+
+        if (newEndpoints.isEmpty()) return
+
+        val jsUrl = request.url().take(80)
+        api.logging().logToOutput("[PassiveAiScanner] JS endpoints discovered from $jsUrl: ${newEndpoints.size} new endpoint(s)")
+        for (ep in newEndpoints.take(JS_ENDPOINTS_LOG_MAX)) {
+            api.logging().logToOutput("[PassiveAiScanner]   -> $ep")
+        }
+        if (newEndpoints.size > JS_ENDPOINTS_LOG_MAX) {
+            api.logging().logToOutput("[PassiveAiScanner]   ... and ${newEndpoints.size - JS_ENDPOINTS_LOG_MAX} more")
+        }
+
+        aiRequestLogger?.log(
+            type = com.six2dez.burp.aiagent.audit.ActivityType.SCANNER_SEND,
+            source = "js_endpoint_discovery",
+            backendId = "local",
+            detail = "Discovered ${newEndpoints.size} endpoint(s) from JS: $jsUrl",
+            metadata = mapOf(
+                "operation" to "js_discovery",
+                "jsUrl" to jsUrl,
+                "endpoints" to newEndpoints.take(20).joinToString(", ")
+            )
+        )
     }
 
     private fun truncateWithEllipsis(text: String, maxChars: Int): String {
@@ -871,27 +1051,22 @@ class PassiveAiScanner(
 
     private fun buildEndpointCacheKey(request: burp.api.montoya.http.message.requests.HttpRequest): String {
         val method = request.method().uppercase()
+        val uri = runCatching { URI(request.url()) }.getOrNull()
         val normalizedPath = runCatching {
-            val uri = URI(request.url())
-            normalizePathSegments(uri.path.orEmpty())
+            normalizePathSegments(uri?.path.orEmpty())
         }.getOrElse { normalizePathSegments(request.url()) }
-        val host = runCatching { URI(request.url()).host.orEmpty().lowercase() }.getOrDefault("")
-        return "$method:$host:$normalizedPath"
+        val host = uri?.host.orEmpty().lowercase()
+        val sortedParamNames = uri?.query.orEmpty()
+            .split('&')
+            .mapNotNull { it.split('=').firstOrNull()?.lowercase()?.ifBlank { null } }
+            .filter { !cacheBustingParamRegex.matches(it) }
+            .sorted()
+            .joinToString(",")
+        return "$method:$host:$normalizedPath:$sortedParamNames"
     }
 
     private fun normalizePathSegments(path: String): String {
-        if (path.isBlank()) return "/"
-        return path.split('/')
-            .joinToString("/") { segment ->
-                when {
-                    segment.isBlank() -> ""
-                    numericIdRegex.matches(segment) -> "{id}"
-                    uuidLikeRegex.matches(segment) -> "{uuid}"
-                    objectIdLikeRegex.matches(segment) -> "{oid}"
-                    else -> segment.take(64)
-                }
-            }
-            .ifBlank { "/" }
+        return IssueUtils.normalizePathSegments(path)
     }
 
     private fun shouldSkipKnownResponseFingerprint(
@@ -920,7 +1095,7 @@ class PassiveAiScanner(
         val headers = sanitizeHeadersForPrompt(response.headers(), isRequest = false)
             .take(10)
             .joinToString("\n")
-        val bodyPrefix = responseBody.take(RESPONSE_FINGERPRINT_BODY_PREFIX_CHARS)
+        val bodyPrefix = stripDynamicValues(responseBody.take(RESPONSE_FINGERPRINT_BODY_PREFIX_CHARS))
         val raw = buildString {
             append(request.method()).append('\n')
             append(IssueUtils.normalizeUrl(request.url())).append('\n')
@@ -929,6 +1104,10 @@ class PassiveAiScanner(
             append(bodyPrefix)
         }
         return sha256Hex(raw)
+    }
+
+    private fun stripDynamicValues(text: String): String {
+        return dynamicValueStripRegex.replace(text, "{DYN}")
     }
 
     private fun sanitizeHeadersForPrompt(
@@ -966,13 +1145,16 @@ class PassiveAiScanner(
 
     private fun buildCompactResponseBody(body: String, contentType: String): String {
         if (body.isBlank()) return ""
-        if (looksLikeJson(contentType, body)) {
-            return compactJsonBody(body, responseBodyPromptMaxChars)
+        val base = if (looksLikeJson(contentType, body)) {
+            compactJsonBody(body, responseBodyPromptMaxChars)
+        } else if (contentType.contains("html", ignoreCase = true) || body.contains("<html", ignoreCase = true)) {
+            compactHtmlBody(body, responseBodyPromptMaxChars)
+        } else {
+            truncateWithEllipsis(body, responseBodyPromptMaxChars)
         }
-        if (contentType.contains("html", ignoreCase = true) || body.contains("<html", ignoreCase = true)) {
-            return compactHtmlBody(body, responseBodyPromptMaxChars)
-        }
-        return truncateWithEllipsis(body, responseBodyPromptMaxChars)
+        // Append security-relevant excerpts from deeper in the response that truncation may have cut off
+        val excerpts = SecurityExcerpts.extract(body, base.length)
+        return if (excerpts.isNullOrBlank()) base else "$base\n\n=== SECURITY-RELEVANT EXCERPTS ===\n$excerpts"
     }
 
     private fun looksLikeJson(contentType: String, body: String): Boolean {
@@ -1042,29 +1224,64 @@ class PassiveAiScanner(
 
     private fun promptResultCacheValue(promptHash: String): List<AiIssueItem>? {
         val now = System.currentTimeMillis()
+        // Check in-memory cache first
         synchronized(promptResultCache) {
-            val cached = promptResultCache[promptHash] ?: return null
-            if (now - cached.createdAtMs > promptCacheTtlMs()) {
-                promptResultCache.remove(promptHash)
-                return null
+            val cached = promptResultCache[promptHash]
+            if (cached != null) {
+                if (now - cached.createdAtMs > promptCacheTtlMs()) {
+                    promptResultCache.remove(promptHash)
+                } else {
+                    return cached.issues
+                }
             }
-            return cached.issues
         }
-    }
-
-    private fun putPromptResultCacheValue(promptHash: String, issues: List<AiIssueItem>) {
+        // Fall back to persistent cache
+        val diskEntry = persistentCache?.get(promptHash) ?: return null
+        val issues = diskEntry.issues.map { ci ->
+            AiIssueItem(
+                reasoning = ci.reasoning,
+                title = ci.title,
+                severity = ci.severity,
+                detail = ci.detail,
+                confidence = ci.confidence,
+                requestIndex = ci.requestIndex
+            )
+        }
+        // Promote to in-memory cache
         synchronized(promptResultCache) {
             promptResultCache[promptHash] = CachedAiIssues(
-                createdAtMs = System.currentTimeMillis(),
+                createdAtMs = diskEntry.createdAtMs,
                 issues = issues
             )
         }
+        return issues
     }
 
-    private fun sha256Hex(text: String): String {
-        val bytes = MessageDigest.getInstance("SHA-256").digest(text.toByteArray(Charsets.UTF_8))
-        return bytes.joinToString("") { "%02x".format(it) }
+    private fun putPromptResultCacheValue(promptHash: String, issues: List<AiIssueItem>) {
+        val now = System.currentTimeMillis()
+        synchronized(promptResultCache) {
+            promptResultCache[promptHash] = CachedAiIssues(
+                createdAtMs = now,
+                issues = issues
+            )
+        }
+        // Write to persistent cache
+        persistentCache?.put(promptHash, com.six2dez.burp.aiagent.cache.CachedEntry(
+            createdAtMs = now,
+            issues = issues.map { ai ->
+                com.six2dez.burp.aiagent.cache.CachedIssue(
+                    reasoning = ai.reasoning,
+                    title = ai.title,
+                    severity = ai.severity,
+                    detail = ai.detail,
+                    confidence = ai.confidence,
+                    requestIndex = ai.requestIndex
+                )
+            }
+        ))
     }
+
+    private fun sha256Hex(text: String): String = Hashing.sha256Hex(text)
 
     private fun buildAnalysisPrompt(metadata: String, minSeverity: String): String {
         val severityInstruction = when (minSeverity) {
@@ -1099,6 +1316,186 @@ Return [] when no supported issue exists.
 HTTP DATA:
 $metadata
 """.trim()
+    }
+
+    private fun buildBatchAnalysisPrompt(items: List<PendingAnalysis>): String {
+        val severityInstruction = when (items.first().minSeverity) {
+            "CRITICAL" -> "Severity filter: only CRITICAL."
+            "HIGH" -> "Severity filter: HIGH or CRITICAL."
+            "MEDIUM" -> "Severity filter: MEDIUM/HIGH/CRITICAL."
+            else -> "Severity filter: LOW/MEDIUM/HIGH/CRITICAL."
+        }
+
+        val batchMetadata = items.mapIndexed { index, item ->
+            "=== REQUEST #${index + 1} ===\n${item.metadata}"
+        }.joinToString("\n\n")
+
+        return """
+You are a security researcher. Analyze these ${items.size} HTTP requests for real vulnerabilities.
+$severityInstruction
+
+SEVERITY DEFINITIONS:
+- Critical: RCE, authentication bypass, full account takeover
+- High: SQLi, stored XSS, SSRF with internal access, deserialization
+- Medium: Reflected XSS, IDOR/BOLA, CSRF on sensitive actions, open redirect
+- Low: Information disclosure, verbose errors, minor misconfigurations
+
+CHECK: Injection (XSS/SQLi/CMDI/SSTI/SSRF/XXE/NoSQL), Auth (IDOR/BOLA/BAC/CSRF/JWT), Info disclosure (secrets/debug/source), Config (CORS/open redirect), High-value (ATO/cache poison/smuggling/host-header), API (version bypass/GraphQL).
+Also CHECK cross-request issues: IDOR by comparing endpoints, BAC by comparing access patterns, inconsistent auth.
+
+DO NOT REPORT:
+- Missing security headers (CSP, X-Frame-Options, HSTS, X-Content-Type-Options) as standalone findings
+- "Potential" issues without concrete evidence in the request/response
+- Generic reflection without XSS context (e.g., parameter echoed in non-executable context)
+- Absence of rate limiting as a vulnerability
+
+RULES: Evidence required — provide step-by-step evidence chain in reasoning. No speculation. Confidence >=85 only. Output JSON array only.
+Output schema: [{"request_index":1,"reasoning":"step-by-step evidence chain","title":"...","severity":"Critical|High|Medium|Low|Information","detail":"...with evidence","confidence":0-100}]
+The request_index field (1-based) indicates which request the finding belongs to.
+Return [] when no supported issue exists.
+
+HTTP DATA:
+$batchMetadata
+""".trim()
+    }
+
+    private fun flushBatch(settings: com.six2dez.burp.aiagent.config.AgentSettings) {
+        val batch = batchQueue.drain()
+        if (batch.isEmpty()) return
+
+        if (batch.size == 1) {
+            // Single item: use standard analysis path
+            val item = batch.first()
+            val prompt = buildAnalysisPrompt(item.metadata, item.minSeverity)
+            sendSingleAnalysis(prompt, item.requestResponse, item.minSeverity, settings)
+            return
+        }
+
+        val prompt = buildBatchAnalysisPrompt(batch)
+        val promptHash = sha256Hex(prompt)
+
+        if (!ensureBackendRunning(settings)) {
+            // Backend unavailable: fall back to individual analysis when it recovers
+            api.logging().logToError("[PassiveAiScanner] Batch backend unavailable, falling back to individual analysis (${batch.size} items)")
+            fallbackToIndividualAnalysis(batch, settings)
+            return
+        }
+
+        val responseBuffer = StringBuilder()
+        val completionLatch = CountDownLatch(1)
+        val errorRef = AtomicReference<String?>(null)
+        val traceId = "scanner-batch-" + UUID.randomUUID().toString()
+        val sendStartMs = System.currentTimeMillis()
+
+        supervisor.send(
+            text = prompt,
+            history = emptyList(),
+            contextJson = null,
+            privacyMode = settings.privacyMode,
+            determinismMode = settings.determinismMode,
+            onChunk = { chunk -> responseBuffer.append(chunk) },
+            onComplete = { err ->
+                errorRef.set(err?.message)
+                completionLatch.countDown()
+            },
+            traceId = traceId,
+            jsonMode = true,
+            maxOutputTokens = Defaults.SCANNER_BATCH_MAX_OUTPUT_TOKENS
+        )
+
+        val completed = completionLatch.await(Defaults.PASSIVE_SCAN_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+        val durationMs = System.currentTimeMillis() - sendStartMs
+
+        if (!completed) {
+            api.logging().logToError("[PassiveAiScanner] Batch timeout (${batch.size} items), falling back to individual analysis")
+            fallbackToIndividualAnalysis(batch, settings)
+        } else if (errorRef.get() != null) {
+            val err = errorRef.get().orEmpty()
+            if (isGeminiCapacityError(err)) {
+                val until = System.currentTimeMillis() + GEMINI_CAPACITY_BACKOFF_MS
+                aiBackoffUntilMs.set(until)
+            }
+            api.logging().logToError("[PassiveAiScanner] Batch AI error: $err, falling back to individual analysis")
+            fallbackToIndividualAnalysis(batch, settings)
+        } else {
+            batch.forEach { _ -> requestsAnalyzed.incrementAndGet() }
+            lastAnalysisTime.set(System.currentTimeMillis())
+
+            if (responseBuffer.isNotEmpty()) {
+                val allIssues = parseIssuesFromAiResponse(responseBuffer.toString())
+                putPromptResultCacheValue(promptHash, allIssues)
+
+                // Dispatch issues to their respective requests by request_index
+                for (issue in allIssues) {
+                    val idx = (issue.requestIndex ?: 1).coerceIn(1, batch.size) - 1
+                    handleParsedAiIssues(listOf(issue), batch[idx].requestResponse, batch[idx].minSeverity)
+                }
+
+                api.logging().logToOutput("[PassiveAiScanner] Batch completed: ${batch.size} requests, ${allIssues.size} issue(s)")
+            }
+
+            TokenTracker.record(
+                flow = "passive_scanner",
+                backendId = settings.preferredBackendId,
+                inputChars = prompt.length,
+                outputChars = responseBuffer.length
+            )
+        }
+    }
+
+    private fun fallbackToIndividualAnalysis(
+        batch: List<PendingAnalysis>,
+        settings: com.six2dez.burp.aiagent.config.AgentSettings
+    ) {
+        for (item in batch) {
+            try {
+                val prompt = buildAnalysisPrompt(item.metadata, item.minSeverity)
+                sendSingleAnalysis(prompt, item.requestResponse, item.minSeverity, settings)
+            } catch (e: Exception) {
+                api.logging().logToError("[PassiveAiScanner] Individual fallback failed for ${item.host}: ${e.message}")
+                requestsAnalyzed.incrementAndGet()
+            }
+        }
+    }
+
+    private fun sendSingleAnalysis(
+        prompt: String,
+        requestResponse: HttpRequestResponse,
+        minSeverity: String,
+        settings: com.six2dez.burp.aiagent.config.AgentSettings
+    ) {
+        if (!ensureBackendRunning(settings)) return
+
+        val promptHash = sha256Hex(prompt)
+        val responseBuffer = StringBuilder()
+        val completionLatch = CountDownLatch(1)
+        val errorRef = AtomicReference<String?>(null)
+
+        supervisor.send(
+            text = prompt,
+            history = emptyList(),
+            contextJson = null,
+            privacyMode = settings.privacyMode,
+            determinismMode = settings.determinismMode,
+            onChunk = { chunk -> responseBuffer.append(chunk) },
+            onComplete = { err ->
+                errorRef.set(err?.message)
+                completionLatch.countDown()
+            },
+            traceId = "scanner-job-" + UUID.randomUUID().toString(),
+            jsonMode = true,
+            maxOutputTokens = Defaults.SCANNER_MAX_OUTPUT_TOKENS
+        )
+
+        val completed = completionLatch.await(Defaults.PASSIVE_SCAN_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+        requestsAnalyzed.incrementAndGet()
+        lastAnalysisTime.set(System.currentTimeMillis())
+
+        if (completed && errorRef.get() == null && responseBuffer.isNotEmpty()) {
+            val issues = parseIssuesFromAiResponse(responseBuffer.toString())
+            putPromptResultCacheValue(promptHash, issues)
+            handleParsedAiIssues(issues, requestResponse, minSeverity)
+        }
     }
 
     private fun handleAiResponse(aiText: String, requestResponse: HttpRequestResponse, minSeverity: String) {
@@ -1187,6 +1584,9 @@ $metadata
                     fullDetailLines.addAll(metadataSection.split("\r\n"))
                     val fullDetail = IssueUtils.formatIssueDetailHtml(fullDetailLines)
                     
+                    // Add markers to highlight evidence in response
+                    val markedReqResp = IssueMarkerSupport.markResponseFromDetail(requestResponse, sanitizedDetail)
+
                     val issue = AuditIssue.auditIssue(
                         issueName,
                         fullDetail,
@@ -1197,11 +1597,21 @@ $metadata
                         null,
                         null,
                         severity,
-                        listOf(requestResponse)
+                        listOf(markedReqResp)
                     )
                     api.siteMap().add(issue)
                     issuesFound.incrementAndGet()
                     api.logging().logToOutput("[PassiveAiScanner] Issue: $title | $rawSeverity | $confidence%")
+
+                    // Record finding in knowledge base
+                    ScanKnowledgeBase.recordVulnSignal(ScanKnowledgeBase.VulnSignal(
+                        endpoint = requestResponse.request().url(),
+                        vulnClass = title,
+                        severity = rawSeverity,
+                        confidence = confidence,
+                        source = source,
+                        evidence = detail.take(200)
+                    ))
 
                     // Auto-queue to active scanner if enabled
                     queueToActiveScanner(requestResponse, title, rawSeverity, detail, confidence, settings)
@@ -1381,6 +1791,7 @@ $metadata
             lowerTitle.contains("redirect") || lowerTitle.contains("open redirect") -> VulnClass.OPEN_REDIRECT
             lowerTitle.contains("cors") -> VulnClass.CORS_MISCONFIGURATION
             lowerTitle.contains("directory listing") -> VulnClass.DIRECTORY_LISTING
+            lowerTitle.contains("403 bypass") || lowerTitle.contains("access control bypass") || lowerTitle.contains("forbidden bypass") -> VulnClass.ACCESS_CONTROL_BYPASS
 
             else -> null
         }
@@ -1555,7 +1966,8 @@ $metadata
         val title: String? = null,
         val severity: String? = null,
         val detail: String? = null,
-        val confidence: Int? = null
+        val confidence: Int? = null,
+        val requestIndex: Int? = null
     )
 
     internal fun parseIssuesJson(json: String): List<AiIssueItem> {
@@ -1614,7 +2026,8 @@ $metadata
                     title = node.path("title").takeIf { !it.isMissingNode && !it.isNull }?.asText(),
                     severity = node.path("severity").takeIf { !it.isMissingNode && !it.isNull }?.asText(),
                     detail = node.path("detail").takeIf { !it.isMissingNode && !it.isNull }?.asText(),
-                    confidence = node.path("confidence").takeIf { !it.isMissingNode && !it.isNull }?.asInt()
+                    confidence = node.path("confidence").takeIf { !it.isMissingNode && !it.isNull }?.asInt(),
+                    requestIndex = node.path("request_index").takeIf { !it.isMissingNode && !it.isNull }?.asInt()
                 )
             }.getOrNull()
         }
@@ -1770,6 +2183,14 @@ $metadata
         }
     }
 
+    private fun hasExcludedExtension(url: String): Boolean {
+        if (excludedExtensions.isEmpty()) return false
+        val path = try { URI(url).path.orEmpty() } catch (_: Exception) { url }
+        val lastSegment = path.substringAfterLast('/')
+        val ext = lastSegment.substringAfterLast('.', "").lowercase()
+        return ext.isNotEmpty() && ext in excludedExtensions
+    }
+
     private fun isStreamingOrRealtimeEndpoint(response: InterceptedResponse): Boolean {
         val request = response.initiatingRequest()
         val reqAccept = request.headerValue("Accept").orEmpty().lowercase()
@@ -1849,6 +2270,12 @@ $metadata
         private const val JSON_ARRAY_SAMPLE_SIZE = 3
         private const val HTML_FORMS_SAMPLE_MAX = 3
         private const val HTML_INLINE_SCRIPTS_SAMPLE_MAX = 3
+
+        private const val JS_ENDPOINTS_CACHE_MAX = 2_000
+        private const val JS_ENDPOINTS_LOG_MAX = 10
+        private const val JS_MIN_BODY_FOR_EXTRACTION = 100
+
+        val DEFAULT_EXCLUDED_EXTENSIONS = Defaults.DEFAULT_EXCLUDED_EXTENSIONS
 
         // Pre-compiled Regex patterns (avoid recompilation in hot paths)
         val POTENTIAL_IDS_REGEX = Regex("\\b([0-9]+|[a-f0-9-]{36}|[a-f0-9]{24})\\b", RegexOption.IGNORE_CASE)

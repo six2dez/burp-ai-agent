@@ -9,6 +9,7 @@ import com.six2dez.burp.aiagent.config.AgentSettingsRepository
 import com.six2dez.burp.aiagent.context.ContextCapture
 import com.six2dez.burp.aiagent.mcp.McpSupervisor
 import com.six2dez.burp.aiagent.redact.PrivacyMode
+import com.six2dez.burp.aiagent.scanner.ScanKnowledgeBase
 import com.six2dez.burp.aiagent.supervisor.AgentSupervisor
 import com.six2dez.burp.aiagent.ui.components.DependencyBanner
 import com.six2dez.burp.aiagent.ui.components.ToggleSwitch
@@ -65,7 +66,7 @@ class MainTab(
         updateActiveScanStats()
         updateSafetySummary()
     }
-    private val baseTabCaption = "AI Agent"
+    private val baseTabCaption = "Custom AI Agent"
     private var tabbedPane: JTabbedPane? = null
     private var attentionActive = false
     private val dependencyBanner =
@@ -73,6 +74,7 @@ class MainTab(
     private var syncingToggles = false
     private var healthTimer: Timer? = null
     private var sessionPersistTimer: Timer? = null
+    private var lastProjectId: String? = null
 
     init {
         settingsPanel = SettingsPanel(api, backends, supervisor, audit, mcpSupervisor, passiveAiScanner, activeAiScanner)
@@ -103,7 +105,7 @@ class MainTab(
         top.layout = BorderLayout()
         top.border = EmptyBorder(14, 16, 14, 16)
 
-        val title = JLabel("Burp AI Agent")
+        val title = JLabel("Custom AI Agent")
         title.font = UiTheme.Typography.headline
         title.foreground = UiTheme.Colors.onSurface
 
@@ -130,11 +132,12 @@ class MainTab(
         backendPicker.foreground = UiTheme.Colors.comboForeground
         backendPicker.border = javax.swing.border.LineBorder(UiTheme.Colors.outline, 1, true)
         val initialSettings = settingsRepo.load()
-        backendPicker.model = javax.swing.DefaultComboBoxModel(backends.listBackendIds(initialSettings).toTypedArray())
+        backendPicker.model = javax.swing.DefaultComboBoxModel(backends.listAllBackendIds().toTypedArray())
         backendPicker.selectedItem = initialSettings.preferredBackendId
         backendPicker.addActionListener {
             val selected = backendPicker.selectedItem as? String ?: "codex-cli"
             settingsPanel.setPreferredBackend(selected)
+            settingsRepo.save(settingsPanel.currentSettings())
         }
 
         mcpToggle.isSelected = initialSettings.mcpSettings.enabled
@@ -306,8 +309,16 @@ class MainTab(
         // Restore persisted chat sessions
         chatPanel.restoreSessions()
 
-        // Auto-save sessions every 30 seconds and update usage stats
+        // Capture initial project ID
+        lastProjectId = try { api.project().id() } catch (_: Exception) { null }
+
+        // Auto-save sessions every 30 seconds, detect project changes, and update usage stats
         sessionPersistTimer = Timer(30_000) {
+            val currentProjectId = try { api.project().id() } catch (_: Exception) { null }
+            if (lastProjectId != null && currentProjectId != null && lastProjectId != currentProjectId) {
+                onProjectChanged()
+            }
+            lastProjectId = currentProjectId
             chatPanel.saveSessions()
             settingsPanel.updateUsageSummary(chatPanel.usageStats())
         }
@@ -418,9 +429,9 @@ class MainTab(
             SwingUtilities.invokeLater {
                 aiRequestLogger?.enabled = updated.aiRequestLoggerEnabled
                 aiRequestLogger?.maxEntries = updated.aiRequestLoggerMaxEntries
-                val available = backends.listBackendIds(updated)
-                backendPicker.model = javax.swing.DefaultComboBoxModel(available.toTypedArray())
-                if (available.contains(updated.preferredBackendId)) {
+                val allBackends = backends.listAllBackendIds()
+                backendPicker.model = javax.swing.DefaultComboBoxModel(allBackends.toTypedArray())
+                if (allBackends.contains(updated.preferredBackendId)) {
                     backendPicker.selectedItem = updated.preferredBackendId
                 }
             }
@@ -608,6 +619,7 @@ class MainTab(
                     else -> null
                 }
             }
+            "burp-ai" -> null
             else -> "Unsupported backend: ${settings.preferredBackendId}"
         }
     }
@@ -628,7 +640,7 @@ class MainTab(
             JOptionPane.showMessageDialog(
                 root,
                 message,
-                "AI Agent",
+                "Custom AI Agent",
                 JOptionPane.ERROR_MESSAGE
             )
         }
@@ -640,7 +652,7 @@ class MainTab(
         val result = JOptionPane.showConfirmDialog(
             root,
             "Ollama is not running. Start it now?",
-            "AI Agent",
+            "Custom AI Agent",
             JOptionPane.YES_NO_OPTION
         )
         if (result != JOptionPane.YES_OPTION) return false
@@ -666,7 +678,7 @@ class MainTab(
         val result = JOptionPane.showConfirmDialog(
             root,
             "LM Studio is not running. Start it now?",
-            "AI Agent",
+            "Custom AI Agent",
             JOptionPane.YES_NO_OPTION
         )
         if (result != JOptionPane.YES_OPTION) return false
@@ -684,6 +696,23 @@ class MainTab(
         }
     }
 
+    /**
+     * Called when the Burp project changes (detected via api.project().id() diff).
+     * Clears all in-memory state that could bleed across projects.
+     */
+    private fun onProjectChanged() {
+        api.logging().logToOutput("[MainTab] Project change detected — clearing session state and knowledge base")
+        // Save current sessions before clearing (they belong to the OLD project)
+        chatPanel.saveSessions()
+        // Clear in-memory chat sessions and reload from the new project's storage
+        chatPanel.clearInMemorySessionState()
+        chatPanel.restoreSessions()
+        // Clear scanner knowledge base to prevent cross-project contamination
+        ScanKnowledgeBase.clear()
+        // Clear live backend chat connections (conversation history)
+        supervisor.shutdownAllChatSessions()
+    }
+
     fun shutdown() {
         settingsPanel.shutdown()
         mcpStatusTimer.stop()
@@ -691,6 +720,7 @@ class MainTab(
         healthTimer = null
         sessionPersistTimer?.stop()
         sessionPersistTimer = null
+        chatPanel.shutdown()
         chatPanel.saveSessions()
         aiLoggerPanel?.shutdown()
     }

@@ -7,11 +7,13 @@ import com.six2dez.burp.aiagent.backends.AiBackend
 import com.six2dez.burp.aiagent.backends.BackendDiagnostics
 import com.six2dez.burp.aiagent.backends.BackendLaunchConfig
 import com.six2dez.burp.aiagent.backends.HealthCheckResult
+import com.six2dez.burp.aiagent.backends.JsonModeCapable
 import com.six2dez.burp.aiagent.backends.TokenUsage
 import com.six2dez.burp.aiagent.backends.UsageAwareConnection
 import com.six2dez.burp.aiagent.backends.http.CircuitBreaker
 import com.six2dez.burp.aiagent.backends.http.ConversationHistory
 import com.six2dez.burp.aiagent.backends.http.HttpBackendSupport
+import com.six2dez.burp.aiagent.backends.http.MontoyaHttpTransport
 import com.six2dez.burp.aiagent.config.AgentSettings
 import com.six2dez.burp.aiagent.util.HeaderParser
 import okhttp3.MediaType.Companion.toMediaType
@@ -39,7 +41,7 @@ class OllamaBackend : AiBackend {
         val client = HttpBackendSupport.sharedClient(baseUrl, timeoutSeconds)
 
         val resolvedContextWindow = if (config.contextWindow == null || config.contextWindow == DEFAULT_CONTEXT_WINDOW) {
-            detectContextWindow(baseUrl, model, config.headers, config.contextWindow)
+            detectContextWindow(baseUrl, model, config.headers, config.contextWindow, config.transport)
         } else {
             BackendDiagnostics.log("[ollama] Using user-configured context window: ${config.contextWindow}")
             config.contextWindow
@@ -55,6 +57,8 @@ class OllamaBackend : AiBackend {
             sessionId = config.sessionId,
             contextWindow = resolvedContextWindow,
             circuitBreaker = HttpBackendSupport.newCircuitBreaker(),
+            transport = config.transport,
+            timeoutSeconds = timeoutSeconds,
             debugLog = { BackendDiagnostics.log("[ollama] $it") },
             errorLog = { BackendDiagnostics.logError("[ollama] $it") }
         )
@@ -79,67 +83,84 @@ class OllamaBackend : AiBackend {
         baseUrl: String,
         model: String,
         headers: Map<String, String>,
-        fallback: Int?
+        fallback: Int?,
+        transport: MontoyaHttpTransport? = null
     ): Int? {
         try {
-            val client = HttpBackendSupport.sharedClient(baseUrl, 5L)
             val requestJson = mapper.writeValueAsString(mapOf("name" to model))
-            val request = Request.Builder()
-                .url("$baseUrl/api/show")
-                .post(requestJson.toRequestBody("application/json".toMediaType()))
-                .apply {
-                    headers.forEach { (name, value) -> header(name, value) }
-                }
-                .build()
+            val showUrl = "$baseUrl/api/show"
 
-            client.newCall(request).execute().use { resp ->
+            val body: String
+            if (transport != null) {
+                val resp = transport.post(showUrl, headers, requestJson, 5_000)
                 if (!resp.isSuccessful) {
                     BackendDiagnostics.log(
-                        "[ollama] /api/show returned HTTP ${resp.code}, using fallback: $fallback"
+                        "[ollama] /api/show returned HTTP ${resp.statusCode}, using fallback: $fallback"
                     )
                     return fallback
                 }
-                val body = resp.body?.string().orEmpty()
-                if (body.isBlank()) return fallback
-
-                val root = mapper.readTree(body)
-
-                // Priority 1: explicit num_ctx in parameters (user Modelfile override)
-                val parameters = root.path("parameters").asText("")
-                val numCtxMatch = Regex("""num_ctx\s+(\d+)""").find(parameters)
-                if (numCtxMatch != null) {
-                    val detected = numCtxMatch.groupValues[1].toIntOrNull()
-                    if (detected != null && detected > 0) {
-                        BackendDiagnostics.log(
-                            "[ollama] Detected context window from Modelfile parameters: $detected"
-                        )
-                        return detected
+                body = resp.body
+            } else {
+                val client = HttpBackendSupport.sharedClient(baseUrl, 5L)
+                val request = Request.Builder()
+                    .url(showUrl)
+                    .post(requestJson.toRequestBody("application/json".toMediaType()))
+                    .apply {
+                        headers.forEach { (name, value) -> header(name, value) }
                     }
-                }
+                    .build()
 
-                // Priority 2: *.context_length in model_info (model default)
-                val modelInfo = root.path("model_info")
-                if (modelInfo.isObject) {
-                    val iter = modelInfo.fields()
-                    while (iter.hasNext()) {
-                        val entry = iter.next()
-                        if (entry.key.endsWith(".context_length")) {
-                            val detected = entry.value.asInt(-1)
-                            if (detected > 0) {
-                                BackendDiagnostics.log(
-                                    "[ollama] Detected context window from model_info: $detected"
-                                )
-                                return detected
-                            }
+                val okResp = client.newCall(request).execute()
+                okResp.use { resp ->
+                    if (!resp.isSuccessful) {
+                        BackendDiagnostics.log(
+                            "[ollama] /api/show returned HTTP ${resp.code}, using fallback: $fallback"
+                        )
+                        return fallback
+                    }
+                    body = resp.body?.string().orEmpty()
+                }
+            }
+
+            if (body.isBlank()) return fallback
+
+            val root = mapper.readTree(body)
+
+            // Priority 1: explicit num_ctx in parameters (user Modelfile override)
+            val parameters = root.path("parameters").asText("")
+            val numCtxMatch = Regex("""num_ctx\s+(\d+)""").find(parameters)
+            if (numCtxMatch != null) {
+                val detected = numCtxMatch.groupValues[1].toIntOrNull()
+                if (detected != null && detected > 0) {
+                    BackendDiagnostics.log(
+                        "[ollama] Detected context window from Modelfile parameters: $detected"
+                    )
+                    return detected
+                }
+            }
+
+            // Priority 2: *.context_length in model_info (model default)
+            val modelInfo = root.path("model_info")
+            if (modelInfo.isObject) {
+                val iter = modelInfo.fields()
+                while (iter.hasNext()) {
+                    val entry = iter.next()
+                    if (entry.key.endsWith(".context_length")) {
+                        val detected = entry.value.asInt(-1)
+                        if (detected > 0) {
+                            BackendDiagnostics.log(
+                                "[ollama] Detected context window from model_info: $detected"
+                            )
+                            return detected
                         }
                     }
                 }
-
-                BackendDiagnostics.log(
-                    "[ollama] No context window found in /api/show response, using fallback: $fallback"
-                )
-                return fallback
             }
+
+            BackendDiagnostics.log(
+                "[ollama] No context window found in /api/show response, using fallback: $fallback"
+            )
+            return fallback
         } catch (e: Exception) {
             BackendDiagnostics.log(
                 "[ollama] Failed to detect context window: ${e.message}, using fallback: $fallback"
@@ -158,9 +179,11 @@ class OllamaBackend : AiBackend {
         private val sessionId: String?,
         private val contextWindow: Int?,
         private val circuitBreaker: CircuitBreaker,
+        private val transport: MontoyaHttpTransport?,
+        private val timeoutSeconds: Long,
         private val debugLog: (String) -> Unit,
         private val errorLog: (String) -> Unit
-    ) : AgentConnection, UsageAwareConnection {
+    ) : AgentConnection, UsageAwareConnection, JsonModeCapable {
 
         private val alive = AtomicBoolean(true)
         private val exec = Executors.newSingleThreadExecutor { runnable ->
@@ -178,7 +201,9 @@ class OllamaBackend : AiBackend {
             history: List<com.six2dez.burp.aiagent.backends.ChatMessage>?,
             onChunk: (String) -> Unit,
             onComplete: (Throwable?) -> Unit,
-            systemPrompt: String?
+            systemPrompt: String?,
+            jsonMode: Boolean,
+            maxOutputTokens: Int?
         ) {
             if (!isAlive()) {
                 onComplete(IllegalStateException("Connection closed"))
@@ -218,71 +243,93 @@ class OllamaBackend : AiBackend {
                                 model = model,
                                 stream = false,
                                 temperature = if (determinismMode) 0.0 else null,
-                                numCtx = contextWindow
+                                numCtx = contextWindow,
+                                formatJson = jsonMode,
+                                numPredict = maxOutputTokens
                             )
                             debugLog("serialize done bytes=${json.toByteArray(Charsets.UTF_8).size}")
-                            val req = Request.Builder()
-                                .url("$baseUrl/api/chat")
-                                .post(json.toRequestBody("application/json".toMediaType()))
-                                .apply {
-                                    headers.forEach { (name, value) ->
-                                        header(name, value)
-                                    }
-                                    if (!sessionId.isNullOrBlank()) {
-                                        header("X-Session-Id", sessionId)
-                                    }
-                                }
-                                .build()
 
-                            debugLog("request -> ${req.url} (stream=false)")
-                            client.newCall(req).execute().use { resp ->
+                            val endpointUrl = "$baseUrl/api/chat"
+                            val allHeaders = buildMap {
+                                putAll(headers)
+                                if (!sessionId.isNullOrBlank()) {
+                                    put("X-Session-Id", sessionId)
+                                }
+                            }
+
+                            debugLog("request -> $endpointUrl (stream=false)")
+
+                            val body: String
+                            if (transport != null) {
+                                val resp = transport.post(endpointUrl, allHeaders, json, timeoutSeconds * 1000)
                                 if (!resp.isSuccessful) {
-                                    val bodyText = resp.body?.string().orEmpty()
-                                    errorLog("HTTP ${resp.code}: ${bodyText.take(500)}")
-                                    onComplete(IllegalStateException("Ollama HTTP ${resp.code}: $bodyText"))
+                                    errorLog("HTTP ${resp.statusCode}: ${resp.body.take(500)}")
+                                    onComplete(IllegalStateException("Ollama HTTP ${resp.statusCode}: ${resp.body}"))
                                     return@submit
                                 }
-                                debugLog("response <- HTTP ${resp.code}")
-                                val body = resp.body?.string().orEmpty()
-                                if (body.isBlank()) {
-                                    onComplete(IllegalStateException("Ollama response body was empty"))
-                                    return@submit
+                                debugLog("response <- HTTP ${resp.statusCode}")
+                                body = resp.body
+                            } else {
+                                val req = Request.Builder()
+                                    .url(endpointUrl)
+                                    .post(json.toRequestBody("application/json".toMediaType()))
+                                    .apply {
+                                        allHeaders.forEach { (name, value) ->
+                                            header(name, value)
+                                        }
+                                    }
+                                    .build()
+                                val okResp = client.newCall(req).execute()
+                                okResp.use { resp ->
+                                    if (!resp.isSuccessful) {
+                                        val bodyText = resp.body?.string().orEmpty()
+                                        errorLog("HTTP ${resp.code}: ${bodyText.take(500)}")
+                                        onComplete(IllegalStateException("Ollama HTTP ${resp.code}: $bodyText"))
+                                        return@submit
+                                    }
+                                    debugLog("response <- HTTP ${resp.code}")
+                                    body = resp.body?.string().orEmpty()
                                 }
-                                val node = mapper.readTree(body)
-                                if (node.has("error")) {
-                                    val errText = node.path("error").asText()
-                                    errorLog("error: $errText")
-                                    onComplete(IllegalStateException("Ollama error: $errText"))
-                                    return@submit
-                                }
+                            }
 
-                                // Extract content from either 'content' or 'response' field
-                                val content = node.path("message").path("content").asText()
-                                    .ifBlank { node.path("response").asText() }
-                                val promptTokens = node.path("prompt_eval_count").asInt(-1)
-                                val completionTokens = node.path("eval_count").asInt(-1)
-                                if (promptTokens >= 0 || completionTokens >= 0) {
-                                    lastTokenUsageRef.set(
-                                        TokenUsage(
-                                            inputTokens = promptTokens.coerceAtLeast(0),
-                                            outputTokens = completionTokens.coerceAtLeast(0)
-                                        )
-                                    )
-                                }
-
-                                if (content.isBlank()) {
-                                    onComplete(IllegalStateException("Ollama response content was empty"))
-                                    return@submit
-                                }
-
-                                debugLog("received complete response (${content.length} chars)")
-                                // Add assistant response to conversation history
-                                conversationHistory.addAssistant(content)
-                                circuitBreaker.recordSuccess()
-                                onChunk(content)
-                                onComplete(null)
+                            if (body.isBlank()) {
+                                onComplete(IllegalStateException("Ollama response body was empty"))
                                 return@submit
                             }
+                            val node = mapper.readTree(body)
+                            if (node.has("error")) {
+                                val errText = node.path("error").asText()
+                                errorLog("error: $errText")
+                                onComplete(IllegalStateException("Ollama error: $errText"))
+                                return@submit
+                            }
+
+                            // Extract content from either 'content' or 'response' field
+                            val content = node.path("message").path("content").asText()
+                                .ifBlank { node.path("response").asText() }
+                            val promptTokens = node.path("prompt_eval_count").asInt(-1)
+                            val completionTokens = node.path("eval_count").asInt(-1)
+                            if (promptTokens >= 0 || completionTokens >= 0) {
+                                lastTokenUsageRef.set(
+                                    TokenUsage(
+                                        inputTokens = promptTokens.coerceAtLeast(0),
+                                        outputTokens = completionTokens.coerceAtLeast(0)
+                                    )
+                                )
+                            }
+
+                            if (content.isBlank()) {
+                                onComplete(IllegalStateException("Ollama response content was empty"))
+                                return@submit
+                            }
+
+                            debugLog("received complete response (${content.length} chars)")
+                            // Add assistant response to conversation history
+                            conversationHistory.addAssistant(content)
+                            circuitBreaker.recordSuccess()
+                            onChunk(content)
+                            onComplete(null)
+                            return@submit
                         } catch (e: Exception) {
                             lastError = e
                             val retryable = HttpBackendSupport.isRetryableConnectionError(e)
@@ -322,7 +369,9 @@ class OllamaBackend : AiBackend {
             model: String,
             stream: Boolean,
             temperature: Double?,
-            numCtx: Int?
+            numCtx: Int?,
+            formatJson: Boolean = false,
+            numPredict: Int? = null
         ): String {
             val messages = conversationHistory.snapshot()
             val sb = StringBuilder(256)
@@ -337,7 +386,10 @@ class OllamaBackend : AiBackend {
             }
             sb.append("],")
             sb.append("\"stream\":").append(if (stream) "true" else "false")
-            if (temperature != null || numCtx != null) {
+            if (formatJson) {
+                sb.append(",\"format\":\"json\"")
+            }
+            if (temperature != null || numCtx != null || numPredict != null) {
                 sb.append(",\"options\":{")
                 var firstOpt = true
                 if (temperature != null) {
@@ -347,6 +399,11 @@ class OllamaBackend : AiBackend {
                 if (numCtx != null) {
                     if (!firstOpt) sb.append(",")
                     sb.append("\"num_ctx\":").append(numCtx)
+                    firstOpt = false
+                }
+                if (numPredict != null) {
+                    if (!firstOpt) sb.append(",")
+                    sb.append("\"num_predict\":").append(numPredict)
                 }
                 sb.append("}")
             }
