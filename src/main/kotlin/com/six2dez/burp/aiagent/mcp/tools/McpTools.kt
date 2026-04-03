@@ -1910,8 +1910,20 @@ object McpToolExecutor {
             "scan_task_status" -> GetScanTaskStatus::class.asInputSchema()
             "scan_task_delete" -> DeleteScanTask::class.asInputSchema()
             "scan_report" -> GenerateScannerReport::class.asInputSchema()
-            "proxy_http_history" -> GetProxyHttpHistory::class.asInputSchema()
-            "proxy_http_history_regex" -> GetProxyHttpHistoryRegex::class.asInputSchema()
+            "proxy_http_history" -> {
+                if (allowUnpreprocessed) {
+                    GetProxyHttpHistory::class.asInputSchema()
+                } else {
+                    GetProxyHttpHistoryRestricted::class.asInputSchema()
+                }
+            }
+            "proxy_http_history_regex" -> {
+                if (allowUnpreprocessed) {
+                    GetProxyHttpHistoryRegex::class.asInputSchema()
+                } else {
+                    GetProxyHttpHistoryRegexRestricted::class.asInputSchema()
+                }
+            }
             "proxy_history_annotate" -> ProxyHistoryAnnotate::class.asInputSchema()
             "response_body_search" -> ResponseBodySearch::class.asInputSchema()
             "proxy_ws_history" -> GetProxyWebsocketHistory::class.asInputSchema()
@@ -2225,11 +2237,24 @@ data class GetProxyHttpHistory(
 ) : Paginated
 
 @Serializable
+data class GetProxyHttpHistoryRestricted(
+    override val count: Int = 5,
+    override val offset: Int = 0
+) : Paginated
+
+@Serializable
 data class GetProxyHttpHistoryRegex(
     val regex: String,
     override val count: Int = 5,
     override val offset: Int = 0,
     val includeUnpreprocessedResponse: Boolean = false
+) : Paginated
+
+@Serializable
+data class GetProxyHttpHistoryRegexRestricted(
+    val regex: String,
+    override val count: Int = 5,
+    override val offset: Int = 0
 ) : Paginated
 
 @Serializable

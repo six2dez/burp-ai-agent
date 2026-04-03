@@ -68,6 +68,11 @@ class McpSupervisor(
         determinismMode: Boolean,
         preprocessSettings: ResponsePreprocessorSettings
     ) {
+        val previousSettings = settingsRef.get()
+        val previousPrivacy = privacyRef.get()
+        val previousDeterminism = determinismRef.get()
+        val previousPreprocess = preprocessRef.get()
+
         settingsRef.set(settings)
         privacyRef.set(privacyMode)
         determinismRef.set(determinismMode)
@@ -85,10 +90,11 @@ class McpSupervisor(
         val alreadyRunning = stateRef.get() is McpServerState.Running
         val settingsUnchanged = previousSettings == settings &&
             previousPrivacy == privacyMode &&
-            previousDeterminism == determinismMode
+            previousDeterminism == determinismMode &&
+            previousPreprocess == preprocessSettings
         if (alreadyRunning && settingsUnchanged) {
             if (settings.stdioEnabled) {
-                stdioBridge.start(settings, privacyMode, determinismMode)
+                stdioBridge.start(settings, privacyMode, determinismMode, preprocessSettings)
             } else {
                 stdioBridge.stop()
             }
