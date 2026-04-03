@@ -2,6 +2,7 @@ package com.six2dez.burp.aiagent.config
 
 import burp.api.montoya.MontoyaApi
 import burp.api.montoya.persistence.Preferences
+import com.six2dez.burp.aiagent.mcp.tools.ResponsePreprocessorSettings
 import com.six2dez.burp.aiagent.prompts.bountyprompt.BountyPromptCatalog
 import com.six2dez.burp.aiagent.redact.PrivacyMode
 import com.six2dez.burp.aiagent.scanner.PayloadRisk
@@ -114,6 +115,13 @@ data class AgentSettings(
     // AI Request Logger settings
     val aiRequestLoggerEnabled: Boolean = true,
     val aiRequestLoggerMaxEntries: Int = 500
+)
+
+fun AgentSettings.toPreprocessorSettings() = ResponsePreprocessorSettings(
+    preprocessProxyHistory = preprocessProxyHistory,
+    preprocessMaxResponseSizeKb = preprocessMaxResponseSizeKb,
+    preprocessFilterBinaryContent = preprocessFilterBinaryContent,
+    preprocessAllowedContentTypes = preprocessAllowedContentTypes
 )
 
 class AgentSettingsRepository(api: MontoyaApi) {

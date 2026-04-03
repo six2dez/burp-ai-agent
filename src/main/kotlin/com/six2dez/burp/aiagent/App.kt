@@ -12,10 +12,10 @@ import com.six2dez.burp.aiagent.audit.RollingLogConfig
 import com.six2dez.burp.aiagent.backends.BackendDiagnostics
 import com.six2dez.burp.aiagent.backends.BackendRegistry
 import com.six2dez.burp.aiagent.agents.AgentProfileLoader
+import com.six2dez.burp.aiagent.config.toPreprocessorSettings
 import com.six2dez.burp.aiagent.config.AgentSettingsRepository
 import com.six2dez.burp.aiagent.context.ContextCollector
 import com.six2dez.burp.aiagent.mcp.McpSupervisor
-import com.six2dez.burp.aiagent.mcp.tools.ResponsePreprocessorSettings
 import com.six2dez.burp.aiagent.redact.Redaction
 import com.six2dez.burp.aiagent.scanner.ActiveAiScanner
 import com.six2dez.burp.aiagent.scanner.AiScanCheck
@@ -102,12 +102,7 @@ object App {
             settings.mcpSettings,
             settings.privacyMode,
             settings.determinismMode,
-            ResponsePreprocessorSettings(
-                preprocessProxyHistory = settings.preprocessProxyHistory,
-                preprocessMaxResponseSizeKb = settings.preprocessMaxResponseSizeKb,
-                preprocessFilterBinaryContent = settings.preprocessFilterBinaryContent,
-                preprocessAllowedContentTypes = settings.preprocessAllowedContentTypes
-            )
+            settings.toPreprocessorSettings()
         )
         
         // Initialize passive AI scanner

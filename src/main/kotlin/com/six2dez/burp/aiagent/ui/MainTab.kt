@@ -6,9 +6,9 @@ import com.six2dez.burp.aiagent.audit.AuditLogger
 import com.six2dez.burp.aiagent.backends.HealthCheckResult
 import com.six2dez.burp.aiagent.backends.BackendRegistry
 import com.six2dez.burp.aiagent.config.AgentSettingsRepository
+import com.six2dez.burp.aiagent.config.toPreprocessorSettings
 import com.six2dez.burp.aiagent.context.ContextCapture
 import com.six2dez.burp.aiagent.mcp.McpSupervisor
-import com.six2dez.burp.aiagent.mcp.tools.ResponsePreprocessorSettings
 import com.six2dez.burp.aiagent.redact.PrivacyMode
 import com.six2dez.burp.aiagent.scanner.ScanKnowledgeBase
 import com.six2dez.burp.aiagent.supervisor.AgentSupervisor
@@ -96,12 +96,7 @@ class MainTab(
                     settings.mcpSettings,
                     settings.privacyMode,
                     settings.determinismMode,
-                    ResponsePreprocessorSettings(
-                        preprocessProxyHistory = settings.preprocessProxyHistory,
-                        preprocessMaxResponseSizeKb = settings.preprocessMaxResponseSizeKb,
-                        preprocessFilterBinaryContent = settings.preprocessFilterBinaryContent,
-                        preprocessAllowedContentTypes = settings.preprocessAllowedContentTypes
-                    )
+                    settings.toPreprocessorSettings()
                 )
             },
             validateBackend = { validateBackendCommand(it) },
@@ -390,12 +385,7 @@ class MainTab(
                 updated.mcpSettings,
                 updated.privacyMode,
                 updated.determinismMode,
-                ResponsePreprocessorSettings(
-                    preprocessProxyHistory = updated.preprocessProxyHistory,
-                    preprocessMaxResponseSizeKb = updated.preprocessMaxResponseSizeKb,
-                    preprocessFilterBinaryContent = updated.preprocessFilterBinaryContent,
-                    preprocessAllowedContentTypes = updated.preprocessAllowedContentTypes
-                )
+                updated.toPreprocessorSettings()
             )
             renderStatus()
         }
@@ -429,12 +419,7 @@ class MainTab(
                 updated.mcpSettings,
                 updated.privacyMode,
                 updated.determinismMode,
-                ResponsePreprocessorSettings(
-                    preprocessProxyHistory = updated.preprocessProxyHistory,
-                    preprocessMaxResponseSizeKb = updated.preprocessMaxResponseSizeKb,
-                    preprocessFilterBinaryContent = updated.preprocessFilterBinaryContent,
-                    preprocessAllowedContentTypes = updated.preprocessAllowedContentTypes
-                )
+                updated.toPreprocessorSettings()
             )
             renderStatus()
         }

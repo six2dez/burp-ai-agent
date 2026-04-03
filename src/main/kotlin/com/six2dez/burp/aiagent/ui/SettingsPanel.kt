@@ -9,10 +9,10 @@ import com.six2dez.burp.aiagent.config.AgentSettingsRepository
 import com.six2dez.burp.aiagent.config.Defaults
 import com.six2dez.burp.aiagent.config.McpSettings
 import com.six2dez.burp.aiagent.config.SeverityLevel
+import com.six2dez.burp.aiagent.config.toPreprocessorSettings
 import com.six2dez.burp.aiagent.mcp.McpSupervisor
 import com.six2dez.burp.aiagent.mcp.McpToolCatalog
 import com.six2dez.burp.aiagent.agents.AgentProfileLoader
-import com.six2dez.burp.aiagent.mcp.tools.ResponsePreprocessorSettings
 import com.six2dez.burp.aiagent.prompts.bountyprompt.BountyPromptCatalog
 import com.six2dez.burp.aiagent.ui.components.ToggleSwitch
 import com.six2dez.burp.aiagent.ui.panels.ActiveScanConfigPanel
@@ -1232,12 +1232,7 @@ class SettingsPanel(
             updated.mcpSettings,
             updated.privacyMode,
             updated.determinismMode,
-            ResponsePreprocessorSettings(
-                preprocessProxyHistory = updated.preprocessProxyHistory,
-                preprocessMaxResponseSizeKb = updated.preprocessMaxResponseSizeKb,
-                preprocessFilterBinaryContent = updated.preprocessFilterBinaryContent,
-                preprocessAllowedContentTypes = updated.preprocessAllowedContentTypes
-            )
+            updated.toPreprocessorSettings()
         )
         
         // Apply passive AI scanner settings

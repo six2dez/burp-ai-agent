@@ -114,16 +114,8 @@ object ResponsePreprocessor {
             }
         }
 
-        // Heuristics for readable textual content types
-        if (lowerContentType.startsWith("text/")) return false
+        // Heuristic for vendor-specific textual content types
         if (lowerContentType.endsWith("+json") || lowerContentType.endsWith("+xml")) return false
-        if (
-            lowerContentType.startsWith("application/json") ||
-            lowerContentType.startsWith("application/xml") ||
-            lowerContentType.startsWith("application/javascript") ||
-            lowerContentType.startsWith("application/x-www-form-urlencoded") ||
-            lowerContentType.startsWith("multipart/form-data")
-        ) return false
 
         // Unknown application/* content is usually compressed/binary blobs.
         if (lowerContentType.startsWith("application/")) return true
