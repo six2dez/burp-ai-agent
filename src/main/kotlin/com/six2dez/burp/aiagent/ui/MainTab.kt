@@ -3,8 +3,8 @@ package com.six2dez.burp.aiagent.ui
 import burp.api.montoya.MontoyaApi
 import com.six2dez.burp.aiagent.audit.AiRequestLogger
 import com.six2dez.burp.aiagent.audit.AuditLogger
-import com.six2dez.burp.aiagent.backends.HealthCheckResult
 import com.six2dez.burp.aiagent.backends.BackendRegistry
+import com.six2dez.burp.aiagent.backends.HealthCheckResult
 import com.six2dez.burp.aiagent.config.AgentSettingsRepository
 import com.six2dez.burp.aiagent.config.toPreprocessorSettings
 import com.six2dez.burp.aiagent.context.ContextCapture
@@ -23,8 +23,8 @@ import java.awt.event.KeyEvent
 import javax.swing.BoxLayout
 import javax.swing.JComponent
 import javax.swing.JLabel
-import javax.swing.JPanel
 import javax.swing.JOptionPane
+import javax.swing.JPanel
 import javax.swing.JTabbedPane
 import javax.swing.SwingUtilities
 import javax.swing.Timer
@@ -38,7 +38,7 @@ class MainTab(
     private val mcpSupervisor: McpSupervisor,
     private val passiveAiScanner: com.six2dez.burp.aiagent.scanner.PassiveAiScanner,
     private val activeAiScanner: com.six2dez.burp.aiagent.scanner.ActiveAiScanner,
-    private val aiRequestLogger: AiRequestLogger? = null
+    private val aiRequestLogger: AiRequestLogger? = null,
 ) {
     val root: JComponent = JPanel(BorderLayout())
     private lateinit var settingsPanel: SettingsPanel
@@ -60,13 +60,14 @@ class MainTab(
     private val statusLabel = JLabel("Idle")
     private val sessionLabel = JLabel("Session: -")
     private val settingsRepo = AgentSettingsRepository(api)
-    private val mcpStatusTimer = Timer(1000) {
-        updateMcpBadge()
-        updateMcpControls()
-        updateBackendBadge()
-        updateActiveScanStats()
-        updateSafetySummary()
-    }
+    private val mcpStatusTimer =
+        Timer(1000) {
+            updateMcpBadge()
+            updateMcpControls()
+            updateBackendBadge()
+            updateActiveScanStats()
+            updateSafetySummary()
+        }
     private val baseTabCaption = "Custom AI Agent"
     private var tabbedPane: JTabbedPane? = null
     private var attentionActive = false
@@ -83,28 +84,29 @@ class MainTab(
             aiLoggerPanel = AiLoggerPanel(aiRequestLogger)
         }
         bottomTabsPanel = BottomTabsPanel(settingsPanel, aiLoggerPanel)
-        chatPanel = ChatPanel(
-            api = api,
-            supervisor = supervisor,
-            getSettings = { settingsPanel.currentSettings() },
-            applySettings = { settings ->
-                settingsRepo.save(settings)
-                aiRequestLogger?.enabled = settings.aiRequestLoggerEnabled
-                aiRequestLogger?.maxEntries = settings.aiRequestLoggerMaxEntries
-                supervisor.applySettings(settings)
-                mcpSupervisor.applySettings(
-                    settings.mcpSettings,
-                    settings.privacyMode,
-                    settings.determinismMode,
-                    settings.toPreprocessorSettings()
-                )
-            },
-            validateBackend = { validateBackendCommand(it) },
-            ensureBackendReady = { ensureBackendReady(it) },
-            showError = { showError(it) },
-            onStatusChanged = { refreshStatus() },
-            onResponseReady = { notifyResponseReady() }
-        )
+        chatPanel =
+            ChatPanel(
+                api = api,
+                supervisor = supervisor,
+                getSettings = { settingsPanel.currentSettings() },
+                applySettings = { settings ->
+                    settingsRepo.save(settings)
+                    aiRequestLogger?.enabled = settings.aiRequestLoggerEnabled
+                    aiRequestLogger?.maxEntries = settings.aiRequestLoggerMaxEntries
+                    supervisor.applySettings(settings)
+                    mcpSupervisor.applySettings(
+                        settings.mcpSettings,
+                        settings.privacyMode,
+                        settings.determinismMode,
+                        settings.toPreprocessorSettings(),
+                    )
+                },
+                validateBackend = { validateBackendCommand(it) },
+                ensureBackendReady = { ensureBackendReady(it) },
+                showError = { showError(it) },
+                onStatusChanged = { refreshStatus() },
+                onResponseReady = { notifyResponseReady() },
+            )
         root.background = UiTheme.Colors.surface
 
         val top = HeaderPanel()
@@ -162,37 +164,39 @@ class MainTab(
         mcpGroup.add(javax.swing.Box.createRigidArea(Dimension(10, 0)))
         styleStatusLabel(mcpStatusLabel)
         mcpGroup.add(mcpStatusLabel)
-        
+
         styleStatusLabel(backendStatusLabel)
         // Check health in background every 5s, not every 1s to avoid spam
-        healthTimer = Timer(5000) {
-            val settings = settingsPanel.currentSettings()
-            Thread {
-                val health = supervisor.backendHealth(settings)
-                SwingUtilities.invokeLater {
-                    when (health) {
-                        is HealthCheckResult.Healthy -> {
-                            backendStatusLabel.text = "AI: OK"
-                            backendStatusLabel.background = UiTheme.Colors.statusRunning
-                            backendStatusLabel.toolTipText = "Backend health check passed."
-                        }
-                        is HealthCheckResult.Degraded -> {
-                            backendStatusLabel.text = "AI: Degraded"
-                            backendStatusLabel.background = UiTheme.Colors.statusTerminal
-                            backendStatusLabel.toolTipText = health.message
-                        }
-                        else -> {
-                            backendStatusLabel.text = "AI: Offline"
-                            backendStatusLabel.background = UiTheme.Colors.statusCrashed
-                            backendStatusLabel.toolTipText = when (health) {
-                                is HealthCheckResult.Unavailable -> health.message
-                                else -> "Backend did not respond."
+        healthTimer =
+            Timer(5000) {
+                val settings = settingsPanel.currentSettings()
+                Thread {
+                    val health = supervisor.backendHealth(settings)
+                    SwingUtilities.invokeLater {
+                        when (health) {
+                            is HealthCheckResult.Healthy -> {
+                                backendStatusLabel.text = "AI: OK"
+                                backendStatusLabel.background = UiTheme.Colors.statusRunning
+                                backendStatusLabel.toolTipText = "Backend health check passed."
+                            }
+                            is HealthCheckResult.Degraded -> {
+                                backendStatusLabel.text = "AI: Degraded"
+                                backendStatusLabel.background = UiTheme.Colors.statusTerminal
+                                backendStatusLabel.toolTipText = health.message
+                            }
+                            else -> {
+                                backendStatusLabel.text = "AI: Offline"
+                                backendStatusLabel.background = UiTheme.Colors.statusCrashed
+                                backendStatusLabel.toolTipText =
+                                    when (health) {
+                                        is HealthCheckResult.Unavailable -> health.message
+                                        else -> "Backend did not respond."
+                                    }
                             }
                         }
                     }
-                }
-            }.start()
-        }
+                }.start()
+            }
         healthTimer?.start()
 
         val passiveLabel = JLabel("Passive")
@@ -237,20 +241,22 @@ class MainTab(
         actions.add(scannerGroup)
         actions.add(clientGroup)
 
-        val mainContent = javax.swing.JSplitPane(
-            javax.swing.JSplitPane.HORIZONTAL_SPLIT,
-            chatPanel.sessionsComponent(),
-            chatPanel.root
-        )
+        val mainContent =
+            javax.swing.JSplitPane(
+                javax.swing.JSplitPane.HORIZONTAL_SPLIT,
+                chatPanel.sessionsComponent(),
+                chatPanel.root,
+            )
         mainContent.resizeWeight = 0.2
         mainContent.setDividerLocation(0.2)
         mainContent.border = EmptyBorder(0, 0, 0, 0)
 
-        val center = javax.swing.JSplitPane(
-            javax.swing.JSplitPane.VERTICAL_SPLIT,
-            mainContent,
-            bottomTabsPanel.root
-        )
+        val center =
+            javax.swing.JSplitPane(
+                javax.swing.JSplitPane.VERTICAL_SPLIT,
+                mainContent,
+                bottomTabsPanel.root,
+            )
         center.resizeWeight = 0.7
         center.setDividerLocation(0.7)
         center.border = EmptyBorder(0, 0, 0, 0)
@@ -277,36 +283,67 @@ class MainTab(
         // ── Keyboard shortcuts ──
         val imap = root.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT)
         val amap = root.actionMap
-        val meta = java.awt.Toolkit.getDefaultToolkit().menuShortcutKeyMaskEx
+        val meta =
+            java.awt.Toolkit
+                .getDefaultToolkit()
+                .menuShortcutKeyMaskEx
 
         imap.put(javax.swing.KeyStroke.getKeyStroke(KeyEvent.VK_N, meta), "newSession")
-        amap.put("newSession", object : javax.swing.AbstractAction() {
-            override fun actionPerformed(e: java.awt.event.ActionEvent?) { chatPanel.createNewSession() }
-        })
-        imap.put(javax.swing.KeyStroke.getKeyStroke(KeyEvent.VK_W, meta), "deleteSession")
-        amap.put("deleteSession", object : javax.swing.AbstractAction() {
-            override fun actionPerformed(e: java.awt.event.ActionEvent?) { chatPanel.deleteCurrentSession() }
-        })
-        imap.put(javax.swing.KeyStroke.getKeyStroke(KeyEvent.VK_L, meta), "clearChat")
-        amap.put("clearChat", object : javax.swing.AbstractAction() {
-            override fun actionPerformed(e: java.awt.event.ActionEvent?) { chatPanel.clearCurrentChat() }
-        })
-        imap.put(javax.swing.KeyStroke.getKeyStroke(KeyEvent.VK_E, meta), "exportChat")
-        amap.put("exportChat", object : javax.swing.AbstractAction() {
-            override fun actionPerformed(e: java.awt.event.ActionEvent?) { chatPanel.exportCurrentChatAsMarkdown() }
-        })
-        imap.put(javax.swing.KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "toggleSettings")
-        amap.put("toggleSettings", object : javax.swing.AbstractAction() {
-            override fun actionPerformed(e: java.awt.event.ActionEvent?) {
-                if (!chatPanel.cancelInFlightRequest()) {
-                    bottomTabsPanel.toggle()
+        amap.put(
+            "newSession",
+            object : javax.swing.AbstractAction() {
+                override fun actionPerformed(e: java.awt.event.ActionEvent?) {
+                    chatPanel.createNewSession()
                 }
-            }
-        })
+            },
+        )
+        imap.put(javax.swing.KeyStroke.getKeyStroke(KeyEvent.VK_W, meta), "deleteSession")
+        amap.put(
+            "deleteSession",
+            object : javax.swing.AbstractAction() {
+                override fun actionPerformed(e: java.awt.event.ActionEvent?) {
+                    chatPanel.deleteCurrentSession()
+                }
+            },
+        )
+        imap.put(javax.swing.KeyStroke.getKeyStroke(KeyEvent.VK_L, meta), "clearChat")
+        amap.put(
+            "clearChat",
+            object : javax.swing.AbstractAction() {
+                override fun actionPerformed(e: java.awt.event.ActionEvent?) {
+                    chatPanel.clearCurrentChat()
+                }
+            },
+        )
+        imap.put(javax.swing.KeyStroke.getKeyStroke(KeyEvent.VK_E, meta), "exportChat")
+        amap.put(
+            "exportChat",
+            object : javax.swing.AbstractAction() {
+                override fun actionPerformed(e: java.awt.event.ActionEvent?) {
+                    chatPanel.exportCurrentChatAsMarkdown()
+                }
+            },
+        )
+        imap.put(javax.swing.KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "toggleSettings")
+        amap.put(
+            "toggleSettings",
+            object : javax.swing.AbstractAction() {
+                override fun actionPerformed(e: java.awt.event.ActionEvent?) {
+                    if (!chatPanel.cancelInFlightRequest()) {
+                        bottomTabsPanel.toggle()
+                    }
+                }
+            },
+        )
         imap.put(javax.swing.KeyStroke.getKeyStroke(KeyEvent.VK_T, meta), "openToolsDialog")
-        amap.put("openToolsDialog", object : javax.swing.AbstractAction() {
-            override fun actionPerformed(e: java.awt.event.ActionEvent?) { chatPanel.openToolDialog() }
-        })
+        amap.put(
+            "openToolsDialog",
+            object : javax.swing.AbstractAction() {
+                override fun actionPerformed(e: java.awt.event.ActionEvent?) {
+                    chatPanel.openToolDialog()
+                }
+            },
+        )
 
         wireActions()
         renderStatus()
@@ -316,18 +353,29 @@ class MainTab(
         chatPanel.restoreSessions()
 
         // Capture initial project ID
-        lastProjectId = try { api.project().id() } catch (_: Exception) { null }
+        lastProjectId =
+            try {
+                api.project().id()
+            } catch (_: Exception) {
+                null
+            }
 
         // Auto-save sessions every 30 seconds, detect project changes, and update usage stats
-        sessionPersistTimer = Timer(30_000) {
-            val currentProjectId = try { api.project().id() } catch (_: Exception) { null }
-            if (lastProjectId != null && currentProjectId != null && lastProjectId != currentProjectId) {
-                onProjectChanged()
+        sessionPersistTimer =
+            Timer(30_000) {
+                val currentProjectId =
+                    try {
+                        api.project().id()
+                    } catch (_: Exception) {
+                        null
+                    }
+                if (lastProjectId != null && currentProjectId != null && lastProjectId != currentProjectId) {
+                    onProjectChanged()
+                }
+                lastProjectId = currentProjectId
+                chatPanel.saveSessions()
+                settingsPanel.updateUsageSummary(chatPanel.usageStats())
             }
-            lastProjectId = currentProjectId
-            chatPanel.saveSessions()
-            settingsPanel.updateUsageSummary(chatPanel.usageStats())
-        }
         sessionPersistTimer?.start()
     }
 
@@ -385,7 +433,7 @@ class MainTab(
                 updated.mcpSettings,
                 updated.privacyMode,
                 updated.determinismMode,
-                updated.toPreprocessorSettings()
+                updated.toPreprocessorSettings(),
             )
             renderStatus()
         }
@@ -419,7 +467,7 @@ class MainTab(
                 updated.mcpSettings,
                 updated.privacyMode,
                 updated.determinismMode,
-                updated.toPreprocessorSettings()
+                updated.toPreprocessorSettings(),
             )
             renderStatus()
         }
@@ -442,6 +490,10 @@ class MainTab(
             renderStatus()
         }
         settingsPanel.onSettingsChanged = { updated ->
+            // SettingsPanel owns its own repository instance; drop our cache so the
+            // next tab.currentSettings() reads the freshly persisted values (custom
+            // prompt library, canned prompts, etc.).
+            settingsRepo.invalidate()
             SwingUtilities.invokeLater {
                 aiRequestLogger?.enabled = updated.aiRequestLoggerEnabled
                 aiRequestLogger?.maxEntries = updated.aiRequestLoggerMaxEntries
@@ -476,9 +528,17 @@ class MainTab(
         capture: ContextCapture,
         promptTemplate: String,
         actionName: String,
-        onCompleted: ((String, Throwable?) -> Unit)? = null
+        onCompleted: ((String, Throwable?) -> Unit)? = null,
     ) {
         chatPanel.startSessionFromContext(capture, promptTemplate, actionName, onCompleted)
+    }
+
+    fun openChatWithContext(
+        capture: ContextCapture,
+        spec: PromptLaunchSpec,
+        onCompleted: ((String, Throwable?) -> Unit)? = null,
+    ) {
+        chatPanel.startSessionFromContext(capture, spec, onCompleted)
     }
 
     fun refreshStatus() {
@@ -488,8 +548,9 @@ class MainTab(
     private fun updateMcpControls() {
         val mcpState = mcpSupervisor.status()
         val running = mcpState is com.six2dez.burp.aiagent.mcp.McpServerState.Running
-        val busy = mcpState is com.six2dez.burp.aiagent.mcp.McpServerState.Starting ||
-            mcpState is com.six2dez.burp.aiagent.mcp.McpServerState.Stopping
+        val busy =
+            mcpState is com.six2dez.burp.aiagent.mcp.McpServerState.Starting ||
+                mcpState is com.six2dez.burp.aiagent.mcp.McpServerState.Stopping
         mcpToggle.isEnabled = !busy
         backendPicker.isEnabled = running && !busy
         if (running) {
@@ -502,49 +563,53 @@ class MainTab(
 
     private fun updateMcpBadge() {
         val state = mcpSupervisor.status()
-        val text = when (state) {
-            is com.six2dez.burp.aiagent.mcp.McpServerState.Running -> "MCP: Running"
-            is com.six2dez.burp.aiagent.mcp.McpServerState.Starting -> "MCP: Starting"
-            is com.six2dez.burp.aiagent.mcp.McpServerState.Stopping -> "MCP: Stopping"
-            is com.six2dez.burp.aiagent.mcp.McpServerState.Failed -> {
-                if (isBindFailure(state.exception)) "MCP: Port in use" else "MCP: Error"
+        val text =
+            when (state) {
+                is com.six2dez.burp.aiagent.mcp.McpServerState.Running -> "MCP: Running"
+                is com.six2dez.burp.aiagent.mcp.McpServerState.Starting -> "MCP: Starting"
+                is com.six2dez.burp.aiagent.mcp.McpServerState.Stopping -> "MCP: Stopping"
+                is com.six2dez.burp.aiagent.mcp.McpServerState.Failed -> {
+                    if (isBindFailure(state.exception)) "MCP: Port in use" else "MCP: Error"
+                }
+                else -> "MCP: Stopped"
             }
-            else -> "MCP: Stopped"
-        }
         mcpStatusLabel.text = text
-        mcpStatusLabel.background = when (state) {
-            is com.six2dez.burp.aiagent.mcp.McpServerState.Running -> UiTheme.Colors.statusRunning
-            is com.six2dez.burp.aiagent.mcp.McpServerState.Failed -> UiTheme.Colors.statusCrashed
-            is com.six2dez.burp.aiagent.mcp.McpServerState.Starting -> UiTheme.Colors.statusTerminal
-            is com.six2dez.burp.aiagent.mcp.McpServerState.Stopping -> UiTheme.Colors.statusTerminal
-            else -> UiTheme.Colors.outlineVariant
-        }
+        mcpStatusLabel.background =
+            when (state) {
+                is com.six2dez.burp.aiagent.mcp.McpServerState.Running -> UiTheme.Colors.statusRunning
+                is com.six2dez.burp.aiagent.mcp.McpServerState.Failed -> UiTheme.Colors.statusCrashed
+                is com.six2dez.burp.aiagent.mcp.McpServerState.Starting -> UiTheme.Colors.statusTerminal
+                is com.six2dez.burp.aiagent.mcp.McpServerState.Stopping -> UiTheme.Colors.statusTerminal
+                else -> UiTheme.Colors.outlineVariant
+            }
     }
 
     private fun updateSafetySummary() {
         val settings = settingsPanel.currentSettings()
         val privacy = settings.privacyMode.name
-        val mcpExposure = when {
-            !settings.mcpSettings.enabled -> "MCP off"
-            settings.mcpSettings.externalEnabled -> "MCP external"
-            else -> "MCP local"
-        }
+        val mcpExposure =
+            when {
+                !settings.mcpSettings.enabled -> "MCP off"
+                settings.mcpSettings.externalEnabled -> "MCP external"
+                else -> "MCP local"
+            }
         val unsafe = if (settings.mcpSettings.unsafeEnabled) "Unsafe on" else "Unsafe off"
         val scanners = "Passive ${if (settings.passiveAiEnabled) "on" else "off"} / Active ${if (settings.activeAiEnabled) "on" else "off"}"
 
         safetySummaryLabel.text = "Safety: $privacy | $mcpExposure | $unsafe | $scanners"
-        safetySummaryLabel.background = when {
-            settings.mcpSettings.enabled &&
-                settings.mcpSettings.externalEnabled &&
-                settings.mcpSettings.unsafeEnabled -> UiTheme.Colors.statusCrashed
-            settings.privacyMode == PrivacyMode.OFF && settings.mcpSettings.enabled -> UiTheme.Colors.statusCrashed
-            settings.privacyMode == PrivacyMode.OFF ||
-                settings.mcpSettings.externalEnabled ||
-                settings.mcpSettings.unsafeEnabled -> UiTheme.Colors.statusTerminal
-            else -> UiTheme.Colors.statusRunning
-        }
+        safetySummaryLabel.background =
+            when {
+                settings.mcpSettings.enabled &&
+                    settings.mcpSettings.externalEnabled &&
+                    settings.mcpSettings.unsafeEnabled -> UiTheme.Colors.statusCrashed
+                settings.privacyMode == PrivacyMode.OFF && settings.mcpSettings.enabled -> UiTheme.Colors.statusCrashed
+                settings.privacyMode == PrivacyMode.OFF ||
+                    settings.mcpSettings.externalEnabled ||
+                    settings.mcpSettings.unsafeEnabled -> UiTheme.Colors.statusTerminal
+                else -> UiTheme.Colors.statusRunning
+            }
     }
-    
+
     private fun updateBackendBadge() {
         // Updated by separate timer to avoid blocking EDT
     }
@@ -555,11 +620,12 @@ class MainTab(
             return
         }
         val status = activeAiScanner.getStatus()
-        val text = if (status.scanning) {
-            "Scanning: ${status.queueSize} queued | ${status.scansCompleted} done | ${status.vulnsConfirmed} confirmed"
-        } else {
-            "Queue: ${status.queueSize} | Done: ${status.scansCompleted} | Confirmed: ${status.vulnsConfirmed}"
-        }
+        val text =
+            if (status.scanning) {
+                "Scanning: ${status.queueSize} queued | ${status.scansCompleted} done | ${status.vulnsConfirmed} confirmed"
+            } else {
+                "Queue: ${status.queueSize} | Done: ${status.scansCompleted} | Confirmed: ${status.vulnsConfirmed}"
+            }
         activeScanStatsLabel.text = text
     }
 
@@ -581,12 +647,13 @@ class MainTab(
     }
 
     private fun updateStatusColor(state: String) {
-        val color = when (state) {
-            "Running" -> UiTheme.Colors.statusRunning
-            "Crashed" -> UiTheme.Colors.statusCrashed
-            // Terminal status removed
-            else -> UiTheme.Colors.outlineVariant
-        }
+        val color =
+            when (state) {
+                "Running" -> UiTheme.Colors.statusRunning
+                "Crashed" -> UiTheme.Colors.statusCrashed
+                // Terminal status removed
+                else -> UiTheme.Colors.outlineVariant
+            }
         statusLabel.background = color
     }
 
@@ -605,8 +672,8 @@ class MainTab(
         }
     }
 
-    internal fun validateBackendCommand(settings: com.six2dez.burp.aiagent.config.AgentSettings): String? {
-        return when (settings.preferredBackendId) {
+    internal fun validateBackendCommand(settings: com.six2dez.burp.aiagent.config.AgentSettings): String? =
+        when (settings.preferredBackendId) {
             "codex-cli" -> if (settings.codexCmd.isBlank()) "Codex command is empty." else null
             "gemini-cli" -> if (settings.geminiCmd.isBlank()) "Gemini command is empty." else null
             "opencode-cli" -> {
@@ -638,7 +705,6 @@ class MainTab(
             "burp-ai" -> null
             else -> "Unsupported backend: ${settings.preferredBackendId}"
         }
-    }
 
     private fun looksLikeBareExe(cmd: String): Boolean {
         val trimmed = cmd.trim()
@@ -657,7 +723,7 @@ class MainTab(
                 root,
                 message,
                 "Custom AI Agent",
-                JOptionPane.ERROR_MESSAGE
+                JOptionPane.ERROR_MESSAGE,
             )
         }
     }
@@ -665,12 +731,13 @@ class MainTab(
     internal fun ensureOllamaReadyIfNeeded(settings: com.six2dez.burp.aiagent.config.AgentSettings): Boolean {
         if (settings.preferredBackendId != "ollama") return true
         if (supervisor.isOllamaHealthy(settings)) return true
-        val result = JOptionPane.showConfirmDialog(
-            root,
-            "Ollama is not running. Start it now?",
-            "Custom AI Agent",
-            JOptionPane.YES_NO_OPTION
-        )
+        val result =
+            JOptionPane.showConfirmDialog(
+                root,
+                "Ollama is not running. Start it now?",
+                "Custom AI Agent",
+                JOptionPane.YES_NO_OPTION,
+            )
         if (result != JOptionPane.YES_OPTION) return false
         if (!settings.ollamaAutoStart) {
             showError("Auto-start for Ollama is disabled in settings.")
@@ -691,26 +758,26 @@ class MainTab(
             return ok
         }
 
-        val result = JOptionPane.showConfirmDialog(
-            root,
-            "LM Studio is not running. Start it now?",
-            "Custom AI Agent",
-            JOptionPane.YES_NO_OPTION
-        )
+        val result =
+            JOptionPane.showConfirmDialog(
+                root,
+                "LM Studio is not running. Start it now?",
+                "Custom AI Agent",
+                JOptionPane.YES_NO_OPTION,
+            )
         if (result != JOptionPane.YES_OPTION) return false
-        
+
         val ok = supervisor.startLmStudioService(settings)
         if (!ok) showError("Failed to start LM Studio. Check the command in settings.")
         return ok
     }
 
-    private fun ensureBackendReady(settings: com.six2dez.burp.aiagent.config.AgentSettings): Boolean {
-        return when (settings.preferredBackendId) {
+    private fun ensureBackendReady(settings: com.six2dez.burp.aiagent.config.AgentSettings): Boolean =
+        when (settings.preferredBackendId) {
             "ollama" -> ensureOllamaReadyIfNeeded(settings)
             "lmstudio" -> ensureLmStudioReadyIfNeeded(settings)
             else -> true
         }
-    }
 
     /**
      * Called when the Burp project changes (detected via api.project().id() diff).

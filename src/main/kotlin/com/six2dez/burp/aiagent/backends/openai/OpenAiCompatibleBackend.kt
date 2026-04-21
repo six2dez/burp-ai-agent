@@ -38,7 +38,7 @@ class OpenAiCompatibleBackend(
     private val streaming: Boolean = false,
     private val defaultHeaders: Map<String, String> = emptyMap(),
     private val payloadCustomizer: ((MutableMap<String, Any?>) -> Unit)? = null,
-    private val healthCheckProvider: ((AgentSettings) -> HealthCheckResult)? = null
+    private val healthCheckProvider: ((AgentSettings) -> HealthCheckResult)? = null,
 ) : AiBackend {
     override val supportsSystemRole: Boolean = true
 
@@ -66,7 +66,7 @@ class OpenAiCompatibleBackend(
             transport = config.transport,
             timeoutSeconds = timeoutSeconds,
             debugLog = { BackendDiagnostics.log("[$id] $it") },
-            errorLog = { BackendDiagnostics.logError("[$id] $it") }
+            errorLog = { BackendDiagnostics.logError("[$id] $it") },
         )
     }
 
@@ -78,14 +78,15 @@ class OpenAiCompatibleBackend(
         if (baseUrl.isBlank()) {
             return HealthCheckResult.Unavailable("$displayName URL is empty.")
         }
-        val headers = HeaderParser.withBearerToken(
-            apiKeySelector(settings),
-            HeaderParser.parse(headersSelector(settings))
-        )
+        val headers =
+            HeaderParser.withBearerToken(
+                apiKeySelector(settings),
+                HeaderParser.parse(headersSelector(settings)),
+            )
         return HttpBackendSupport.healthCheckGet(
             url = buildModelsUrl(baseUrl),
             headers = headers,
-            timeoutSeconds = timeoutSelector(settings).coerceIn(1, 30).toLong()
+            timeoutSeconds = timeoutSelector(settings).coerceIn(1, 30).toLong(),
         )
     }
 
@@ -105,12 +106,15 @@ class OpenAiCompatibleBackend(
         private val transport: MontoyaHttpTransport?,
         private val timeoutSeconds: Long,
         private val debugLog: (String) -> Unit,
-        private val errorLog: (String) -> Unit
-    ) : AgentConnection, UsageAwareConnection, JsonModeCapable {
+        private val errorLog: (String) -> Unit,
+    ) : AgentConnection,
+        UsageAwareConnection,
+        JsonModeCapable {
         private val alive = AtomicBoolean(true)
-        private val exec = Executors.newSingleThreadExecutor { runnable ->
-            Thread(runnable, "$backendId-connection").apply { isDaemon = true }
-        }
+        private val exec =
+            Executors.newSingleThreadExecutor { runnable ->
+                Thread(runnable, "$backendId-connection").apply { isDaemon = true }
+            }
         private val conversationHistory = ConversationHistory(20)
         private val lastTokenUsageRef = AtomicReference<TokenUsage?>(null)
 
@@ -125,7 +129,7 @@ class OpenAiCompatibleBackend(
             onComplete: (Throwable?) -> Unit,
             systemPrompt: String?,
             jsonMode: Boolean,
-            maxOutputTokens: Int?
+            maxOutputTokens: Int?,
         ) {
             if (!isAlive()) {
                 onComplete(IllegalStateException("Connection closed"))
@@ -157,12 +161,13 @@ class OpenAiCompatibleBackend(
                         try {
                             conversationHistory.addUser(text)
                             val messages = conversationHistory.snapshot()
-                            val payload = mutableMapOf<String, Any?>(
-                                "model" to model,
-                                "messages" to messages,
-                                "stream" to streaming,
-                                "temperature" to if (determinismMode) 0.0 else 0.7
-                            )
+                            val payload =
+                                mutableMapOf<String, Any?>(
+                                    "model" to model,
+                                    "messages" to messages,
+                                    "stream" to streaming,
+                                    "temperature" to if (determinismMode) 0.0 else 0.7,
+                                )
                             payloadCustomizer?.invoke(payload)
                             if (maxOutputTokens != null) {
                                 payload["max_tokens"] = maxOutputTokens
@@ -174,77 +179,91 @@ class OpenAiCompatibleBackend(
                             val json = mapper.writeValueAsString(payload)
                             val endpointUrl = buildChatCompletionsUrl(baseUrl)
 
-                            val allHeaders = buildMap {
-                                putAll(headers)
-                                if (!sessionId.isNullOrBlank()) {
-                                    put("X-Session-Id", sessionId)
+                            val allHeaders =
+                                buildMap {
+                                    putAll(headers)
+                                    if (!sessionId.isNullOrBlank()) {
+                                        put("X-Session-Id", sessionId)
+                                    }
+                                }
+
+                            debugLog("request -> $endpointUrl")
+
+                            if (transport != null) {
+                                val resp = transport.post(endpointUrl, allHeaders, json, timeoutSeconds * 1000)
+                                if (!resp.isSuccessful) {
+                                    errorLog("HTTP ${resp.statusCode}: ${resp.body.take(500)}")
+                                    val message =
+                                        when (resp.statusCode) {
+                                            429 -> "$backendDisplayName rate limited (HTTP 429). Check quota/capacity or retry later."
+                                            else -> "$backendDisplayName HTTP ${resp.statusCode}: ${resp.body}"
+                                        }
+                                    onComplete(IllegalStateException(message))
+                                    return@submit
+                                }
+                                val body = resp.body
+                                if (body.isBlank()) {
+                                    onComplete(IllegalStateException("$backendDisplayName response body was empty"))
+                                    return@submit
+                                }
+                                val node = mapper.readTree(body)
+                                val content =
+                                    node
+                                        .path("choices")
+                                        .path(0)
+                                        .path("message")
+                                        .path("content")
+                                        .asText()
+                                extractUsage(node)?.let { lastTokenUsageRef.set(it) }
+                                if (content.isBlank()) {
+                                    onComplete(IllegalStateException("$backendDisplayName response content was empty"))
+                                    return@submit
+                                }
+                                debugLog("response <- ${content.take(200)}")
+                                conversationHistory.addAssistant(content)
+                                circuitBreaker.recordSuccess()
+                                onChunk(content)
+                                onComplete(null)
+                            } else {
+                                val req =
+                                    Request
+                                        .Builder()
+                                        .url(endpointUrl)
+                                        .post(json.toRequestBody("application/json".toMediaType()))
+                                        .apply {
+                                            allHeaders.forEach { (name, value) ->
+                                                header(name, value)
+                                            }
+                                        }.build()
+                                client.newCall(req).execute().use { resp ->
+                                    if (!resp.isSuccessful) {
+                                        val bodyText = resp.body?.string().orEmpty()
+                                        errorLog("HTTP ${resp.code}: ${bodyText.take(500)}")
+                                        val retryAfter = resp.header("Retry-After")
+                                        val message =
+                                            when (resp.code) {
+                                                429 -> {
+                                                    val retryHint =
+                                                        retryAfter
+                                                            ?.takeIf { it.isNotBlank() }
+                                                            ?.let { " Retry after: $it." }
+                                                            .orEmpty()
+                                                    "$backendDisplayName rate limited (HTTP 429). Check quota/capacity or retry later.$retryHint"
+                                                }
+                                                else -> "$backendDisplayName HTTP ${resp.code}: $bodyText"
+                                            }
+                                        onComplete(IllegalStateException(message))
+                                        return@submit
+                                    }
+                                    if (streaming) {
+                                        handleStreamingResponse(resp, onChunk, onComplete)
+                                    } else {
+                                        handleNonStreamingResponse(resp, onChunk, onComplete)
+                                    }
                                 }
                             }
-
-                              debugLog("request -> $endpointUrl")
-
-                              if (transport != null) {
-                                  val resp = transport.post(endpointUrl, allHeaders, json, timeoutSeconds * 1000)
-                                  if (!resp.isSuccessful) {
-                                      errorLog("HTTP ${resp.statusCode}: ${resp.body.take(500)}")
-                                      val message = when (resp.statusCode) {
-                                          429 -> "$backendDisplayName rate limited (HTTP 429). Check quota/capacity or retry later."
-                                          else -> "$backendDisplayName HTTP ${resp.statusCode}: ${resp.body}"
-                                      }
-                                      onComplete(IllegalStateException(message))
-                                      return@submit
-                                  }
-                                  val body = resp.body
-                                  if (body.isBlank()) {
-                                      onComplete(IllegalStateException("$backendDisplayName response body was empty"))
-                                      return@submit
-                                  }
-                                  val node = mapper.readTree(body)
-                                  val content = node.path("choices").path(0).path("message").path("content").asText()
-                                  extractUsage(node)?.let { lastTokenUsageRef.set(it) }
-                                  if (content.isBlank()) {
-                                      onComplete(IllegalStateException("$backendDisplayName response content was empty"))
-                                      return@submit
-                                  }
-                                  debugLog("response <- ${content.take(200)}")
-                                  conversationHistory.addAssistant(content)
-                                  circuitBreaker.recordSuccess()
-                                  onChunk(content)
-                                  onComplete(null)
-                              } else {
-                                  val req = Request.Builder()
-                                      .url(endpointUrl)
-                                      .post(json.toRequestBody("application/json".toMediaType()))
-                                      .apply {
-                                          allHeaders.forEach { (name, value) ->
-                                              header(name, value)
-                                          }
-                                      }
-                                      .build()
-                                  client.newCall(req).execute().use { resp ->
-                                      if (!resp.isSuccessful) {
-                                          val bodyText = resp.body?.string().orEmpty()
-                                          errorLog("HTTP ${resp.code}: ${bodyText.take(500)}")
-                                          val retryAfter = resp.header("Retry-After")
-                                          val message = when (resp.code) {
-                                              429 -> {
-                                                  val retryHint = retryAfter?.takeIf { it.isNotBlank() }?.let { " Retry after: $it." }.orEmpty()
-                                                  "$backendDisplayName rate limited (HTTP 429). Check quota/capacity or retry later.$retryHint"
-                                              }
-                                              else -> "$backendDisplayName HTTP ${resp.code}: $bodyText"
-                                          }
-                                          onComplete(IllegalStateException(message))
-                                          return@submit
-                                      }
-                                      if (streaming) {
-                                          handleStreamingResponse(resp, onChunk, onComplete)
-                                      } else {
-                                          handleNonStreamingResponse(resp, onChunk, onComplete)
-                                      }
-                                  }
-                              }
-                              return@submit
-                          } catch (e: Exception) {
+                            return@submit
+                        } catch (e: Exception) {
                             lastError = e
                             val retryable = HttpBackendSupport.isRetryableConnectionError(e)
                             if (retryable) {
@@ -282,7 +301,7 @@ class OpenAiCompatibleBackend(
         private fun handleNonStreamingResponse(
             resp: okhttp3.Response,
             onChunk: (String) -> Unit,
-            onComplete: (Throwable?) -> Unit
+            onComplete: (Throwable?) -> Unit,
         ) {
             val body = resp.body?.string().orEmpty()
             if (body.isBlank()) {
@@ -290,7 +309,13 @@ class OpenAiCompatibleBackend(
                 return
             }
             val node = mapper.readTree(body)
-            val content = node.path("choices").path(0).path("message").path("content").asText()
+            val content =
+                node
+                    .path("choices")
+                    .path(0)
+                    .path("message")
+                    .path("content")
+                    .asText()
             extractUsage(node)?.let { lastTokenUsageRef.set(it) }
             if (content.isBlank()) {
                 onComplete(IllegalStateException("$backendDisplayName response content was empty"))
@@ -306,12 +331,13 @@ class OpenAiCompatibleBackend(
         private fun handleStreamingResponse(
             resp: okhttp3.Response,
             onChunk: (String) -> Unit,
-            onComplete: (Throwable?) -> Unit
+            onComplete: (Throwable?) -> Unit,
         ) {
-            val body = resp.body ?: run {
-                onComplete(IllegalStateException("$backendDisplayName response body was empty"))
-                return
-            }
+            val body =
+                resp.body ?: run {
+                    onComplete(IllegalStateException("$backendDisplayName response body was empty"))
+                    return
+                }
             val streamReader = BufferedReader(InputStreamReader(body.byteStream()))
             val fullContent = StringBuilder()
             var emittedAny = false
@@ -358,7 +384,7 @@ class OpenAiCompatibleBackend(
             if (promptTokens < 0 && completionTokens < 0) return null
             return TokenUsage(
                 inputTokens = promptTokens.coerceAtLeast(0),
-                outputTokens = completionTokens.coerceAtLeast(0)
+                outputTokens = completionTokens.coerceAtLeast(0),
             )
         }
 
@@ -392,7 +418,10 @@ class OpenAiCompatibleBackend(
             return "$trimmed/v1/models"
         }
 
-        private fun mergeHeaders(defaults: Map<String, String>, overrides: Map<String, String>): Map<String, String> {
+        private fun mergeHeaders(
+            defaults: Map<String, String>,
+            overrides: Map<String, String>,
+        ): Map<String, String> {
             if (defaults.isEmpty()) return overrides
             val merged = LinkedHashMap<String, String>()
             merged.putAll(defaults)

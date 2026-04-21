@@ -8,10 +8,11 @@ import javax.swing.border.EmptyBorder
 
 class HelpConfigPanel(
     private val sectionPanel: (String, String, javax.swing.JComponent) -> JPanel,
-    private val dialogParentProvider: () -> javax.swing.JComponent?
+    private val dialogParentProvider: () -> javax.swing.JComponent?,
 ) : ConfigPanel {
     override fun build(): JPanel {
-        val helpHtml = """
+        val helpHtml =
+            """
             <html>
               <body style="font-family: sans-serif; font-size: 12px;">
                 <b>Custom AI Agent - Quick Start</b><br/>
@@ -24,7 +25,7 @@ class HelpConfigPanel(
                 <b>Privacy:</b> STRICT (hosts anonymized) | BALANCED (hosts visible) | OFF (raw data)
               </body>
             </html>
-        """.trimIndent()
+            """.trimIndent()
         val helpPane = JEditorPane("text/html", helpHtml)
         helpPane.isEditable = false
         helpPane.isOpaque = false
@@ -40,7 +41,7 @@ class HelpConfigPanel(
                         dialogParentProvider(),
                         "Open this URL in your browser: $urlText",
                         "Help",
-                        JOptionPane.INFORMATION_MESSAGE
+                        JOptionPane.INFORMATION_MESSAGE,
                     )
                 }
             } catch (_: Exception) {
@@ -48,14 +49,14 @@ class HelpConfigPanel(
                     dialogParentProvider(),
                     "Open this URL in your browser: $urlText",
                     "Help",
-                    JOptionPane.INFORMATION_MESSAGE
+                    JOptionPane.INFORMATION_MESSAGE,
                 )
             }
         }
         return sectionPanel(
             "Help",
             "Quick start and documentation links.",
-            helpPane
+            helpPane,
         )
     }
 }

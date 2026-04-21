@@ -5,12 +5,12 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class McpToolErrorSanitizationTest {
-
     @Test
     fun sanitizeErrorMessage_redactsPathsAndInternalClassNames() {
-        val error = IllegalStateException(
-            "Failed loading /Users/alice/work/project/config.json from com.six2dez.burp.aiagent.mcp.KtorMcpServerManager"
-        )
+        val error =
+            IllegalStateException(
+                "Failed loading /Users/alice/work/project/config.json from com.six2dez.burp.aiagent.mcp.KtorMcpServerManager",
+            )
 
         val sanitized = invokeSanitize(error)
 
@@ -22,10 +22,11 @@ class McpToolErrorSanitizationTest {
 
     @Test
     fun sanitizeErrorMessage_truncatesOverlyLongOutput() {
-        val longPayload = buildString {
-            append("Error in C:\\\\Users\\\\alice\\\\very\\\\secret\\\\file.txt ")
-            repeat(120) { append("abcdef") }
-        }
+        val longPayload =
+            buildString {
+                append("Error in C:\\\\Users\\\\alice\\\\very\\\\secret\\\\file.txt ")
+                repeat(120) { append("abcdef") }
+            }
         val error = RuntimeException(longPayload)
 
         val sanitized = invokeSanitize(error)

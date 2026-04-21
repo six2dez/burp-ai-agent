@@ -28,7 +28,7 @@ inline fun <reified I : Any> Server.mcpTool(
     description: String,
     context: McpToolContext,
     toolName: String? = null,
-    crossinline execute: I.() -> String
+    crossinline execute: I.() -> String,
 ) {
     val name = toolName ?: I::class.simpleName?.toLowerSnakeCase() ?: error("Missing tool name for ${I::class}")
     addTool(
@@ -37,13 +37,14 @@ inline fun <reified I : Any> Server.mcpTool(
         inputSchema = I::class.asInputSchema(),
         handler = { request ->
             runTool(context, name, request.arguments.toString()) {
-                val input = json.decodeFromJsonElement(
-                    I::class.serializer(),
-                    request.arguments
-                )
+                val input =
+                    json.decodeFromJsonElement(
+                        I::class.serializer(),
+                        request.arguments,
+                    )
                 context.redactIfNeeded(execute(input))
             }
-        }
+        },
     )
 }
 
@@ -54,7 +55,7 @@ inline fun <reified I : Any> Server.mcpTool(
     description: String,
     context: McpToolContext,
     toolName: String? = null,
-    crossinline execute: I.() -> Unit
+    crossinline execute: I.() -> Unit,
 ) {
     mcpTool<I>(description, context, toolName) {
         execute(this)
@@ -66,7 +67,7 @@ inline fun Server.mcpTool(
     name: String,
     description: String,
     context: McpToolContext,
-    crossinline execute: () -> String
+    crossinline execute: () -> String,
 ) {
     addTool(
         name = name,
@@ -76,7 +77,7 @@ inline fun Server.mcpTool(
             runTool(context, name, null) {
                 context.redactIfNeeded(execute())
             }
-        }
+        },
     )
 }
 
@@ -84,7 +85,7 @@ inline fun <reified I : Paginated> Server.mcpPaginatedTool(
     description: String,
     context: McpToolContext,
     toolName: String? = null,
-    crossinline execute: I.() -> Sequence<String>
+    crossinline execute: I.() -> Sequence<String>,
 ) {
     mcpTool<I>(description, context, toolName) {
         val items = execute(this).drop(offset).take(count).toList()
@@ -96,13 +97,12 @@ inline fun <reified I : Paginated> Server.mcpPaginatedTool(
     }
 }
 
-fun String.toLowerSnakeCase(): String {
-    return this
+fun String.toLowerSnakeCase(): String =
+    this
         .replace(Regex("([a-z0-9])([A-Z])"), "$1_$2")
         .replace(Regex("([A-Z])([A-Z][a-z])"), "$1_$2")
         .replace(Regex("[\\s-]+"), "_")
         .lowercase()
-}
 
 interface Paginated {
     val count: Int
@@ -114,42 +114,46 @@ internal fun runTool(
     context: McpToolContext,
     name: String,
     argsJson: String? = null,
-    execute: () -> String
+    execute: () -> String,
 ): CallToolResult {
     val normalizedArgs = argsJson?.trim().orEmpty()
     val hasArgs = normalizedArgs.isNotBlank() && normalizedArgs != "{}"
     val argsSha256 = if (hasArgs) Hashing.sha256Hex(normalizedArgs) else null
     val toolType = if (context.isUnsafeTool(name)) "unsafe" else "safe"
 
-    val baseTelemetry = linkedMapOf<String, Any?>(
-        "tool" to name,
-        "toolType" to toolType,
-        "hasArgs" to hasArgs
-    ).also { payload ->
-        if (argsSha256 != null) {
-            payload["argsSha256"] = argsSha256
+    val baseTelemetry =
+        linkedMapOf<String, Any?>(
+            "tool" to name,
+            "toolType" to toolType,
+            "hasArgs" to hasArgs,
+        ).also { payload ->
+            if (argsSha256 != null) {
+                payload["argsSha256"] = argsSha256
+            }
         }
-    }
 
     if (!context.isToolEnabled(name)) {
         emitToolTelemetry(MCP_TOOL_EVENT_BLOCKED, baseTelemetry + mapOf("reason" to "disabled"))
         return CallToolResult(
             content = listOf(TextContent("Tool disabled: $name")),
-            isError = true
+            isError = true,
         )
     }
     if (context.isUnsafeTool(name) && !context.isUnsafeToolAllowed(name)) {
         emitToolTelemetry(MCP_TOOL_EVENT_BLOCKED, baseTelemetry + mapOf("reason" to "unsafe_not_allowed"))
         return CallToolResult(
-            content = listOf(TextContent("Unsafe mode is disabled for tool: $name. Enable global unsafe mode or explicitly allow this tool.")),
-            isError = true
+            content =
+                listOf(
+                    TextContent("Unsafe mode is disabled for tool: $name. Enable global unsafe mode or explicitly allow this tool."),
+                ),
+            isError = true,
         )
     }
     if (!context.limiter.tryAcquire()) {
         emitToolTelemetry(MCP_TOOL_EVENT_BLOCKED, baseTelemetry + mapOf("reason" to "concurrency_limited"))
         return CallToolResult(
             content = listOf(TextContent("Too many concurrent MCP requests.")),
-            isError = true
+            isError = true,
         )
     }
 
@@ -161,59 +165,64 @@ internal fun runTool(
         val result = CallToolResult(content = listOf(TextContent(output)))
         emitToolTelemetry(
             MCP_TOOL_EVENT_END,
-            baseTelemetry + mapOf(
-                "outcome" to "success",
-                "durationMs" to elapsedMs(startedAtNanos),
-                "outputChars" to output.length
-            )
+            baseTelemetry +
+                mapOf(
+                    "outcome" to "success",
+                    "durationMs" to elapsedMs(startedAtNanos),
+                    "outputChars" to output.length,
+                ),
         )
         result
     } catch (e: kotlinx.serialization.SerializationException) {
         // Extract missing field from the error message for a cleaner message
         val msg = e.message.orEmpty()
         val fieldMatch = Regex("Field '([^']+)' is required").find(msg)
-        val cleanMsg = if (fieldMatch != null) {
-            "Missing required parameter: ${fieldMatch.groupValues[1]}"
-        } else {
-            "Invalid tool arguments: $msg"
-        }
+        val cleanMsg =
+            if (fieldMatch != null) {
+                "Missing required parameter: ${fieldMatch.groupValues[1]}"
+            } else {
+                "Invalid tool arguments: $msg"
+            }
         emitToolTelemetry(
             MCP_TOOL_EVENT_END,
-            baseTelemetry + mapOf(
-                "outcome" to "error",
-                "errorType" to "serialization",
-                "durationMs" to elapsedMs(startedAtNanos)
-            )
+            baseTelemetry +
+                mapOf(
+                    "outcome" to "error",
+                    "errorType" to "serialization",
+                    "durationMs" to elapsedMs(startedAtNanos),
+                ),
         )
         CallToolResult(
             content = listOf(TextContent(cleanMsg)),
-            isError = true
+            isError = true,
         )
     } catch (e: Exception) {
         context.api.logging().logToError(e)
         val cleanMsg = sanitizeErrorMessage(e)
         emitToolTelemetry(
             MCP_TOOL_EVENT_END,
-            baseTelemetry + mapOf(
-                "outcome" to "error",
-                "errorType" to "exception",
-                "durationMs" to elapsedMs(startedAtNanos)
-            )
+            baseTelemetry +
+                mapOf(
+                    "outcome" to "error",
+                    "errorType" to "exception",
+                    "durationMs" to elapsedMs(startedAtNanos),
+                ),
         )
         CallToolResult(
             content = listOf(TextContent(cleanMsg)),
-            isError = true
+            isError = true,
         )
     } finally {
         context.limiter.release()
     }
 }
 
-private fun elapsedMs(startedAtNanos: Long): Long {
-    return ((System.nanoTime() - startedAtNanos) / 1_000_000L).coerceAtLeast(0L)
-}
+private fun elapsedMs(startedAtNanos: Long): Long = ((System.nanoTime() - startedAtNanos) / 1_000_000L).coerceAtLeast(0L)
 
-private fun emitToolTelemetry(type: String, payload: Map<String, Any?>) {
+private fun emitToolTelemetry(
+    type: String,
+    payload: Map<String, Any?>,
+) {
     AuditLogger.emitGlobal(type, payload)
 }
 

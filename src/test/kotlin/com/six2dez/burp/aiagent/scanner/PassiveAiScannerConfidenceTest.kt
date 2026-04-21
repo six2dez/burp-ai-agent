@@ -16,14 +16,14 @@ import org.mockito.kotlin.mock
 import java.lang.reflect.Method
 
 class PassiveAiScannerConfidenceTest {
-
     @Test
     fun aiFindingBelowThreshold_isSkippedAndNotRecorded() {
-        val scanner = PassiveAiScanner(
-            api = mock<MontoyaApi>(),
-            supervisor = mock<AgentSupervisor>(),
-            audit = mock<AuditLogger>()
-        ) { baselineSettings() }
+        val scanner =
+            PassiveAiScanner(
+                api = mock<MontoyaApi>(),
+                supervisor = mock<AgentSupervisor>(),
+                audit = mock<AuditLogger>(),
+            ) { baselineSettings() }
 
         invokeHandleFinding(
             scanner = scanner,
@@ -34,7 +34,7 @@ class PassiveAiScannerConfidenceTest {
             confidence = 84,
             minSeverity = "LOW",
             settings = baselineSettings(),
-            source = "ai"
+            source = "ai",
         )
 
         assertTrue(scanner.getLastFindings(10).isEmpty())
@@ -49,25 +49,26 @@ class PassiveAiScannerConfidenceTest {
         confidence: Int,
         minSeverity: String,
         settings: AgentSettings,
-        source: String
+        source: String,
     ) {
-        val method: Method = scanner.javaClass.getDeclaredMethod(
-            "handleFinding",
-            HttpRequestResponse::class.java,
-            String::class.java,
-            String::class.java,
-            String::class.java,
-            Int::class.javaPrimitiveType,
-            String::class.java,
-            AgentSettings::class.java,
-            String::class.java
-        )
+        val method: Method =
+            scanner.javaClass.getDeclaredMethod(
+                "handleFinding",
+                HttpRequestResponse::class.java,
+                String::class.java,
+                String::class.java,
+                String::class.java,
+                Int::class.javaPrimitiveType,
+                String::class.java,
+                AgentSettings::class.java,
+                String::class.java,
+            )
         method.isAccessible = true
         method.invoke(scanner, requestResponse, title, rawSeverity, detail, confidence, minSeverity, settings, source)
     }
 
-    private fun baselineSettings(): AgentSettings {
-        return AgentSettings(
+    private fun baselineSettings(): AgentSettings =
+        AgentSettings(
             codexCmd = "codex",
             geminiCmd = "gemini",
             opencodeCmd = "opencode",
@@ -109,26 +110,27 @@ class PassiveAiScannerConfidenceTest {
             determinismMode = false,
             autoRestart = true,
             auditEnabled = true,
-            mcpSettings = McpSettings(
-                enabled = false,
-                host = "127.0.0.1",
-                port = 8765,
-                externalEnabled = false,
-                stdioEnabled = false,
-                token = "token",
-                allowedOrigins = emptyList(),
-                tlsEnabled = false,
-                tlsAutoGenerate = true,
-                tlsKeystorePath = "",
-                tlsKeystorePassword = "",
-                scanTaskTtlMinutes = 120,
-                collaboratorClientTtlMinutes = 60,
-                maxConcurrentRequests = 4,
-                maxBodyBytes = 262_144,
-                toolToggles = emptyMap(),
-                enabledUnsafeTools = emptySet(),
-                unsafeEnabled = false
-            ),
+            mcpSettings =
+                McpSettings(
+                    enabled = false,
+                    host = "127.0.0.1",
+                    port = 8765,
+                    externalEnabled = false,
+                    stdioEnabled = false,
+                    token = "token",
+                    allowedOrigins = emptyList(),
+                    tlsEnabled = false,
+                    tlsAutoGenerate = true,
+                    tlsKeystorePath = "",
+                    tlsKeystorePassword = "",
+                    scanTaskTtlMinutes = 120,
+                    collaboratorClientTtlMinutes = 60,
+                    maxConcurrentRequests = 4,
+                    maxBodyBytes = 262_144,
+                    toolToggles = emptyMap(),
+                    enabledUnsafeTools = emptySet(),
+                    unsafeEnabled = false,
+                ),
             passiveAiEnabled = false,
             passiveAiRateSeconds = 5,
             passiveAiScopeOnly = true,
@@ -148,7 +150,6 @@ class PassiveAiScannerConfidenceTest {
             bountyPromptDir = "",
             bountyPromptAutoCreateIssues = true,
             bountyPromptIssueConfidenceThreshold = 90,
-            bountyPromptEnabledPromptIds = emptySet()
+            bountyPromptEnabledPromptIds = emptySet(),
         )
-    }
 }

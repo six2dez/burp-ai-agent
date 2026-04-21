@@ -14,29 +14,31 @@ import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
 
 class McpRuntimeContextFactoryTest {
-
     @Test
     fun create_buildsContextFromSettingsAndRuntimeFlags() {
         val api = mock<MontoyaApi>(defaultAnswer = Answers.RETURNS_DEEP_STUBS)
         whenever(api.burpSuite().version().edition()).thenReturn(BurpSuiteEdition.PROFESSIONAL)
         val factory = McpRuntimeContextFactory(api)
-        val settings = mcpSettings(
-            token = "token-1234567890",
-            maxConcurrentRequests = 3,
-            maxBodyBytes = 1234,
-            unsafeEnabled = true,
-            toolToggles = mapOf(
-                "status" to false,
-                "url_encode" to true
+        val settings =
+            mcpSettings(
+                token = "token-1234567890",
+                maxConcurrentRequests = 3,
+                maxBodyBytes = 1234,
+                unsafeEnabled = true,
+                toolToggles =
+                    mapOf(
+                        "status" to false,
+                        "url_encode" to true,
+                    ),
             )
-        )
 
-        val context = factory.create(
-            settings = settings,
-            privacyMode = PrivacyMode.STRICT,
-            determinismMode = true,
-            preprocessSettings = ResponsePreprocessorSettings()
-        )
+        val context =
+            factory.create(
+                settings = settings,
+                privacyMode = PrivacyMode.STRICT,
+                determinismMode = true,
+                preprocessSettings = ResponsePreprocessorSettings(),
+            )
 
         assertEquals("mcp-token-123456", context.hostSalt)
         assertEquals(PrivacyMode.STRICT, context.privacyMode)
@@ -54,9 +56,9 @@ class McpRuntimeContextFactoryTest {
         maxConcurrentRequests: Int,
         maxBodyBytes: Int,
         unsafeEnabled: Boolean,
-        toolToggles: Map<String, Boolean>
-    ): McpSettings {
-        return McpSettings(
+        toolToggles: Map<String, Boolean>,
+    ): McpSettings =
+        McpSettings(
             enabled = true,
             host = "127.0.0.1",
             port = 8765,
@@ -74,7 +76,6 @@ class McpRuntimeContextFactoryTest {
             maxBodyBytes = maxBodyBytes,
             toolToggles = toolToggles,
             enabledUnsafeTools = emptySet(),
-            unsafeEnabled = unsafeEnabled
+            unsafeEnabled = unsafeEnabled,
         )
-    }
 }

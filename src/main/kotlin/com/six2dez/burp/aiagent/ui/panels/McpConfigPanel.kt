@@ -34,16 +34,17 @@ class McpConfigPanel(
     private val preprocessFilterBinaryContent: JComponent,
     private val preprocessAllowedContentTypes: JComponent,
     private val tokenPanelFactory: () -> JPanel,
-    private val quickActionsFactory: () -> JPanel
+    private val quickActionsFactory: () -> JPanel,
 ) : ConfigPanel {
     override fun build(): JPanel {
         val body = JPanel(BorderLayout())
         body.background = UiTheme.Colors.surface
-        val wrapper = sectionPanel(
-            "MCP Server",
-            "Built-in MCP server (SSE + optional stdio bridge).",
-            body
-        )
+        val wrapper =
+            sectionPanel(
+                "MCP Server",
+                "Built-in MCP server (SSE + optional stdio bridge).",
+                body,
+            )
 
         val grid = formGrid()
         addRowFull(grid, "Enabled", mcpEnabled)

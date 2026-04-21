@@ -14,18 +14,26 @@ import javax.swing.*
 import javax.swing.table.AbstractTableModel
 
 object ActiveScanQueuePanel {
-    fun showDialog(parent: JComponent?, scanner: ActiveAiScanner) {
+    fun showDialog(
+        parent: JComponent?,
+        scanner: ActiveAiScanner,
+    ) {
         val dialog = QueueDialog(parent, scanner)
         dialog.isVisible = true
     }
 
-    private class QueueDialog(parent: JComponent?, private val scanner: ActiveAiScanner) : JDialog(
-        SwingUtilities.getWindowAncestor(parent),
-        "AI Active Scanner Queue",
-        Dialog.ModalityType.MODELESS
-    ) {
-        private val formatter: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
-            .withZone(ZoneId.systemDefault())
+    private class QueueDialog(
+        parent: JComponent?,
+        private val scanner: ActiveAiScanner,
+    ) : JDialog(
+            SwingUtilities.getWindowAncestor(parent),
+            "AI Active Scanner Queue",
+            Dialog.ModalityType.MODELESS,
+        ) {
+        private val formatter: DateTimeFormatter =
+            DateTimeFormatter
+                .ofPattern("yyyy-MM-dd HH:mm:ss")
+                .withZone(ZoneId.systemDefault())
         private val model = QueueTableModel(formatter)
         private val table = JTable(model)
         private val statusLabel = JLabel()
@@ -56,11 +64,13 @@ object ActiveScanQueuePanel {
             closeButton.addActionListener { dispose() }
 
             defaultCloseOperation = DISPOSE_ON_CLOSE
-            addWindowListener(object : java.awt.event.WindowAdapter() {
-                override fun windowClosed(e: java.awt.event.WindowEvent?) {
-                    refreshTimer.stop()
-                }
-            })
+            addWindowListener(
+                object : java.awt.event.WindowAdapter() {
+                    override fun windowClosed(e: java.awt.event.WindowEvent?) {
+                        refreshTimer.stop()
+                    }
+                },
+            )
 
             refreshQueue()
             refreshTimer.start()
@@ -105,7 +115,10 @@ object ActiveScanQueuePanel {
             return footer
         }
 
-        private fun styleButton(button: JButton, outlined: Boolean) {
+        private fun styleButton(
+            button: JButton,
+            outlined: Boolean,
+        ) {
             button.font = UiTheme.Typography.label
             button.background = UiTheme.Colors.surface
             button.foreground = UiTheme.Colors.primary
@@ -130,15 +143,16 @@ object ActiveScanQueuePanel {
                     this,
                     "Select one or more queued rows to cancel.",
                     "No selection",
-                    JOptionPane.INFORMATION_MESSAGE
+                    JOptionPane.INFORMATION_MESSAGE,
                 )
                 return
             }
 
-            val ids = selectedRows
-                .map { table.convertRowIndexToModel(it) }
-                .distinct()
-                .mapNotNull { model.targetIdAt(it) }
+            val ids =
+                selectedRows
+                    .map { table.convertRowIndexToModel(it) }
+                    .distinct()
+                    .mapNotNull { model.targetIdAt(it) }
 
             var removed = 0
             ids.forEach { id ->
@@ -152,18 +166,19 @@ object ActiveScanQueuePanel {
                 this,
                 "Cancelled $removed queued target(s).",
                 "Queue updated",
-                JOptionPane.INFORMATION_MESSAGE
+                JOptionPane.INFORMATION_MESSAGE,
             )
         }
 
         private fun clearQueueWithConfirmation() {
-            val choice = JOptionPane.showConfirmDialog(
-                this,
-                "Clear all queued active scan targets?",
-                "Confirm queue clear",
-                JOptionPane.YES_NO_OPTION,
-                JOptionPane.WARNING_MESSAGE
-            )
+            val choice =
+                JOptionPane.showConfirmDialog(
+                    this,
+                    "Clear all queued active scan targets?",
+                    "Confirm queue clear",
+                    JOptionPane.YES_NO_OPTION,
+                    JOptionPane.WARNING_MESSAGE,
+                )
             if (choice == JOptionPane.YES_OPTION) {
                 scanner.clearQueue()
                 refreshQueue()
@@ -172,7 +187,7 @@ object ActiveScanQueuePanel {
     }
 
     private class QueueTableModel(
-        private val formatter: DateTimeFormatter
+        private val formatter: DateTimeFormatter,
     ) : AbstractTableModel() {
         private val columns = arrayOf("Queued At", "Vulnerability", "Injection Point", "URL", "Status")
         private var rows: List<ActiveScanQueueItem> = emptyList()
@@ -182,9 +197,7 @@ object ActiveScanQueuePanel {
             fireTableDataChanged()
         }
 
-        fun targetIdAt(modelRow: Int): String? {
-            return rows.getOrNull(modelRow)?.id
-        }
+        fun targetIdAt(modelRow: Int): String? = rows.getOrNull(modelRow)?.id
 
         override fun getRowCount(): Int = rows.size
 
@@ -192,7 +205,10 @@ object ActiveScanQueuePanel {
 
         override fun getColumnName(column: Int): String = columns[column]
 
-        override fun getValueAt(rowIndex: Int, columnIndex: Int): Any {
+        override fun getValueAt(
+            rowIndex: Int,
+            columnIndex: Int,
+        ): Any {
             val row = rows[rowIndex]
             return when (columnIndex) {
                 0 -> formatter.format(Instant.ofEpochMilli(row.queuedAtEpochMs))

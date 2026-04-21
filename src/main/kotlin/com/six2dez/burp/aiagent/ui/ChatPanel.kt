@@ -1,9 +1,9 @@
 package com.six2dez.burp.aiagent.ui
 
 import burp.api.montoya.MontoyaApi
+import com.six2dez.burp.aiagent.agents.AgentProfileLoader
 import com.six2dez.burp.aiagent.audit.ActivityType
 import com.six2dez.burp.aiagent.backends.AgentConnection
-import com.six2dez.burp.aiagent.agents.AgentProfileLoader
 import com.six2dez.burp.aiagent.backends.ChatMessage
 import com.six2dez.burp.aiagent.backends.UsageAwareConnection
 import com.six2dez.burp.aiagent.config.AgentSettings
@@ -16,9 +16,15 @@ import com.six2dez.burp.aiagent.mcp.tools.McpToolExecutor
 import com.six2dez.burp.aiagent.redact.PrivacyMode
 import com.six2dez.burp.aiagent.supervisor.AgentSupervisor
 import com.six2dez.burp.aiagent.ui.components.ActionCard
+import com.six2dez.burp.aiagent.ui.components.ContextPreviewDialog
 import com.six2dez.burp.aiagent.ui.components.PrivacyPill
 import com.six2dez.burp.aiagent.ui.components.ToolInvocationDialog
 import com.six2dez.burp.aiagent.util.TokenTracker
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import java.awt.BorderLayout
 import java.awt.Color
 import java.awt.Dimension
@@ -28,18 +34,13 @@ import java.awt.event.KeyEvent
 import java.net.URI
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicReference
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
+import javax.swing.BoxLayout
 import javax.swing.DefaultListModel
 import javax.swing.JButton
 import javax.swing.JComponent
 import javax.swing.JLabel
 import javax.swing.JList
 import javax.swing.JPanel
-import javax.swing.BoxLayout
 import javax.swing.JScrollPane
 import javax.swing.JSeparator
 import javax.swing.JTextArea
@@ -75,7 +76,7 @@ class ChatPanel(
     private val ensureBackendReady: (AgentSettings) -> Boolean,
     private val showError: (String) -> Unit,
     private val onStatusChanged: () -> Unit,
-    private val onResponseReady: () -> Unit
+    private val onResponseReady: () -> Unit,
 ) {
     val root: JComponent = JPanel(BorderLayout())
     private val sessionsModel = DefaultListModel<ChatSession>()
@@ -87,6 +88,7 @@ class ChatPanel(
     private val clearChatBtn = JButton("Clear Chat")
     private val toolsBtn = JButton("Tools")
     private val inFlightConnection = InFlightConnectionTracker()
+
     @Volatile private var isSending = false
     private val inputArea = JTextArea(3, 24)
     private val newSessionBtn = JButton("New Session")
@@ -118,17 +120,19 @@ class ChatPanel(
             val selected = sessionsList.selectedValue ?: return@addListSelectionListener
             switchToSession(selected.id)
         }
-        sessionsList.addMouseListener(object : java.awt.event.MouseAdapter() {
-            override fun mousePressed(e: java.awt.event.MouseEvent) {
-                if (SwingUtilities.isRightMouseButton(e)) {
-                    val index = sessionsList.locationToIndex(e.point)
-                    if (index != -1) {
-                        sessionsList.selectedIndex = index
-                        showSessionContextMenu(e.component, e.x, e.y)
+        sessionsList.addMouseListener(
+            object : java.awt.event.MouseAdapter() {
+                override fun mousePressed(e: java.awt.event.MouseEvent) {
+                    if (SwingUtilities.isRightMouseButton(e)) {
+                        val index = sessionsList.locationToIndex(e.point)
+                        if (index != -1) {
+                            sessionsList.selectedIndex = index
+                            showSessionContextMenu(e.component, e.x, e.y)
+                        }
                     }
                 }
-            }
-        })
+            },
+        )
 
         clearChatBtn.font = UiTheme.Typography.label
         clearChatBtn.isFocusPainted = false
@@ -262,20 +266,50 @@ class ChatPanel(
         capture: ContextCapture,
         promptTemplate: String,
         actionName: String,
-        onCompleted: ((String, Throwable?) -> Unit)? = null
+        onCompleted: ((String, Throwable?) -> Unit)? = null,
+    ) {
+        startSessionFromContext(
+            capture,
+            PromptLaunchSpec(
+                promptText = promptTemplate,
+                actionName = actionName,
+                source = PromptSource.FIXED,
+                contextKind = ContextKind.HTTP_SELECTION,
+            ),
+            onCompleted,
+        )
+    }
+
+    fun startSessionFromContext(
+        capture: ContextCapture,
+        spec: PromptLaunchSpec,
+        onCompleted: ((String, Throwable?) -> Unit)? = null,
     ) {
         updatePrivacyPill()
+        val prompt = spec.promptText.trim().ifBlank { "Analyze the provided context." }
+        if (!ContextPreviewDialog.confirm(
+                parent = root,
+                privacyMode = getSettings().privacyMode,
+                actionName = spec.actionName,
+                prompt = prompt,
+                contextJson = capture.contextJson,
+            )
+        ) {
+            onCompleted?.invoke("", InterruptedException("Context preview cancelled by user"))
+            return
+        }
         val uri = extractUriFromContext(capture)
-        val title = if (uri.isNullOrBlank()) actionName else "$actionName: $uri"
+        val baseTitle = spec.customPromptTitle ?: spec.actionName
+        val title = if (uri.isNullOrBlank()) baseTitle else "$baseTitle: $uri"
         val session = createSession(title)
+        session.launchMetadata = spec.toMetadataMap()
         val panel = sessionPanels[session.id] ?: return
-        val prompt = promptTemplate.trim().ifBlank { "Analyze the provided context." }
         val state = sessionStates[session.id] ?: ToolSessionState()
-        val actionCard = buildActionCard(capture, actionName, prompt, session.id, state)
+        val actionCard = buildActionCard(capture, spec.actionName, prompt, session.id, state)
         panel.addComponent(actionCard)
         panel.addMessage(
             role = "You",
-            text = prompt
+            text = prompt,
         )
         session.messages.add(ChatMessage("user", prompt))
         sendMessage(
@@ -283,18 +317,19 @@ class ChatPanel(
             userText = prompt,
             contextJson = capture.contextJson,
             allowToolCalls = state.toolsMode,
-            actionName = actionName,
-            onCompleted = onCompleted
+            actionName = spec.actionName,
+            onCompleted = onCompleted,
         )
     }
 
     private fun inputPanel(): JPanel {
         val panel = JPanel(BorderLayout())
         panel.background = UiTheme.Colors.surface
-        panel.border = javax.swing.BorderFactory.createCompoundBorder(
-            javax.swing.BorderFactory.createMatteBorder(1, 0, 0, 0, UiTheme.Colors.outlineVariant),
-            EmptyBorder(6, 12, 10, 12)
-        )
+        panel.border =
+            javax.swing.BorderFactory.createCompoundBorder(
+                javax.swing.BorderFactory.createMatteBorder(1, 0, 0, 0, UiTheme.Colors.outlineVariant),
+                EmptyBorder(6, 12, 10, 12),
+            )
 
         inputArea.lineWrap = true
         inputArea.wrapStyleWord = true
@@ -304,31 +339,47 @@ class ChatPanel(
         inputArea.margin = java.awt.Insets(8, 10, 8, 10)
         val inputMap = inputArea.getInputMap(JComponent.WHEN_FOCUSED)
         val actionMap = inputArea.actionMap
-        val menuMask = java.awt.Toolkit.getDefaultToolkit().menuShortcutKeyMaskEx
+        val menuMask =
+            java.awt.Toolkit
+                .getDefaultToolkit()
+                .menuShortcutKeyMaskEx
         inputMap.put(javax.swing.KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "sendMessage")
         inputMap.put(javax.swing.KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, KeyEvent.SHIFT_DOWN_MASK), "insert-break")
         inputMap.put(javax.swing.KeyStroke.getKeyStroke(KeyEvent.VK_T, menuMask), "openToolDialog")
         inputMap.put(javax.swing.KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "cancelInFlight")
-        actionMap.put("sendMessage", object : javax.swing.AbstractAction() {
-            override fun actionPerformed(e: java.awt.event.ActionEvent?) {
-                sendFromInput()
-            }
-        })
-        actionMap.put("openToolDialog", object : javax.swing.AbstractAction() {
-            override fun actionPerformed(e: java.awt.event.ActionEvent?) {
-                openToolDialog()
-            }
-        })
-        actionMap.put("cancelInFlight", object : javax.swing.AbstractAction() {
-            override fun actionPerformed(e: java.awt.event.ActionEvent?) {
-                cancelInFlightRequest()
-            }
-        })
-        inputArea.document.addDocumentListener(object : DocumentListener {
-            override fun insertUpdate(e: DocumentEvent?) = syncDraftFromInput()
-            override fun removeUpdate(e: DocumentEvent?) = syncDraftFromInput()
-            override fun changedUpdate(e: DocumentEvent?) = syncDraftFromInput()
-        })
+        actionMap.put(
+            "sendMessage",
+            object : javax.swing.AbstractAction() {
+                override fun actionPerformed(e: java.awt.event.ActionEvent?) {
+                    sendFromInput()
+                }
+            },
+        )
+        actionMap.put(
+            "openToolDialog",
+            object : javax.swing.AbstractAction() {
+                override fun actionPerformed(e: java.awt.event.ActionEvent?) {
+                    openToolDialog()
+                }
+            },
+        )
+        actionMap.put(
+            "cancelInFlight",
+            object : javax.swing.AbstractAction() {
+                override fun actionPerformed(e: java.awt.event.ActionEvent?) {
+                    cancelInFlightRequest()
+                }
+            },
+        )
+        inputArea.document.addDocumentListener(
+            object : DocumentListener {
+                override fun insertUpdate(e: DocumentEvent?) = syncDraftFromInput()
+
+                override fun removeUpdate(e: DocumentEvent?) = syncDraftFromInput()
+
+                override fun changedUpdate(e: DocumentEvent?) = syncDraftFromInput()
+            },
+        )
 
         sendBtn.font = UiTheme.Typography.label
         sendBtn.isFocusPainted = false
@@ -379,7 +430,7 @@ class ChatPanel(
             text,
             contextJson = null,
             allowToolCalls = state.toolsMode,
-            actionName = "Chat"
+            actionName = "Chat",
         )
     }
 
@@ -391,7 +442,7 @@ class ChatPanel(
         actionName: String? = null,
         onCompleted: ((String, Throwable?) -> Unit)? = null,
         toolIterationsLeft: Int = MAX_AUTO_TOOL_ITERATIONS,
-        traceId: String = "chat-turn-" + UUID.randomUUID().toString()
+        traceId: String = "chat-turn-" + UUID.randomUUID().toString(),
     ) {
         val settings = getSettings()
         updatePrivacyPill()
@@ -434,7 +485,9 @@ class ChatPanel(
             session.contextSent = true
         }
         // Extract agent instructions as system prompt for HTTP backends
-        val agentBlock = com.six2dez.burp.aiagent.agents.AgentProfileLoader.buildInstructionBlock(actionName)
+        val agentBlock =
+            com.six2dez.burp.aiagent.agents.AgentProfileLoader
+                .buildInstructionBlock(actionName)
         val backendObj = supervisor.getBackend(backendId)
         val systemPrompt: String?
         val prompt: String
@@ -446,109 +499,119 @@ class ChatPanel(
             systemPrompt = null
             prompt = buildContextPayload(userText, effectiveContextJson, actionName)
         }
-        val finalPrompt = listOfNotNull(
-            toolPreamble?.takeIf { it.isNotBlank() },
-            prompt.takeIf { it.isNotBlank() }
-        ).joinToString("\n\n")
+        val finalPrompt =
+            listOfNotNull(
+                toolPreamble?.takeIf { it.isNotBlank() },
+                prompt.takeIf { it.isNotBlank() },
+            ).joinToString("\n\n")
         val promptChars = finalPrompt.length
         if (promptChars > Defaults.LARGE_PROMPT_THRESHOLD) {
-            api.logging().logToOutput("[ChatPanel] Large prompt warning: ${promptChars} chars exceeds threshold (${Defaults.LARGE_PROMPT_THRESHOLD})")
+            api.logging().logToOutput(
+                "[ChatPanel] Large prompt warning: $promptChars chars exceeds threshold (${Defaults.LARGE_PROMPT_THRESHOLD})",
+            )
         }
 
         val responseBuffer = StringBuilder()
-        val history = session?.messages?.let { msgs ->
-            val trimmed = if (msgs.isNotEmpty() &&
-                normalizeRole(msgs.last().role) == "user" &&
-                msgs.last().content == userText
-            ) {
-                msgs.dropLast(1)
-            } else {
-                msgs
-            }
-            trimmed.map { ChatMessage(normalizeRole(it.role), it.content) }
-        }
-        val callbackConnectionRef = AtomicReference<AgentConnection?>(null)
-        val connection = supervisor.sendChat(
-            chatSessionId = sessionId,
-            backendId = backendId,
-            text = finalPrompt,
-            history = history,
-            contextJson = contextJson,
-            privacyMode = settings.privacyMode,
-            determinismMode = settings.determinismMode,
-            traceId = traceId,
-            systemPrompt = systemPrompt,
-            maxOutputTokens = Defaults.CHAT_MAX_OUTPUT_TOKENS,
-            onChunk = { chunk ->
-                responseBuffer.append(chunk)
-                SwingUtilities.invokeLater { assistant.appendChunk(chunk) }
-            },
-            onComplete = { err ->
-                val callbackConnection = callbackConnectionRef.get()
-                val shouldSetIdle = if (callbackConnection == null) {
-                    inFlightConnection.current() == null
-                } else {
-                    inFlightConnection.clearIfMatches(callbackConnection)
-                }
-                if (shouldSetIdle) {
-                    SwingUtilities.invokeLater { setSendingState(false) }
-                }
-                val usage = (callbackConnection as? UsageAwareConnection)?.lastTokenUsage()
-                TokenTracker.record(
-                    flow = "chat",
-                    backendId = backendId,
-                    inputChars = promptChars,
-                    outputChars = responseBuffer.length,
-                    inputTokensActual = usage?.inputTokens,
-                    outputTokensActual = usage?.outputTokens
-                )
-                if (session != null) {
-                    val tokIn = usage?.inputTokens?.toLong()
-                        ?: TokenTracker.estimateTokens(promptChars, backendId).toLong()
-                    val tokOut = usage?.outputTokens?.toLong()
-                        ?: TokenTracker.estimateTokens(responseBuffer.length, backendId).toLong()
-                    session.totalTokensIn += tokIn
-                    session.totalTokensOut += tokOut
-                }
-                if (err != null) {
-                    SwingUtilities.invokeLater { assistant.finish("\n[Error] ${err.message}") }
-                    onCompleted?.invoke(responseBuffer.toString(), err)
-                } else {
-                    val finalResp = responseBuffer.toString()
-                    if (session != null) {
-                        session.totalCharsOut += finalResp.length.toLong()
-                        session.messages.add(ChatMessage("assistant", finalResp))
-                    }
-                    SwingUtilities.invokeLater {
-                        assistant.append("\n")
-                        refreshSessionList()
-                        onResponseReady()
-                    }
-                    val chained = if (allowToolCalls && state.toolsMode && toolContext != null) {
-                        maybeExecuteToolCall(
-                            sessionId = sessionId,
-                            userText = userText,
-                            responseText = finalResp,
-                            context = toolContext,
-                            remainingToolIterations = toolIterationsLeft,
-                            traceId = traceId,
-                            onCompleted = onCompleted
-                        )
+        val history =
+            session?.messages?.let { msgs ->
+                val trimmed =
+                    if (msgs.isNotEmpty() &&
+                        normalizeRole(msgs.last().role) == "user" &&
+                        msgs.last().content == userText
+                    ) {
+                        msgs.dropLast(1)
                     } else {
-                        false
+                        msgs
                     }
-                    if (!chained) {
-                        onCompleted?.invoke(finalResp, null)
-                    }
-                }
+                trimmed.map { ChatMessage(normalizeRole(it.role), it.content) }
             }
-        )
+        val callbackConnectionRef = AtomicReference<AgentConnection?>(null)
+        val connection =
+            supervisor.sendChat(
+                chatSessionId = sessionId,
+                backendId = backendId,
+                text = finalPrompt,
+                history = history,
+                contextJson = contextJson,
+                privacyMode = settings.privacyMode,
+                determinismMode = settings.determinismMode,
+                traceId = traceId,
+                systemPrompt = systemPrompt,
+                maxOutputTokens = Defaults.CHAT_MAX_OUTPUT_TOKENS,
+                launchMetadata = session?.launchMetadata,
+                onChunk = { chunk ->
+                    responseBuffer.append(chunk)
+                    SwingUtilities.invokeLater { assistant.appendChunk(chunk) }
+                },
+                onComplete = { err ->
+                    val callbackConnection = callbackConnectionRef.get()
+                    val shouldSetIdle =
+                        if (callbackConnection == null) {
+                            inFlightConnection.current() == null
+                        } else {
+                            inFlightConnection.clearIfMatches(callbackConnection)
+                        }
+                    if (shouldSetIdle) {
+                        SwingUtilities.invokeLater { setSendingState(false) }
+                    }
+                    val usage = (callbackConnection as? UsageAwareConnection)?.lastTokenUsage()
+                    TokenTracker.record(
+                        flow = "chat",
+                        backendId = backendId,
+                        inputChars = promptChars,
+                        outputChars = responseBuffer.length,
+                        inputTokensActual = usage?.inputTokens,
+                        outputTokensActual = usage?.outputTokens,
+                    )
+                    if (session != null) {
+                        val tokIn =
+                            usage?.inputTokens?.toLong()
+                                ?: TokenTracker.estimateTokens(promptChars, backendId).toLong()
+                        val tokOut =
+                            usage?.outputTokens?.toLong()
+                                ?: TokenTracker.estimateTokens(responseBuffer.length, backendId).toLong()
+                        session.totalTokensIn += tokIn
+                        session.totalTokensOut += tokOut
+                    }
+                    if (err != null) {
+                        SwingUtilities.invokeLater { assistant.finish("\n[Error] ${err.message}") }
+                        onCompleted?.invoke(responseBuffer.toString(), err)
+                    } else {
+                        val finalResp = responseBuffer.toString()
+                        if (session != null) {
+                            session.totalCharsOut += finalResp.length.toLong()
+                            session.messages.add(ChatMessage("assistant", finalResp))
+                        }
+                        SwingUtilities.invokeLater {
+                            assistant.append("\n")
+                            refreshSessionList()
+                            onResponseReady()
+                        }
+                        val chained =
+                            if (allowToolCalls && state.toolsMode && toolContext != null) {
+                                maybeExecuteToolCall(
+                                    sessionId = sessionId,
+                                    userText = userText,
+                                    responseText = finalResp,
+                                    context = toolContext,
+                                    remainingToolIterations = toolIterationsLeft,
+                                    traceId = traceId,
+                                    onCompleted = onCompleted,
+                                )
+                            } else {
+                                false
+                            }
+                        if (!chained) {
+                            onCompleted?.invoke(finalResp, null)
+                        }
+                    }
+                },
+            )
         callbackConnectionRef.set(connection)
         inFlightConnection.set(connection)
     }
 
-    private fun sanitizeTitle(raw: String): String =
-        raw.replace(Regex("[\\t\\n\\r\\u0000-\\u001F]"), " ").trim()
+    private fun sanitizeTitle(raw: String): String = raw.replace(Regex("[\\t\\n\\r\\u0000-\\u001F]"), " ").trim()
 
     private fun createSession(title: String): ChatSession {
         val id = "chat-" + UUID.randomUUID().toString()
@@ -567,16 +630,20 @@ class ChatPanel(
         return session
     }
 
-    private fun showSessionContextMenu(comp: java.awt.Component, x: Int, y: Int) {
+    private fun showSessionContextMenu(
+        comp: java.awt.Component,
+        x: Int,
+        y: Int,
+    ) {
         val selected = sessionsList.selectedValue ?: return
         val menu = javax.swing.JPopupMenu()
-        
+
         val renameItem = javax.swing.JMenuItem("Rename")
         renameItem.addActionListener { renameSession(selected) }
-        
+
         val deleteItem = javax.swing.JMenuItem("Delete")
         deleteItem.addActionListener { deleteSession(selected) }
-        
+
         val exportItem = javax.swing.JMenuItem("Export as Markdown")
         exportItem.addActionListener { exportCurrentChatAsMarkdown() }
 
@@ -588,11 +655,12 @@ class ChatPanel(
     }
 
     private fun renameSession(session: ChatSession) {
-        val newName = javax.swing.JOptionPane.showInputDialog(
-            root, 
-            "Enter new session name:", 
-            session.title
-        )
+        val newName =
+            javax.swing.JOptionPane.showInputDialog(
+                root,
+                "Enter new session name:",
+                session.title,
+            )
         if (!newName.isNullOrBlank()) {
             val index = sessionsModel.indexOf(session)
             if (index != -1) {
@@ -606,12 +674,13 @@ class ChatPanel(
     }
 
     private fun deleteSession(session: ChatSession) {
-        val confirm = javax.swing.JOptionPane.showConfirmDialog(
-            root,
-            "Delete session '${session.title}'?",
-            "Delete Session",
-            javax.swing.JOptionPane.YES_NO_OPTION
-        )
+        val confirm =
+            javax.swing.JOptionPane.showConfirmDialog(
+                root,
+                "Delete session '${session.title}'?",
+                "Delete Session",
+                javax.swing.JOptionPane.YES_NO_OPTION,
+            )
         if (confirm == javax.swing.JOptionPane.YES_OPTION) {
             try {
                 supervisor.removeChatSession(session.id)
@@ -627,7 +696,8 @@ class ChatPanel(
                 // Clean persisted data
                 try {
                     projectData().setString(SESSION_MSG_KEY_PREFIX + session.id, "")
-                } catch (_: Exception) {}
+                } catch (_: Exception) {
+                }
             }
 
             if (sessionsModel.isEmpty()) {
@@ -645,26 +715,28 @@ class ChatPanel(
     /** Export current session as a Markdown file */
     fun exportCurrentChatAsMarkdown() {
         val session = sessionsList.selectedValue ?: return
-        val md = buildString {
-            appendLine("# ${session.title}")
-            appendLine()
-            appendLine("Backend: ${session.lastBackendId ?: "unknown"}")
-            appendLine("Date: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm").format(java.util.Date(session.createdAt))}")
-            appendLine()
-            appendLine("---")
-            appendLine()
-            for (msg in session.messages) {
-                val displayRole = when (msg.role.lowercase()) {
-                    "user" -> "You"
-                    "assistant" -> "AI"
-                    else -> msg.role
+        val md =
+            buildString {
+                appendLine("# ${session.title}")
+                appendLine()
+                appendLine("Backend: ${session.lastBackendId ?: "unknown"}")
+                appendLine("Date: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm").format(java.util.Date(session.createdAt))}")
+                appendLine()
+                appendLine("---")
+                appendLine()
+                for (msg in session.messages) {
+                    val displayRole =
+                        when (msg.role.lowercase()) {
+                            "user" -> "You"
+                            "assistant" -> "AI"
+                            else -> msg.role
+                        }
+                    appendLine("**$displayRole:**")
+                    appendLine()
+                    appendLine(msg.content.trim())
+                    appendLine()
                 }
-                appendLine("**$displayRole:**")
-                appendLine()
-                appendLine(msg.content.trim())
-                appendLine()
             }
-        }
         val chooser = javax.swing.JFileChooser()
         chooser.selectedFile = java.io.File("${session.title.replace(Regex("[^a-zA-Z0-9_\\-]"), "_")}.md")
         if (chooser.showSaveDialog(root) == javax.swing.JFileChooser.APPROVE_OPTION) {
@@ -701,7 +773,8 @@ class ChatPanel(
         setSendingState(false)
         try {
             conn.stop()
-        } catch (_: Exception) {}
+        } catch (_: Exception) {
+        }
         val sessionId = sessionsList.selectedValue?.id ?: return true
         val panel = sessionPanels[sessionId] ?: return true
         panel.addMessage("System", "Request cancelled.")
@@ -718,12 +791,14 @@ class ChatPanel(
         val state = sessionStates.getOrPut(session.id) { ToolSessionState() }
         val settings = getSettings()
         val context = buildToolContext(settings, session.id)
-        val availableTools = McpToolCatalog.all()
-            .filter { descriptor ->
-                val enabled = context.isToolEnabled(descriptor.id) && context.isUnsafeToolAllowed(descriptor.id)
-                val proAllowed = !descriptor.proOnly || context.edition == burp.api.montoya.core.BurpSuiteEdition.PROFESSIONAL
-                enabled && proAllowed
-            }
+        val availableTools =
+            McpToolCatalog
+                .all()
+                .filter { descriptor ->
+                    val enabled = context.isToolEnabled(descriptor.id) && context.isUnsafeToolAllowed(descriptor.id)
+                    val proAllowed = !descriptor.proOnly || context.edition == burp.api.montoya.core.BurpSuiteEdition.PROFESSIONAL
+                    enabled && proAllowed
+                }
 
         if (availableTools.isEmpty()) {
             showError("No enabled MCP tools are available with current settings.")
@@ -733,11 +808,12 @@ class ChatPanel(
         val owner = SwingUtilities.getWindowAncestor(root)
         val invocation = ToolInvocationDialog(owner, availableTools, McpToolExecutor::inputSchema).showDialog() ?: return
         val args = invocation.argsJson
-        val commandPreview = if (args.isNullOrBlank()) {
-            "/tool ${invocation.toolId} {}"
-        } else {
-            "/tool ${invocation.toolId} $args"
-        }
+        val commandPreview =
+            if (args.isNullOrBlank()) {
+                "/tool ${invocation.toolId} {}"
+            } else {
+                "/tool ${invocation.toolId} $args"
+            }
 
         panel.addMessage("You", commandPreview)
         session.messages.add(ChatMessage("user", commandPreview))
@@ -764,10 +840,11 @@ class ChatPanel(
         tools.groupBy { it.category }.forEach { (category, categoryTools) ->
             val submenu = javax.swing.JMenu(category)
             categoryTools.sortedBy { it.title }.forEach { tool ->
-                val canRun = context.isToolEnabled(tool.id) &&
-                    context.isUnsafeToolAllowed(tool.id) &&
-                    (!tool.proOnly || context.edition == burp.api.montoya.core.BurpSuiteEdition.PROFESSIONAL)
-                
+                val canRun =
+                    context.isToolEnabled(tool.id) &&
+                        context.isUnsafeToolAllowed(tool.id) &&
+                        (!tool.proOnly || context.edition == burp.api.montoya.core.BurpSuiteEdition.PROFESSIONAL)
+
                 val item = javax.swing.JMenuItem(tool.title)
                 item.isEnabled = canRun
                 item.toolTipText = tool.description
@@ -786,12 +863,13 @@ class ChatPanel(
 
     fun clearCurrentChat() {
         val selected = sessionsList.selectedValue ?: return
-        val confirm = javax.swing.JOptionPane.showConfirmDialog(
-            root,
-            "Are you sure you want to clear this chat history?",
-            "Clear Chat",
-            javax.swing.JOptionPane.YES_NO_OPTION
-        )
+        val confirm =
+            javax.swing.JOptionPane.showConfirmDialog(
+                root,
+                "Are you sure you want to clear this chat history?",
+                "Clear Chat",
+                javax.swing.JOptionPane.YES_NO_OPTION,
+            )
         if (confirm != javax.swing.JOptionPane.YES_OPTION) return
 
         val panel = sessionPanels[selected.id] ?: return
@@ -812,7 +890,10 @@ class ChatPanel(
             state.toolsMode = true
         }
         // Remove persisted messages for this session
-        try { projectData().deleteString(SESSION_MSG_KEY_PREFIX + selected.id) } catch (_: Exception) {}
+        try {
+            projectData().deleteString(SESSION_MSG_KEY_PREFIX + selected.id)
+        } catch (_: Exception) {
+        }
     }
 
     private fun buildActionCard(
@@ -820,7 +901,7 @@ class ChatPanel(
         actionName: String,
         promptText: String,
         sessionId: String,
-        state: ToolSessionState
+        state: ToolSessionState,
     ): ActionCard {
         val source = extractSourceFromPreview(capture.previewText)
         val target = extractHostFromContext(capture) ?: "Unknown"
@@ -828,41 +909,51 @@ class ChatPanel(
         val payload = buildContextPayload(promptText, capture.contextJson, actionName)
         val toolContext = if (state.toolsMode) buildToolContext(getSettings(), sessionId) else null
         val toolPreamble = if (state.toolsMode) buildToolPreamble(toolContext, state, mutateState = false) else null
-        val finalPayload = if (!toolPreamble.isNullOrBlank()) {
-            toolPreamble + "\n\n" + payload
-        } else {
-            payload
-        }
+        val finalPayload =
+            if (!toolPreamble.isNullOrBlank()) {
+                toolPreamble + "\n\n" + payload
+            } else {
+                payload
+            }
         return ActionCard(
             actionName = actionName,
             source = "Source: $source",
             target = "Target: $target",
             privacySummary = summary,
-            payloadPreview = finalPayload
+            payloadPreview = finalPayload,
         )
     }
 
-    private fun buildActionCard(capture: ContextCapture, actionName: String): ActionCard {
-        return buildActionCard(
+    private fun buildActionCard(
+        capture: ContextCapture,
+        actionName: String,
+    ): ActionCard =
+        buildActionCard(
             capture = capture,
             actionName = actionName,
             promptText = "Analyze the provided context.",
             sessionId = "preview",
-            state = ToolSessionState()
+            state = ToolSessionState(),
         )
-    }
 
-    private fun buildContextPayload(userText: String, contextJson: String?, actionName: String?): String {
+    private fun buildContextPayload(
+        userText: String,
+        contextJson: String?,
+        actionName: String?,
+    ): String {
         val agentBlock = AgentProfileLoader.buildInstructionBlock(actionName)
         val base = buildContextPayloadNoAgent(userText, contextJson)
         return listOfNotNull(
             agentBlock?.takeIf { it.isNotBlank() },
-            base.takeIf { it.isNotBlank() }
+            base.takeIf { it.isNotBlank() },
         ).joinToString("\n\n")
     }
 
-    private fun buildContextPayloadNoAgent(userText: String, contextJson: String?): String {
-        return if (contextJson.isNullOrBlank()) {
+    private fun buildContextPayloadNoAgent(
+        userText: String,
+        contextJson: String?,
+    ): String =
+        if (contextJson.isNullOrBlank()) {
             userText
         } else {
             buildString {
@@ -872,30 +963,35 @@ class ChatPanel(
                 append(contextJson)
             }
         }
-    }
 
     private fun extractSourceFromPreview(preview: String): String {
         val line = preview.lineSequence().firstOrNull { it.trim().startsWith("Kind:") }
-        return line?.substringAfter("Kind:")?.trim().orEmpty().ifBlank { "Context" }
+        return line
+            ?.substringAfter("Kind:")
+            ?.trim()
+            .orEmpty()
+            .ifBlank { "Context" }
     }
 
     private fun extractHostFromContext(capture: ContextCapture): String? {
         return try {
             val root = Json.parseToJsonElement(capture.contextJson).jsonObject
             val items = root["items"]?.jsonArray ?: return null
-            items.asSequence().mapNotNull { item ->
-                val obj = item.jsonObject
-                val affectedHost = obj["affectedHost"]?.jsonPrimitive?.contentOrNull
-                if (!affectedHost.isNullOrBlank()) return@mapNotNull affectedHost
-                val url = obj["url"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
-                runCatching { URI(url).host }.getOrNull() ?: url
-            }.firstOrNull()
+            items
+                .asSequence()
+                .mapNotNull { item ->
+                    val obj = item.jsonObject
+                    val affectedHost = obj["affectedHost"]?.jsonPrimitive?.contentOrNull
+                    if (!affectedHost.isNullOrBlank()) return@mapNotNull affectedHost
+                    val url = obj["url"]?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
+                    runCatching { URI(url).host }.getOrNull() ?: url
+                }.firstOrNull()
         } catch (e: Exception) {
             api.logging().logToOutput("[ChatPanel] Failed to extract host from context: ${e.message}")
             null
         }
     }
-    
+
     /**
      * Extract a representative URI from context for session title
      * Returns: METHOD path (e.g., "GET /api/users/123")
@@ -904,46 +1000,47 @@ class ChatPanel(
         return try {
             val root = Json.parseToJsonElement(capture.contextJson).jsonObject
             val items = root["items"]?.jsonArray ?: return null
-            items.asSequence().mapNotNull { item ->
-                val obj = item.jsonObject
-                val url = obj["url"]?.jsonPrimitive?.contentOrNull
-                val method = obj["method"]?.jsonPrimitive?.contentOrNull ?: "GET"
+            items
+                .asSequence()
+                .mapNotNull { item ->
+                    val obj = item.jsonObject
+                    val url = obj["url"]?.jsonPrimitive?.contentOrNull
+                    val method = obj["method"]?.jsonPrimitive?.contentOrNull ?: "GET"
 
-                if (url != null) {
-                    val uri = runCatching { URI(url) }.getOrNull()
-                    if (uri != null) {
-                        val path = uri.path?.takeIf { it.isNotBlank() } ?: "/"
-                        val query = uri.query?.let { "?${it.take(30)}${if (it.length > 30) "..." else ""}" } ?: ""
-                        val displayPath = if (path.length > 50) "...${path.takeLast(47)}" else path
-                        "$method $displayPath$query"
+                    if (url != null) {
+                        val uri = runCatching { URI(url) }.getOrNull()
+                        if (uri != null) {
+                            val path = uri.path?.takeIf { it.isNotBlank() } ?: "/"
+                            val query = uri.query?.let { "?${it.take(30)}${if (it.length > 30) "..." else ""}" } ?: ""
+                            val displayPath = if (path.length > 50) "...${path.takeLast(47)}" else path
+                            "$method $displayPath$query"
+                        } else {
+                            "$method $url"
+                        }
                     } else {
-                        "$method $url"
+                        // Audit issue items: extract issue name + host
+                        val name = obj["name"]?.jsonPrimitive?.contentOrNull
+                        if (name != null) {
+                            val host = obj["affectedHost"]?.jsonPrimitive?.contentOrNull
+                            val displayName = if (name.length > 60) name.take(57) + "..." else name
+                            if (!host.isNullOrBlank()) "$displayName @ $host" else displayName
+                        } else {
+                            null
+                        }
                     }
-                } else {
-                    // Audit issue items: extract issue name + host
-                    val name = obj["name"]?.jsonPrimitive?.contentOrNull
-                    if (name != null) {
-                        val host = obj["affectedHost"]?.jsonPrimitive?.contentOrNull
-                        val displayName = if (name.length > 60) name.take(57) + "..." else name
-                        if (!host.isNullOrBlank()) "$displayName @ $host" else displayName
-                    } else {
-                        null
-                    }
-                }
-            }.firstOrNull()
+                }.firstOrNull()
         } catch (e: Exception) {
             api.logging().logToOutput("[ChatPanel] Failed to extract URI from context: ${e.message}")
             null
         }
     }
 
-    private fun privacySummary(mode: PrivacyMode): String {
-        return when (mode) {
+    private fun privacySummary(mode: PrivacyMode): String =
+        when (mode) {
             PrivacyMode.STRICT -> "Privacy: STRICT (cookies stripped, tokens redacted, hosts anonymized)"
             PrivacyMode.BALANCED -> "Privacy: BALANCED (cookies stripped, tokens redacted)"
             PrivacyMode.OFF -> "Privacy: OFF (no redaction)"
         }
-    }
 
     private fun updatePrivacyPill() {
         privacyPill.updateMode(getSettings().privacyMode)
@@ -980,12 +1077,17 @@ class ChatPanel(
 
         fun formatSessionDate(epochMs: Long): String {
             val now = java.util.Calendar.getInstance()
-            val then = java.util.Calendar.getInstance().apply { timeInMillis = epochMs }
-            val sameDay = now.get(java.util.Calendar.YEAR) == then.get(java.util.Calendar.YEAR) &&
+            val then =
+                java.util.Calendar
+                    .getInstance()
+                    .apply { timeInMillis = epochMs }
+            val sameDay =
+                now.get(java.util.Calendar.YEAR) == then.get(java.util.Calendar.YEAR) &&
                     now.get(java.util.Calendar.DAY_OF_YEAR) == then.get(java.util.Calendar.DAY_OF_YEAR)
             if (sameDay) return "Today"
             now.add(java.util.Calendar.DAY_OF_YEAR, -1)
-            val yesterday = now.get(java.util.Calendar.YEAR) == then.get(java.util.Calendar.YEAR) &&
+            val yesterday =
+                now.get(java.util.Calendar.YEAR) == then.get(java.util.Calendar.YEAR) &&
                     now.get(java.util.Calendar.DAY_OF_YEAR) == then.get(java.util.Calendar.DAY_OF_YEAR)
             if (yesterday) return "Yesterday"
             val daysDiff = ((System.currentTimeMillis() - epochMs) / 86_400_000).toInt()
@@ -1017,11 +1119,12 @@ class ChatPanel(
             // Filled portion
             val fillW = (w * ratio).toInt().coerceAtLeast(0)
             if (fillW > 0) {
-                g.color = when {
-                    ratio < 0.4f -> Color(76, 175, 80)   // green
-                    ratio < 0.7f -> Color(255, 193, 7)    // yellow
-                    else -> Color(255, 152, 0)             // orange
-                }
+                g.color =
+                    when {
+                        ratio < 0.4f -> Color(76, 175, 80) // green
+                        ratio < 0.7f -> Color(255, 193, 7) // yellow
+                        else -> Color(255, 152, 0) // orange
+                    }
                 g.fillRoundRect(0, 0, fillW, h, h, h)
             }
         }
@@ -1048,10 +1151,12 @@ class ChatPanel(
             sessionTokenBar.setRatio(0f)
             globalTokenBar.setRatio(0f)
         } else {
-            usageStatsLine1.text = "${stats.totalMessages} msgs | In: ${formatChars(stats.totalCharsIn)} | Out: ${formatChars(stats.totalCharsOut)}"
-            usageStatsLine2.text = stats.perBackend.entries
-                .sortedByDescending { it.value }
-                .joinToString(", ") { "${it.key}: ${it.value}" }
+            usageStatsLine1.text =
+                "${stats.totalMessages} msgs | In: ${formatChars(stats.totalCharsIn)} | Out: ${formatChars(stats.totalCharsOut)}"
+            usageStatsLine2.text =
+                stats.perBackend.entries
+                    .sortedByDescending { it.value }
+                    .joinToString(", ") { "${it.key}: ${it.value}" }
 
             // Per-session tokens
             val activeSession = activeSessionId?.let { sessionsById[it] }
@@ -1074,22 +1179,20 @@ class ChatPanel(
         }
     }
 
-    private fun formatChars(chars: Long): String {
-        return when {
+    private fun formatChars(chars: Long): String =
+        when {
             chars >= 1_000_000 -> String.format("%.1fM", chars / 1_000_000.0)
             chars >= 1_000 -> String.format("%.1fK", chars / 1_000.0)
-            else -> "${chars}"
+            else -> "$chars"
         }
-    }
 
-    private fun normalizeRole(role: String): String {
-        return when (role.lowercase()) {
+    private fun normalizeRole(role: String): String =
+        when (role.lowercase()) {
             "you", "user" -> "user"
             "ai", "assistant" -> "assistant"
             "system" -> "system"
             else -> role
         }
-    }
 
     // ── Persistence: save/restore chat sessions via Burp preferences ──
 
@@ -1099,8 +1202,7 @@ class ChatPanel(
     private val MIGRATED_KEY = "chat.migrated_to_project"
 
     /** Project-scoped storage: extensionData() is saved inside the .burp project file. */
-    private fun projectData(): burp.api.montoya.persistence.PersistedObject =
-        api.persistence().extensionData()
+    private fun projectData(): burp.api.montoya.persistence.PersistedObject = api.persistence().extensionData()
 
     fun shutdown() {
         cancelInFlightRequest()
@@ -1125,36 +1227,39 @@ class ChatPanel(
         try {
             persistActiveSessionDraft()
             val prefs = projectData()
-            val sessionList = sessionsById.values.map { s ->
-                buildString {
-                    append(s.id)
-                    append('\t')
-                    append(s.title)
-                    append('\t')
-                    append(s.createdAt)
-                    append('\t')
-                    append(s.backendsUsed.entries.joinToString(",") { "${it.key}:${it.value}" })
-                    append('\t')
-                    append(s.messageCount)
-                    append('\t')
-                    append(s.totalCharsIn)
-                    append('\t')
-                    append(s.totalCharsOut)
+            val sessionList =
+                sessionsById.values.map { s ->
+                    buildString {
+                        append(s.id)
+                        append('\t')
+                        append(s.title)
+                        append('\t')
+                        append(s.createdAt)
+                        append('\t')
+                        append(s.backendsUsed.entries.joinToString(",") { "${it.key}:${it.value}" })
+                        append('\t')
+                        append(s.messageCount)
+                        append('\t')
+                        append(s.totalCharsIn)
+                        append('\t')
+                        append(s.totalCharsOut)
+                    }
                 }
-            }
             prefs.setString(SESSIONS_KEY, sessionList.joinToString("\n"))
 
             // Save messages for each session
             for (s in sessionsById.values) {
-                val msgData = s.messages.joinToString("\u001F") { msg ->
-                    "${msg.role}\u001E${msg.content.replace("\n", "\u001D")}"
-                }
+                val msgData =
+                    s.messages.joinToString("\u001F") { msg ->
+                        "${msg.role}\u001E${msg.content.replace("\n", "\u001D")}"
+                    }
                 prefs.setString(SESSION_MSG_KEY_PREFIX + s.id, msgData)
             }
-            val draftsData = sessionsById.keys.map { id ->
-                val draft = sessionDrafts[id].orEmpty().replace("\n", "\u001D")
-                "$id\u001E$draft"
-            }
+            val draftsData =
+                sessionsById.keys.map { id ->
+                    val draft = sessionDrafts[id].orEmpty().replace("\n", "\u001D")
+                    "$id\u001E$draft"
+                }
             prefs.setString(SESSION_DRAFTS_KEY, draftsData.joinToString("\n"))
 
             api.logging().logToOutput("[ChatPanel] Saved ${sessionsById.size} sessions with messages.")
@@ -1204,10 +1309,12 @@ class ChatPanel(
                             val role = msgParts[0]
                             var text = msgParts[1].replace("\u001D", "\n")
                             // Clean up noise from old persisted messages
-                            text = text.lines()
-                                .filterNot { it.lowercase().startsWith("hook registry initialized") }
-                                .joinToString("\n")
-                                .trim()
+                            text =
+                                text
+                                    .lines()
+                                    .filterNot { it.lowercase().startsWith("hook registry initialized") }
+                                    .joinToString("\n")
+                                    .trim()
                             if (text.isNotBlank()) {
                                 messages.add(ChatMessage(role, text))
                             }
@@ -1215,17 +1322,18 @@ class ChatPanel(
                     }
                 }
 
-                val session = ChatSession(
-                    id = id,
-                    title = title,
-                    createdAt = createdAt,
-                    lastBackendId = backendsUsed.keys.firstOrNull(),
-                    backendsUsed = backendsUsed,
-                    messageCount = messageCount,
-                    totalCharsIn = totalCharsIn,
-                    totalCharsOut = totalCharsOut,
-                    messages = messages
-                )
+                val session =
+                    ChatSession(
+                        id = id,
+                        title = title,
+                        createdAt = createdAt,
+                        lastBackendId = backendsUsed.keys.firstOrNull(),
+                        backendsUsed = backendsUsed,
+                        messageCount = messageCount,
+                        totalCharsIn = totalCharsIn,
+                        totalCharsOut = totalCharsOut,
+                        messages = messages,
+                    )
 
                 sessionsModel.addElement(session)
                 sessionsById[id] = session
@@ -1243,7 +1351,8 @@ class ChatPanel(
 
             val draftsRaw = prefs.getString(SESSION_DRAFTS_KEY).orEmpty()
             if (draftsRaw.isNotBlank()) {
-                draftsRaw.split('\n')
+                draftsRaw
+                    .split('\n')
                     .filter { it.isNotBlank() }
                     .forEach { entry ->
                         val parts = entry.split("\u001E", limit = 2)
@@ -1331,7 +1440,7 @@ class ChatPanel(
         val totalMessages: Int,
         val totalCharsIn: Long,
         val totalCharsOut: Long,
-        val perBackend: Map<String, Int>
+        val perBackend: Map<String, Int>,
     )
 
     data class ChatSession(
@@ -1346,14 +1455,20 @@ class ChatPanel(
         var totalTokensIn: Long = 0,
         var totalTokensOut: Long = 0,
         val messages: MutableList<ChatMessage> = mutableListOf(),
-        var contextSent: Boolean = false
+        var contextSent: Boolean = false,
+        /**
+         * Metadata describing how this chat session was launched (prompt source, prompt id,
+         * context kind). Forwarded to AgentSupervisor.sendChat so it lands in
+         * AuditLogger prompt bundles and AiRequestLogger entries. Null for plain chat.
+         */
+        var launchMetadata: Map<String, String>? = null,
     ) {
         override fun toString(): String = title
     }
 
     private data class ToolSessionState(
         var toolsMode: Boolean = true,
-        var toolCatalogSent: Boolean = false
+        var toolCatalogSent: Boolean = false,
     )
 
     private class ChatSessionRenderer : javax.swing.DefaultListCellRenderer() {
@@ -1362,7 +1477,7 @@ class ChatPanel(
             value: Any?,
             index: Int,
             isSelected: Boolean,
-            cellHasFocus: Boolean
+            cellHasFocus: Boolean,
         ): java.awt.Component {
             val label = super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus) as JLabel
             if (value !is ChatSession) {
@@ -1416,7 +1531,10 @@ class ChatPanel(
             root.add(scroll, BorderLayout.CENTER)
         }
 
-        fun addMessage(role: String, text: String) {
+        fun addMessage(
+            role: String,
+            text: String,
+        ) {
             val message = ChatMessagePanel(role, text)
             messagePanels.add(message)
             messages.add(message.root)
@@ -1426,10 +1544,10 @@ class ChatPanel(
 
         fun addComponent(component: JComponent) {
             // Wrap in a panel that prevents vertical stretching
-            val wrapper = object : JPanel(BorderLayout()) {
-                override fun getMaximumSize(): Dimension =
-                    Dimension(super.getMaximumSize().width, preferredSize.height)
-            }
+            val wrapper =
+                object : JPanel(BorderLayout()) {
+                    override fun getMaximumSize(): Dimension = Dimension(super.getMaximumSize().width, preferredSize.height)
+                }
             wrapper.isOpaque = false
             wrapper.add(component, BorderLayout.CENTER)
             messages.add(wrapper)
@@ -1467,8 +1585,11 @@ class ChatPanel(
         }
     }
 
-    private class StreamingMessage(private val message: ChatMessagePanel) {
+    private class StreamingMessage(
+        private val message: ChatMessagePanel,
+    ) {
         private var firstChunk = true
+
         fun append(text: String) {
             if (firstChunk) {
                 message.hideSpinner()
@@ -1492,10 +1613,11 @@ class ChatPanel(
 
     private class ChatMessagePanel(
         private val role: String,
-        initialText: String
+        initialText: String,
     ) {
         // Normalize role detection: accept "You", "user", "User" as user
         private val isUser = role.lowercase() in listOf("you", "user")
+
         // Display normalized labels
         private val displayRole = if (isUser) "You" else "AI"
         private val showSpinner = !isUser && initialText.isEmpty()
@@ -1503,7 +1625,8 @@ class ChatPanel(
         private val copyBtn = JButton("Copy")
         private val spinnerLabel = JLabel("Thinking...")
         private var spinnerTimer: javax.swing.Timer? = null
-        private val spinnerFrames = listOf("\u280B", "\u2819", "\u2839", "\u2838", "\u283C", "\u2834", "\u2826", "\u2827", "\u2807", "\u280F")
+        private val spinnerFrames =
+            listOf("\u280B", "\u2819", "\u2839", "\u2838", "\u283C", "\u2834", "\u2826", "\u2827", "\u2807", "\u280F")
         private var spinnerIndex = 0
         private val pendingText = StringBuilder()
         private var coalescingTimer: javax.swing.Timer? = null
@@ -1521,35 +1644,41 @@ class ChatPanel(
         }
 
         /** EditorPane: calculates height based on a width derived from the viewport */
-        private val editorPane = object : javax.swing.JEditorPane() {
-            override fun getPreferredSize(): java.awt.Dimension {
-                val vpW = viewportWidth()
-                val w: Int = if (isUser) {
-                    // User bubble: max 60% of viewport, but shrink-to-fit for short text
-                    val maxW = (vpW * 0.60).toInt().coerceAtLeast(200)
-                    setSize(maxW, Short.MAX_VALUE.toInt())
-                    val naturalW = super.getPreferredSize().width
-                    naturalW.coerceAtMost(maxW)
-                } else {
-                    // AI bubble: max 75% of viewport, shrink-to-fit for short text
-                    val maxW = (vpW * 0.75).toInt().coerceAtLeast(200)
-                    setSize(maxW, Short.MAX_VALUE.toInt())
-                    val naturalW = super.getPreferredSize().width
-                    naturalW.coerceAtMost(maxW)
+        private val editorPane =
+            object : javax.swing.JEditorPane() {
+                override fun getPreferredSize(): java.awt.Dimension {
+                    val vpW = viewportWidth()
+                    val w: Int =
+                        if (isUser) {
+                            // User bubble: max 60% of viewport, but shrink-to-fit for short text
+                            val maxW = (vpW * 0.60).toInt().coerceAtLeast(200)
+                            setSize(maxW, Short.MAX_VALUE.toInt())
+                            val naturalW = super.getPreferredSize().width
+                            naturalW.coerceAtMost(maxW)
+                        } else {
+                            // AI bubble: max 75% of viewport, shrink-to-fit for short text
+                            val maxW = (vpW * 0.75).toInt().coerceAtLeast(200)
+                            setSize(maxW, Short.MAX_VALUE.toInt())
+                            val naturalW = super.getPreferredSize().width
+                            naturalW.coerceAtMost(maxW)
+                        }
+                    setSize(w, Short.MAX_VALUE.toInt())
+                    val pref = super.getPreferredSize()
+                    return java.awt.Dimension(w, pref.height.coerceAtLeast(18))
                 }
-                setSize(w, Short.MAX_VALUE.toInt())
-                val pref = super.getPreferredSize()
-                return java.awt.Dimension(w, pref.height.coerceAtLeast(18))
+
+                override fun getMaximumSize(): java.awt.Dimension = preferredSize
             }
-            override fun getMaximumSize(): java.awt.Dimension = preferredSize
-        }
 
         // Root panel: prevents vertical stretching in BoxLayout.Y_AXIS container
-        val root: JComponent = object : JPanel(BorderLayout()) {
-            init { isOpaque = false }
-            override fun getMaximumSize(): Dimension =
-                Dimension(super.getMaximumSize().width, preferredSize.height)
-        }
+        val root: JComponent =
+            object : JPanel(BorderLayout()) {
+                init {
+                    isOpaque = false
+                }
+
+                override fun getMaximumSize(): Dimension = Dimension(super.getMaximumSize().width, preferredSize.height)
+            }
 
         init {
             root.border = EmptyBorder(2, 0, 2, 0)
@@ -1584,11 +1713,18 @@ class ChatPanel(
             copyBtn.cursor = java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR)
             copyBtn.isVisible = false
             copyBtn.addActionListener {
-                val clipboard = java.awt.Toolkit.getDefaultToolkit().systemClipboard
+                val clipboard =
+                    java.awt.Toolkit
+                        .getDefaultToolkit()
+                        .systemClipboard
                 clipboard.setContents(java.awt.datatransfer.StringSelection(rawText.toString()), null)
                 copyBtn.text = "Copied!"
                 copyResetTimer?.stop()
-                copyResetTimer = javax.swing.Timer(1500) { copyBtn.text = "Copy" }.also { it.isRepeats = false; it.start() }
+                copyResetTimer =
+                    javax.swing.Timer(1500) { copyBtn.text = "Copy" }.also {
+                        it.isRepeats = false
+                        it.start()
+                    }
             }
             header.add(copyBtn, BorderLayout.EAST)
 
@@ -1601,7 +1737,12 @@ class ChatPanel(
             editorPane.isVisible = !showSpinner
             editorPane.addHyperlinkListener { e ->
                 if (e.eventType == javax.swing.event.HyperlinkEvent.EventType.ACTIVATED) {
-                    try { java.awt.Desktop.getDesktop().browse(e.url.toURI()) } catch (_: Exception) {}
+                    try {
+                        java.awt.Desktop
+                            .getDesktop()
+                            .browse(e.url.toURI())
+                    } catch (_: Exception) {
+                    }
                 }
             }
 
@@ -1636,25 +1777,33 @@ class ChatPanel(
 
                 // Hover: show copy on the bubble
                 val hoverTarget = bubble
-                val hoverListener = object : java.awt.event.MouseAdapter() {
-                    override fun mouseEntered(e: java.awt.event.MouseEvent?) { copyBtn.isVisible = true }
-                    override fun mouseExited(e: java.awt.event.MouseEvent?) {
-                        val pt = e?.point ?: return; val src = e.component ?: return
-                        val bp = javax.swing.SwingUtilities.convertPoint(src, pt, hoverTarget)
-                        if (!java.awt.Rectangle(0, 0, hoverTarget.width, hoverTarget.height).contains(bp)) copyBtn.isVisible = false
+                val hoverListener =
+                    object : java.awt.event.MouseAdapter() {
+                        override fun mouseEntered(e: java.awt.event.MouseEvent?) {
+                            copyBtn.isVisible = true
+                        }
+
+                        override fun mouseExited(e: java.awt.event.MouseEvent?) {
+                            val pt = e?.point ?: return
+                            val src = e.component ?: return
+                            val bp = javax.swing.SwingUtilities.convertPoint(src, pt, hoverTarget)
+                            if (!java.awt.Rectangle(0, 0, hoverTarget.width, hoverTarget.height).contains(bp)) copyBtn.isVisible = false
+                        }
                     }
-                }
-                bubble.addMouseListener(hoverListener); header.addMouseListener(hoverListener)
-                editorPane.addMouseListener(hoverListener); copyBtn.addMouseListener(hoverListener)
+                bubble.addMouseListener(hoverListener)
+                header.addMouseListener(hoverListener)
+                editorPane.addMouseListener(hoverListener)
+                copyBtn.addMouseListener(hoverListener)
             } else {
                 // AI / System message: left-aligned bubble (like ChatGPT)
                 val bubble = JPanel(BorderLayout())
                 bubble.isOpaque = true
                 bubble.background = UiTheme.Colors.aiBubble
-                bubble.border = javax.swing.BorderFactory.createCompoundBorder(
-                    javax.swing.BorderFactory.createLineBorder(UiTheme.Colors.outline, 1),
-                    EmptyBorder(8, 14, 8, 14)
-                )
+                bubble.border =
+                    javax.swing.BorderFactory.createCompoundBorder(
+                        javax.swing.BorderFactory.createLineBorder(UiTheme.Colors.outline, 1),
+                        EmptyBorder(8, 14, 8, 14),
+                    )
                 bubble.add(header, BorderLayout.NORTH)
                 bubble.add(contentPanel, BorderLayout.CENTER)
                 editorPane.background = UiTheme.Colors.aiBubble
@@ -1669,35 +1818,45 @@ class ChatPanel(
 
                 // Hover: show copy on the bubble
                 val hoverTarget = bubble
-                val hoverListener = object : java.awt.event.MouseAdapter() {
-                    override fun mouseEntered(e: java.awt.event.MouseEvent?) { copyBtn.isVisible = true }
-                    override fun mouseExited(e: java.awt.event.MouseEvent?) {
-                        val pt = e?.point ?: return; val src = e.component ?: return
-                        val bp = javax.swing.SwingUtilities.convertPoint(src, pt, hoverTarget)
-                        if (!java.awt.Rectangle(0, 0, hoverTarget.width, hoverTarget.height).contains(bp)) copyBtn.isVisible = false
+                val hoverListener =
+                    object : java.awt.event.MouseAdapter() {
+                        override fun mouseEntered(e: java.awt.event.MouseEvent?) {
+                            copyBtn.isVisible = true
+                        }
+
+                        override fun mouseExited(e: java.awt.event.MouseEvent?) {
+                            val pt = e?.point ?: return
+                            val src = e.component ?: return
+                            val bp = javax.swing.SwingUtilities.convertPoint(src, pt, hoverTarget)
+                            if (!java.awt.Rectangle(0, 0, hoverTarget.width, hoverTarget.height).contains(bp)) copyBtn.isVisible = false
+                        }
                     }
-                }
-                bubble.addMouseListener(hoverListener); header.addMouseListener(hoverListener)
-                editorPane.addMouseListener(hoverListener); copyBtn.addMouseListener(hoverListener)
+                bubble.addMouseListener(hoverListener)
+                header.addMouseListener(hoverListener)
+                editorPane.addMouseListener(hoverListener)
+                copyBtn.addMouseListener(hoverListener)
             }
 
             updateHtml()
 
             // Re-layout on resize so editorPane recalculates width
-            root.addComponentListener(object : java.awt.event.ComponentAdapter() {
-                override fun componentResized(e: java.awt.event.ComponentEvent?) {
-                    SwingUtilities.invokeLater {
-                        editorPane.revalidate()
-                        root.revalidate()
+            root.addComponentListener(
+                object : java.awt.event.ComponentAdapter() {
+                    override fun componentResized(e: java.awt.event.ComponentEvent?) {
+                        SwingUtilities.invokeLater {
+                            editorPane.revalidate()
+                            root.revalidate()
+                        }
                     }
-                }
-            })
+                },
+            )
 
             if (showSpinner) {
-                spinnerTimer = javax.swing.Timer(100) {
-                    spinnerIndex = (spinnerIndex + 1) % spinnerFrames.size
-                    spinnerLabel.text = "${spinnerFrames[spinnerIndex]} Thinking..."
-                }
+                spinnerTimer =
+                    javax.swing.Timer(100) {
+                        spinnerIndex = (spinnerIndex + 1) % spinnerFrames.size
+                        spinnerLabel.text = "${spinnerFrames[spinnerIndex]} Thinking..."
+                    }
                 spinnerTimer?.start()
             }
 
@@ -1750,13 +1909,18 @@ class ChatPanel(
                 val newBytes = rawText.length - lastRenderedLength
                 if (isStreaming && rawText.length > 1024 && newBytes < 2048) {
                     // Lightweight: just set plain escaped text for intermediate updates
-                    val escaped = rawText.toString()
-                        .replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-                        .replace("\n", "<br>")
+                    val escaped =
+                        rawText
+                            .toString()
+                            .replace("&", "&amp;")
+                            .replace("<", "&lt;")
+                            .replace(">", "&gt;")
+                            .replace("\n", "<br>")
                     val isDark = UiTheme.isDarkTheme
                     val fontSize = (UiTheme.Typography.chatBody.size - 2).coerceAtLeast(10)
                     val textColor = if (isDark) "#e0e0e0" else "#202020"
-                    editorPane.text = "<html><body style='font-family:SansSerif;color:$textColor;font-size:${fontSize}px;margin:0;padding:0;line-height:1.4;'>$escaped</body></html>"
+                    editorPane.text =
+                        "<html><body style='font-family:SansSerif;color:$textColor;font-size:${fontSize}px;margin:0;padding:0;line-height:1.4;'>$escaped</body></html>"
                     SwingUtilities.invokeLater {
                         editorPane.revalidate()
                         contentPanel.revalidate()
@@ -1785,7 +1949,7 @@ class ChatPanel(
         sessionId: String,
         panel: SessionPanel,
         state: ToolSessionState,
-        settings: AgentSettings
+        settings: AgentSettings,
     ): Boolean {
         val trimmed = text.trim()
         if (trimmed == "/tools") {
@@ -1822,7 +1986,7 @@ class ChatPanel(
         context: McpToolContext,
         remainingToolIterations: Int,
         traceId: String,
-        onCompleted: ((String, Throwable?) -> Unit)?
+        onCompleted: ((String, Throwable?) -> Unit)?,
     ): Boolean {
         if (remainingToolIterations <= 0) return false
         val call = ToolCallParser.extractFirst(responseText) ?: return false
@@ -1841,14 +2005,15 @@ class ChatPanel(
                 sessionId = sessionId,
                 detail = "Tool ${call.tool} failed: $errorMessage",
                 durationMs = durationMs,
-                metadata = mapOf(
-                    "operation" to "tool_chain",
-                    "status" to "error",
-                    "traceId" to traceId,
-                    "step" to chainStep.toString(),
-                    "toolName" to call.tool,
-                    "errorClass" to (resultOutcome.exceptionOrNull()?.javaClass?.simpleName ?: "Exception")
-                )
+                metadata =
+                    mapOf(
+                        "operation" to "tool_chain",
+                        "status" to "error",
+                        "traceId" to traceId,
+                        "step" to chainStep.toString(),
+                        "toolName" to call.tool,
+                        "errorClass" to (resultOutcome.exceptionOrNull()?.javaClass?.simpleName ?: "Exception"),
+                    ),
             )
             panel.addMessage("Tool result: ${call.tool}", "Error: $errorMessage")
             return false
@@ -1862,25 +2027,27 @@ class ChatPanel(
             sessionId = sessionId,
             detail = "Tool ${call.tool} executed",
             durationMs = durationMs,
-            metadata = mapOf(
-                "operation" to "tool_chain",
-                "status" to status,
-                "traceId" to traceId,
-                "step" to chainStep.toString(),
-                "toolName" to call.tool,
-                "resultChars" to result.length.toString()
-            )
+            metadata =
+                mapOf(
+                    "operation" to "tool_chain",
+                    "status" to status,
+                    "traceId" to traceId,
+                    "step" to chainStep.toString(),
+                    "toolName" to call.tool,
+                    "resultChars" to result.length.toString(),
+                ),
         )
         panel.addMessage("Tool result: ${call.tool}", result)
-        val followup = buildString {
-            appendLine("Tool result for ${call.tool}:")
-            appendLine(result)
-            appendLine()
-            appendLine("User request:")
-            appendLine(userText)
-            appendLine()
-            appendLine("Provide the final response using the tool result.")
-        }.trim()
+        val followup =
+            buildString {
+                appendLine("Tool result for ${call.tool}:")
+                appendLine(result)
+                appendLine()
+                appendLine("User request:")
+                appendLine(userText)
+                appendLine()
+                appendLine("Provide the final response using the tool result.")
+            }.trim()
         sendMessage(
             sessionId,
             followup,
@@ -1889,7 +2056,7 @@ class ChatPanel(
             actionName = "Tool Followup",
             onCompleted = onCompleted,
             toolIterationsLeft = (remainingToolIterations - 1).coerceAtLeast(0),
-            traceId = traceId
+            traceId = traceId,
         )
         return true
     }
@@ -1897,10 +2064,11 @@ class ChatPanel(
     private fun buildToolPreamble(
         context: McpToolContext?,
         state: ToolSessionState,
-        mutateState: Boolean
+        mutateState: Boolean,
     ): String? {
         if (context == null) return null
-        val header = """
+        val header =
+            """
 You have access to MCP tools via a text-based protocol. To call a tool, output ONLY a JSON code block in this exact format:
 
 ```json
@@ -1923,7 +2091,10 @@ IMPORTANT:
         return header + "\n\n" + list
     }
 
-    private fun buildToolContext(settings: AgentSettings, sessionId: String): McpToolContext {
+    private fun buildToolContext(
+        settings: AgentSettings,
+        sessionId: String,
+    ): McpToolContext {
         val toggles = McpToolCatalog.mergeWithDefaults(settings.mcpSettings.toolToggles)
         return McpToolContext(
             api = api,
@@ -1936,7 +2107,7 @@ IMPORTANT:
             enabledUnsafeTools = settings.mcpSettings.enabledUnsafeTools,
             limiter = McpRequestLimiter(settings.mcpSettings.maxConcurrentRequests),
             edition = api.burpSuite().version().edition(),
-            maxBodyBytes = settings.mcpSettings.maxBodyBytes
+            maxBodyBytes = settings.mcpSettings.maxBodyBytes,
         )
     }
 }

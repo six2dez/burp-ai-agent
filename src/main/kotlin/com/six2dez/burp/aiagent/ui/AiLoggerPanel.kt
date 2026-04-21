@@ -1,15 +1,15 @@
 package com.six2dez.burp.aiagent.ui
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.databind.SerializationFeature
 import com.six2dez.burp.aiagent.audit.ActivityType
 import com.six2dez.burp.aiagent.audit.AiActivityEntry
 import com.six2dez.burp.aiagent.audit.AiRequestLogger
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.databind.SerializationFeature
 import java.awt.BorderLayout
-import java.util.ArrayDeque
 import java.awt.Component
 import java.awt.FlowLayout
 import java.text.SimpleDateFormat
+import java.util.ArrayDeque
 import java.util.Date
 import javax.swing.*
 import javax.swing.border.EmptyBorder
@@ -22,7 +22,9 @@ import javax.swing.table.DefaultTableCellRenderer
  * Swing panel that displays a live, filterable table of AI request log entries
  * with a detail pane to inspect full prompt/response text.
  */
-class AiLoggerPanel(private val logger: AiRequestLogger) {
+class AiLoggerPanel(
+    private val logger: AiRequestLogger,
+) {
     val root: JComponent = JPanel(BorderLayout())
 
     private val tableModel = AiLogTableModel()
@@ -91,11 +93,15 @@ class AiLoggerPanel(private val logger: AiRequestLogger) {
         toolbar.add(traceLabel)
         traceFilter.font = UiTheme.Typography.body
         traceFilter.toolTipText = "Filter by trace ID"
-        traceFilter.document.addDocumentListener(object : DocumentListener {
-            override fun insertUpdate(e: DocumentEvent?) = applyFilter()
-            override fun removeUpdate(e: DocumentEvent?) = applyFilter()
-            override fun changedUpdate(e: DocumentEvent?) = applyFilter()
-        })
+        traceFilter.document.addDocumentListener(
+            object : DocumentListener {
+                override fun insertUpdate(e: DocumentEvent?) = applyFilter()
+
+                override fun removeUpdate(e: DocumentEvent?) = applyFilter()
+
+                override fun changedUpdate(e: DocumentEvent?) = applyFilter()
+            },
+        )
         toolbar.add(traceFilter)
         toolbar.add(Box.createHorizontalStrut(16))
 
@@ -125,17 +131,17 @@ class AiLoggerPanel(private val logger: AiRequestLogger) {
         table.setDefaultRenderer(Any::class.java, AiLogCellRenderer())
 
         // Column widths
-        table.columnModel.getColumn(0).preferredWidth = 90   // Time
-        table.columnModel.getColumn(1).preferredWidth = 80   // Type
-        table.columnModel.getColumn(2).preferredWidth = 90   // Source
-        table.columnModel.getColumn(3).preferredWidth = 100  // Backend
-        table.columnModel.getColumn(4).preferredWidth = 110  // Operation
-        table.columnModel.getColumn(5).preferredWidth = 70   // Status
-        table.columnModel.getColumn(6).preferredWidth = 190  // Trace
-        table.columnModel.getColumn(7).preferredWidth = 330  // Detail
-        table.columnModel.getColumn(8).preferredWidth = 70   // Duration
-        table.columnModel.getColumn(9).preferredWidth = 60   // Prompt
-        table.columnModel.getColumn(10).preferredWidth = 60  // Response
+        table.columnModel.getColumn(0).preferredWidth = 90 // Time
+        table.columnModel.getColumn(1).preferredWidth = 80 // Type
+        table.columnModel.getColumn(2).preferredWidth = 90 // Source
+        table.columnModel.getColumn(3).preferredWidth = 100 // Backend
+        table.columnModel.getColumn(4).preferredWidth = 110 // Operation
+        table.columnModel.getColumn(5).preferredWidth = 70 // Status
+        table.columnModel.getColumn(6).preferredWidth = 190 // Trace
+        table.columnModel.getColumn(7).preferredWidth = 330 // Detail
+        table.columnModel.getColumn(8).preferredWidth = 70 // Duration
+        table.columnModel.getColumn(9).preferredWidth = 60 // Prompt
+        table.columnModel.getColumn(10).preferredWidth = 60 // Response
 
         table.selectionModel.addListSelectionListener {
             if (!it.valueIsAdjusting) {
@@ -181,29 +187,32 @@ class AiLoggerPanel(private val logger: AiRequestLogger) {
         val selectedSource = sourceFilter.selectedItem as? String ?: "All"
         val traceQuery = traceFilter.text.trim().lowercase()
 
-        val filtered = allEntries.filter { entry ->
-            val typeMatch = when (selectedType) {
-                "All" -> true
-                "Prompt" -> entry.type == ActivityType.PROMPT_SENT
-                "Response" -> entry.type == ActivityType.RESPONSE_COMPLETE
-                "MCP Tool" -> entry.type == ActivityType.MCP_TOOL_CALL
-                "Error" -> entry.type == ActivityType.ERROR
-                "Scanner" -> entry.type == ActivityType.SCANNER_SEND
-                "Retry" -> entry.type == ActivityType.RETRY
-                else -> true
+        val filtered =
+            allEntries.filter { entry ->
+                val typeMatch =
+                    when (selectedType) {
+                        "All" -> true
+                        "Prompt" -> entry.type == ActivityType.PROMPT_SENT
+                        "Response" -> entry.type == ActivityType.RESPONSE_COMPLETE
+                        "MCP Tool" -> entry.type == ActivityType.MCP_TOOL_CALL
+                        "Error" -> entry.type == ActivityType.ERROR
+                        "Scanner" -> entry.type == ActivityType.SCANNER_SEND
+                        "Retry" -> entry.type == ActivityType.RETRY
+                        else -> true
+                    }
+                val sourceMatch = selectedSource == "All" || entry.source == selectedSource
+                val status = entry.metadata["status"].orEmpty().lowercase()
+                val presetMatch =
+                    when (selectedPreset) {
+                        "Errors only" -> entry.type == ActivityType.ERROR || status == "error" || status == "blocked"
+                        "Slow (>=3s)" -> (entry.durationMs ?: 0L) >= 3_000L
+                        "Tool failures" -> entry.type == ActivityType.MCP_TOOL_CALL && (status == "error" || status == "blocked")
+                        else -> true
+                    }
+                val traceId = entry.metadata["traceId"].orEmpty().lowercase()
+                val traceMatch = traceQuery.isBlank() || traceId.contains(traceQuery)
+                typeMatch && sourceMatch && presetMatch && traceMatch
             }
-            val sourceMatch = selectedSource == "All" || entry.source == selectedSource
-            val status = entry.metadata["status"].orEmpty().lowercase()
-            val presetMatch = when (selectedPreset) {
-                "Errors only" -> entry.type == ActivityType.ERROR || status == "error" || status == "blocked"
-                "Slow (>=3s)" -> (entry.durationMs ?: 0L) >= 3_000L
-                "Tool failures" -> entry.type == ActivityType.MCP_TOOL_CALL && (status == "error" || status == "blocked")
-                else -> true
-            }
-            val traceId = entry.metadata["traceId"].orEmpty().lowercase()
-            val traceMatch = traceQuery.isBlank() || traceId.contains(traceQuery)
-            typeMatch && sourceMatch && presetMatch && traceMatch
-        }
 
         tableModel.setData(filtered)
         countLabel.text = "${filtered.size} entries (${allEntries.size} total)"
@@ -263,19 +272,20 @@ class AiLoggerPanel(private val logger: AiRequestLogger) {
 
     // ── Table model ──
     private inner class AiLogTableModel : AbstractTableModel() {
-        private val columns = arrayOf(
-            "Time",
-            "Type",
-            "Source",
-            "Backend",
-            "Operation",
-            "Status",
-            "Trace",
-            "Detail",
-            "Duration",
-            "Prompt",
-            "Response"
-        )
+        private val columns =
+            arrayOf(
+                "Time",
+                "Type",
+                "Source",
+                "Backend",
+                "Operation",
+                "Status",
+                "Trace",
+                "Detail",
+                "Duration",
+                "Prompt",
+                "Response",
+            )
         private var data = listOf<AiActivityEntry>()
 
         fun setData(entries: List<AiActivityEntry>) {
@@ -286,10 +296,15 @@ class AiLoggerPanel(private val logger: AiRequestLogger) {
         fun getEntryAt(row: Int): AiActivityEntry = data[row]
 
         override fun getRowCount(): Int = data.size
+
         override fun getColumnCount(): Int = columns.size
+
         override fun getColumnName(column: Int): String = columns[column]
 
-        override fun getValueAt(rowIndex: Int, columnIndex: Int): Any {
+        override fun getValueAt(
+            rowIndex: Int,
+            columnIndex: Int,
+        ): Any {
             val entry = data[rowIndex]
             return when (columnIndex) {
                 0 -> dateFormat.format(Date(entry.timestamp))
@@ -307,32 +322,39 @@ class AiLoggerPanel(private val logger: AiRequestLogger) {
             }
         }
 
-        private fun formatType(type: ActivityType): String = when (type) {
-            ActivityType.PROMPT_SENT -> "→ Prompt"
-            ActivityType.RESPONSE_COMPLETE -> "← Response"
-            ActivityType.MCP_TOOL_CALL -> "MCP Tool"
-            ActivityType.RETRY -> "↻ Retry"
-            ActivityType.ERROR -> "✗ Error"
-            ActivityType.SCANNER_SEND -> "Scanner"
-        }
+        private fun formatType(type: ActivityType): String =
+            when (type) {
+                ActivityType.PROMPT_SENT -> "→ Prompt"
+                ActivityType.RESPONSE_COMPLETE -> "← Response"
+                ActivityType.MCP_TOOL_CALL -> "MCP Tool"
+                ActivityType.RETRY -> "↻ Retry"
+                ActivityType.ERROR -> "✗ Error"
+                ActivityType.SCANNER_SEND -> "Scanner"
+            }
     }
 
     // ── Cell renderer ──
     private inner class AiLogCellRenderer : DefaultTableCellRenderer() {
         override fun getTableCellRendererComponent(
-            table: JTable, value: Any?, isSelected: Boolean, hasFocus: Boolean, row: Int, column: Int
+            table: JTable,
+            value: Any?,
+            isSelected: Boolean,
+            hasFocus: Boolean,
+            row: Int,
+            column: Int,
         ): Component {
             val component = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column)
             if (!isSelected && row < tableModel.rowCount) {
                 val entry = tableModel.getEntryAt(row)
-                foreground = when (entry.type) {
-                    ActivityType.ERROR -> UiTheme.Colors.statusCrashed
-                    ActivityType.PROMPT_SENT -> UiTheme.Colors.primary
-                    ActivityType.RESPONSE_COMPLETE -> UiTheme.Colors.statusRunning
-                    ActivityType.MCP_TOOL_CALL -> UiTheme.Colors.onSurfaceVariant
-                    ActivityType.SCANNER_SEND -> UiTheme.Colors.statusTerminal
-                    ActivityType.RETRY -> UiTheme.Colors.statusTerminal
-                }
+                foreground =
+                    when (entry.type) {
+                        ActivityType.ERROR -> UiTheme.Colors.statusCrashed
+                        ActivityType.PROMPT_SENT -> UiTheme.Colors.primary
+                        ActivityType.RESPONSE_COMPLETE -> UiTheme.Colors.statusRunning
+                        ActivityType.MCP_TOOL_CALL -> UiTheme.Colors.onSurfaceVariant
+                        ActivityType.SCANNER_SEND -> UiTheme.Colors.statusTerminal
+                        ActivityType.RETRY -> UiTheme.Colors.statusTerminal
+                    }
             }
             border = EmptyBorder(2, 6, 2, 6)
             return component

@@ -16,7 +16,6 @@ import org.mockito.kotlin.whenever
 import java.util.concurrent.atomic.AtomicInteger
 
 class BackendRegistryTest {
-
     @Test
     fun listBackendIds_usesAvailabilityCachePerSettings() {
         val registry = createRegistry()
@@ -76,8 +75,8 @@ class BackendRegistryTest {
         return field.get(registry) as java.util.concurrent.ConcurrentHashMap<Pair<String, Int>, Boolean>
     }
 
-    private fun baselineSettings(): AgentSettings {
-        return AgentSettings(
+    private fun baselineSettings(): AgentSettings =
+        AgentSettings(
             codexCmd = "codex",
             geminiCmd = "gemini",
             opencodeCmd = "opencode",
@@ -119,26 +118,27 @@ class BackendRegistryTest {
             determinismMode = false,
             autoRestart = true,
             auditEnabled = true,
-            mcpSettings = McpSettings(
-                enabled = false,
-                host = "127.0.0.1",
-                port = 8765,
-                externalEnabled = false,
-                stdioEnabled = false,
-                token = "token",
-                allowedOrigins = emptyList(),
-                tlsEnabled = false,
-                tlsAutoGenerate = true,
-                tlsKeystorePath = "",
-                tlsKeystorePassword = "",
-                scanTaskTtlMinutes = 120,
-                collaboratorClientTtlMinutes = 60,
-                maxConcurrentRequests = 4,
-                maxBodyBytes = 262_144,
-                toolToggles = emptyMap(),
-                enabledUnsafeTools = emptySet(),
-                unsafeEnabled = false
-            ),
+            mcpSettings =
+                McpSettings(
+                    enabled = false,
+                    host = "127.0.0.1",
+                    port = 8765,
+                    externalEnabled = false,
+                    stdioEnabled = false,
+                    token = "token",
+                    allowedOrigins = emptyList(),
+                    tlsEnabled = false,
+                    tlsAutoGenerate = true,
+                    tlsKeystorePath = "",
+                    tlsKeystorePassword = "",
+                    scanTaskTtlMinutes = 120,
+                    collaboratorClientTtlMinutes = 60,
+                    maxConcurrentRequests = 4,
+                    maxBodyBytes = 262_144,
+                    toolToggles = emptyMap(),
+                    enabledUnsafeTools = emptySet(),
+                    unsafeEnabled = false,
+                ),
             passiveAiEnabled = false,
             passiveAiRateSeconds = 5,
             passiveAiScopeOnly = true,
@@ -158,18 +158,15 @@ class BackendRegistryTest {
             bountyPromptDir = "",
             bountyPromptAutoCreateIssues = true,
             bountyPromptIssueConfidenceThreshold = 90,
-            bountyPromptEnabledPromptIds = emptySet()
+            bountyPromptEnabledPromptIds = emptySet(),
         )
-    }
 
     private class CountingBackend(
         override val id: String,
         override val displayName: String,
-        private val calls: AtomicInteger
+        private val calls: AtomicInteger,
     ) : AiBackend {
-        override fun launch(config: BackendLaunchConfig): AgentConnection {
-            throw UnsupportedOperationException("Not needed in this test")
-        }
+        override fun launch(config: BackendLaunchConfig): AgentConnection = throw UnsupportedOperationException("Not needed in this test")
 
         override fun isAvailable(settings: AgentSettings): Boolean {
             calls.incrementAndGet()

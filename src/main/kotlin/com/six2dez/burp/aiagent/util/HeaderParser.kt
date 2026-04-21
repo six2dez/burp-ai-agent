@@ -18,7 +18,10 @@ object HeaderParser {
         return out
     }
 
-    fun withBearerToken(apiKey: String, headers: Map<String, String>): Map<String, String> {
+    fun withBearerToken(
+        apiKey: String,
+        headers: Map<String, String>,
+    ): Map<String, String> {
         if (apiKey.isBlank()) return headers
         val hasAuth = headers.keys.any { it.equals("authorization", ignoreCase = true) }
         if (hasAuth) return headers

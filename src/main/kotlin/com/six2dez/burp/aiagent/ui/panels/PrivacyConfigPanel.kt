@@ -18,7 +18,7 @@ class PrivacyConfigPanel(
     private val privacyRiskWarning: JComponent,
     private val saveFeedback: JComponent,
     private val aiLoggerEnabled: JComponent? = null,
-    private val aiLoggerMaxEntries: JComponent? = null
+    private val aiLoggerMaxEntries: JComponent? = null,
 ) : ConfigPanel {
     override fun build(): JPanel {
         val grid = formGrid()
@@ -50,7 +50,7 @@ class PrivacyConfigPanel(
         return sectionPanel(
             "Privacy & Logging",
             "Controls redaction, logging and stable ordering of context.",
-            grid
+            grid,
         )
     }
 }

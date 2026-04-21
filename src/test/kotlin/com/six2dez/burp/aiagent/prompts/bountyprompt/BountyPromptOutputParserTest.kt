@@ -5,9 +5,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class BountyPromptOutputParserTest {
-
-    private fun definition(): BountyPromptDefinition {
-        return BountyPromptDefinition(
+    private fun definition(): BountyPromptDefinition =
+        BountyPromptDefinition(
             id = "Security_Headers_Analysis",
             title = "Security Headers Analysis",
             category = BountyPromptCategory.DETECTION,
@@ -16,14 +15,14 @@ class BountyPromptOutputParserTest {
             userPrompt = "User prompt",
             severity = "Information",
             confidence = BountyPromptConfidence.FIRM,
-            tagsUsed = emptySet()
+            tagsUsed = emptySet(),
         )
-    }
 
     @Test
     fun parse_jsonArrayFindings() {
         val parser = BountyPromptOutputParser()
-        val raw = """
+        val raw =
+            """
             ```json
             [
               {
@@ -34,7 +33,7 @@ class BountyPromptOutputParserTest {
               }
             ]
             ```
-        """.trimIndent()
+            """.trimIndent()
 
         val findings = parser.parse(raw, definition())
 

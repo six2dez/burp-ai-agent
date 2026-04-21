@@ -4,7 +4,9 @@ package com.six2dez.burp.aiagent.mcp.tools
  * Byte-aware builder that stops appending once the configured UTF-8 limit is reached.
  * It is used by high-volume MCP tools to avoid building oversized intermediate strings.
  */
-class LimitedStringBuilder(private val maxBytes: Int) {
+class LimitedStringBuilder(
+    private val maxBytes: Int,
+) {
     private val output = StringBuilder()
     private var byteCount = 0
     private var truncated = false

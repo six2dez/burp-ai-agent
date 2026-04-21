@@ -3,8 +3,8 @@ package com.six2dez.burp.aiagent.mcp
 import burp.api.montoya.MontoyaApi
 import com.six2dez.burp.aiagent.audit.AiRequestLogger
 import com.six2dez.burp.aiagent.config.McpSettings
-import com.six2dez.burp.aiagent.mcp.tools.ResponsePreprocessorSettings
 import com.six2dez.burp.aiagent.mcp.tools.CollaboratorRegistry
+import com.six2dez.burp.aiagent.mcp.tools.ResponsePreprocessorSettings
 import com.six2dez.burp.aiagent.mcp.tools.ScannerTaskRegistry
 import com.six2dez.burp.aiagent.redact.PrivacyMode
 import java.net.BindException
@@ -24,6 +24,7 @@ import javax.net.ssl.X509TrustManager
 
 interface McpTakeoverClient {
     fun probe(settings: McpSettings): Boolean
+
     fun requestShutdown(settings: McpSettings): Boolean
 }
 
@@ -36,7 +37,7 @@ class McpSupervisor(
     private val maxRestartAttempts: Int = DEFAULT_MAX_RESTART_ATTEMPTS,
     private val maxTakeoverAttempts: Int = DEFAULT_MAX_TAKEOVER_ATTEMPTS,
     private val restartDelayMs: Long = DEFAULT_RESTART_DELAY_MS,
-    private val takeoverRetryDelayMs: Long = DEFAULT_TAKEOVER_RETRY_DELAY_MS
+    private val takeoverRetryDelayMs: Long = DEFAULT_TAKEOVER_RETRY_DELAY_MS,
 ) {
     private val stateRef = AtomicReference<McpServerState>(McpServerState.Stopped)
     private val settingsRef = AtomicReference<McpSettings?>(null)
@@ -45,10 +46,12 @@ class McpSupervisor(
     private val preprocessRef = AtomicReference(ResponsePreprocessorSettings())
     private val restartAttempts = AtomicInteger(0)
     private val takeoverAttempts = AtomicInteger(0)
-    private val takeoverClient: McpTakeoverClient = takeoverClientOverride ?: object : McpTakeoverClient {
-        override fun probe(settings: McpSettings): Boolean = probeExistingServer(settings)
-        override fun requestShutdown(settings: McpSettings): Boolean = requestRemoteShutdownWithToken(settings)
-    }
+    private val takeoverClient: McpTakeoverClient =
+        takeoverClientOverride ?: object : McpTakeoverClient {
+            override fun probe(settings: McpSettings): Boolean = probeExistingServer(settings)
+
+            override fun requestShutdown(settings: McpSettings): Boolean = requestRemoteShutdownWithToken(settings)
+        }
 
     init {
         require(maxRestartAttempts >= 0) { "maxRestartAttempts must be >= 0" }
@@ -66,7 +69,7 @@ class McpSupervisor(
         settings: McpSettings,
         privacyMode: PrivacyMode,
         determinismMode: Boolean,
-        preprocessSettings: ResponsePreprocessorSettings
+        preprocessSettings: ResponsePreprocessorSettings,
     ) {
         val previousSettings = settingsRef.get()
         val previousPrivacy = privacyRef.get()
@@ -88,10 +91,11 @@ class McpSupervisor(
         }
 
         val alreadyRunning = stateRef.get() is McpServerState.Running
-        val settingsUnchanged = previousSettings == settings &&
-            previousPrivacy == privacyMode &&
-            previousDeterminism == determinismMode &&
-            previousPreprocess == preprocessSettings
+        val settingsUnchanged =
+            previousSettings == settings &&
+                previousPrivacy == privacyMode &&
+                previousDeterminism == determinismMode &&
+                previousPreprocess == preprocessSettings
         if (alreadyRunning && settingsUnchanged) {
             if (settings.stdioEnabled) {
                 stdioBridge.start(settings, privacyMode, determinismMode, preprocessSettings)
@@ -140,7 +144,7 @@ class McpSupervisor(
         settings: McpSettings,
         privacyMode: PrivacyMode,
         determinismMode: Boolean,
-        preprocessSettings: ResponsePreprocessorSettings
+        preprocessSettings: ResponsePreprocessorSettings,
     ) {
         serverManager.start(settings, privacyMode, determinismMode, preprocessSettings) { state ->
             stateRef.set(state)
@@ -180,14 +184,14 @@ class McpSupervisor(
                 if (attempt > maxTakeoverAttempts) {
                     api.logging().logToError(
                         "MCP bind conflict persists after $attempt takeover attempts. " +
-                            "Port ${settings.host}:${settings.port} is still unavailable."
+                            "Port ${settings.host}:${settings.port} is still unavailable.",
                     )
                     return
                 }
                 api.logging().logToOutput(
                     "MCP bind conflict detected on ${settings.host}:${settings.port}. " +
                         "Shutdown requested from existing MCP server; retrying in ${takeoverRetryDelayMs}ms " +
-                        "(attempt $attempt/$maxTakeoverAttempts)."
+                        "(attempt $attempt/$maxTakeoverAttempts).",
                 )
                 scheduleStart(takeoverRetryDelayMs)
             }
@@ -195,14 +199,14 @@ class McpSupervisor(
             BindTakeoverOutcome.NO_COMPATIBLE_SERVER -> {
                 api.logging().logToError(
                     "MCP server failed to bind on ${settings.host}:${settings.port}. " +
-                        "Port appears busy and no compatible MCP server was detected for takeover."
+                        "Port appears busy and no compatible MCP server was detected for takeover.",
                 )
             }
 
             BindTakeoverOutcome.SHUTDOWN_REJECTED -> {
                 api.logging().logToError(
                     "MCP bind conflict on ${settings.host}:${settings.port}. " +
-                        "Existing MCP server did not accept shutdown request."
+                        "Existing MCP server did not accept shutdown request.",
                 )
             }
         }
@@ -236,8 +240,8 @@ class McpSupervisor(
         return false
     }
 
-    private fun probeExistingServer(settings: McpSettings): Boolean {
-        return try {
+    private fun probeExistingServer(settings: McpSettings): Boolean =
+        try {
             val scheme = if (settings.tlsEnabled) "https" else "http"
             val url = URI.create("$scheme://${settings.host}:${settings.port}/__mcp/health").toURL()
             val conn = openConnection(url, settings.tlsEnabled)
@@ -255,10 +259,9 @@ class McpSupervisor(
             api.logging().logToOutput("MCP probe failed on ${settings.host}:${settings.port}: ${e.message}")
             false
         }
-    }
 
-    private fun requestRemoteShutdownWithToken(settings: McpSettings): Boolean {
-        return try {
+    private fun requestRemoteShutdownWithToken(settings: McpSettings): Boolean =
+        try {
             val scheme = if (settings.tlsEnabled) "https" else "http"
             val url = URI.create("$scheme://${settings.host}:${settings.port}/__mcp/shutdown").toURL()
             val conn = openConnection(url, settings.tlsEnabled)
@@ -276,21 +279,35 @@ class McpSupervisor(
             api.logging().logToOutput("MCP remote shutdown request was not accepted: ${e.message}")
             false
         }
-    }
 
-    private fun openConnection(url: URL, tlsEnabled: Boolean): HttpURLConnection {
+    private fun openConnection(
+        url: URL,
+        tlsEnabled: Boolean,
+    ): HttpURLConnection {
         val conn = url.openConnection() as HttpURLConnection
         if (tlsEnabled && conn is HttpsURLConnection) {
-            val isLoopback = url.host.equals("localhost", ignoreCase = true) ||
-                url.host.equals("127.0.0.1") ||
-                url.host.equals("::1")
+            val isLoopback =
+                url.host.equals("localhost", ignoreCase = true) ||
+                    url.host.equals("127.0.0.1") ||
+                    url.host.equals("::1")
 
             if (isLoopback) {
-                val trustAll = arrayOf<TrustManager>(object : X509TrustManager {
-                    override fun getAcceptedIssuers() = emptyArray<java.security.cert.X509Certificate>()
-                    override fun checkClientTrusted(chain: Array<java.security.cert.X509Certificate>, authType: String) = Unit
-                    override fun checkServerTrusted(chain: Array<java.security.cert.X509Certificate>, authType: String) = Unit
-                })
+                val trustAll =
+                    arrayOf<TrustManager>(
+                        object : X509TrustManager {
+                            override fun getAcceptedIssuers() = emptyArray<java.security.cert.X509Certificate>()
+
+                            override fun checkClientTrusted(
+                                chain: Array<java.security.cert.X509Certificate>,
+                                authType: String,
+                            ) = Unit
+
+                            override fun checkServerTrusted(
+                                chain: Array<java.security.cert.X509Certificate>,
+                                authType: String,
+                            ) = Unit
+                        },
+                    )
                 val sslContext = SSLContext.getInstance("TLS")
                 sslContext.init(null, trustAll, java.security.SecureRandom())
                 conn.sslSocketFactory = sslContext.socketFactory
@@ -303,7 +320,7 @@ class McpSupervisor(
     private enum class BindTakeoverOutcome {
         SHUTDOWN_REQUESTED,
         NO_COMPATIBLE_SERVER,
-        SHUTDOWN_REJECTED
+        SHUTDOWN_REJECTED,
     }
 
     private companion object {

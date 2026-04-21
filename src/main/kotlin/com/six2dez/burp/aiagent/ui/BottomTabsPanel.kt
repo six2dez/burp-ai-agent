@@ -11,7 +11,7 @@ import javax.swing.border.LineBorder
 
 class BottomTabsPanel(
     private val settingsPanel: SettingsPanel,
-    private val aiLoggerPanel: AiLoggerPanel? = null
+    private val aiLoggerPanel: AiLoggerPanel? = null,
 ) {
     val root: JComponent = JPanel(BorderLayout())
 

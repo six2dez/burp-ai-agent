@@ -7,10 +7,11 @@ import kotlin.test.assertTrue
 class McpSettingsTest {
     @Test
     fun roundTripToolToggles() {
-        val input = mapOf(
-            "http1_request" to false,
-            "url_encode" to true
-        )
+        val input =
+            mapOf(
+                "http1_request" to false,
+                "url_encode" to true,
+            )
         val serialized = McpSettings.serializeToolToggles(input)
         val parsed = McpSettings.parseToolToggles(serialized)
         assertEquals(input, parsed)
@@ -25,11 +26,12 @@ class McpSettingsTest {
 
     @Test
     fun roundTripAllowedOrigins() {
-        val input = listOf(
-            "https://app.example.com",
-            "https://app.example.com",
-            "http://localhost:3000"
-        )
+        val input =
+            listOf(
+                "https://app.example.com",
+                "https://app.example.com",
+                "http://localhost:3000",
+            )
         val serialized = McpSettings.serializeAllowedOrigins(input)
         val parsed = McpSettings.parseAllowedOrigins(serialized)
         assertEquals(listOf("https://app.example.com", "http://localhost:3000"), parsed)

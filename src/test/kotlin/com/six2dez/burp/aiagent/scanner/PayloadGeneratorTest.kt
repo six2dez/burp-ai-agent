@@ -5,7 +5,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class PayloadGeneratorTest {
-
     private val generator = PayloadGenerator()
 
     @Test

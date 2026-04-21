@@ -47,7 +47,7 @@ class LmStudioBackend : AiBackend {
             transport = config.transport,
             timeoutSeconds = timeoutSeconds,
             debugLog = { BackendDiagnostics.log("[lmstudio] $it") },
-            errorLog = { BackendDiagnostics.logError("[lmstudio] $it") }
+            errorLog = { BackendDiagnostics.logError("[lmstudio] $it") },
         )
     }
 
@@ -56,13 +56,14 @@ class LmStudioBackend : AiBackend {
         if (baseUrl.isBlank()) {
             return HealthCheckResult.Unavailable("LM Studio URL is empty.")
         }
-        val headers = HeaderParser.withBearerToken(
-            settings.lmStudioApiKey,
-            HeaderParser.parse(settings.lmStudioHeaders)
-        )
+        val headers =
+            HeaderParser.withBearerToken(
+                settings.lmStudioApiKey,
+                HeaderParser.parse(settings.lmStudioHeaders),
+            )
         return HttpBackendSupport.healthCheckGet(
             url = "${baseUrl.trimEnd('/')}/v1/models",
-            headers = headers
+            headers = headers,
         )
     }
 
@@ -78,12 +79,15 @@ class LmStudioBackend : AiBackend {
         private val transport: MontoyaHttpTransport?,
         private val timeoutSeconds: Long,
         private val debugLog: (String) -> Unit,
-        private val errorLog: (String) -> Unit
-    ) : AgentConnection, UsageAwareConnection, JsonModeCapable {
+        private val errorLog: (String) -> Unit,
+    ) : AgentConnection,
+        UsageAwareConnection,
+        JsonModeCapable {
         private val alive = AtomicBoolean(true)
-        private val exec = Executors.newSingleThreadExecutor { runnable ->
-            Thread(runnable, "lmstudio-connection").apply { isDaemon = true }
-        }
+        private val exec =
+            Executors.newSingleThreadExecutor { runnable ->
+                Thread(runnable, "lmstudio-connection").apply { isDaemon = true }
+            }
         private val conversationHistory = ConversationHistory(20)
         private val lastTokenUsageRef = AtomicReference<TokenUsage?>(null)
 
@@ -98,7 +102,7 @@ class LmStudioBackend : AiBackend {
             onComplete: (Throwable?) -> Unit,
             systemPrompt: String?,
             jsonMode: Boolean,
-            maxOutputTokens: Int?
+            maxOutputTokens: Int?,
         ) {
             if (!isAlive()) {
                 onComplete(IllegalStateException("Connection closed"))
@@ -131,12 +135,13 @@ class LmStudioBackend : AiBackend {
                             // Add user message to conversation history
                             conversationHistory.addUser(text)
                             val messages = conversationHistory.snapshot()
-                            val payload = mutableMapOf<String, Any>(
-                                "model" to model,
-                                "messages" to messages,
-                                "stream" to false,
-                                "temperature" to if (determinismMode) 0.0 else 0.7
-                            )
+                            val payload =
+                                mutableMapOf<String, Any>(
+                                    "model" to model,
+                                    "messages" to messages,
+                                    "stream" to false,
+                                    "temperature" to if (determinismMode) 0.0 else 0.7,
+                                )
                             if (maxOutputTokens != null) {
                                 payload["max_tokens"] = maxOutputTokens
                             }
@@ -147,12 +152,13 @@ class LmStudioBackend : AiBackend {
                             val json = mapper.writeValueAsString(payload)
                             val endpointUrl = "$baseUrl/v1/chat/completions"
 
-                            val allHeaders = buildMap {
-                                putAll(headers)
-                                if (!sessionId.isNullOrBlank()) {
-                                    put("X-Session-Id", sessionId)
+                            val allHeaders =
+                                buildMap {
+                                    putAll(headers)
+                                    if (!sessionId.isNullOrBlank()) {
+                                        put("X-Session-Id", sessionId)
+                                    }
                                 }
-                            }
 
                             debugLog("request -> $endpointUrl")
 
@@ -166,15 +172,16 @@ class LmStudioBackend : AiBackend {
                                 }
                                 body = resp.body
                             } else {
-                                val req = Request.Builder()
-                                    .url(endpointUrl)
-                                    .post(json.toRequestBody("application/json".toMediaType()))
-                                    .apply {
-                                        allHeaders.forEach { (name, value) ->
-                                            header(name, value)
-                                        }
-                                    }
-                                    .build()
+                                val req =
+                                    Request
+                                        .Builder()
+                                        .url(endpointUrl)
+                                        .post(json.toRequestBody("application/json".toMediaType()))
+                                        .apply {
+                                            allHeaders.forEach { (name, value) ->
+                                                header(name, value)
+                                            }
+                                        }.build()
                                 val okResp = client.newCall(req).execute()
                                 okResp.use { resp ->
                                     if (!resp.isSuccessful) {
@@ -192,7 +199,13 @@ class LmStudioBackend : AiBackend {
                                 return@submit
                             }
                             val node = mapper.readTree(body)
-                            val content = node.path("choices").path(0).path("message").path("content").asText()
+                            val content =
+                                node
+                                    .path("choices")
+                                    .path(0)
+                                    .path("message")
+                                    .path("content")
+                                    .asText()
                             val usageNode = node.path("usage")
                             val promptTokens = usageNode.path("prompt_tokens").asInt(-1)
                             val completionTokens = usageNode.path("completion_tokens").asInt(-1)
@@ -200,8 +213,8 @@ class LmStudioBackend : AiBackend {
                                 lastTokenUsageRef.set(
                                     TokenUsage(
                                         inputTokens = promptTokens.coerceAtLeast(0),
-                                        outputTokens = completionTokens.coerceAtLeast(0)
-                                    )
+                                        outputTokens = completionTokens.coerceAtLeast(0),
+                                    ),
                                 )
                             }
                             if (content.isBlank()) {

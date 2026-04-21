@@ -1,6 +1,11 @@
 package com.six2dez.burp.aiagent.mcp
 
 import burp.api.montoya.MontoyaApi
+import com.six2dez.burp.aiagent.audit.AiRequestLogger
+import com.six2dez.burp.aiagent.config.McpSettings
+import com.six2dez.burp.aiagent.mcp.tools.ResponsePreprocessorSettings
+import com.six2dez.burp.aiagent.mcp.tools.registerTools
+import com.six2dez.burp.aiagent.redact.PrivacyMode
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.*
@@ -17,24 +22,23 @@ import io.modelcontextprotocol.kotlin.sdk.ServerCapabilities
 import io.modelcontextprotocol.kotlin.sdk.server.Server
 import io.modelcontextprotocol.kotlin.sdk.server.ServerOptions
 import io.modelcontextprotocol.kotlin.sdk.server.mcp
-import com.six2dez.burp.aiagent.audit.AiRequestLogger
-import com.six2dez.burp.aiagent.config.McpSettings
-import com.six2dez.burp.aiagent.mcp.tools.ResponsePreprocessorSettings
-import com.six2dez.burp.aiagent.mcp.tools.registerTools
-import com.six2dez.burp.aiagent.redact.PrivacyMode
-import java.security.MessageDigest
 import java.net.URI
+import java.security.MessageDigest
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
 class KtorMcpServerManager(
     private val api: MontoyaApi,
-    private val contextFactory: McpRuntimeContextFactory = McpRuntimeContextFactory(api)
+    private val contextFactory: McpRuntimeContextFactory = McpRuntimeContextFactory(api),
 ) : McpServerManager {
     private var server: EmbeddedServer<*, *>? = null
     private val executor: ExecutorService = Executors.newSingleThreadExecutor()
-    private data class CorsAllowedHost(val hostAndPort: String, val scheme: String)
+
+    private data class CorsAllowedHost(
+        val hostAndPort: String,
+        val scheme: String,
+    )
 
     override fun setAiRequestLogger(logger: AiRequestLogger) {
         contextFactory.aiRequestLogger = logger
@@ -45,7 +49,7 @@ class KtorMcpServerManager(
         privacyMode: PrivacyMode,
         determinismMode: Boolean,
         preprocessSettings: ResponsePreprocessorSettings,
-        callback: (McpServerState) -> Unit
+        callback: (McpServerState) -> Unit,
     ) {
         callback(McpServerState.Starting)
         executor.submit {
@@ -64,136 +68,141 @@ class KtorMcpServerManager(
                 val externalCorsHosts = parseExternalCorsHosts(settings.allowedOrigins)
                 if (settings.externalEnabled && externalCorsHosts.isEmpty()) {
                     api.logging().logToOutput(
-                        "MCP external mode has no allowed origins configured; using permissive CORS (any origin)."
+                        "MCP external mode has no allowed origins configured; using permissive CORS (any origin).",
                     )
                 }
 
-                val mcpServer = Server(
-                    serverInfo = Implementation("burp-ai-agent", "0.1.0"),
-                    options = ServerOptions(
-                        capabilities = ServerCapabilities(
-                            tools = ServerCapabilities.Tools(listChanged = false)
-                        )
+                val mcpServer =
+                    Server(
+                        serverInfo = Implementation("burp-ai-agent", "0.1.0"),
+                        options =
+                            ServerOptions(
+                                capabilities =
+                                    ServerCapabilities(
+                                        tools = ServerCapabilities.Tools(listChanged = false),
+                                    ),
+                            ),
                     )
-                )
 
                 val environment = applicationEnvironment { }
-                val serverInstance = embeddedServer(Netty, environment, configure = {
-                    if (settings.tlsEnabled) {
-                        val tlsMaterial = McpTls.resolve(settings)
-                            ?: throw IllegalStateException("TLS enabled but keystore not available.")
-                        sslConnector(
-                            keyStore = tlsMaterial.keyStore,
-                            keyAlias = tlsMaterial.keyAlias,
-                            keyStorePassword = { tlsMaterial.password },
-                            privateKeyPassword = { tlsMaterial.password }
-                        ) {
-                            host = settings.host
-                            port = settings.port
-                        }
-                    } else {
-                        connector {
-                            host = settings.host
-                            port = settings.port
-                        }
-                    }
-                }) {
-                    install(CORS) {
-                        if (!settings.externalEnabled) {
-                            allowHost("localhost:${settings.port}")
-                            allowHost("127.0.0.1:${settings.port}")
+                val serverInstance =
+                    embeddedServer(Netty, environment, configure = {
+                        if (settings.tlsEnabled) {
+                            val tlsMaterial =
+                                McpTls.resolve(settings)
+                                    ?: throw IllegalStateException("TLS enabled but keystore not available.")
+                            sslConnector(
+                                keyStore = tlsMaterial.keyStore,
+                                keyAlias = tlsMaterial.keyAlias,
+                                keyStorePassword = { tlsMaterial.password },
+                                privateKeyPassword = { tlsMaterial.password },
+                            ) {
+                                host = settings.host
+                                port = settings.port
+                            }
                         } else {
-                            if (externalCorsHosts.isEmpty()) {
-                                anyHost()
+                            connector {
+                                host = settings.host
+                                port = settings.port
+                            }
+                        }
+                    }) {
+                        install(CORS) {
+                            if (!settings.externalEnabled) {
+                                allowHost("localhost:${settings.port}")
+                                allowHost("127.0.0.1:${settings.port}")
                             } else {
-                                externalCorsHosts.forEach { allowed ->
-                                    allowHost(allowed.hostAndPort, schemes = listOf(allowed.scheme))
+                                if (externalCorsHosts.isEmpty()) {
+                                    anyHost()
+                                } else {
+                                    externalCorsHosts.forEach { allowed ->
+                                        allowHost(allowed.hostAndPort, schemes = listOf(allowed.scheme))
+                                    }
+                                }
+                            }
+                            allowMethod(HttpMethod.Get)
+                            allowMethod(HttpMethod.Post)
+                            allowHeader("Content-Type")
+                            allowHeader("Accept")
+                            allowHeader("Authorization")
+                            allowHeader("Last-Event-ID")
+                            allowCredentials = false
+                            allowNonSimpleContentTypes = true
+                            maxAgeInSeconds = 3600
+                        }
+
+                        routing {
+                            get("/__mcp/health") {
+                                call.response.headers.append("X-Burp-AI-Agent", "mcp")
+                                call.respondText("ok")
+                            }
+                            post("/__mcp/shutdown") {
+                                val authHeader = call.request.headers["Authorization"].orEmpty()
+                                if (!isAuthorized(authHeader, settings.token)) {
+                                    call.respond(HttpStatusCode.Unauthorized)
+                                    return@post
+                                }
+                                call.respondText("shutting down")
+                                executor.submit {
+                                    try {
+                                        server?.stop(1000, 5000)
+                                    } catch (e: Exception) {
+                                        api.logging().logToError("MCP shutdown failed: ${e.message}")
+                                    }
                                 }
                             }
                         }
-                        allowMethod(HttpMethod.Get)
-                        allowMethod(HttpMethod.Post)
-                        allowHeader("Content-Type")
-                        allowHeader("Accept")
-                        allowHeader("Authorization")
-                        allowHeader("Last-Event-ID")
-                        allowCredentials = false
-                        allowNonSimpleContentTypes = true
-                        maxAgeInSeconds = 3600
-                    }
 
-                    routing {
-                        get("/__mcp/health") {
-                            call.response.headers.append("X-Burp-AI-Agent", "mcp")
-                            call.respondText("ok")
-                        }
-                        post("/__mcp/shutdown") {
-                            val authHeader = call.request.headers["Authorization"].orEmpty()
-                            if (!isAuthorized(authHeader, settings.token)) {
-                                call.respond(HttpStatusCode.Unauthorized)
-                                return@post
-                            }
-                            call.respondText("shutting down")
-                            executor.submit {
-                                try {
-                                    server?.stop(1000, 5000)
-                                } catch (e: Exception) {
-                                    api.logging().logToError("MCP shutdown failed: ${e.message}")
+                        intercept(ApplicationCallPipeline.Call) {
+                            if (settings.externalEnabled) {
+                                val authHeader = call.request.headers["Authorization"].orEmpty()
+                                if (!isAuthorized(authHeader, settings.token)) {
+                                    call.respond(HttpStatusCode.Unauthorized)
+                                    return@intercept
                                 }
                             }
-                        }
-                    }
 
-                    intercept(ApplicationCallPipeline.Call) {
-                        if (settings.externalEnabled) {
-                            val authHeader = call.request.headers["Authorization"].orEmpty()
-                            if (!isAuthorized(authHeader, settings.token)) {
-                                call.respond(HttpStatusCode.Unauthorized)
-                                return@intercept
-                            }
-                        }
+                            if (!settings.externalEnabled) {
+                                val origin = call.request.headers["Origin"]
+                                val host = call.request.headers["Host"]
+                                val referer = call.request.headers["Referer"]
+                                val userAgent = call.request.headers["User-Agent"]
 
-                        if (!settings.externalEnabled) {
-                            val origin = call.request.headers["Origin"]
-                            val host = call.request.headers["Host"]
-                            val referer = call.request.headers["Referer"]
-                            val userAgent = call.request.headers["User-Agent"]
+                                if (origin != null && !isValidOrigin(origin)) {
+                                    api.logging().logToOutput("Blocked MCP request from origin: $origin")
+                                    call.respond(HttpStatusCode.Forbidden)
+                                    return@intercept
+                                } else if (isBrowserRequest(userAgent)) {
+                                    api.logging().logToOutput("Blocked browser MCP request without Origin header")
+                                    call.respond(HttpStatusCode.Forbidden)
+                                    return@intercept
+                                }
 
-                            if (origin != null && !isValidOrigin(origin)) {
-                                api.logging().logToOutput("Blocked MCP request from origin: $origin")
-                                call.respond(HttpStatusCode.Forbidden)
-                                return@intercept
-                            } else if (isBrowserRequest(userAgent)) {
-                                api.logging().logToOutput("Blocked browser MCP request without Origin header")
-                                call.respond(HttpStatusCode.Forbidden)
-                                return@intercept
-                            }
+                                if (host != null && !isValidHost(host, settings.port)) {
+                                    api.logging().logToOutput("Blocked MCP request from host: $host")
+                                    call.respond(HttpStatusCode.Forbidden)
+                                    return@intercept
+                                }
 
-                            if (host != null && !isValidHost(host, settings.port)) {
-                                api.logging().logToOutput("Blocked MCP request from host: $host")
-                                call.respond(HttpStatusCode.Forbidden)
-                                return@intercept
+                                if (referer != null && !isValidReferer(referer)) {
+                                    api.logging().logToOutput("Blocked MCP request from referer: $referer")
+                                    call.respond(HttpStatusCode.Forbidden)
+                                    return@intercept
+                                }
                             }
 
-                            if (referer != null && !isValidReferer(referer)) {
-                                api.logging().logToOutput("Blocked MCP request from referer: $referer")
-                                call.respond(HttpStatusCode.Forbidden)
-                                return@intercept
-                            }
+                            call.response.headers.append("X-Frame-Options", "DENY")
+                            call.response.headers.append("X-Content-Type-Options", "nosniff")
+                            call.response.headers.append("Referrer-Policy", "same-origin")
+                            call.response.headers.append("Content-Security-Policy", "default-src 'none'")
                         }
 
-                        call.response.headers.append("X-Frame-Options", "DENY")
-                        call.response.headers.append("X-Content-Type-Options", "nosniff")
-                        call.response.headers.append("Referrer-Policy", "same-origin")
-                        call.response.headers.append("Content-Security-Policy", "default-src 'none'")
-                    }
+                        mcp {
+                            mcpServer
+                        }
 
-                    mcp {
-                        mcpServer
+                        mcpServer.registerTools(api, context)
                     }
-
-                    mcpServer.registerTools(api, context)
-                }
 
                 server = serverInstance.apply { start(false) }
                 api.logging().logToOutput("Started MCP server on ${settings.host}:${settings.port}")
@@ -229,12 +238,18 @@ class KtorMcpServerManager(
         }
     }
 
-    private fun isAuthorized(authHeader: String, token: String): Boolean {
+    private fun isAuthorized(
+        authHeader: String,
+        token: String,
+    ): Boolean {
         val expected = "Bearer $token"
         return constantTimeEquals(authHeader, expected)
     }
 
-    private fun constantTimeEquals(left: String, right: String): Boolean {
+    private fun constantTimeEquals(
+        left: String,
+        right: String,
+    ): Boolean {
         val leftBytes = left.toByteArray(Charsets.UTF_8)
         val rightBytes = right.toByteArray(Charsets.UTF_8)
         return MessageDigest.isEqual(leftBytes, rightBytes)
@@ -245,26 +260,37 @@ class KtorMcpServerManager(
         return normalized == "localhost" || normalized == "127.0.0.1" || normalized == "::1"
     }
 
-    private fun isValidOrigin(origin: String): Boolean {
-        return try {
+    private fun isValidOrigin(origin: String): Boolean =
+        try {
             val url = URI(origin).toURL()
             val hostname = url.host.lowercase()
             hostname == "localhost" || hostname == "127.0.0.1"
         } catch (_: Exception) {
             false
         }
-    }
 
     private fun isBrowserRequest(userAgent: String?): Boolean {
         if (userAgent == null) return false
         val userAgentLower = userAgent.lowercase()
-        val browserIndicators = listOf(
-            "mozilla/", "chrome/", "safari/", "webkit/", "gecko/", "firefox/", "edge/", "opera/", "browser"
-        )
+        val browserIndicators =
+            listOf(
+                "mozilla/",
+                "chrome/",
+                "safari/",
+                "webkit/",
+                "gecko/",
+                "firefox/",
+                "edge/",
+                "opera/",
+                "browser",
+            )
         return browserIndicators.any { userAgentLower.contains(it) }
     }
 
-    private fun isValidHost(host: String, expectedPort: Int): Boolean {
+    private fun isValidHost(
+        host: String,
+        expectedPort: Int,
+    ): Boolean {
         return try {
             val parts = host.split(":")
             val hostname = parts[0].lowercase()
@@ -277,15 +303,14 @@ class KtorMcpServerManager(
         }
     }
 
-    private fun isValidReferer(referer: String): Boolean {
-        return try {
+    private fun isValidReferer(referer: String): Boolean =
+        try {
             val url = URI(referer).toURL()
             val hostname = url.host.lowercase()
             hostname == "localhost" || hostname == "127.0.0.1"
         } catch (_: Exception) {
             false
         }
-    }
 
     private fun parseExternalCorsHosts(origins: List<String>): List<CorsAllowedHost> {
         if (origins.isEmpty()) return emptyList()

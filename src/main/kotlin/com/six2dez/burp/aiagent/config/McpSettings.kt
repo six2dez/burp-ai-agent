@@ -26,12 +26,14 @@ data class McpSettings(
     val allowUnpreprocessedProxyHistory: Boolean = Defaults.MCP_ALLOW_UNPREPROCESSED_PROXY_HISTORY,
     val toolToggles: Map<String, Boolean>,
     val enabledUnsafeTools: Set<String>,
-    val unsafeEnabled: Boolean
+    val unsafeEnabled: Boolean,
 ) {
     companion object {
-        private val mapper = JsonMapper.builder()
-            .build()
-            .registerKotlinModule()
+        private val mapper =
+            JsonMapper
+                .builder()
+                .build()
+                .registerKotlinModule()
 
         fun generateToken(): String {
             val bytes = ByteArray(32)
@@ -48,29 +50,29 @@ data class McpSettings(
         fun parseToolToggles(raw: String?): Map<String, Boolean> {
             if (raw.isNullOrBlank()) return emptyMap()
             return try {
-                mapper.readValue(raw, Map::class.java)
+                mapper
+                    .readValue(raw, Map::class.java)
                     .mapNotNull { (k, v) ->
                         val key = k?.toString()?.trim().orEmpty()
-                        val value = when (v) {
-                            is Boolean -> v
-                            is String -> v.equals("true", ignoreCase = true)
-                            else -> null
-                        }
+                        val value =
+                            when (v) {
+                                is Boolean -> v
+                                is String -> v.equals("true", ignoreCase = true)
+                                else -> null
+                            }
                         if (key.isNotBlank() && value != null) key to value else null
-                    }
-                    .toMap()
+                    }.toMap()
             } catch (_: Exception) {
                 emptyMap()
             }
         }
 
-        fun serializeToolToggles(toggles: Map<String, Boolean>): String {
-            return try {
+        fun serializeToolToggles(toggles: Map<String, Boolean>): String =
+            try {
                 mapper.writeValueAsString(toggles)
             } catch (_: Exception) {
                 "{}"
             }
-        }
 
         fun parseAllowedOrigins(raw: String?): List<String> {
             if (raw.isNullOrBlank()) return emptyList()

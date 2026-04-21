@@ -40,12 +40,13 @@ class OllamaBackend : AiBackend {
         val timeoutSeconds = (config.requestTimeoutSeconds ?: 120L).coerceIn(30L, 3600L)
         val client = HttpBackendSupport.sharedClient(baseUrl, timeoutSeconds)
 
-        val resolvedContextWindow = if (config.contextWindow == null || config.contextWindow == DEFAULT_CONTEXT_WINDOW) {
-            detectContextWindow(baseUrl, model, config.headers, config.contextWindow, config.transport)
-        } else {
-            BackendDiagnostics.log("[ollama] Using user-configured context window: ${config.contextWindow}")
-            config.contextWindow
-        }
+        val resolvedContextWindow =
+            if (config.contextWindow == null || config.contextWindow == DEFAULT_CONTEXT_WINDOW) {
+                detectContextWindow(baseUrl, model, config.headers, config.contextWindow, config.transport)
+            } else {
+                BackendDiagnostics.log("[ollama] Using user-configured context window: ${config.contextWindow}")
+                config.contextWindow
+            }
 
         return OllamaConnection(
             client = client,
@@ -60,7 +61,7 @@ class OllamaBackend : AiBackend {
             transport = config.transport,
             timeoutSeconds = timeoutSeconds,
             debugLog = { BackendDiagnostics.log("[ollama] $it") },
-            errorLog = { BackendDiagnostics.logError("[ollama] $it") }
+            errorLog = { BackendDiagnostics.logError("[ollama] $it") },
         )
     }
 
@@ -69,13 +70,14 @@ class OllamaBackend : AiBackend {
         if (baseUrl.isBlank()) {
             return HealthCheckResult.Unavailable("Ollama URL is empty.")
         }
-        val headers = HeaderParser.withBearerToken(
-            settings.ollamaApiKey,
-            HeaderParser.parse(settings.ollamaHeaders)
-        )
+        val headers =
+            HeaderParser.withBearerToken(
+                settings.ollamaApiKey,
+                HeaderParser.parse(settings.ollamaHeaders),
+            )
         return HttpBackendSupport.healthCheckGet(
             url = "${baseUrl.trimEnd('/')}/api/tags",
-            headers = headers
+            headers = headers,
         )
     }
 
@@ -84,7 +86,7 @@ class OllamaBackend : AiBackend {
         model: String,
         headers: Map<String, String>,
         fallback: Int?,
-        transport: MontoyaHttpTransport? = null
+        transport: MontoyaHttpTransport? = null,
     ): Int? {
         try {
             val requestJson = mapper.writeValueAsString(mapOf("name" to model))
@@ -95,26 +97,27 @@ class OllamaBackend : AiBackend {
                 val resp = transport.post(showUrl, headers, requestJson, 5_000)
                 if (!resp.isSuccessful) {
                     BackendDiagnostics.log(
-                        "[ollama] /api/show returned HTTP ${resp.statusCode}, using fallback: $fallback"
+                        "[ollama] /api/show returned HTTP ${resp.statusCode}, using fallback: $fallback",
                     )
                     return fallback
                 }
                 body = resp.body
             } else {
                 val client = HttpBackendSupport.sharedClient(baseUrl, 5L)
-                val request = Request.Builder()
-                    .url(showUrl)
-                    .post(requestJson.toRequestBody("application/json".toMediaType()))
-                    .apply {
-                        headers.forEach { (name, value) -> header(name, value) }
-                    }
-                    .build()
+                val request =
+                    Request
+                        .Builder()
+                        .url(showUrl)
+                        .post(requestJson.toRequestBody("application/json".toMediaType()))
+                        .apply {
+                            headers.forEach { (name, value) -> header(name, value) }
+                        }.build()
 
                 val okResp = client.newCall(request).execute()
                 okResp.use { resp ->
                     if (!resp.isSuccessful) {
                         BackendDiagnostics.log(
-                            "[ollama] /api/show returned HTTP ${resp.code}, using fallback: $fallback"
+                            "[ollama] /api/show returned HTTP ${resp.code}, using fallback: $fallback",
                         )
                         return fallback
                     }
@@ -133,7 +136,7 @@ class OllamaBackend : AiBackend {
                 val detected = numCtxMatch.groupValues[1].toIntOrNull()
                 if (detected != null && detected > 0) {
                     BackendDiagnostics.log(
-                        "[ollama] Detected context window from Modelfile parameters: $detected"
+                        "[ollama] Detected context window from Modelfile parameters: $detected",
                     )
                     return detected
                 }
@@ -149,7 +152,7 @@ class OllamaBackend : AiBackend {
                         val detected = entry.value.asInt(-1)
                         if (detected > 0) {
                             BackendDiagnostics.log(
-                                "[ollama] Detected context window from model_info: $detected"
+                                "[ollama] Detected context window from model_info: $detected",
                             )
                             return detected
                         }
@@ -158,12 +161,12 @@ class OllamaBackend : AiBackend {
             }
 
             BackendDiagnostics.log(
-                "[ollama] No context window found in /api/show response, using fallback: $fallback"
+                "[ollama] No context window found in /api/show response, using fallback: $fallback",
             )
             return fallback
         } catch (e: Exception) {
             BackendDiagnostics.log(
-                "[ollama] Failed to detect context window: ${e.message}, using fallback: $fallback"
+                "[ollama] Failed to detect context window: ${e.message}, using fallback: $fallback",
             )
             return fallback
         }
@@ -182,13 +185,15 @@ class OllamaBackend : AiBackend {
         private val transport: MontoyaHttpTransport?,
         private val timeoutSeconds: Long,
         private val debugLog: (String) -> Unit,
-        private val errorLog: (String) -> Unit
-    ) : AgentConnection, UsageAwareConnection, JsonModeCapable {
-
+        private val errorLog: (String) -> Unit,
+    ) : AgentConnection,
+        UsageAwareConnection,
+        JsonModeCapable {
         private val alive = AtomicBoolean(true)
-        private val exec = Executors.newSingleThreadExecutor { runnable ->
-            Thread(runnable, "ollama-connection").apply { isDaemon = true }
-        }
+        private val exec =
+            Executors.newSingleThreadExecutor { runnable ->
+                Thread(runnable, "ollama-connection").apply { isDaemon = true }
+            }
         private val conversationHistory = ConversationHistory(20)
         private val lastTokenUsageRef = AtomicReference<TokenUsage?>(null)
 
@@ -203,7 +208,7 @@ class OllamaBackend : AiBackend {
             onComplete: (Throwable?) -> Unit,
             systemPrompt: String?,
             jsonMode: Boolean,
-            maxOutputTokens: Int?
+            maxOutputTokens: Int?,
         ) {
             if (!isAlive()) {
                 onComplete(IllegalStateException("Connection closed"))
@@ -239,23 +244,25 @@ class OllamaBackend : AiBackend {
                             // Add user message to conversation history
                             conversationHistory.addUser(text)
                             // Use non-streaming mode for better performance
-                            val json = buildChatJson(
-                                model = model,
-                                stream = false,
-                                temperature = if (determinismMode) 0.0 else null,
-                                numCtx = contextWindow,
-                                formatJson = jsonMode,
-                                numPredict = maxOutputTokens
-                            )
+                            val json =
+                                buildChatJson(
+                                    model = model,
+                                    stream = false,
+                                    temperature = if (determinismMode) 0.0 else null,
+                                    numCtx = contextWindow,
+                                    formatJson = jsonMode,
+                                    numPredict = maxOutputTokens,
+                                )
                             debugLog("serialize done bytes=${json.toByteArray(Charsets.UTF_8).size}")
 
                             val endpointUrl = "$baseUrl/api/chat"
-                            val allHeaders = buildMap {
-                                putAll(headers)
-                                if (!sessionId.isNullOrBlank()) {
-                                    put("X-Session-Id", sessionId)
+                            val allHeaders =
+                                buildMap {
+                                    putAll(headers)
+                                    if (!sessionId.isNullOrBlank()) {
+                                        put("X-Session-Id", sessionId)
+                                    }
                                 }
-                            }
 
                             debugLog("request -> $endpointUrl (stream=false)")
 
@@ -270,15 +277,16 @@ class OllamaBackend : AiBackend {
                                 debugLog("response <- HTTP ${resp.statusCode}")
                                 body = resp.body
                             } else {
-                                val req = Request.Builder()
-                                    .url(endpointUrl)
-                                    .post(json.toRequestBody("application/json".toMediaType()))
-                                    .apply {
-                                        allHeaders.forEach { (name, value) ->
-                                            header(name, value)
-                                        }
-                                    }
-                                    .build()
+                                val req =
+                                    Request
+                                        .Builder()
+                                        .url(endpointUrl)
+                                        .post(json.toRequestBody("application/json".toMediaType()))
+                                        .apply {
+                                            allHeaders.forEach { (name, value) ->
+                                                header(name, value)
+                                            }
+                                        }.build()
                                 val okResp = client.newCall(req).execute()
                                 okResp.use { resp ->
                                     if (!resp.isSuccessful) {
@@ -305,16 +313,20 @@ class OllamaBackend : AiBackend {
                             }
 
                             // Extract content from either 'content' or 'response' field
-                            val content = node.path("message").path("content").asText()
-                                .ifBlank { node.path("response").asText() }
+                            val content =
+                                node
+                                    .path("message")
+                                    .path("content")
+                                    .asText()
+                                    .ifBlank { node.path("response").asText() }
                             val promptTokens = node.path("prompt_eval_count").asInt(-1)
                             val completionTokens = node.path("eval_count").asInt(-1)
                             if (promptTokens >= 0 || completionTokens >= 0) {
                                 lastTokenUsageRef.set(
                                     TokenUsage(
                                         inputTokens = promptTokens.coerceAtLeast(0),
-                                        outputTokens = completionTokens.coerceAtLeast(0)
-                                    )
+                                        outputTokens = completionTokens.coerceAtLeast(0),
+                                    ),
                                 )
                             }
 
@@ -371,7 +383,7 @@ class OllamaBackend : AiBackend {
             temperature: Double?,
             numCtx: Int?,
             formatJson: Boolean = false,
-            numPredict: Int? = null
+            numPredict: Int? = null,
         ): String {
             val messages = conversationHistory.snapshot()
             val sb = StringBuilder(256)

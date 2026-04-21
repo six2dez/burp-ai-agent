@@ -7,412 +7,413 @@ data class McpToolDescriptor(
     val category: String,
     val defaultEnabled: Boolean,
     val proOnly: Boolean = false,
-    val unsafeOnly: Boolean = false
+    val unsafeOnly: Boolean = false,
 )
 
 object McpToolCatalog {
-    private val tools = listOf(
-        McpToolDescriptor(
-            id = "status",
-            title = "Extension status",
-            description = "Returns basic extension and Burp version status.",
-            category = "Extension",
-            defaultEnabled = true
-        ),
-        McpToolDescriptor(
-            id = "url_encode",
-            title = "URL encode",
-            description = "URL encodes the input string.",
-            category = "Utilities",
-            defaultEnabled = true
-        ),
-        McpToolDescriptor(
-            id = "url_decode",
-            title = "URL decode",
-            description = "URL decodes the input string.",
-            category = "Utilities",
-            defaultEnabled = true
-        ),
-        McpToolDescriptor(
-            id = "base64_encode",
-            title = "Base64 encode",
-            description = "Base64 encodes the input string.",
-            category = "Utilities",
-            defaultEnabled = true
-        ),
-        McpToolDescriptor(
-            id = "base64_decode",
-            title = "Base64 decode",
-            description = "Base64 decodes the input string.",
-            category = "Utilities",
-            defaultEnabled = true
-        ),
-        McpToolDescriptor(
-            id = "random_string",
-            title = "Generate random string",
-            description = "Generates a random string of specified length and character set.",
-            category = "Utilities",
-            defaultEnabled = true
-        ),
-        McpToolDescriptor(
-            id = "hash_compute",
-            title = "Compute hash",
-            description = "Computes a hash for input text (MD5/SHA1/SHA256/SHA512).",
-            category = "Utilities",
-            defaultEnabled = true
-        ),
-        McpToolDescriptor(
-            id = "jwt_decode",
-            title = "Decode JWT",
-            description = "Decodes JWT header/payload without verifying the signature.",
-            category = "Utilities",
-            defaultEnabled = true
-        ),
-        McpToolDescriptor(
-            id = "decode_as",
-            title = "Decode content",
-            description = "Decodes base64 content using compression codecs (gzip/deflate/brotli).",
-            category = "Utilities",
-            defaultEnabled = true
-        ),
-        McpToolDescriptor(
-            id = "cookie_jar_get",
-            title = "Cookie jar",
-            description = "Returns cookies from Burp's cookie jar (values redacted unless privacy is OFF).",
-            category = "Utilities",
-            defaultEnabled = true
-        ),
-        McpToolDescriptor(
-            id = "proxy_http_history",
-            title = "Proxy HTTP history",
-            description = "Displays items within the proxy HTTP history.",
-            category = "History",
-            defaultEnabled = true
-        ),
-        McpToolDescriptor(
-            id = "proxy_http_history_regex",
-            title = "Proxy HTTP history (regex)",
-            description = "Displays proxy HTTP history items matching a regex.",
-            category = "History",
-            defaultEnabled = true
-        ),
-        McpToolDescriptor(
-            id = "proxy_history_annotate",
-            title = "Annotate proxy history",
-            description = "Adds notes/highlights to proxy history items matching a regex.",
-            category = "History",
-            defaultEnabled = false,
-            unsafeOnly = true
-        ),
-        McpToolDescriptor(
-            id = "response_body_search",
-            title = "Search response bodies",
-            description = "Searches response bodies in proxy history using a regex.",
-            category = "History",
-            defaultEnabled = true
-        ),
-        McpToolDescriptor(
-            id = "proxy_ws_history",
-            title = "Proxy WebSocket history",
-            description = "Displays items within the proxy WebSocket history.",
-            category = "History",
-            defaultEnabled = true
-        ),
-        McpToolDescriptor(
-            id = "proxy_ws_history_regex",
-            title = "Proxy WebSocket history (regex)",
-            description = "Displays WebSocket history items matching a regex.",
-            category = "History",
-            defaultEnabled = true
-        ),
-        McpToolDescriptor(
-            id = "site_map",
-            title = "Site map",
-            description = "Displays items within the Burp site map.",
-            category = "Site Map",
-            defaultEnabled = true
-        ),
-        McpToolDescriptor(
-            id = "site_map_regex",
-            title = "Site map (regex)",
-            description = "Displays site map items matching a regex.",
-            category = "Site Map",
-            defaultEnabled = true
-        ),
-        McpToolDescriptor(
-            id = "scope_check",
-            title = "Scope check",
-            description = "Checks whether a URL is in scope.",
-            category = "Scope",
-            defaultEnabled = true
-        ),
-        McpToolDescriptor(
-            id = "scope_include",
-            title = "Include in scope",
-            description = "Includes a URL in scope.",
-            category = "Scope",
-            defaultEnabled = false,
-            unsafeOnly = true
-        ),
-        McpToolDescriptor(
-            id = "scope_exclude",
-            title = "Exclude from scope",
-            description = "Excludes a URL from scope.",
-            category = "Scope",
-            defaultEnabled = false,
-            unsafeOnly = true
-        ),
-        McpToolDescriptor(
-            id = "scanner_issues",
-            title = "Scanner issues",
-            description = "Displays scanner issues (Burp Pro only).",
-            category = "Scanner",
-            defaultEnabled = true,
-            proOnly = true
-        ),
-        McpToolDescriptor(
-            id = "http1_request",
-            title = "Send HTTP/1.1 request",
-            description = "Issues an HTTP/1.1 request and returns the response.",
-            category = "Requests",
-            defaultEnabled = true,
-            unsafeOnly = true
-        ),
-        McpToolDescriptor(
-            id = "http2_request",
-            title = "Send HTTP/2 request",
-            description = "Issues an HTTP/2 request and returns the response.",
-            category = "Requests",
-            defaultEnabled = true,
-            unsafeOnly = true
-        ),
-        McpToolDescriptor(
-            id = "repeater_tab",
-            title = "Create repeater tab",
-            description = "Creates a new Repeater tab with the specified HTTP request.",
-            category = "Requests",
-            defaultEnabled = false,
-            unsafeOnly = true
-        ),
-        McpToolDescriptor(
-            id = "repeater_tab_with_payload",
-            title = "Create repeater tab with payload",
-            description = "Creates a Repeater tab after applying placeholder replacements.",
-            category = "Requests",
-            defaultEnabled = false,
-            unsafeOnly = true
-        ),
-        McpToolDescriptor(
-            id = "intruder",
-            title = "Send to Intruder",
-            description = "Sends a request to Intruder.",
-            category = "Requests",
-            defaultEnabled = false,
-            unsafeOnly = true
-        ),
-        McpToolDescriptor(
-            id = "intruder_prepare",
-            title = "Prepare Intruder tab",
-            description = "Creates an Intruder tab with explicit insertion points.",
-            category = "Requests",
-            defaultEnabled = false,
-            unsafeOnly = true
-        ),
-        McpToolDescriptor(
-            id = "insertion_points",
-            title = "List insertion points",
-            description = "Lists insertion point offsets for a request.",
-            category = "Requests",
-            defaultEnabled = true
-        ),
-        McpToolDescriptor(
-            id = "params_extract",
-            title = "Extract parameters",
-            description = "Extracts parameters from a request.",
-            category = "Requests",
-            defaultEnabled = true
-        ),
-        McpToolDescriptor(
-            id = "diff_requests",
-            title = "Diff requests",
-            description = "Produces a line diff between two requests.",
-            category = "Requests",
-            defaultEnabled = true
-        ),
-        McpToolDescriptor(
-            id = "request_parse",
-            title = "Parse request",
-            description = "Parses a raw HTTP request into method, path, headers, parameters, and body.",
-            category = "Requests",
-            defaultEnabled = true
-        ),
-        McpToolDescriptor(
-            id = "response_parse",
-            title = "Parse response",
-            description = "Parses a raw HTTP response into status, headers, and body.",
-            category = "Requests",
-            defaultEnabled = true
-        ),
-        McpToolDescriptor(
-            id = "find_reflected",
-            title = "Find reflected values",
-            description = "Finds reflected parameter values in a response.",
-            category = "Requests",
-            defaultEnabled = true
-        ),
-        McpToolDescriptor(
-            id = "comparer_send",
-            title = "Send to Comparer",
-            description = "Sends one or more items to Burp Comparer.",
-            category = "Requests",
-            defaultEnabled = false,
-            unsafeOnly = true
-        ),
-        McpToolDescriptor(
-            id = "task_engine_state",
-            title = "Set task execution engine state",
-            description = "Sets Burp's task execution engine to paused or running.",
-            category = "Burp Control",
-            defaultEnabled = false,
-            unsafeOnly = true
-        ),
-        McpToolDescriptor(
-            id = "proxy_intercept",
-            title = "Set proxy intercept state",
-            description = "Enables or disables Proxy intercept.",
-            category = "Burp Control",
-            defaultEnabled = false,
-            unsafeOnly = true
-        ),
-        McpToolDescriptor(
-            id = "editor_get",
-            title = "Get active editor contents",
-            description = "Outputs the contents of the active message editor.",
-            category = "Editor",
-            defaultEnabled = false
-        ),
-        McpToolDescriptor(
-            id = "editor_set",
-            title = "Set active editor contents",
-            description = "Sets the content of the active message editor.",
-            category = "Editor",
-            defaultEnabled = false,
-            unsafeOnly = true
-        ),
-        McpToolDescriptor(
-            id = "project_options_get",
-            title = "Output project options",
-            description = "Outputs project-level configuration as JSON.",
-            category = "Config",
-            defaultEnabled = false
-        ),
-        McpToolDescriptor(
-            id = "user_options_get",
-            title = "Output user options",
-            description = "Outputs user-level configuration as JSON.",
-            category = "Config",
-            defaultEnabled = false
-        ),
-        McpToolDescriptor(
-            id = "project_options_set",
-            title = "Set project options",
-            description = "Sets project-level configuration from JSON.",
-            category = "Config",
-            defaultEnabled = false,
-            unsafeOnly = true
-        ),
-        McpToolDescriptor(
-            id = "user_options_set",
-            title = "Set user options",
-            description = "Sets user-level configuration from JSON.",
-            category = "Config",
-            defaultEnabled = false,
-            unsafeOnly = true
-        ),
-        McpToolDescriptor(
-            id = "collaborator_generate",
-            title = "Generate Collaborator payload",
-            description = "Generates a Burp Collaborator payload.",
-            category = "Collaborator",
-            defaultEnabled = true
-        ),
-        McpToolDescriptor(
-            id = "collaborator_poll",
-            title = "Poll Collaborator interactions",
-            description = "Fetches interactions for a Collaborator secret key.",
-            category = "Collaborator",
-            defaultEnabled = true
-        ),
-        McpToolDescriptor(
-            id = "scan_audit_start",
-            title = "Start scanner audit",
-            description = "Starts a Burp Scanner audit.",
-            category = "Scanner",
-            defaultEnabled = false,
-            proOnly = true,
-            unsafeOnly = true
-        ),
-        McpToolDescriptor(
-            id = "scan_audit_start_mode",
-            title = "Start scanner audit (mode)",
-            description = "Starts a scanner audit using active or passive mode.",
-            category = "Scanner",
-            defaultEnabled = false,
-            proOnly = true,
-            unsafeOnly = true
-        ),
-        McpToolDescriptor(
-            id = "scan_audit_start_requests",
-            title = "Start audit with requests",
-            description = "Starts an audit and adds HTTP requests.",
-            category = "Scanner",
-            defaultEnabled = false,
-            proOnly = true,
-            unsafeOnly = true
-        ),
-        McpToolDescriptor(
-            id = "scan_crawl_start",
-            title = "Start crawl",
-            description = "Starts a Burp Scanner crawl.",
-            category = "Scanner",
-            defaultEnabled = false,
-            proOnly = true,
-            unsafeOnly = true
-        ),
-        McpToolDescriptor(
-            id = "scan_task_status",
-            title = "Get scan task status",
-            description = "Gets status for a crawl/audit task.",
-            category = "Scanner",
-            defaultEnabled = false,
-            proOnly = true
-        ),
-        McpToolDescriptor(
-            id = "scan_task_delete",
-            title = "Delete scan task",
-            description = "Deletes a crawl/audit task started via MCP.",
-            category = "Scanner",
-            defaultEnabled = false,
-            proOnly = true,
-            unsafeOnly = true
-        ),
-        McpToolDescriptor(
-            id = "scan_report",
-            title = "Generate scanner report",
-            description = "Generates a scanner report to a path.",
-            category = "Scanner",
-            defaultEnabled = false,
-            proOnly = true,
-            unsafeOnly = true
-        ),
-        McpToolDescriptor(
-            id = "issue_create",
-            title = "Create audit issue",
-            description = "Creates a custom audit issue in Burp's issue list for AI-discovered findings.",
-            category = "Issues",
-            defaultEnabled = true
+    private val tools =
+        listOf(
+            McpToolDescriptor(
+                id = "status",
+                title = "Extension status",
+                description = "Returns basic extension and Burp version status.",
+                category = "Extension",
+                defaultEnabled = true,
+            ),
+            McpToolDescriptor(
+                id = "url_encode",
+                title = "URL encode",
+                description = "URL encodes the input string.",
+                category = "Utilities",
+                defaultEnabled = true,
+            ),
+            McpToolDescriptor(
+                id = "url_decode",
+                title = "URL decode",
+                description = "URL decodes the input string.",
+                category = "Utilities",
+                defaultEnabled = true,
+            ),
+            McpToolDescriptor(
+                id = "base64_encode",
+                title = "Base64 encode",
+                description = "Base64 encodes the input string.",
+                category = "Utilities",
+                defaultEnabled = true,
+            ),
+            McpToolDescriptor(
+                id = "base64_decode",
+                title = "Base64 decode",
+                description = "Base64 decodes the input string.",
+                category = "Utilities",
+                defaultEnabled = true,
+            ),
+            McpToolDescriptor(
+                id = "random_string",
+                title = "Generate random string",
+                description = "Generates a random string of specified length and character set.",
+                category = "Utilities",
+                defaultEnabled = true,
+            ),
+            McpToolDescriptor(
+                id = "hash_compute",
+                title = "Compute hash",
+                description = "Computes a hash for input text (MD5/SHA1/SHA256/SHA512).",
+                category = "Utilities",
+                defaultEnabled = true,
+            ),
+            McpToolDescriptor(
+                id = "jwt_decode",
+                title = "Decode JWT",
+                description = "Decodes JWT header/payload without verifying the signature.",
+                category = "Utilities",
+                defaultEnabled = true,
+            ),
+            McpToolDescriptor(
+                id = "decode_as",
+                title = "Decode content",
+                description = "Decodes base64 content using compression codecs (gzip/deflate/brotli).",
+                category = "Utilities",
+                defaultEnabled = true,
+            ),
+            McpToolDescriptor(
+                id = "cookie_jar_get",
+                title = "Cookie jar",
+                description = "Returns cookies from Burp's cookie jar (values redacted unless privacy is OFF).",
+                category = "Utilities",
+                defaultEnabled = true,
+            ),
+            McpToolDescriptor(
+                id = "proxy_http_history",
+                title = "Proxy HTTP history",
+                description = "Displays items within the proxy HTTP history.",
+                category = "History",
+                defaultEnabled = true,
+            ),
+            McpToolDescriptor(
+                id = "proxy_http_history_regex",
+                title = "Proxy HTTP history (regex)",
+                description = "Displays proxy HTTP history items matching a regex.",
+                category = "History",
+                defaultEnabled = true,
+            ),
+            McpToolDescriptor(
+                id = "proxy_history_annotate",
+                title = "Annotate proxy history",
+                description = "Adds notes/highlights to proxy history items matching a regex.",
+                category = "History",
+                defaultEnabled = false,
+                unsafeOnly = true,
+            ),
+            McpToolDescriptor(
+                id = "response_body_search",
+                title = "Search response bodies",
+                description = "Searches response bodies in proxy history using a regex.",
+                category = "History",
+                defaultEnabled = true,
+            ),
+            McpToolDescriptor(
+                id = "proxy_ws_history",
+                title = "Proxy WebSocket history",
+                description = "Displays items within the proxy WebSocket history.",
+                category = "History",
+                defaultEnabled = true,
+            ),
+            McpToolDescriptor(
+                id = "proxy_ws_history_regex",
+                title = "Proxy WebSocket history (regex)",
+                description = "Displays WebSocket history items matching a regex.",
+                category = "History",
+                defaultEnabled = true,
+            ),
+            McpToolDescriptor(
+                id = "site_map",
+                title = "Site map",
+                description = "Displays items within the Burp site map.",
+                category = "Site Map",
+                defaultEnabled = true,
+            ),
+            McpToolDescriptor(
+                id = "site_map_regex",
+                title = "Site map (regex)",
+                description = "Displays site map items matching a regex.",
+                category = "Site Map",
+                defaultEnabled = true,
+            ),
+            McpToolDescriptor(
+                id = "scope_check",
+                title = "Scope check",
+                description = "Checks whether a URL is in scope.",
+                category = "Scope",
+                defaultEnabled = true,
+            ),
+            McpToolDescriptor(
+                id = "scope_include",
+                title = "Include in scope",
+                description = "Includes a URL in scope.",
+                category = "Scope",
+                defaultEnabled = false,
+                unsafeOnly = true,
+            ),
+            McpToolDescriptor(
+                id = "scope_exclude",
+                title = "Exclude from scope",
+                description = "Excludes a URL from scope.",
+                category = "Scope",
+                defaultEnabled = false,
+                unsafeOnly = true,
+            ),
+            McpToolDescriptor(
+                id = "scanner_issues",
+                title = "Scanner issues",
+                description = "Displays scanner issues (Burp Pro only).",
+                category = "Scanner",
+                defaultEnabled = true,
+                proOnly = true,
+            ),
+            McpToolDescriptor(
+                id = "http1_request",
+                title = "Send HTTP/1.1 request",
+                description = "Issues an HTTP/1.1 request and returns the response.",
+                category = "Requests",
+                defaultEnabled = true,
+                unsafeOnly = true,
+            ),
+            McpToolDescriptor(
+                id = "http2_request",
+                title = "Send HTTP/2 request",
+                description = "Issues an HTTP/2 request and returns the response.",
+                category = "Requests",
+                defaultEnabled = true,
+                unsafeOnly = true,
+            ),
+            McpToolDescriptor(
+                id = "repeater_tab",
+                title = "Create repeater tab",
+                description = "Creates a new Repeater tab with the specified HTTP request.",
+                category = "Requests",
+                defaultEnabled = false,
+                unsafeOnly = true,
+            ),
+            McpToolDescriptor(
+                id = "repeater_tab_with_payload",
+                title = "Create repeater tab with payload",
+                description = "Creates a Repeater tab after applying placeholder replacements.",
+                category = "Requests",
+                defaultEnabled = false,
+                unsafeOnly = true,
+            ),
+            McpToolDescriptor(
+                id = "intruder",
+                title = "Send to Intruder",
+                description = "Sends a request to Intruder.",
+                category = "Requests",
+                defaultEnabled = false,
+                unsafeOnly = true,
+            ),
+            McpToolDescriptor(
+                id = "intruder_prepare",
+                title = "Prepare Intruder tab",
+                description = "Creates an Intruder tab with explicit insertion points.",
+                category = "Requests",
+                defaultEnabled = false,
+                unsafeOnly = true,
+            ),
+            McpToolDescriptor(
+                id = "insertion_points",
+                title = "List insertion points",
+                description = "Lists insertion point offsets for a request.",
+                category = "Requests",
+                defaultEnabled = true,
+            ),
+            McpToolDescriptor(
+                id = "params_extract",
+                title = "Extract parameters",
+                description = "Extracts parameters from a request.",
+                category = "Requests",
+                defaultEnabled = true,
+            ),
+            McpToolDescriptor(
+                id = "diff_requests",
+                title = "Diff requests",
+                description = "Produces a line diff between two requests.",
+                category = "Requests",
+                defaultEnabled = true,
+            ),
+            McpToolDescriptor(
+                id = "request_parse",
+                title = "Parse request",
+                description = "Parses a raw HTTP request into method, path, headers, parameters, and body.",
+                category = "Requests",
+                defaultEnabled = true,
+            ),
+            McpToolDescriptor(
+                id = "response_parse",
+                title = "Parse response",
+                description = "Parses a raw HTTP response into status, headers, and body.",
+                category = "Requests",
+                defaultEnabled = true,
+            ),
+            McpToolDescriptor(
+                id = "find_reflected",
+                title = "Find reflected values",
+                description = "Finds reflected parameter values in a response.",
+                category = "Requests",
+                defaultEnabled = true,
+            ),
+            McpToolDescriptor(
+                id = "comparer_send",
+                title = "Send to Comparer",
+                description = "Sends one or more items to Burp Comparer.",
+                category = "Requests",
+                defaultEnabled = false,
+                unsafeOnly = true,
+            ),
+            McpToolDescriptor(
+                id = "task_engine_state",
+                title = "Set task execution engine state",
+                description = "Sets Burp's task execution engine to paused or running.",
+                category = "Burp Control",
+                defaultEnabled = false,
+                unsafeOnly = true,
+            ),
+            McpToolDescriptor(
+                id = "proxy_intercept",
+                title = "Set proxy intercept state",
+                description = "Enables or disables Proxy intercept.",
+                category = "Burp Control",
+                defaultEnabled = false,
+                unsafeOnly = true,
+            ),
+            McpToolDescriptor(
+                id = "editor_get",
+                title = "Get active editor contents",
+                description = "Outputs the contents of the active message editor.",
+                category = "Editor",
+                defaultEnabled = false,
+            ),
+            McpToolDescriptor(
+                id = "editor_set",
+                title = "Set active editor contents",
+                description = "Sets the content of the active message editor.",
+                category = "Editor",
+                defaultEnabled = false,
+                unsafeOnly = true,
+            ),
+            McpToolDescriptor(
+                id = "project_options_get",
+                title = "Output project options",
+                description = "Outputs project-level configuration as JSON.",
+                category = "Config",
+                defaultEnabled = false,
+            ),
+            McpToolDescriptor(
+                id = "user_options_get",
+                title = "Output user options",
+                description = "Outputs user-level configuration as JSON.",
+                category = "Config",
+                defaultEnabled = false,
+            ),
+            McpToolDescriptor(
+                id = "project_options_set",
+                title = "Set project options",
+                description = "Sets project-level configuration from JSON.",
+                category = "Config",
+                defaultEnabled = false,
+                unsafeOnly = true,
+            ),
+            McpToolDescriptor(
+                id = "user_options_set",
+                title = "Set user options",
+                description = "Sets user-level configuration from JSON.",
+                category = "Config",
+                defaultEnabled = false,
+                unsafeOnly = true,
+            ),
+            McpToolDescriptor(
+                id = "collaborator_generate",
+                title = "Generate Collaborator payload",
+                description = "Generates a Burp Collaborator payload.",
+                category = "Collaborator",
+                defaultEnabled = true,
+            ),
+            McpToolDescriptor(
+                id = "collaborator_poll",
+                title = "Poll Collaborator interactions",
+                description = "Fetches interactions for a Collaborator secret key.",
+                category = "Collaborator",
+                defaultEnabled = true,
+            ),
+            McpToolDescriptor(
+                id = "scan_audit_start",
+                title = "Start scanner audit",
+                description = "Starts a Burp Scanner audit.",
+                category = "Scanner",
+                defaultEnabled = false,
+                proOnly = true,
+                unsafeOnly = true,
+            ),
+            McpToolDescriptor(
+                id = "scan_audit_start_mode",
+                title = "Start scanner audit (mode)",
+                description = "Starts a scanner audit using active or passive mode.",
+                category = "Scanner",
+                defaultEnabled = false,
+                proOnly = true,
+                unsafeOnly = true,
+            ),
+            McpToolDescriptor(
+                id = "scan_audit_start_requests",
+                title = "Start audit with requests",
+                description = "Starts an audit and adds HTTP requests.",
+                category = "Scanner",
+                defaultEnabled = false,
+                proOnly = true,
+                unsafeOnly = true,
+            ),
+            McpToolDescriptor(
+                id = "scan_crawl_start",
+                title = "Start crawl",
+                description = "Starts a Burp Scanner crawl.",
+                category = "Scanner",
+                defaultEnabled = false,
+                proOnly = true,
+                unsafeOnly = true,
+            ),
+            McpToolDescriptor(
+                id = "scan_task_status",
+                title = "Get scan task status",
+                description = "Gets status for a crawl/audit task.",
+                category = "Scanner",
+                defaultEnabled = false,
+                proOnly = true,
+            ),
+            McpToolDescriptor(
+                id = "scan_task_delete",
+                title = "Delete scan task",
+                description = "Deletes a crawl/audit task started via MCP.",
+                category = "Scanner",
+                defaultEnabled = false,
+                proOnly = true,
+                unsafeOnly = true,
+            ),
+            McpToolDescriptor(
+                id = "scan_report",
+                title = "Generate scanner report",
+                description = "Generates a scanner report to a path.",
+                category = "Scanner",
+                defaultEnabled = false,
+                proOnly = true,
+                unsafeOnly = true,
+            ),
+            McpToolDescriptor(
+                id = "issue_create",
+                title = "Create audit issue",
+                description = "Creates a custom audit issue in Burp's issue list for AI-discovered findings.",
+                category = "Issues",
+                defaultEnabled = true,
+            ),
         )
-    )
 
     fun all(): List<McpToolDescriptor> = tools
 

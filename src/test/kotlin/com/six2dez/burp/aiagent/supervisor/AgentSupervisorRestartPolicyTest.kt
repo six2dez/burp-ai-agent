@@ -13,15 +13,14 @@ import org.mockito.Answers
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
 import java.util.Collections
-import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.AbstractExecutorService
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
 class AgentSupervisorRestartPolicyTest {
-
     @Test
     fun repeatedImmediateCrashesSuppressAutoRestart() {
         val api = mock<MontoyaApi>(defaultAnswer = Answers.RETURNS_DEEP_STUBS)
@@ -35,18 +34,19 @@ class AgentSupervisorRestartPolicyTest {
         }
 
         val workerPool = NoOpExecutorService()
-        val supervisor = AgentSupervisor(
-            api = api,
-            registry = registry,
-            audit = mock<AuditLogger>(),
-            workerPool = workerPool
-        )
+        val supervisor =
+            AgentSupervisor(
+                api = api,
+                registry = registry,
+                audit = mock<AuditLogger>(),
+                workerPool = workerPool,
+            )
 
         try {
             supervisor.applySettings(
                 TestSettings.baselineSettings(preferredBackendId = failingBackend.id).copy(
-                    autoRestart = true
-                )
+                    autoRestart = true,
+                ),
             )
             assertTrue(supervisor.startOrAttach(failingBackend.id))
 
@@ -92,7 +92,9 @@ class AgentSupervisorRestartPolicyTest {
         method.invoke(supervisor)
     }
 
-    private class FailingBackend(private val launches: AtomicInteger) : AiBackend {
+    private class FailingBackend(
+        private val launches: AtomicInteger,
+    ) : AiBackend {
         override val id: String = "failing-backend"
         override val displayName: String = "Failing Backend"
 
@@ -112,7 +114,7 @@ class AgentSupervisorRestartPolicyTest {
             onComplete: (Throwable?) -> Unit,
             systemPrompt: String?,
             jsonMode: Boolean,
-            maxOutputTokens: Int?
+            maxOutputTokens: Int?,
         ) {
             onComplete(IllegalStateException("dead"))
         }
@@ -137,7 +139,10 @@ class AgentSupervisorRestartPolicyTest {
 
         override fun isTerminated(): Boolean = shutdown
 
-        override fun awaitTermination(timeout: Long, unit: TimeUnit): Boolean = true
+        override fun awaitTermination(
+            timeout: Long,
+            unit: TimeUnit,
+        ): Boolean = true
 
         override fun execute(command: Runnable) {
             // Intentionally no-op to keep auto-restart submissions pending in this test.

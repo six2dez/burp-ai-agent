@@ -5,7 +5,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class TokenTrackerTest {
-
     @Test
     fun estimatesTokensFromCharacters() {
         assertEquals(0, TokenTracker.estimateTokens(0))
@@ -43,13 +42,13 @@ class TokenTrackerTest {
             inputChars = 36,
             outputChars = 18,
             inputTokensActual = 7,
-            outputTokensActual = 3
+            outputTokensActual = 3,
         )
         TokenTracker.record(
             flow = flow,
             backendId = backend,
             inputChars = 36,
-            outputChars = 18
+            outputChars = 18,
         )
 
         val row = TokenTracker.snapshot().firstOrNull { it.flow == flow && it.backendId == backend }

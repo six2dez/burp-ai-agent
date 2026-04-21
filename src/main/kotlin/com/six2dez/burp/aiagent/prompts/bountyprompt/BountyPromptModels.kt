@@ -3,42 +3,46 @@ package com.six2dez.burp.aiagent.prompts.bountyprompt
 enum class BountyPromptCategory {
     DETECTION,
     RECON,
-    ADVISORY
+    ADVISORY,
 }
 
 enum class BountyPromptOutputType {
     ISSUE,
-    PROMPT_OUTPUT;
+    PROMPT_OUTPUT,
+    ;
 
     companion object {
-        fun fromString(raw: String?): BountyPromptOutputType {
-            return when (raw?.trim()?.lowercase()) {
+        fun fromString(raw: String?): BountyPromptOutputType =
+            when (raw?.trim()?.lowercase()) {
                 "issue" -> ISSUE
                 "prompt output" -> PROMPT_OUTPUT
                 else -> ISSUE
             }
-        }
     }
 }
 
-enum class BountyPromptConfidence(val score: Int) {
+enum class BountyPromptConfidence(
+    val score: Int,
+) {
     CERTAIN(95),
     FIRM(90),
-    TENTATIVE(80);
+    TENTATIVE(80),
+    ;
 
     companion object {
-        fun fromString(raw: String?): BountyPromptConfidence {
-            return when (raw?.trim()?.lowercase()) {
+        fun fromString(raw: String?): BountyPromptConfidence =
+            when (raw?.trim()?.lowercase()) {
                 "certain" -> CERTAIN
                 "firm" -> FIRM
                 "tentative" -> TENTATIVE
                 else -> FIRM
             }
-        }
     }
 }
 
-enum class BountyPromptTag(val token: String) {
+enum class BountyPromptTag(
+    val token: String,
+) {
     HTTP_REQUESTS("[HTTP_Requests]"),
     HTTP_REQUESTS_HEADERS("[HTTP_Requests_Headers]"),
     HTTP_REQUESTS_PARAMETERS("[HTTP_Requests_Parameters]"),
@@ -47,7 +51,8 @@ enum class BountyPromptTag(val token: String) {
     HTTP_RESPONSE_HEADERS("[HTTP_Response_Headers]"),
     HTTP_RESPONSE_BODY("[HTTP_Response_Body]"),
     HTTP_STATUS_CODE("[HTTP_Status_Code]"),
-    HTTP_COOKIES("[HTTP_Cookies]");
+    HTTP_COOKIES("[HTTP_Cookies]"),
+    ;
 
     companion object {
         private val byToken = entries.associateBy { it.token }
@@ -55,7 +60,8 @@ enum class BountyPromptTag(val token: String) {
 
         fun extractFrom(text: String): Set<BountyPromptTag> {
             if (text.isBlank()) return emptySet()
-            return regex.findAll(text)
+            return regex
+                .findAll(text)
                 .mapNotNull { match -> byToken[match.value] }
                 .toCollection(LinkedHashSet())
         }
@@ -71,22 +77,22 @@ data class BountyPromptDefinition(
     val userPrompt: String,
     val severity: String,
     val confidence: BountyPromptConfidence,
-    val tagsUsed: Set<BountyPromptTag>
+    val tagsUsed: Set<BountyPromptTag>,
 )
 
 data class LoadedBountyPrompts(
     val prompts: List<BountyPromptDefinition>,
-    val errors: List<String>
+    val errors: List<String>,
 )
 
 data class ResolvedBountyPrompt(
     val resolvedUserPrompt: String,
-    val previewText: String
+    val previewText: String,
 )
 
 data class BountyPromptFinding(
     val title: String,
     val detail: String,
     val severity: String,
-    val confidence: Int
+    val confidence: Int,
 )

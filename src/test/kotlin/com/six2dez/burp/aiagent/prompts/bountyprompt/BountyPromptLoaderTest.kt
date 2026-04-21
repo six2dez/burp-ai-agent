@@ -7,7 +7,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class BountyPromptLoaderTest {
-
     @Test
     fun loadFromDirectory_onlyLoadsCuratedEnabledPrompts() {
         val dir = Files.createTempDirectory("bounty-loader-test")
@@ -21,7 +20,7 @@ class BountyPromptLoaderTest {
               "severity": "High",
               "confidence": "Certain"
             }
-            """.trimIndent()
+            """.trimIndent(),
         )
         dir.resolve("Non_Curated_Prompt.json").writeText(
             """
@@ -31,14 +30,15 @@ class BountyPromptLoaderTest {
               "systemPrompt": "noop",
               "userPrompt": "noop"
             }
-            """.trimIndent()
+            """.trimIndent(),
         )
 
         val loader = BountyPromptLoader()
-        val loaded = loader.loadFromDirectory(
-            directoryPath = dir.toString(),
-            enabledPromptIds = setOf("API_Keys_Exposure_Detection", "Non_Curated_Prompt")
-        )
+        val loaded =
+            loader.loadFromDirectory(
+                directoryPath = dir.toString(),
+                enabledPromptIds = setOf("API_Keys_Exposure_Detection", "Non_Curated_Prompt"),
+            )
 
         assertEquals(1, loaded.prompts.size)
         assertEquals("API_Keys_Exposure_Detection", loaded.prompts.first().id)
@@ -55,14 +55,15 @@ class BountyPromptLoaderTest {
               "systemPrompt": "",
               "userPrompt": ""
             }
-            """.trimIndent()
+            """.trimIndent(),
         )
 
         val loader = BountyPromptLoader()
-        val loaded = loader.loadFromDirectory(
-            directoryPath = dir.toString(),
-            enabledPromptIds = setOf("Extract_Endpoints")
-        )
+        val loaded =
+            loader.loadFromDirectory(
+                directoryPath = dir.toString(),
+                enabledPromptIds = setOf("Extract_Endpoints"),
+            )
 
         assertTrue(loaded.prompts.isEmpty())
         assertTrue(loaded.errors.isNotEmpty())

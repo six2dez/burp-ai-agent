@@ -10,5 +10,9 @@ data class PromptBundle(
     val contextJson: String?,
     val contextSha256: String?,
     val privacyMode: String,
-    val determinismMode: Boolean
+    val determinismMode: Boolean,
+    val promptSource: String? = null,
+    val promptId: String? = null,
+    val promptTitle: String? = null,
+    val contextKind: String? = null,
 )

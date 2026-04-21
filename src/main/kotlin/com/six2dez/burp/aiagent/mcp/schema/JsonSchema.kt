@@ -7,8 +7,8 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlin.reflect.KClass
 import kotlin.reflect.full.memberProperties
 
-fun getJsonSchemaForProperty(kType: kotlin.reflect.KType): JsonElement {
-    return when (kType.classifier) {
+fun getJsonSchemaForProperty(kType: kotlin.reflect.KType): JsonElement =
+    when (kType.classifier) {
         String::class ->
             JsonObject(mapOf("type" to JsonPrimitive("string")))
 
@@ -23,26 +23,27 @@ fun getJsonSchemaForProperty(kType: kotlin.reflect.KType): JsonElement {
 
         List::class, Array::class -> {
             val argType = kType.arguments.firstOrNull()?.type
-            val itemsSchema = when {
-                argType != null -> getJsonSchemaForProperty(argType)
-                else -> JsonObject(mapOf("type" to JsonPrimitive("object")))
-            }
+            val itemsSchema =
+                when {
+                    argType != null -> getJsonSchemaForProperty(argType)
+                    else -> JsonObject(mapOf("type" to JsonPrimitive("object")))
+                }
             JsonObject(mapOf("type" to JsonPrimitive("array"), "items" to itemsSchema))
         }
 
         Map::class -> {
             val valueType = kType.arguments.getOrNull(1)?.type
-            val valueSchema = when {
-                valueType != null -> getJsonSchemaForProperty(valueType)
-                else -> JsonObject(mapOf("type" to JsonPrimitive("object")))
-            }
+            val valueSchema =
+                when {
+                    valueType != null -> getJsonSchemaForProperty(valueType)
+                    else -> JsonObject(mapOf("type" to JsonPrimitive("object")))
+                }
             JsonObject(mapOf("type" to JsonPrimitive("object"), "additionalProperties" to valueSchema))
         }
 
         else ->
             JsonObject(mapOf("type" to JsonPrimitive("object")))
     }
-}
 
 fun KClass<*>.asInputSchema(): Tool.Input {
     val properties = mutableMapOf<String, JsonElement>()
@@ -57,6 +58,6 @@ fun KClass<*>.asInputSchema(): Tool.Input {
 
     return Tool.Input(
         properties = JsonObject(properties),
-        required = required
+        required = required,
     )
 }

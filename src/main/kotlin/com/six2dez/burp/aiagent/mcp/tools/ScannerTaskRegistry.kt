@@ -9,21 +9,25 @@ import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
 object ScannerTaskRegistry {
-    private data class TimedScanTask(val task: ScanTask, val createdAtMs: Long)
+    private data class TimedScanTask(
+        val task: ScanTask,
+        val createdAtMs: Long,
+    )
 
     private val idToTask: MutableMap<String, TimedScanTask> = ConcurrentHashMap()
     private val ttlMs = AtomicLong(TimeUnit.MINUTES.toMillis(DEFAULT_TTL_MINUTES.toLong()))
     private val loggerRef = AtomicReference<(String) -> Unit>({})
-    private val cleaner = Executors.newSingleThreadScheduledExecutor { runnable ->
-        Thread(runnable, "McpScannerTaskRegistryCleaner").apply { isDaemon = true }
-    }
+    private val cleaner =
+        Executors.newSingleThreadScheduledExecutor { runnable ->
+            Thread(runnable, "McpScannerTaskRegistryCleaner").apply { isDaemon = true }
+        }
 
     init {
         cleaner.scheduleWithFixedDelay(
             { cleanupExpired() },
             CLEANUP_INTERVAL_MINUTES,
             CLEANUP_INTERVAL_MINUTES,
-            TimeUnit.MINUTES
+            TimeUnit.MINUTES,
         )
     }
 
@@ -80,9 +84,10 @@ object ScannerTaskRegistry {
         }
     }
 
-    private fun isExpired(entry: TimedScanTask, nowMs: Long): Boolean {
-        return nowMs - entry.createdAtMs >= ttlMs.get()
-    }
+    private fun isExpired(
+        entry: TimedScanTask,
+        nowMs: Long,
+    ): Boolean = nowMs - entry.createdAtMs >= ttlMs.get()
 
     private fun log(message: String) {
         try {

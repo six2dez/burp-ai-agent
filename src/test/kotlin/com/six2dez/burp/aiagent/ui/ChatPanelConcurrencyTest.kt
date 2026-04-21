@@ -14,7 +14,6 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
 class ChatPanelConcurrencyTest {
-
     @Test
     fun clearIfMatches_onlyClearsWhenConnectionMatches() {
         val tracker = InFlightConnectionTracker()
@@ -55,7 +54,9 @@ class ChatPanelConcurrencyTest {
         assertNull(tracker.current())
     }
 
-    private class FakeConnection(private val id: String) : AgentConnection {
+    private class FakeConnection(
+        private val id: String,
+    ) : AgentConnection {
         override fun isAlive(): Boolean = true
 
         override fun send(
@@ -65,7 +66,7 @@ class ChatPanelConcurrencyTest {
             onComplete: (Throwable?) -> Unit,
             systemPrompt: String?,
             jsonMode: Boolean,
-            maxOutputTokens: Int?
+            maxOutputTokens: Int?,
         ) = Unit
 
         override fun stop() = Unit

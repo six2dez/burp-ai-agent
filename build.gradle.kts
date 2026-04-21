@@ -1,14 +1,17 @@
-import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import org.gradle.api.tasks.testing.Test
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
     kotlin("jvm") version "2.1.21"
     kotlin("plugin.serialization") version "2.1.21"
     id("com.github.johnrengelman.shadow") version "8.1.1"
+    id("org.jlleitschuh.gradle.ktlint") version "12.1.1"
+    id("org.cyclonedx.bom") version "1.10.0"
+    jacoco
 }
 
 group = "com.six2dez.burp"
-version = "0.5.0"
+version = "0.6.0"
 
 repositories {
     mavenCentral()
@@ -82,9 +85,10 @@ tasks.build {
 
 tasks.test {
     useJUnitPlatform()
-    val excludeHeavyTests = (project.findProperty("excludeHeavyTests") as? String)
-        ?.trim()
-        ?.equals("true", ignoreCase = true) == true
+    val excludeHeavyTests =
+        (project.findProperty("excludeHeavyTests") as? String)
+            ?.trim()
+            ?.equals("true", ignoreCase = true) == true
     if (excludeHeavyTests) {
         filter {
             excludeTestsMatching("*IntegrationTest")
@@ -105,4 +109,46 @@ tasks.register<Test>("nightlyRegressionTest") {
         includeTestsMatching("*BackpressureTest")
         includeTestsMatching("*RestartPolicyTest")
     }
+}
+
+ktlint {
+    version.set("1.5.0")
+    android.set(false)
+    // Start lenient: `ktlintFormat` auto-fixes most violations, but the initial run will still
+    // surface things that need manual review. Flip to `false` once the baseline is clean.
+    ignoreFailures.set(
+        (project.findProperty("ktlintStrict") as? String)?.equals("true", ignoreCase = true) != true,
+    )
+    reporters {
+        reporter(org.jlleitschuh.gradle.ktlint.reporter.ReporterType.PLAIN)
+        reporter(org.jlleitschuh.gradle.ktlint.reporter.ReporterType.CHECKSTYLE)
+    }
+    filter {
+        exclude("**/build/**")
+        exclude("**/generated/**")
+    }
+}
+
+tasks.withType<Test> {
+    finalizedBy(tasks.named("jacocoTestReport"))
+}
+
+tasks.named<JacocoReport>("jacocoTestReport") {
+    dependsOn(tasks.named("test"))
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
+    }
+}
+
+tasks.named<org.cyclonedx.gradle.CycloneDxTask>("cyclonedxBom") {
+    includeConfigs.set(listOf("runtimeClasspath"))
+    outputFormat.set("json")
+    outputName.set("bom")
+    destination.set(
+        layout.buildDirectory
+            .dir("reports/sbom")
+            .get()
+            .asFile,
+    )
 }

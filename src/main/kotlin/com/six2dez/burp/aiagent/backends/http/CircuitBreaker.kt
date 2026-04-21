@@ -4,7 +4,7 @@ class CircuitBreaker(
     private val failureThreshold: Int = 5,
     private val resetTimeoutMs: Long = 30_000,
     private val halfOpenMaxAttempts: Int = 1,
-    private val nowProvider: () -> Long = { System.currentTimeMillis() }
+    private val nowProvider: () -> Long = { System.currentTimeMillis() },
 ) {
     init {
         require(failureThreshold > 0) { "failureThreshold must be > 0" }
@@ -15,13 +15,13 @@ class CircuitBreaker(
     enum class State {
         CLOSED,
         OPEN,
-        HALF_OPEN
+        HALF_OPEN,
     }
 
     data class Permission(
         val allowed: Boolean,
         val state: State,
-        val retryAfterMs: Long
+        val retryAfterMs: Long,
     )
 
     private val lock = Any()
@@ -42,7 +42,7 @@ class CircuitBreaker(
                     return Permission(
                         allowed = false,
                         state = State.OPEN,
-                        retryAfterMs = (resetTimeoutMs - elapsed).coerceAtLeast(1L)
+                        retryAfterMs = (resetTimeoutMs - elapsed).coerceAtLeast(1L),
                     )
                 }
             }
@@ -52,21 +52,21 @@ class CircuitBreaker(
                     return Permission(
                         allowed = false,
                         state = State.HALF_OPEN,
-                        retryAfterMs = resetTimeoutMs
+                        retryAfterMs = resetTimeoutMs,
                     )
                 }
                 halfOpenAttempts++
                 return Permission(
                     allowed = true,
                     state = State.HALF_OPEN,
-                    retryAfterMs = 0
+                    retryAfterMs = 0,
                 )
             }
 
             return Permission(
                 allowed = true,
                 state = State.CLOSED,
-                retryAfterMs = 0
+                retryAfterMs = 0,
             )
         }
     }

@@ -14,7 +14,8 @@ Burp AI Agent is an extension for Burp Suite that integrates AI into your securi
 - **62 Vulnerability Classes** — Passive and Active AI scanners across injection, auth, crypto, and more.
 - **Burp Scan Skill** — Use your preferred AI coding assistant (Claude Code, Gemini CLI, Codex, etc.) as a scanner via MCP.
 - **3 Privacy Modes** — STRICT / BALANCED / OFF. Redact sensitive data before it leaves Burp.
-- **Audit Logging** — JSONL with SHA-256 integrity hashing for compliance.
+- **Custom Prompt Library** — Save free-form prompts per context (HTTP request or scanner issue); launch them from the right-click menu or type ad-hoc ones via `Custom…`.
+- **Audit Logging** — JSONL with SHA-256 integrity hashing for compliance; every launch stamped with `promptSource` / `contextKind` for reproducibility.
 
 ## Quick Start
 
@@ -26,7 +27,7 @@ Download the latest JAR from [Releases](https://github.com/six2dez/burp-ai-agent
 git clone https://github.com/six2dez/burp-ai-agent.git
 cd burp-ai-agent
 JAVA_HOME=/path/to/jdk-21 ./gradlew clean shadowJar
-# Output: build/libs/Burp-AI-Agent-<version>.jar
+# Output: build/libs/Custom-AI-Agent-<version>.jar
 ```
 
 ### 2. Load into Burp

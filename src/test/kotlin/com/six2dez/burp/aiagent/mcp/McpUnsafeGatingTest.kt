@@ -12,15 +12,15 @@ import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
 
 class McpUnsafeGatingTest {
-
     @Test
     fun unsafeTool_isBlockedWithoutGlobalOrPerToolApproval() {
-        val context = contextFor(
-            toolName = "unsafe_tool",
-            unsafeTools = setOf("unsafe_tool"),
-            unsafeEnabled = false,
-            enabledUnsafeTools = emptySet()
-        )
+        val context =
+            contextFor(
+                toolName = "unsafe_tool",
+                unsafeTools = setOf("unsafe_tool"),
+                unsafeEnabled = false,
+                enabledUnsafeTools = emptySet(),
+            )
 
         val result = runTool(context, "unsafe_tool") { "ok" }
         val text = result.content.joinToString("\n") { it.toString() }
@@ -31,12 +31,13 @@ class McpUnsafeGatingTest {
 
     @Test
     fun unsafeTool_isAllowedWithPerToolApproval() {
-        val context = contextFor(
-            toolName = "unsafe_tool",
-            unsafeTools = setOf("unsafe_tool"),
-            unsafeEnabled = false,
-            enabledUnsafeTools = setOf("unsafe_tool")
-        )
+        val context =
+            contextFor(
+                toolName = "unsafe_tool",
+                unsafeTools = setOf("unsafe_tool"),
+                unsafeEnabled = false,
+                enabledUnsafeTools = setOf("unsafe_tool"),
+            )
 
         val result = runTool(context, "unsafe_tool") { "ok" }
         val text = result.content.joinToString("\n") { it.toString() }
@@ -47,12 +48,13 @@ class McpUnsafeGatingTest {
 
     @Test
     fun unsafeTool_isAllowedWhenGlobalUnsafeIsEnabled() {
-        val context = contextFor(
-            toolName = "unsafe_tool",
-            unsafeTools = setOf("unsafe_tool"),
-            unsafeEnabled = true,
-            enabledUnsafeTools = emptySet()
-        )
+        val context =
+            contextFor(
+                toolName = "unsafe_tool",
+                unsafeTools = setOf("unsafe_tool"),
+                unsafeEnabled = true,
+                enabledUnsafeTools = emptySet(),
+            )
 
         val result = runTool(context, "unsafe_tool") { "ok" }
         val text = result.content.joinToString("\n") { it.toString() }
@@ -63,12 +65,13 @@ class McpUnsafeGatingTest {
 
     @Test
     fun safeTool_ignoresUnsafeApprovals() {
-        val context = contextFor(
-            toolName = "safe_tool",
-            unsafeTools = setOf("unsafe_tool"),
-            unsafeEnabled = false,
-            enabledUnsafeTools = emptySet()
-        )
+        val context =
+            contextFor(
+                toolName = "safe_tool",
+                unsafeTools = setOf("unsafe_tool"),
+                unsafeEnabled = false,
+                enabledUnsafeTools = emptySet(),
+            )
 
         val result = runTool(context, "safe_tool") { "ok" }
         val text = result.content.joinToString("\n") { it.toString() }
@@ -81,7 +84,7 @@ class McpUnsafeGatingTest {
         toolName: String,
         unsafeTools: Set<String>,
         unsafeEnabled: Boolean,
-        enabledUnsafeTools: Set<String>
+        enabledUnsafeTools: Set<String>,
     ): McpToolContext {
         val api = mock<MontoyaApi>(defaultAnswer = Answers.RETURNS_DEEP_STUBS)
         whenever(api.burpSuite().version().edition()).thenReturn(BurpSuiteEdition.PROFESSIONAL)
@@ -96,7 +99,7 @@ class McpUnsafeGatingTest {
             enabledUnsafeTools = enabledUnsafeTools,
             limiter = McpRequestLimiter(4),
             edition = BurpSuiteEdition.PROFESSIONAL,
-            maxBodyBytes = 1024
+            maxBodyBytes = 1024,
         )
     }
 }

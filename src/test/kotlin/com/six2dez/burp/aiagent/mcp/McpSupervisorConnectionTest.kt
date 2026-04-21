@@ -17,7 +17,6 @@ import javax.net.ssl.SSLSocketFactory
 
 @Suppress("DEPRECATION")
 class McpSupervisorConnectionTest {
-
     private val supervisor = McpSupervisor(mock<MontoyaApi>())
 
     @Test
@@ -47,23 +46,28 @@ class McpSupervisorConnectionTest {
         assertNull(connection.assignedHostnameVerifier)
     }
 
-    private fun invokeOpenConnection(url: URL, tlsEnabled: Boolean): URLConnection {
-        val method: Method = supervisor.javaClass.getDeclaredMethod(
-            "openConnection",
-            URL::class.java,
-            Boolean::class.javaPrimitiveType
-        )
+    private fun invokeOpenConnection(
+        url: URL,
+        tlsEnabled: Boolean,
+    ): URLConnection {
+        val method: Method =
+            supervisor.javaClass.getDeclaredMethod(
+                "openConnection",
+                URL::class.java,
+                Boolean::class.javaPrimitiveType,
+            )
         method.isAccessible = true
         return method.invoke(supervisor, url, tlsEnabled) as URLConnection
     }
 
-    private fun connectionHandler(): URLStreamHandler {
-        return object : URLStreamHandler() {
+    private fun connectionHandler(): URLStreamHandler =
+        object : URLStreamHandler() {
             override fun openConnection(url: URL): URLConnection = FakeHttpsURLConnection(url)
         }
-    }
 
-    private class FakeHttpsURLConnection(url: URL) : HttpsURLConnection(url) {
+    private class FakeHttpsURLConnection(
+        url: URL,
+    ) : HttpsURLConnection(url) {
         var assignedSslSocketFactory: SSLSocketFactory? = null
         var assignedHostnameVerifier: HostnameVerifier? = null
 
@@ -77,17 +81,13 @@ class McpSupervisorConnectionTest {
             assignedSslSocketFactory = sf
         }
 
-        override fun getSSLSocketFactory(): SSLSocketFactory? {
-            return assignedSslSocketFactory
-        }
+        override fun getSSLSocketFactory(): SSLSocketFactory? = assignedSslSocketFactory
 
         override fun setHostnameVerifier(v: HostnameVerifier?) {
             assignedHostnameVerifier = v
         }
 
-        override fun getHostnameVerifier(): HostnameVerifier? {
-            return assignedHostnameVerifier
-        }
+        override fun getHostnameVerifier(): HostnameVerifier? = assignedHostnameVerifier
 
         override fun getCipherSuite(): String = "TLS_FAKE"
 

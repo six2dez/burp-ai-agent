@@ -9,7 +9,6 @@ import org.junit.jupiter.api.Test
 import org.mockito.kotlin.mock
 
 class PassiveAiScannerJsonParsingTest {
-
     private fun scanner(): PassiveAiScanner {
         val api = mock<MontoyaApi>()
         val supervisor = mock<AgentSupervisor>()
@@ -22,11 +21,12 @@ class PassiveAiScannerJsonParsingTest {
     @Test
     fun cleanJsonResponse_extractsArrayFromMarkdownCodeFence() {
         val scanner = scanner()
-        val raw = """
+        val raw =
+            """
             ```json
             [{"title":"A","severity":"High","detail":"x","confidence":90}]
             ```
-        """.trimIndent()
+            """.trimIndent()
 
         val cleaned = scanner.cleanJsonResponse(raw)
 
@@ -37,7 +37,8 @@ class PassiveAiScannerJsonParsingTest {
     @Test
     fun parseIssuesJson_supportsNestedContentAndEscapedQuotes() {
         val scanner = scanner()
-        val cleaned = """
+        val cleaned =
+            """
             [
               {
                 "title":"SQL Injection",
@@ -47,7 +48,7 @@ class PassiveAiScannerJsonParsingTest {
                 "confidence":95
               }
             ]
-        """.trimIndent()
+            """.trimIndent()
 
         val issues = scanner.parseIssuesJson(cleaned)
 
@@ -61,13 +62,14 @@ class PassiveAiScannerJsonParsingTest {
     @Test
     fun cleanJsonResponse_extractsJsonFromMixedCliNoise() {
         val scanner = scanner()
-        val raw = """
+        val raw =
+            """
             [PassiveAiScanner] Analyzing [1/3]: https://example.test/login
             [Burp AI Agent] Resolved absolute: /Users/test/.local/bin/claude
             ```json
             [{"title":"Missing Security Header","severity":"Low","detail":"X-Frame-Options missing","confidence":88}]
             ```
-        """.trimIndent()
+            """.trimIndent()
 
         val cleaned = scanner.cleanJsonResponse(raw)
         val issues = scanner.parseIssuesJson(cleaned)
@@ -80,7 +82,8 @@ class PassiveAiScannerJsonParsingTest {
     @Test
     fun parseIssuesJson_supportsObjectWrapperWithIssuesArray() {
         val scanner = scanner()
-        val cleaned = """
+        val cleaned =
+            """
             {
               "issues": [
                 {
@@ -91,7 +94,7 @@ class PassiveAiScannerJsonParsingTest {
                 }
               ]
             }
-        """.trimIndent()
+            """.trimIndent()
 
         val issues = scanner.parseIssuesJson(cleaned)
 

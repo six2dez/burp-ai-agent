@@ -7,16 +7,16 @@ import org.junit.jupiter.api.Test
 import java.util.concurrent.atomic.AtomicLong
 
 class CircuitBreakerTest {
-
     @Test
     fun opensAfterFailureThresholdAndBlocksRequests() {
         val now = AtomicLong(0)
-        val breaker = CircuitBreaker(
-            failureThreshold = 3,
-            resetTimeoutMs = 1_000,
-            halfOpenMaxAttempts = 1,
-            nowProvider = now::get
-        )
+        val breaker =
+            CircuitBreaker(
+                failureThreshold = 3,
+                resetTimeoutMs = 1_000,
+                halfOpenMaxAttempts = 1,
+                nowProvider = now::get,
+            )
 
         repeat(3) {
             assertTrue(breaker.tryAcquire().allowed)
@@ -32,12 +32,13 @@ class CircuitBreakerTest {
     @Test
     fun transitionsToHalfOpenAfterTimeoutAndClosesOnSuccess() {
         val now = AtomicLong(0)
-        val breaker = CircuitBreaker(
-            failureThreshold = 2,
-            resetTimeoutMs = 250,
-            halfOpenMaxAttempts = 1,
-            nowProvider = now::get
-        )
+        val breaker =
+            CircuitBreaker(
+                failureThreshold = 2,
+                resetTimeoutMs = 250,
+                halfOpenMaxAttempts = 1,
+                nowProvider = now::get,
+            )
 
         repeat(2) {
             assertTrue(breaker.tryAcquire().allowed)
@@ -59,12 +60,13 @@ class CircuitBreakerTest {
     @Test
     fun halfOpenFailureReopensCircuit() {
         val now = AtomicLong(0)
-        val breaker = CircuitBreaker(
-            failureThreshold = 1,
-            resetTimeoutMs = 100,
-            halfOpenMaxAttempts = 1,
-            nowProvider = now::get
-        )
+        val breaker =
+            CircuitBreaker(
+                failureThreshold = 1,
+                resetTimeoutMs = 100,
+                halfOpenMaxAttempts = 1,
+                nowProvider = now::get,
+            )
 
         assertTrue(breaker.tryAcquire().allowed)
         breaker.recordFailure()

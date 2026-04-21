@@ -10,7 +10,6 @@ import java.util.concurrent.atomic.AtomicLong
  * so each component can make smarter decisions.
  */
 object ScanKnowledgeBase {
-
     // Tech stack detected per host (e.g., "nginx", "Django", "PostgreSQL")
     private val techStackByHost = ConcurrentHashMap<String, MutableSet<String>>()
 
@@ -30,31 +29,33 @@ object ScanKnowledgeBase {
         val vulnClass: String,
         val severity: String,
         val confidence: Int,
-        val source: String,         // "passive", "active", "chat", "bounty_prompt"
+        val source: String, // "passive", "active", "chat", "bounty_prompt"
         val evidence: String = "",
-        val timestampMs: Long = System.currentTimeMillis()
+        val timestampMs: Long = System.currentTimeMillis(),
     )
 
     data class AuthInfo(
         val hasSessionCookies: Boolean = false,
         val hasAuthHeader: Boolean = false,
         val hasApiKey: Boolean = false,
-        val authCookieNames: Set<String> = emptySet()
+        val authCookieNames: Set<String> = emptySet(),
     )
 
     // --- Tech Stack ---
 
-    fun recordTechStack(host: String, technologies: Set<String>) {
+    fun recordTechStack(
+        host: String,
+        technologies: Set<String>,
+    ) {
         if (technologies.isEmpty()) return
         val normalized = host.lowercase()
-        techStackByHost.getOrPut(normalized) { ConcurrentHashMap.newKeySet() }
+        techStackByHost
+            .getOrPut(normalized) { ConcurrentHashMap.newKeySet() }
             .addAll(technologies.map { it.lowercase() })
         lastUpdatedMs.set(System.currentTimeMillis())
     }
 
-    fun getTechStack(host: String): Set<String> {
-        return techStackByHost[host.lowercase()]?.toSet() ?: emptySet()
-    }
+    fun getTechStack(host: String): Set<String> = techStackByHost[host.lowercase()]?.toSet() ?: emptySet()
 
     // --- Vulnerability Signals ---
 
@@ -63,9 +64,10 @@ object ScanKnowledgeBase {
         val signals = vulnSignals.getOrPut(key) { mutableListOf() }
         synchronized(signals) {
             // Avoid duplicate signals for same vuln class on same endpoint
-            val exists = signals.any {
-                it.vulnClass == signal.vulnClass && it.source == signal.source
-            }
+            val exists =
+                signals.any {
+                    it.vulnClass == signal.vulnClass && it.source == signal.source
+                }
             if (!exists) {
                 signals.add(signal)
                 if (signals.size > MAX_SIGNALS_PER_ENDPOINT) {
@@ -88,35 +90,37 @@ object ScanKnowledgeBase {
             .flatMap { entry -> synchronized(entry.value) { entry.value.toList() } }
     }
 
-    fun hasHighPrioritySignals(endpoint: String): Boolean {
-        return getVulnSignals(endpoint).any {
+    fun hasHighPrioritySignals(endpoint: String): Boolean =
+        getVulnSignals(endpoint).any {
             it.severity.uppercase() in setOf("CRITICAL", "HIGH") && it.confidence >= 80
         }
-    }
 
     // --- Error Patterns ---
 
-    fun recordErrorPattern(host: String, pattern: String) {
+    fun recordErrorPattern(
+        host: String,
+        pattern: String,
+    ) {
         val normalized = host.lowercase()
-        errorPatterns.getOrPut(normalized) { ConcurrentHashMap.newKeySet() }
+        errorPatterns
+            .getOrPut(normalized) { ConcurrentHashMap.newKeySet() }
             .add(pattern.take(200))
         lastUpdatedMs.set(System.currentTimeMillis())
     }
 
-    fun getErrorPatterns(host: String): Set<String> {
-        return errorPatterns[host.lowercase()]?.toSet() ?: emptySet()
-    }
+    fun getErrorPatterns(host: String): Set<String> = errorPatterns[host.lowercase()]?.toSet() ?: emptySet()
 
     // --- Auth Info ---
 
-    fun recordAuthInfo(host: String, info: AuthInfo) {
+    fun recordAuthInfo(
+        host: String,
+        info: AuthInfo,
+    ) {
         authPatterns[host.lowercase()] = info
         lastUpdatedMs.set(System.currentTimeMillis())
     }
 
-    fun getAuthInfo(host: String): AuthInfo? {
-        return authPatterns[host.lowercase()]
-    }
+    fun getAuthInfo(host: String): AuthInfo? = authPatterns[host.lowercase()]
 
     // --- Context Summary (for chat / AI prompts) ---
 
@@ -163,16 +167,17 @@ object ScanKnowledgeBase {
         lastUpdatedMs.set(0L)
     }
 
-    fun stats(): Map<String, Int> = mapOf(
-        "hosts" to techStackByHost.size,
-        "endpoints_with_signals" to vulnSignals.size,
-        "total_signals" to vulnSignals.values.sumOf { synchronized(it) { it.size } },
-        "hosts_with_errors" to errorPatterns.size,
-        "hosts_with_auth" to authPatterns.size
-    )
+    fun stats(): Map<String, Int> =
+        mapOf(
+            "hosts" to techStackByHost.size,
+            "endpoints_with_signals" to vulnSignals.size,
+            "total_signals" to vulnSignals.values.sumOf { synchronized(it) { it.size } },
+            "hosts_with_errors" to errorPatterns.size,
+            "hosts_with_auth" to authPatterns.size,
+        )
 
-    private fun normalizeEndpointKey(endpoint: String): String {
-        return try {
+    private fun normalizeEndpointKey(endpoint: String): String =
+        try {
             val uri = java.net.URI(endpoint)
             val host = uri.host?.lowercase().orEmpty()
             val path = IssueUtils.normalizePathSegments(uri.path.orEmpty())
@@ -180,7 +185,6 @@ object ScanKnowledgeBase {
         } catch (_: Exception) {
             endpoint.lowercase().take(200)
         }
-    }
 
     private const val MAX_SIGNALS_PER_ENDPOINT = 20
 }

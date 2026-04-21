@@ -4,6 +4,40 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+## [0.6.0] - 2026-04-21
+
+### Changed
+
+- **Privacy-by-default**: Default privacy mode is now `BALANCED` instead of `OFF`. New users, and users who never explicitly chose a mode, get cookie stripping and token redaction before any HTTP data is sent to an AI backend. Users with an existing explicit mode keep their choice.
+- **Redaction coverage expanded**: the token redactor now also strips `X-Auth-Token`, `X-Access-Token`, `X-Session-Token`, `X-CSRF-Token`, `X-Api-Secret`, `X-Client-Secret` and their non-prefixed variants; Basic auth values are replaced with `Basic [REDACTED]`; URL query parameters named `access_token`, `api_key`, `apikey`, `auth`, `token`, `key`, `secret`, `password`, `pwd`, `session`, `sid`, `code` have their value redacted in-place.
+- **Vulnerability class inventory**: removed the duplicate `RACE_CONDITION` entry; race-condition issues now use the single canonical `RACE_CONDITION_TOCTOU`. A new `VulnClassInventoryTest` locks the 62-class count plus severity and remediation coverage, so any future drift in `VulnClass` fails the build.
+- **JAR artifact renamed**: build output is now `Custom-AI-Agent-<version>.jar` (was `Burp-AI-Agent-<version>.jar`). CI, release workflows, and `CONTRIBUTING.md` updated; any external script or download URL that hard-codes the old name must be updated.
+
+### Added
+
+- **NVIDIA NIM backend** (#new): 10th backend (`nvidia-nim`) targeting `integrate.api.nvidia.com` — configurable URL, model id, API key, extra headers, and request timeout. Participates in the standard backend registry, health check, and AI logger flows like other HTTP backends.
+- **MCP proxy history preprocessing**: the MCP tools that surface Burp's proxy history now run through a preprocessor pipeline that optionally filters binary content types, caps per-response body size, limits the total items returned per request, and orders results newest-first. Adds `preprocessProxyHistory`, `preprocessMaxResponseSizeKb`, `preprocessFilterBinaryContent`, `preprocessAllowedContentTypes`, `proxyHistoryMaxItemsPerRequest`, `proxyHistoryNewestFirst`, and `allowUnpreprocessedProxyHistory` settings (surfaced in **Settings → MCP**). The unpreprocessed option is off by default; turning it on is an opt-in that lets MCP clients request raw history when they explicitly need it.
+- **Context preview dialog**: right-click actions that auto-capture context from Burp (requests, issues, site map) now open a modal showing the prompt, privacy mode, and the exact redacted JSON that will be sent to the AI. The user can confirm with `Send` or abort with `Cancel`.
+- **Prompt-injection hardening in scanner prompts**: passive scanner (single + batch) and adaptive payload generator now instruct the model to treat captured HTTP traffic and observed context as untrusted data, not as instructions, even if a response body tries to override the prompt.
+- **Custom prompt library**: new `Custom prompts` submenu in both the HTTP request/response context menu and the scanner issue context menu. Saved prompts are tagged per applicability (`HTTP_SELECTION`, `SCANNER_ISSUE`, or both) with an `Show in context menu` toggle and ordered from Settings → Prompt Templates (Add / Edit / Duplicate / Delete / Move Up / Move Down). A `Custom…` entry at the bottom of the submenu opens a free-form editor for ad-hoc prompts, optionally seeded from a saved one. Library persists as JSON under settings schema v3.
+- **Launch metadata in audit & logging**: every context-driven chat launch now carries `promptSource` (`FIXED` / `CUSTOM_SAVED` / `CUSTOM_AD_HOC`), `contextKind` (`HTTP_SELECTION` / `SCANNER_ISSUE`), and — for saved custom prompts — `promptId` and `promptTitle`. These flow into `AuditLogger` prompt bundles (`~/.burp-ai-agent/bundles/`) and the `prompt` records in `audit.jsonl`, plus the `AiRequestLogger` metadata map, making runs reproducible and filterable (e.g. `jq 'select(.type=="prompt") | .payload.promptSource'`). `PromptBundle` schema gained four optional fields; existing bundles on disk remain readable.
+- **Build & CI hygiene**:
+  - `ktlint` plugin (`12.1.1`) with `ktlintFormat` (auto-fix) and `ktlintCheck` (verification) Gradle tasks; ktlint gate in CI.
+  - `jacoco` plugin with HTML + XML coverage reports generated on every `./gradlew test` and published as a CI artifact.
+  - CycloneDX SBOM (`cyclonedxBom`) generated on release, published as `bom.json`.
+  - Multi-OS test matrix on PRs: `ubuntu-latest`, `macos-latest`, `windows-latest` (JAR + coverage still only uploaded from Linux).
+  - Release pipeline now uploads the release JAR, a matching SHA-256 checksum, and the SBOM, and uses release notes extracted from the matching `CHANGELOG.md` section of the tagged version.
+- **Community and project hygiene files**: `CODE_OF_CONDUCT.md`, `.github/dependabot.yml` (gradle + github-actions, weekly), `.github/pull_request_template.md`, and YAML-form issue templates (`bug_report.yml`, `feature_request.yml`, `config.yml`) with links to Security Advisories, Discussions, and docs.
+- **Operational docs**: `docs/mcp-hardening.md` gained a *Credential Storage* section documenting how the TLS keystore password and MCP bearer token are persisted and rotated.
+
+### Fixed
+
+- **Stale settings cache across UI instances**: `SettingsPanel` and `MainTab` own separate `AgentSettingsRepository` instances, each with its own in-memory cache. Before this fix, saving any setting (prompts, backends, privacy mode, scanner config) from the Settings tab could leave the right-click menu reading a stale snapshot until Burp restart. `AgentSettingsRepository.invalidate()` is now called on every save-through-Settings event so the next menu build re-reads from preferences.
+- **Runtime defaults restored**: token budget and CLI idle-timeout defaults were missing from `Defaults.kt` after an earlier refactor, causing some backends to launch with zero-valued limits. Defaults are now explicit again.
+- **MCP preprocess change detection**: fixed a case where changing proxy-history preprocessing settings did not invalidate the tool schema, so MCP clients kept seeing the old schema until the MCP server restarted. Also gated the proxy-history tool schema on the active preprocessor settings so clients can distinguish between `preprocessed` and `raw` shapes.
+
 ## [0.5.0] - 2026-04-02
 
 ### Added

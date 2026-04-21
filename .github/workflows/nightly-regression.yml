@@ -33,4 +33,4 @@ jobs:
           path: |
             build/reports/tests/**
             build/test-results/**
-            build/libs/Burp-AI-Agent-*.jar
+            build/libs/Custom-AI-Agent-*.jar

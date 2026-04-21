@@ -6,7 +6,6 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class ResponseAnalyzerTest {
-
     private val analyzer = ResponseAnalyzer()
 
     @Test
@@ -29,38 +28,42 @@ class ResponseAnalyzerTest {
 
     @Test
     fun analyzeTimeBasedRejectsSlowBaseline() {
-        val result = analyzer.analyzeTimeBased(
-            baselineTimeMs = 1_500,
-            payloadTimeMs = 6_500,
-            expectedDelayMs = 5_000
-        )
+        val result =
+            analyzer.analyzeTimeBased(
+                baselineTimeMs = 1_500,
+                payloadTimeMs = 6_500,
+                expectedDelayMs = 5_000,
+            )
 
         assertFalse(result)
     }
 
     @Test
     fun analyzeTimeBasedAcceptsDelayWithinStrictWindow() {
-        val result = analyzer.analyzeTimeBased(
-            baselineTimeMs = 200,
-            payloadTimeMs = 5_200,
-            expectedDelayMs = 5_000
-        )
+        val result =
+            analyzer.analyzeTimeBased(
+                baselineTimeMs = 200,
+                payloadTimeMs = 5_200,
+                expectedDelayMs = 5_000,
+            )
 
         assertTrue(result)
     }
 
     @Test
     fun analyzeTimeBasedRejectsDelayOutsideStrictWindow() {
-        val tooLow = analyzer.analyzeTimeBased(
-            baselineTimeMs = 100,
-            payloadTimeMs = 4_200,
-            expectedDelayMs = 5_000
-        )
-        val tooHigh = analyzer.analyzeTimeBased(
-            baselineTimeMs = 100,
-            payloadTimeMs = 8_000,
-            expectedDelayMs = 5_000
-        )
+        val tooLow =
+            analyzer.analyzeTimeBased(
+                baselineTimeMs = 100,
+                payloadTimeMs = 4_200,
+                expectedDelayMs = 5_000,
+            )
+        val tooHigh =
+            analyzer.analyzeTimeBased(
+                baselineTimeMs = 100,
+                payloadTimeMs = 8_000,
+                expectedDelayMs = 5_000,
+            )
 
         assertFalse(tooLow)
         assertFalse(tooHigh)

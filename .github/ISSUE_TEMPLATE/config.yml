@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/six2dez/burp-ai-agent/security/advisories/new
+    about: Report a security issue privately via GitHub Security Advisories. Do NOT open a public issue.
+  - name: Question or discussion
+    url: https://github.com/six2dez/burp-ai-agent/discussions
+    about: Ask a question or discuss ideas in GitHub Discussions.
+  - name: Documentation
+    url: https://burp-ai-agent.six2dez.com
+    about: Check the full documentation before filing an issue.

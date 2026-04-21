@@ -6,8 +6,8 @@ import javax.swing.Box
 import javax.swing.BoxLayout
 import javax.swing.JButton
 import javax.swing.JCheckBox
-import javax.swing.JComponent
 import javax.swing.JComboBox
+import javax.swing.JComponent
 import javax.swing.JLabel
 import javax.swing.JPanel
 import javax.swing.JSpinner
@@ -36,7 +36,7 @@ class ActiveScanConfigPanel(
     private val activeAiViewFindings: JButton,
     private val activeAiViewQueue: JButton,
     private val activeAiClearQueue: JButton,
-    private val activeAiResetStats: JButton
+    private val activeAiResetStats: JButton,
 ) : ConfigPanel {
     override fun build(): JPanel {
         val body = JPanel(BorderLayout())
@@ -156,7 +156,7 @@ class ActiveScanConfigPanel(
         return sectionPanel(
             "AI Active Scanner",
             "Confirm vulnerabilities by sending test payloads (SQLi, XSS, LFI, CMDI, SSRF, etc.)",
-            body
+            body,
         )
     }
 }

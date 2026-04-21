@@ -6,15 +6,16 @@ import com.six2dez.burp.aiagent.config.McpSettings
 import com.six2dez.burp.aiagent.mcp.tools.ResponsePreprocessorSettings
 import com.six2dez.burp.aiagent.redact.PrivacyMode
 
-class McpRuntimeContextFactory(private val api: MontoyaApi) {
-
+class McpRuntimeContextFactory(
+    private val api: MontoyaApi,
+) {
     var aiRequestLogger: AiRequestLogger? = null
 
     fun create(
         settings: McpSettings,
         privacyMode: PrivacyMode,
         determinismMode: Boolean,
-        preprocessSettings: ResponsePreprocessorSettings
+        preprocessSettings: ResponsePreprocessorSettings,
     ): McpToolContext {
         val tools = McpToolCatalog.mergeWithDefaults(settings.toolToggles)
         val unsafeTools = McpToolCatalog.unsafeToolIds()
@@ -40,7 +41,7 @@ class McpRuntimeContextFactory(private val api: MontoyaApi) {
             preprocessMaxResponseSizeKb = preprocessSettings.preprocessMaxResponseSizeKb,
             preprocessFilterBinaryContent = preprocessSettings.preprocessFilterBinaryContent,
             preprocessAllowedContentTypes = preprocessSettings.preprocessAllowedContentTypes,
-            aiRequestLogger = aiRequestLogger
+            aiRequestLogger = aiRequestLogger,
         )
     }
 }

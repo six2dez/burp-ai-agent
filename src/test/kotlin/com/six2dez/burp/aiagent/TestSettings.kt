@@ -8,8 +8,8 @@ import com.six2dez.burp.aiagent.scanner.PayloadRisk
 import com.six2dez.burp.aiagent.scanner.ScanMode
 
 object TestSettings {
-    fun baselineSettings(preferredBackendId: String = "codex-cli"): AgentSettings {
-        return AgentSettings(
+    fun baselineSettings(preferredBackendId: String = "codex-cli"): AgentSettings =
+        AgentSettings(
             codexCmd = "codex",
             geminiCmd = "gemini",
             opencodeCmd = "opencode",
@@ -51,26 +51,27 @@ object TestSettings {
             determinismMode = false,
             autoRestart = true,
             auditEnabled = true,
-            mcpSettings = McpSettings(
-                enabled = false,
-                host = "127.0.0.1",
-                port = 8765,
-                externalEnabled = false,
-                stdioEnabled = false,
-                token = "token",
-                allowedOrigins = emptyList(),
-                tlsEnabled = false,
-                tlsAutoGenerate = true,
-                tlsKeystorePath = "",
-                tlsKeystorePassword = "",
-                scanTaskTtlMinutes = 120,
-                collaboratorClientTtlMinutes = 60,
-                maxConcurrentRequests = 4,
-                maxBodyBytes = 262_144,
-                toolToggles = emptyMap(),
-                enabledUnsafeTools = emptySet(),
-                unsafeEnabled = false
-            ),
+            mcpSettings =
+                McpSettings(
+                    enabled = false,
+                    host = "127.0.0.1",
+                    port = 8765,
+                    externalEnabled = false,
+                    stdioEnabled = false,
+                    token = "token",
+                    allowedOrigins = emptyList(),
+                    tlsEnabled = false,
+                    tlsAutoGenerate = true,
+                    tlsKeystorePath = "",
+                    tlsKeystorePassword = "",
+                    scanTaskTtlMinutes = 120,
+                    collaboratorClientTtlMinutes = 60,
+                    maxConcurrentRequests = 4,
+                    maxBodyBytes = 262_144,
+                    toolToggles = emptyMap(),
+                    enabledUnsafeTools = emptySet(),
+                    unsafeEnabled = false,
+                ),
             passiveAiEnabled = false,
             passiveAiRateSeconds = 5,
             passiveAiScopeOnly = true,
@@ -90,7 +91,6 @@ object TestSettings {
             bountyPromptDir = "",
             bountyPromptAutoCreateIssues = true,
             bountyPromptIssueConfidenceThreshold = 90,
-            bountyPromptEnabledPromptIds = emptySet()
+            bountyPromptEnabledPromptIds = emptySet(),
         )
-    }
 }

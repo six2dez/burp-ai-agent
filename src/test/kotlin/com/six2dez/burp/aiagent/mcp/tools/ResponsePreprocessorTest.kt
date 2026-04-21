@@ -6,7 +6,6 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class ResponsePreprocessorTest {
-
     @Test
     fun preprocessResponse_filtersBinaryContentType() {
         val response =
@@ -44,10 +43,11 @@ class ResponsePreprocessorTest {
                 "\r\n" +
                 body
 
-        val processed = ResponsePreprocessor.preprocessResponse(
-            response,
-            ResponsePreprocessorSettings(preprocessMaxResponseSizeKb = 1)
-        )
+        val processed =
+            ResponsePreprocessor.preprocessResponse(
+                response,
+                ResponsePreprocessorSettings(preprocessMaxResponseSizeKb = 1),
+            )
 
         assertTrue(processed.contains("[SNIP -"))
         val truncatedBody = processed.substringAfter("\r\n\r\n")

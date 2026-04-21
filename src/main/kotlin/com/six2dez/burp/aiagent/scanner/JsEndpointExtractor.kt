@@ -7,37 +7,39 @@ import java.net.URI
  * Discovers hidden API routes that may not appear in proxy traffic.
  */
 object JsEndpointExtractor {
-
-    private val patterns = listOf(
-        // fetch("url") / fetch('url') / fetch(`url`)
-        Regex("""fetch\s*\(\s*["'`]([^"'`\s]+)["'`]"""),
-        // axios.get/post/put/delete/patch("url")
-        Regex("""axios\.\w+\s*\(\s*["'`]([^"'`\s]+)["'`]"""),
-        // $.ajax({ url: "..." })
-        Regex("""\.\s*ajax\s*\(\s*\{[^}]*url\s*:\s*["'`]([^"'`\s]+)["'`]"""),
-        // XMLHttpRequest.open("METHOD", "url")
-        Regex("""\.open\s*\(\s*["'`]\w+["'`]\s*,\s*["'`]([^"'`\s]+)["'`]"""),
-        // "/api/v1/..." or "/api/..."
-        Regex("""["'`](/api/[^"'`\s]{2,})["'`]"""),
-        // "/v1/..." "/v2/..." etc.
-        Regex("""["'`](/v[0-9]+/[^"'`\s]{2,})["'`]"""),
-        // endpoint/path assignment: endpoint: "/...", path = "/..."
-        Regex("""(?:endpoint|api_?path|base_?url|url_?path)\s*[:=]\s*["'`](/[^"'`\s]+)["'`]""", RegexOption.IGNORE_CASE),
-        // Multi-segment path strings: "/users/profile", "/admin/settings"
-        Regex("""["'`](/[a-z_-]+/[a-z_-]+(?:/[a-z_-]+)*)["'`]"""),
-    )
+    private val patterns =
+        listOf(
+            // fetch("url") / fetch('url') / fetch(`url`)
+            Regex("""fetch\s*\(\s*["'`]([^"'`\s]+)["'`]"""),
+            // axios.get/post/put/delete/patch("url")
+            Regex("""axios\.\w+\s*\(\s*["'`]([^"'`\s]+)["'`]"""),
+            // $.ajax({ url: "..." })
+            Regex("""\.\s*ajax\s*\(\s*\{[^}]*url\s*:\s*["'`]([^"'`\s]+)["'`]"""),
+            // XMLHttpRequest.open("METHOD", "url")
+            Regex("""\.open\s*\(\s*["'`]\w+["'`]\s*,\s*["'`]([^"'`\s]+)["'`]"""),
+            // "/api/v1/..." or "/api/..."
+            Regex("""["'`](/api/[^"'`\s]{2,})["'`]"""),
+            // "/v1/..." "/v2/..." etc.
+            Regex("""["'`](/v[0-9]+/[^"'`\s]{2,})["'`]"""),
+            // endpoint/path assignment: endpoint: "/...", path = "/..."
+            Regex("""(?:endpoint|api_?path|base_?url|url_?path)\s*[:=]\s*["'`](/[^"'`\s]+)["'`]""", RegexOption.IGNORE_CASE),
+            // Multi-segment path strings: "/users/profile", "/admin/settings"
+            Regex("""["'`](/[a-z_-]+/[a-z_-]+(?:/[a-z_-]+)*)["'`]"""),
+        )
 
     // Paths to exclude (common non-API JS paths)
-    private val excludePatterns = Regex(
-        """^/(css|js|img|images|static|assets|fonts|media|public|favicon|manifest|sw|service-worker|workbox|webpack|node_modules|\.well-known)/""",
-        RegexOption.IGNORE_CASE
-    )
+    private val excludePatterns =
+        Regex(
+            """^/(css|js|img|images|static|assets|fonts|media|public|favicon|manifest|sw|service-worker|workbox|webpack|node_modules|\.well-known)/""",
+            RegexOption.IGNORE_CASE,
+        )
 
     // File extensions to exclude
-    private val excludeExtensions = Regex(
-        """\.(js|css|map|png|jpg|jpeg|gif|svg|ico|woff2?|ttf|eot|pdf|zip|gz|tar|mp[34]|avi|mov|webm|webp|avif)$""",
-        RegexOption.IGNORE_CASE
-    )
+    private val excludeExtensions =
+        Regex(
+            """\.(js|css|map|png|jpg|jpeg|gif|svg|ico|woff2?|ttf|eot|pdf|zip|gz|tar|mp[34]|avi|mov|webm|webp|avif)$""",
+            RegexOption.IGNORE_CASE,
+        )
 
     // Min/max path length filters
     private const val MIN_PATH_LENGTH = 4
@@ -70,17 +72,26 @@ object JsEndpointExtractor {
     /**
      * Resolve relative paths to absolute URLs using the base URL of the JS file.
      */
-    fun resolveEndpoints(endpoints: Set<String>, baseUrl: String): Set<String> {
+    fun resolveEndpoints(
+        endpoints: Set<String>,
+        baseUrl: String,
+    ): Set<String> {
         val resolved = mutableSetOf<String>()
-        val base = try { URI(baseUrl) } catch (_: Exception) { return endpoints }
+        val base =
+            try {
+                URI(baseUrl)
+            } catch (_: Exception) {
+                return endpoints
+            }
         val origin = "${base.scheme}://${base.host}${if (base.port > 0 && base.port != 443 && base.port != 80) ":${base.port}" else ""}"
 
         for (endpoint in endpoints) {
-            val resolved_url = when {
-                endpoint.startsWith("http://") || endpoint.startsWith("https://") -> endpoint
-                endpoint.startsWith("/") -> "$origin$endpoint"
-                else -> "$origin/$endpoint"
-            }
+            val resolved_url =
+                when {
+                    endpoint.startsWith("http://") || endpoint.startsWith("https://") -> endpoint
+                    endpoint.startsWith("/") -> "$origin$endpoint"
+                    else -> "$origin/$endpoint"
+                }
             resolved.add(resolved_url)
         }
         return resolved

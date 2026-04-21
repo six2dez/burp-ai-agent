@@ -8,7 +8,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class ConversationHistoryTest {
-
     @Test
     fun trimsToConfiguredMaximum() {
         val history = ConversationHistory(maxMessages = 3)

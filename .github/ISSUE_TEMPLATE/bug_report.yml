@@ -1,0 +1,113 @@
+name: Bug Report
+description: Report a defect or regression in the extension.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a report. Please include as much detail as possible so we can reproduce the issue.
+
+  - type: input
+    id: plugin-version
+    attributes:
+      label: Plugin version
+      description: Version of Burp AI Agent (see Extensions > Installed > Details, or the JAR filename).
+      placeholder: "0.5.0"
+    validations:
+      required: true
+
+  - type: input
+    id: burp-version
+    attributes:
+      label: Burp Suite version and edition
+      description: "e.g. `2026.2.1 Professional` or `2026.2.1 Community`"
+      placeholder: "2026.2.1 Professional"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Linux
+        - macOS (Intel)
+        - macOS (Apple Silicon)
+        - Windows
+    validations:
+      required: true
+
+  - type: input
+    id: jdk
+    attributes:
+      label: JDK version
+      description: Output of `java --version` (only needed if you built from source).
+      placeholder: "Temurin 21.0.5+11"
+
+  - type: dropdown
+    id: backend
+    attributes:
+      label: AI backend in use
+      options:
+        - Ollama
+        - LM Studio
+        - NVIDIA NIM
+        - Generic OpenAI-compatible
+        - Claude CLI
+        - Gemini CLI
+        - Codex CLI
+        - OpenCode CLI
+        - Copilot CLI
+        - Burp native AI
+        - Not relevant to this bug
+    validations:
+      required: true
+
+  - type: dropdown
+    id: privacy-mode
+    attributes:
+      label: Privacy mode
+      options:
+        - STRICT
+        - BALANCED
+        - OFF
+        - Not relevant
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Load the JAR into Burp Suite.
+        2. Open the AI Agent tab and ...
+        3. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Extension output and error logs
+      description: From Burp > Extensions > Installed > Output and Errors tabs. Redact any API keys before pasting.
+      render: text
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Screenshots, related issues, workarounds tried.

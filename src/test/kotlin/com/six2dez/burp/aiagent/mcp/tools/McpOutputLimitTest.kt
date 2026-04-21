@@ -12,7 +12,6 @@ import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
 
 class McpOutputLimitTest {
-
     @Test
     fun limitedStringBuilder_stopsGrowthAtByteLimit() {
         val builder = LimitedStringBuilder(32)
@@ -29,11 +28,12 @@ class McpOutputLimitTest {
     @Test
     fun contextLimitedJoin_capsLargeSequences() {
         val context = testContext(maxBodyBytes = 96)
-        val entries = sequence {
-            repeat(1000) { idx ->
-                yield("entry=$idx payload=${"A".repeat(32)}")
+        val entries =
+            sequence {
+                repeat(1000) { idx ->
+                    yield("entry=$idx payload=${"A".repeat(32)}")
+                }
             }
-        }
 
         val output = context.limitedJoin(entries)
 
@@ -66,7 +66,7 @@ class McpOutputLimitTest {
             enabledUnsafeTools = emptySet(),
             limiter = McpRequestLimiter(4),
             edition = BurpSuiteEdition.PROFESSIONAL,
-            maxBodyBytes = maxBodyBytes
+            maxBodyBytes = maxBodyBytes,
         )
     }
 }

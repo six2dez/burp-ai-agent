@@ -9,7 +9,7 @@ import kotlin.concurrent.write
 
 data class CachedEntry(
     val createdAtMs: Long,
-    val issues: List<CachedIssue>
+    val issues: List<CachedIssue>,
 )
 
 data class CachedIssue(
@@ -18,13 +18,13 @@ data class CachedIssue(
     val severity: String? = null,
     val detail: String? = null,
     val confidence: Int? = null,
-    val requestIndex: Int? = null
+    val requestIndex: Int? = null,
 )
 
 class PersistentPromptCache(
     private val cacheDir: File = File(System.getProperty("user.home"), ".burp-ai-agent/cache"),
     val maxDiskBytes: Long = DEFAULT_MAX_DISK_BYTES,
-    val ttlMs: Long = DEFAULT_TTL_MS
+    val ttlMs: Long = DEFAULT_TTL_MS,
 ) {
     private val mapper = ObjectMapper().registerKotlinModule()
     private val lock = ReentrantReadWriteLock()
@@ -51,7 +51,10 @@ class PersistentPromptCache(
         }
     }
 
-    fun put(promptHash: String, entry: CachedEntry) {
+    fun put(
+        promptHash: String,
+        entry: CachedEntry,
+    ) {
         val file = fileFor(promptHash)
         lock.write {
             try {
@@ -69,18 +72,17 @@ class PersistentPromptCache(
         }
     }
 
-    fun diskSizeBytes(): Long {
-        return lock.read {
-            cacheDir.listFiles { f -> f.extension == "json" }
+    fun diskSizeBytes(): Long =
+        lock.read {
+            cacheDir
+                .listFiles { f -> f.extension == "json" }
                 ?.sumOf { it.length() } ?: 0L
         }
-    }
 
-    fun entryCount(): Int {
-        return lock.read {
+    fun entryCount(): Int =
+        lock.read {
             cacheDir.listFiles { f -> f.extension == "json" }?.size ?: 0
         }
-    }
 
     private fun fileFor(promptHash: String): File {
         val safeHash = promptHash.replace(SAFE_HASH_REGEX, "").take(64)
@@ -104,7 +106,7 @@ class PersistentPromptCache(
 
     companion object {
         const val DEFAULT_MAX_DISK_BYTES = 50L * 1024 * 1024 // 50 MB
-        const val DEFAULT_TTL_MS = 24L * 60 * 60 * 1000      // 24 hours
+        const val DEFAULT_TTL_MS = 24L * 60 * 60 * 1000 // 24 hours
         private val SAFE_HASH_REGEX = Regex("[^a-zA-Z0-9]")
     }
 }

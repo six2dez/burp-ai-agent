@@ -3,14 +3,15 @@ package com.six2dez.burp.aiagent.scanner
 import burp.api.montoya.scanner.audit.issues.AuditIssueSeverity
 
 object ScannerIssueSupport {
-    fun mapSeverity(vulnClass: VulnClass): AuditIssueSeverity {
-        return when (vulnClass) {
+    fun mapSeverity(vulnClass: VulnClass): AuditIssueSeverity =
+        when (vulnClass) {
             VulnClass.SQLI, VulnClass.CMDI, VulnClass.SSTI, VulnClass.XXE,
             VulnClass.DESERIALIZATION, VulnClass.REQUEST_SMUGGLING, VulnClass.RFI, VulnClass.LDAP_INJECTION,
             VulnClass.XPATH_INJECTION, VulnClass.NOSQL_INJECTION,
             VulnClass.ACCOUNT_TAKEOVER, VulnClass.MFA_BYPASS, VulnClass.OAUTH_MISCONFIGURATION,
             VulnClass.GIT_EXPOSURE, VulnClass.SUBDOMAIN_TAKEOVER, VulnClass.HOST_HEADER_INJECTION,
-            VulnClass.CACHE_POISONING -> AuditIssueSeverity.HIGH
+            VulnClass.CACHE_POISONING,
+            -> AuditIssueSeverity.HIGH
 
             VulnClass.ACCESS_CONTROL_BYPASS,
             VulnClass.XSS_REFLECTED, VulnClass.XSS_STORED, VulnClass.XSS_DOM,
@@ -21,20 +22,21 @@ object ScannerIssueSupport {
             VulnClass.SOURCEMAP_DISCLOSURE, VulnClass.BACKUP_DISCLOSURE,
             VulnClass.DEBUG_EXPOSURE, VulnClass.S3_MISCONFIGURATION, VulnClass.CACHE_DECEPTION,
             VulnClass.PRICE_MANIPULATION, VulnClass.RACE_CONDITION_TOCTOU, VulnClass.EMAIL_HEADER_INJECTION,
-            VulnClass.API_VERSION_BYPASS, VulnClass.UNRESTRICTED_FILE_UPLOAD -> AuditIssueSeverity.MEDIUM
+            VulnClass.API_VERSION_BYPASS, VulnClass.UNRESTRICTED_FILE_UPLOAD,
+            -> AuditIssueSeverity.MEDIUM
 
             VulnClass.OPEN_REDIRECT, VulnClass.HEADER_INJECTION, VulnClass.CRLF_INJECTION,
-            VulnClass.JWT_WEAKNESS, VulnClass.RACE_CONDITION, VulnClass.BUSINESS_LOGIC,
+            VulnClass.JWT_WEAKNESS, VulnClass.BUSINESS_LOGIC,
             VulnClass.CORS_MISCONFIGURATION, VulnClass.DIRECTORY_LISTING, VulnClass.DEBUG_ENDPOINT,
             VulnClass.VERSION_DISCLOSURE, VulnClass.MISSING_SECURITY_HEADERS, VulnClass.VERBOSE_ERROR,
             VulnClass.INSECURE_COOKIE, VulnClass.SENSITIVE_DATA_URL, VulnClass.WEAK_CRYPTO,
             VulnClass.LOG_INJECTION, VulnClass.CSRF, VulnClass.RATE_LIMIT_BYPASS,
-            VulnClass.WEAK_SESSION_TOKEN -> AuditIssueSeverity.LOW
+            VulnClass.WEAK_SESSION_TOKEN,
+            -> AuditIssueSeverity.LOW
         }
-    }
 
-    fun remediation(vulnClass: VulnClass): String {
-        return when (vulnClass) {
+    fun remediation(vulnClass: VulnClass): String =
+        when (vulnClass) {
             VulnClass.SQLI -> "Use parameterized queries or prepared statements. Never concatenate user input into SQL queries."
             VulnClass.XSS_REFLECTED, VulnClass.XSS_STORED, VulnClass.XSS_DOM -> "Encode all user input before rendering in HTML. Use Content-Security-Policy headers."
             VulnClass.LFI, VulnClass.PATH_TRAVERSAL -> "Validate and sanitize file paths. Use allowlists for permitted files. Avoid user input in file operations."
@@ -56,7 +58,6 @@ object ScannerIssueSupport {
             VulnClass.LDAP_INJECTION -> "Use parameterized LDAP queries. Escape special LDAP characters in user input."
             VulnClass.XPATH_INJECTION -> "Use parameterized XPath queries. Validate and sanitize user input."
             VulnClass.AUTH_BYPASS -> "Implement proper authentication checks on all protected resources."
-            VulnClass.RACE_CONDITION -> "Use proper locking mechanisms. Implement idempotency tokens for critical operations."
             VulnClass.BUSINESS_LOGIC -> "Review business logic for edge cases. Implement proper validation and state management."
             VulnClass.NOSQL_INJECTION -> "Use parameterized queries. Sanitize user input. Disable server-side JavaScript."
             VulnClass.GRAPHQL_INJECTION -> "Disable introspection in production. Implement query depth/complexity limits."
@@ -92,5 +93,4 @@ object ScannerIssueSupport {
             VulnClass.API_VERSION_BYPASS -> "Deprecate old API versions completely. Don't leave deprecated versions accessible. Use consistent security across all versions."
             VulnClass.ACCESS_CONTROL_BYPASS -> "Don't rely on client IP headers for access control. Implement proper authentication and authorization. Use consistent access control across path variations and HTTP methods."
         }
-    }
 }

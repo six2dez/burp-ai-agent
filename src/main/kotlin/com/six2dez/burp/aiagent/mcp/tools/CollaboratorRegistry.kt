@@ -8,25 +8,32 @@ import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
 object CollaboratorRegistry {
-    private data class TimedCollaboratorClient(val client: CollaboratorClient, val createdAtMs: Long)
+    private data class TimedCollaboratorClient(
+        val client: CollaboratorClient,
+        val createdAtMs: Long,
+    )
 
     private val clients = ConcurrentHashMap<String, TimedCollaboratorClient>()
     private val ttlMs = AtomicLong(TimeUnit.MINUTES.toMillis(DEFAULT_TTL_MINUTES.toLong()))
     private val loggerRef = AtomicReference<(String) -> Unit>({})
-    private val cleaner = Executors.newSingleThreadScheduledExecutor { runnable ->
-        Thread(runnable, "McpCollaboratorRegistryCleaner").apply { isDaemon = true }
-    }
+    private val cleaner =
+        Executors.newSingleThreadScheduledExecutor { runnable ->
+            Thread(runnable, "McpCollaboratorRegistryCleaner").apply { isDaemon = true }
+        }
 
     init {
         cleaner.scheduleWithFixedDelay(
             { cleanupExpired() },
             CLEANUP_INTERVAL_MINUTES,
             CLEANUP_INTERVAL_MINUTES,
-            TimeUnit.MINUTES
+            TimeUnit.MINUTES,
         )
     }
 
-    fun put(key: String, client: CollaboratorClient) {
+    fun put(
+        key: String,
+        client: CollaboratorClient,
+    ) {
         clients[key] = TimedCollaboratorClient(client = client, createdAtMs = System.currentTimeMillis())
     }
 
@@ -77,9 +84,10 @@ object CollaboratorRegistry {
         }
     }
 
-    private fun isExpired(entry: TimedCollaboratorClient, nowMs: Long): Boolean {
-        return nowMs - entry.createdAtMs >= ttlMs.get()
-    }
+    private fun isExpired(
+        entry: TimedCollaboratorClient,
+        nowMs: Long,
+    ): Boolean = nowMs - entry.createdAtMs >= ttlMs.get()
 
     private fun log(message: String) {
         try {

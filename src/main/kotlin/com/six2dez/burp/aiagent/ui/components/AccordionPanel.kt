@@ -5,11 +5,11 @@ import java.awt.BorderLayout
 import java.awt.Cursor
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
+import javax.swing.BoxLayout
 import javax.swing.JComponent
 import javax.swing.JLabel
 import javax.swing.JPanel
 import javax.swing.SwingConstants
-import javax.swing.BoxLayout
 import javax.swing.border.EmptyBorder
 import javax.swing.border.MatteBorder
 
@@ -17,7 +17,7 @@ class AccordionPanel(
     title: String,
     subtitle: String,
     content: JComponent,
-    initiallyExpanded: Boolean = false
+    initiallyExpanded: Boolean = false,
 ) : JPanel(BorderLayout()) {
     private val header = JPanel(BorderLayout())
     private val titleLabel = JLabel(title)
@@ -60,11 +60,12 @@ class AccordionPanel(
 
         updateExpandedState()
 
-        val toggleListener = object : MouseAdapter() {
-            override fun mouseClicked(e: MouseEvent) {
-                setExpanded(!expanded)
+        val toggleListener =
+            object : MouseAdapter() {
+                override fun mouseClicked(e: MouseEvent) {
+                    setExpanded(!expanded)
+                }
             }
-        }
         header.addMouseListener(toggleListener)
         textPanel.addMouseListener(toggleListener)
         toggleLabel.addMouseListener(toggleListener)

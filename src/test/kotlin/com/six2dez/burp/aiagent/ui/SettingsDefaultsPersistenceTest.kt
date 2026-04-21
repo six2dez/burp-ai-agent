@@ -13,7 +13,6 @@ import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
 
 class SettingsDefaultsPersistenceTest {
-
     @Test
     fun load_usesStableDefaults_whenPreferencesAreMissing() {
         val repo = AgentSettingsRepository(apiWith(inMemoryPreferences()))
@@ -31,19 +30,21 @@ class SettingsDefaultsPersistenceTest {
     fun saveAndLoad_roundTripPreservesSafetyRelevantFields() {
         val repo = AgentSettingsRepository(apiWith(inMemoryPreferences()))
         val defaults = repo.defaultSettings()
-        val updated = defaults.copy(
-            privacyMode = PrivacyMode.STRICT,
-            auditEnabled = true,
-            mcpSettings = defaults.mcpSettings.copy(
-                enabled = true,
-                externalEnabled = true,
-                tlsEnabled = true,
-                allowedOrigins = listOf("https://ops.example.com"),
-                unsafeEnabled = true
-            ),
-            passiveAiEnabled = true,
-            activeAiEnabled = true
-        )
+        val updated =
+            defaults.copy(
+                privacyMode = PrivacyMode.STRICT,
+                auditEnabled = true,
+                mcpSettings =
+                    defaults.mcpSettings.copy(
+                        enabled = true,
+                        externalEnabled = true,
+                        tlsEnabled = true,
+                        allowedOrigins = listOf("https://ops.example.com"),
+                        unsafeEnabled = true,
+                    ),
+                passiveAiEnabled = true,
+                activeAiEnabled = true,
+            )
 
         repo.save(updated)
         val loaded = repo.load()

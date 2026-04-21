@@ -13,11 +13,14 @@ data class TokenUsageSnapshot(
     val inputChars: Long,
     val outputChars: Long,
     val inputTokensEstimated: Long,
-    val outputTokensEstimated: Long
+    val outputTokensEstimated: Long,
 )
 
 object TokenTracker {
-    private data class UsageKey(val flow: String, val backendId: String)
+    private data class UsageKey(
+        val flow: String,
+        val backendId: String,
+    )
 
     private class UsageCounter {
         val calls = AtomicLong(0)
@@ -32,17 +35,21 @@ object TokenTracker {
 
     private val counters = ConcurrentHashMap<UsageKey, UsageCounter>()
 
-    fun estimateTokens(chars: Int): Int {
-        return estimateTokens(chars, null)
-    }
+    fun estimateTokens(chars: Int): Int = estimateTokens(chars, null)
 
-    fun estimateTokens(chars: Int, backendId: String?): Int {
+    fun estimateTokens(
+        chars: Int,
+        backendId: String?,
+    ): Int {
         if (chars <= 0) return 0
         val charsPerToken = charsPerTokenForBackend(backendId)
         return max(1, ceil(chars / charsPerToken).toInt())
     }
 
-    private fun estimateTokens(chars: Long, backendId: String?): Long {
+    private fun estimateTokens(
+        chars: Long,
+        backendId: String?,
+    ): Long {
         if (chars <= 0L) return 0L
         val charsPerToken = charsPerTokenForBackend(backendId)
         return max(1L, ceil(chars / charsPerToken).toLong())
@@ -55,12 +62,13 @@ object TokenTracker {
         outputChars: Int,
         cacheHit: Boolean = false,
         inputTokensActual: Int? = null,
-        outputTokensActual: Int? = null
+        outputTokensActual: Int? = null,
     ) {
-        val key = UsageKey(
-            flow = flow.trim().ifBlank { "unknown" },
-            backendId = backendId?.trim().orEmpty().ifBlank { "unknown" }
-        )
+        val key =
+            UsageKey(
+                flow = flow.trim().ifBlank { "unknown" },
+                backendId = backendId?.trim().orEmpty().ifBlank { "unknown" },
+            )
         val counter = counters.computeIfAbsent(key) { UsageCounter() }
         val safeInputChars = inputChars.toLong().coerceAtLeast(0)
         val safeOutputChars = outputChars.toLong().coerceAtLeast(0)
@@ -80,36 +88,35 @@ object TokenTracker {
         }
     }
 
-    fun snapshot(): List<TokenUsageSnapshot> {
-        return counters.entries.map { (key, counter) ->
-            val inChars = counter.inputChars.get()
-            val outChars = counter.outputChars.get()
-            val inCharsWithActual = counter.inputCharsWithActual.get().coerceIn(0L, inChars)
-            val outCharsWithActual = counter.outputCharsWithActual.get().coerceIn(0L, outChars)
-            val inTokensActual = counter.inputTokensActual.get().coerceAtLeast(0L)
-            val outTokensActual = counter.outputTokensActual.get().coerceAtLeast(0L)
-            val inCharsToEstimate = (inChars - inCharsWithActual).coerceAtLeast(0L)
-            val outCharsToEstimate = (outChars - outCharsWithActual).coerceAtLeast(0L)
-            TokenUsageSnapshot(
-                flow = key.flow,
-                backendId = key.backendId,
-                calls = counter.calls.get(),
-                cacheHits = counter.cacheHits.get(),
-                inputChars = inChars,
-                outputChars = outChars,
-                inputTokensEstimated = inTokensActual + estimateTokens(inCharsToEstimate, key.backendId),
-                outputTokensEstimated = outTokensActual + estimateTokens(outCharsToEstimate, key.backendId)
-            )
-        }.sortedWith(compareBy<TokenUsageSnapshot> { it.flow }.thenBy { it.backendId })
-    }
+    fun snapshot(): List<TokenUsageSnapshot> =
+        counters.entries
+            .map { (key, counter) ->
+                val inChars = counter.inputChars.get()
+                val outChars = counter.outputChars.get()
+                val inCharsWithActual = counter.inputCharsWithActual.get().coerceIn(0L, inChars)
+                val outCharsWithActual = counter.outputCharsWithActual.get().coerceIn(0L, outChars)
+                val inTokensActual = counter.inputTokensActual.get().coerceAtLeast(0L)
+                val outTokensActual = counter.outputTokensActual.get().coerceAtLeast(0L)
+                val inCharsToEstimate = (inChars - inCharsWithActual).coerceAtLeast(0L)
+                val outCharsToEstimate = (outChars - outCharsWithActual).coerceAtLeast(0L)
+                TokenUsageSnapshot(
+                    flow = key.flow,
+                    backendId = key.backendId,
+                    calls = counter.calls.get(),
+                    cacheHits = counter.cacheHits.get(),
+                    inputChars = inChars,
+                    outputChars = outChars,
+                    inputTokensEstimated = inTokensActual + estimateTokens(inCharsToEstimate, key.backendId),
+                    outputTokensEstimated = outTokensActual + estimateTokens(outCharsToEstimate, key.backendId),
+                )
+            }.sortedWith(compareBy<TokenUsageSnapshot> { it.flow }.thenBy { it.backendId })
 
-    private fun charsPerTokenForBackend(backendId: String?): Double {
-        return when (backendId?.trim()?.lowercase()) {
+    private fun charsPerTokenForBackend(backendId: String?): Double =
+        when (backendId?.trim()?.lowercase()) {
             "openai-compatible", "nvidia-nim" -> 3.6
             "ollama", "lmstudio" -> 3.8
             "claude-cli" -> 3.5
             "gemini-cli" -> 3.7
             else -> 4.0
         }
-    }
 }

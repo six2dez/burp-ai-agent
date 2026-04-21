@@ -1,13 +1,37 @@
 package com.six2dez.burp.aiagent.config
 
 object Defaults {
-    val DEFAULT_EXCLUDED_EXTENSIONS = setOf(
-        "css", "jpg", "jpeg", "png", "gif", "svg", "ico",
-        "woff", "woff2", "ttf", "eot", "otf",
-        "mp4", "mp3", "avi", "mov", "webm", "webp",
-        "pdf", "zip", "gz", "tar", "rar", "7z",
-        "map", "bmp", "tif", "tiff"
-    )
+    val DEFAULT_EXCLUDED_EXTENSIONS =
+        setOf(
+            "css",
+            "jpg",
+            "jpeg",
+            "png",
+            "gif",
+            "svg",
+            "ico",
+            "woff",
+            "woff2",
+            "ttf",
+            "eot",
+            "otf",
+            "mp4",
+            "mp3",
+            "avi",
+            "mov",
+            "webm",
+            "webp",
+            "pdf",
+            "zip",
+            "gz",
+            "tar",
+            "rar",
+            "7z",
+            "map",
+            "bmp",
+            "tif",
+            "tiff",
+        )
     val DEFAULT_EXCLUDED_EXTENSIONS_CSV = DEFAULT_EXCLUDED_EXTENSIONS.joinToString(",")
 
     const val FINDINGS_BUFFER_SIZE = 50
@@ -33,12 +57,13 @@ object Defaults {
     const val MCP_PROXY_HISTORY_MAX_ITEMS_PER_REQUEST = 20
     const val MCP_PROXY_HISTORY_NEWEST_FIRST = true
     const val MCP_ALLOW_UNPREPROCESSED_PROXY_HISTORY = true
-    val PREPROCESS_ALLOWED_CONTENT_TYPES: Set<String> = setOf(
-        "text/",
-        "application/json",
-        "application/xml",
-        "application/javascript",
-        "application/x-www-form-urlencoded",
-        "multipart/form-data"
-    )
+    val PREPROCESS_ALLOWED_CONTENT_TYPES: Set<String> =
+        setOf(
+            "text/",
+            "application/json",
+            "application/xml",
+            "application/javascript",
+            "application/x-www-form-urlencoded",
+            "multipart/form-data",
+        )
 }

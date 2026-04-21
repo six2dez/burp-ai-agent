@@ -14,7 +14,6 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class BountyPromptTagResolverTest {
-
     @Test
     fun resolve_replacesTagsAndAppliesRedaction() {
         val urlParam = mock<ParsedHttpParameter>()
@@ -32,7 +31,7 @@ class BountyPromptTagResolverTest {
             Content-Type: application/json
             
             {"username":"alice","password":"secret"}
-            """.trimIndent()
+            """.trimIndent(),
         )
         whenever(request.method()).thenReturn("POST")
         whenever(request.url()).thenReturn("https://example.com/api/login?token=abc123&next=/home")
@@ -46,7 +45,7 @@ class BountyPromptTagResolverTest {
             Content-Type: application/json
             
             {"status":"ok"}
-            """.trimIndent()
+            """.trimIndent(),
         )
         whenever(response.statusCode()).thenReturn(200)
 
@@ -54,35 +53,39 @@ class BountyPromptTagResolverTest {
         whenever(rr.request()).thenReturn(request)
         whenever(rr.response()).thenReturn(response)
 
-        val promptText = """
+        val promptText =
+            """
             Check:
             [HTTP_Requests_Headers]
             [HTTP_Response_Headers]
             [HTTP_Requests_Parameters]
             [HTTP_Cookies]
             [HTTP_Status_Code]
-        """.trimIndent()
-        val definition = BountyPromptDefinition(
-            id = "Security_Headers_Analysis",
-            title = "Security Headers Analysis",
-            category = BountyPromptCategory.DETECTION,
-            outputType = BountyPromptOutputType.ISSUE,
-            systemPrompt = "System",
-            userPrompt = promptText,
-            severity = "Information",
-            confidence = BountyPromptConfidence.TENTATIVE,
-            tagsUsed = BountyPromptTag.extractFrom(promptText)
-        )
-
-        val resolved = BountyPromptTagResolver().resolve(
-            definition = definition,
-            requestResponses = listOf(rr),
-            options = ContextOptions(
-                privacyMode = PrivacyMode.STRICT,
-                deterministic = true,
-                hostSalt = "test-salt"
+            """.trimIndent()
+        val definition =
+            BountyPromptDefinition(
+                id = "Security_Headers_Analysis",
+                title = "Security Headers Analysis",
+                category = BountyPromptCategory.DETECTION,
+                outputType = BountyPromptOutputType.ISSUE,
+                systemPrompt = "System",
+                userPrompt = promptText,
+                severity = "Information",
+                confidence = BountyPromptConfidence.TENTATIVE,
+                tagsUsed = BountyPromptTag.extractFrom(promptText),
             )
-        )
+
+        val resolved =
+            BountyPromptTagResolver().resolve(
+                definition = definition,
+                requestResponses = listOf(rr),
+                options =
+                    ContextOptions(
+                        privacyMode = PrivacyMode.STRICT,
+                        deterministic = true,
+                        hostSalt = "test-salt",
+                    ),
+            )
 
         assertFalse(resolved.resolvedUserPrompt.contains("[HTTP_"))
         assertTrue(resolved.resolvedUserPrompt.contains("Host: host-"))

@@ -2,6 +2,8 @@ package com.six2dez.burp.aiagent.config
 
 import burp.api.montoya.MontoyaApi
 import burp.api.montoya.persistence.Preferences
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.KotlinModule
 import com.six2dez.burp.aiagent.mcp.tools.ResponsePreprocessorSettings
 import com.six2dez.burp.aiagent.prompts.bountyprompt.BountyPromptCatalog
 import com.six2dez.burp.aiagent.redact.PrivacyMode
@@ -12,12 +14,11 @@ enum class SeverityLevel {
     LOW,
     MEDIUM,
     HIGH,
-    CRITICAL;
+    CRITICAL,
+    ;
 
     companion object {
-        fun fromString(raw: String?): SeverityLevel {
-            return entries.firstOrNull { it.name.equals(raw, ignoreCase = true) } ?: LOW
-        }
+        fun fromString(raw: String?): SeverityLevel = entries.firstOrNull { it.name.equals(raw, ignoreCase = true) } ?: LOW
     }
 }
 
@@ -107,9 +108,9 @@ data class AgentSettings(
     val activeAiRequestDelayMs: Int = 100,
     val activeAiMaxRiskLevel: PayloadRisk = PayloadRisk.SAFE,
     val activeAiScopeOnly: Boolean = true,
-    val activeAiAutoFromPassive: Boolean = true,  // Auto-queue passive findings
+    val activeAiAutoFromPassive: Boolean = true, // Auto-queue passive findings
     val activeAiScanMode: ScanMode = ScanMode.FULL,
-    val activeAiUseCollaborator: Boolean = false,  // SSRF OAST confirmation
+    val activeAiUseCollaborator: Boolean = false, // SSRF OAST confirmation
     val activeAiAdaptivePayloads: Boolean = false,
     // BountyPrompt integration settings
     val bountyPromptEnabled: Boolean = false,
@@ -119,20 +120,37 @@ data class AgentSettings(
     val bountyPromptEnabledPromptIds: Set<String> = emptySet(),
     // AI Request Logger settings
     val aiRequestLoggerEnabled: Boolean = true,
-    val aiRequestLoggerMaxEntries: Int = 500
+    val aiRequestLoggerMaxEntries: Int = 500,
+    // Custom prompt library (saved user prompts exposed in right-click menus)
+    val customPromptLibrary: List<CustomPromptDefinition> = emptyList(),
 )
 
-fun AgentSettings.toPreprocessorSettings() = ResponsePreprocessorSettings(
-    preprocessProxyHistory = preprocessProxyHistory,
-    preprocessMaxResponseSizeKb = preprocessMaxResponseSizeKb,
-    preprocessFilterBinaryContent = preprocessFilterBinaryContent,
-    preprocessAllowedContentTypes = preprocessAllowedContentTypes
-)
+fun AgentSettings.toPreprocessorSettings() =
+    ResponsePreprocessorSettings(
+        preprocessProxyHistory = preprocessProxyHistory,
+        preprocessMaxResponseSizeKb = preprocessMaxResponseSizeKb,
+        preprocessFilterBinaryContent = preprocessFilterBinaryContent,
+        preprocessAllowedContentTypes = preprocessAllowedContentTypes,
+    )
 
-class AgentSettingsRepository(api: MontoyaApi) {
+class AgentSettingsRepository(
+    private val api: MontoyaApi,
+) {
     private val prefs: Preferences = api.persistence().preferences()
+
     /** Thread-safe cached settings snapshot. Updated atomically on save(). */
-    private val cachedSettings = java.util.concurrent.atomic.AtomicReference<AgentSettings?>(null)
+    private val cachedSettings =
+        java.util.concurrent.atomic
+            .AtomicReference<AgentSettings?>(null)
+
+    /**
+     * Drops the cached snapshot so the next [load] re-reads preferences. Use this when
+     * another repository instance (e.g. the one owned by SettingsPanel) may have
+     * persisted newer values behind our back.
+     */
+    fun invalidate() {
+        cachedSettings.set(null)
+    }
 
     fun load(): AgentSettings {
         // Return cached snapshot if available (thread-safe immutable data class)
@@ -142,27 +160,75 @@ class AgentSettingsRepository(api: MontoyaApi) {
         val mcpSettings = loadMcpSettings()
         val rawGeminiCmd = prefs.getString(KEY_GEMINI_CMD).orEmpty().trim()
         return AgentSettings(
-            codexCmd = prefs.getString(KEY_CODEX_CMD).orEmpty().trim().ifBlank { defaultCodexCmd() },
+            codexCmd =
+                prefs
+                    .getString(KEY_CODEX_CMD)
+                    .orEmpty()
+                    .trim()
+                    .ifBlank { defaultCodexCmd() },
             geminiCmd = normalizeLegacyGeminiCmd(rawGeminiCmd).ifBlank { defaultGeminiCmd() },
-            opencodeCmd = prefs.getString(KEY_OPENCODE_CMD).orEmpty().trim().ifBlank { defaultOpenCodeCmd() },
-            claudeCmd = prefs.getString(KEY_CLAUDE_CMD).orEmpty().trim().ifBlank { defaultClaudeCmd() },
-            agentProfile = prefs.getString(KEY_AGENT_PROFILE).orEmpty().trim().ifBlank { defaultAgentProfile() },
-            ollamaCliCmd = prefs.getString(KEY_OLLAMA_CLI_CMD).orEmpty().trim().ifBlank { defaultOllamaCliCmd() },
-            ollamaModel = prefs.getString(KEY_OLLAMA_MODEL).orEmpty().trim().ifBlank { defaultOllamaModel() },
+            opencodeCmd =
+                prefs
+                    .getString(KEY_OPENCODE_CMD)
+                    .orEmpty()
+                    .trim()
+                    .ifBlank { defaultOpenCodeCmd() },
+            claudeCmd =
+                prefs
+                    .getString(KEY_CLAUDE_CMD)
+                    .orEmpty()
+                    .trim()
+                    .ifBlank { defaultClaudeCmd() },
+            agentProfile =
+                prefs
+                    .getString(KEY_AGENT_PROFILE)
+                    .orEmpty()
+                    .trim()
+                    .ifBlank { defaultAgentProfile() },
+            ollamaCliCmd =
+                prefs
+                    .getString(KEY_OLLAMA_CLI_CMD)
+                    .orEmpty()
+                    .trim()
+                    .ifBlank { defaultOllamaCliCmd() },
+            ollamaModel =
+                prefs
+                    .getString(KEY_OLLAMA_MODEL)
+                    .orEmpty()
+                    .trim()
+                    .ifBlank { defaultOllamaModel() },
             ollamaUrl = (prefs.getString(KEY_OLLAMA_URL) ?: "http://127.0.0.1:11434").trim(),
-            ollamaServeCmd = prefs.getString(KEY_OLLAMA_SERVE_CMD).orEmpty().trim().ifBlank { defaultOllamaServeCmd() },
+            ollamaServeCmd =
+                prefs
+                    .getString(KEY_OLLAMA_SERVE_CMD)
+                    .orEmpty()
+                    .trim()
+                    .ifBlank { defaultOllamaServeCmd() },
             ollamaAutoStart = prefs.getBoolean(KEY_OLLAMA_AUTOSTART) ?: true,
             ollamaApiKey = prefs.getString(KEY_OLLAMA_API_KEY).orEmpty().trim(),
             ollamaHeaders = prefs.getString(KEY_OLLAMA_HEADERS).orEmpty(),
-            ollamaTimeoutSeconds = (prefs.getInteger(KEY_OLLAMA_TIMEOUT) ?: defaultOllamaTimeoutSeconds())
-                .coerceIn(30, 3600),
-            ollamaContextWindow = (prefs.getInteger(KEY_OLLAMA_CONTEXT_WINDOW) ?: defaultOllamaContextWindow())
-                .coerceIn(2048, 256000),
+            ollamaTimeoutSeconds =
+                (prefs.getInteger(KEY_OLLAMA_TIMEOUT) ?: defaultOllamaTimeoutSeconds())
+                    .coerceIn(30, 3600),
+            ollamaContextWindow =
+                (prefs.getInteger(KEY_OLLAMA_CONTEXT_WINDOW) ?: defaultOllamaContextWindow())
+                    .coerceIn(2048, 256000),
             lmStudioUrl = (prefs.getString(KEY_LMSTUDIO_URL) ?: "http://127.0.0.1:1234").trim(),
-            lmStudioModel = prefs.getString(KEY_LMSTUDIO_MODEL).orEmpty().trim().ifBlank { defaultLmStudioModel() },
-            lmStudioTimeoutSeconds = (prefs.getInteger(KEY_LMSTUDIO_TIMEOUT) ?: defaultLmStudioTimeoutSeconds())
-                .coerceIn(30, 3600),
-            lmStudioServerCmd = prefs.getString(KEY_LMSTUDIO_SERVER_CMD).orEmpty().trim().ifBlank { defaultLmStudioServerCmd() },
+            lmStudioModel =
+                prefs
+                    .getString(KEY_LMSTUDIO_MODEL)
+                    .orEmpty()
+                    .trim()
+                    .ifBlank { defaultLmStudioModel() },
+            lmStudioTimeoutSeconds =
+                (prefs.getInteger(KEY_LMSTUDIO_TIMEOUT) ?: defaultLmStudioTimeoutSeconds())
+                    .coerceIn(30, 3600),
+            lmStudioServerCmd =
+                prefs
+                    .getString(KEY_LMSTUDIO_SERVER_CMD)
+                    .orEmpty()
+                    .trim()
+                    .ifBlank { defaultLmStudioServerCmd() },
             lmStudioAutoStart = prefs.getBoolean(KEY_LMSTUDIO_AUTOSTART) ?: true,
             lmStudioApiKey = prefs.getString(KEY_LMSTUDIO_API_KEY).orEmpty().trim(),
             lmStudioHeaders = prefs.getString(KEY_LMSTUDIO_HEADERS).orEmpty(),
@@ -170,17 +236,25 @@ class AgentSettingsRepository(api: MontoyaApi) {
             openAiCompatibleModel = prefs.getString(KEY_OPENAI_COMPAT_MODEL).orEmpty().trim(),
             openAiCompatibleApiKey = prefs.getString(KEY_OPENAI_COMPAT_API_KEY).orEmpty().trim(),
             openAiCompatibleHeaders = prefs.getString(KEY_OPENAI_COMPAT_HEADERS).orEmpty(),
-            openAiCompatibleTimeoutSeconds = (prefs.getInteger(KEY_OPENAI_COMPAT_TIMEOUT) ?: defaultOpenAiCompatTimeoutSeconds())
-                .coerceIn(30, 3600),
-            nvidiaNimUrl = (prefs.getString(KEY_NVIDIA_NIM_URL) ?: defaultNvidiaNimUrl()).trim().ifBlank {
-                defaultNvidiaNimUrl()
-            },
+            openAiCompatibleTimeoutSeconds =
+                (prefs.getInteger(KEY_OPENAI_COMPAT_TIMEOUT) ?: defaultOpenAiCompatTimeoutSeconds())
+                    .coerceIn(30, 3600),
+            nvidiaNimUrl =
+                (prefs.getString(KEY_NVIDIA_NIM_URL) ?: defaultNvidiaNimUrl()).trim().ifBlank {
+                    defaultNvidiaNimUrl()
+                },
             nvidiaNimModel = prefs.getString(KEY_NVIDIA_NIM_MODEL).orEmpty().trim(),
             nvidiaNimApiKey = prefs.getString(KEY_NVIDIA_NIM_API_KEY).orEmpty().trim(),
             nvidiaNimHeaders = prefs.getString(KEY_NVIDIA_NIM_HEADERS).orEmpty(),
-            nvidiaNimTimeoutSeconds = (prefs.getInteger(KEY_NVIDIA_NIM_TIMEOUT) ?: defaultNvidiaNimTimeoutSeconds())
-                .coerceIn(30, 3600),
-            copilotCmd = prefs.getString(KEY_COPILOT_CMD).orEmpty().trim().ifBlank { defaultCopilotCmd() },
+            nvidiaNimTimeoutSeconds =
+                (prefs.getInteger(KEY_NVIDIA_NIM_TIMEOUT) ?: defaultNvidiaNimTimeoutSeconds())
+                    .coerceIn(30, 3600),
+            copilotCmd =
+                prefs
+                    .getString(KEY_COPILOT_CMD)
+                    .orEmpty()
+                    .trim()
+                    .ifBlank { defaultCopilotCmd() },
             requestPromptTemplate = prefs.getString(KEY_PROMPT_FIND_VULNS).orEmpty().ifBlank { defaultRequestPrompt() },
             issuePromptTemplate = prefs.getString(KEY_PROMPT_FULL_REPORT).orEmpty().ifBlank { defaultIssuePrompt() },
             issueAnalyzePrompt = prefs.getString(KEY_PROMPT_ISSUE_ANALYZE).orEmpty().ifBlank { defaultIssueAnalyzePrompt() },
@@ -190,27 +264,34 @@ class AgentSettingsRepository(api: MontoyaApi) {
             explainJsPrompt = prefs.getString(KEY_PROMPT_EXPLAIN_JS).orEmpty().ifBlank { defaultExplainJsPrompt() },
             accessControlPrompt = prefs.getString(KEY_PROMPT_ACCESS_CONTROL).orEmpty().ifBlank { defaultAccessControlPrompt() },
             loginSequencePrompt = prefs.getString(KEY_PROMPT_LOGIN_SEQUENCE).orEmpty().ifBlank { defaultLoginSequencePrompt() },
-            hostAnonymizationSalt = prefs.getString(KEY_HOST_SALT).orEmpty().ifBlank {
-                val generated = McpSettings.generateToken() // Reuse token generator for salt
-                prefs.setString(KEY_HOST_SALT, generated)
-                generated
-            },
+            hostAnonymizationSalt =
+                prefs.getString(KEY_HOST_SALT).orEmpty().ifBlank {
+                    val generated = McpSettings.generateToken() // Reuse token generator for salt
+                    prefs.setString(KEY_HOST_SALT, generated)
+                    generated
+                },
             preferredBackendId = (prefs.getString(KEY_PREFERRED_BACKEND) ?: "burp-ai").trim(),
             privacyMode = privacy,
             determinismMode = prefs.getBoolean(KEY_DETERMINISM) ?: false,
             autoRestart = prefs.getBoolean(KEY_AUTORESTART) ?: true,
             auditEnabled = prefs.getBoolean(KEY_AUDIT_ENABLED) ?: false,
             mcpSettings = mcpSettings,
-            preprocessProxyHistory = prefs.getBoolean(KEY_PREPROCESS_PROXY_HISTORY)
-                ?: Defaults.PREPROCESS_PROXY_HISTORY_ENABLED,
-            preprocessMaxResponseSizeKb = (prefs.getInteger(KEY_PREPROCESS_MAX_RESPONSE_SIZE_KB)
-                ?: Defaults.PREPROCESS_MAX_RESPONSE_SIZE_KB).coerceIn(1, 10_240),
-            preprocessFilterBinaryContent = prefs.getBoolean(KEY_PREPROCESS_FILTER_BINARY_CONTENT)
-                ?: Defaults.PREPROCESS_FILTER_BINARY_CONTENT,
-            preprocessAllowedContentTypes = parseContentTypeSet(
-                prefs.getString(KEY_PREPROCESS_ALLOWED_CONTENT_TYPES),
-                Defaults.PREPROCESS_ALLOWED_CONTENT_TYPES
-            ),
+            preprocessProxyHistory =
+                prefs.getBoolean(KEY_PREPROCESS_PROXY_HISTORY)
+                    ?: Defaults.PREPROCESS_PROXY_HISTORY_ENABLED,
+            preprocessMaxResponseSizeKb =
+                (
+                    prefs.getInteger(KEY_PREPROCESS_MAX_RESPONSE_SIZE_KB)
+                        ?: Defaults.PREPROCESS_MAX_RESPONSE_SIZE_KB
+                ).coerceIn(1, 10_240),
+            preprocessFilterBinaryContent =
+                prefs.getBoolean(KEY_PREPROCESS_FILTER_BINARY_CONTENT)
+                    ?: Defaults.PREPROCESS_FILTER_BINARY_CONTENT,
+            preprocessAllowedContentTypes =
+                parseContentTypeSet(
+                    prefs.getString(KEY_PREPROCESS_ALLOWED_CONTENT_TYPES),
+                    Defaults.PREPROCESS_ALLOWED_CONTENT_TYPES,
+                ),
             passiveAiEnabled = prefs.getBoolean(KEY_PASSIVE_AI_ENABLED) ?: false,
             passiveAiRateSeconds = (prefs.getInteger(KEY_PASSIVE_AI_RATE) ?: 5).coerceIn(1, 60),
             passiveAiScopeOnly = prefs.getBoolean(KEY_PASSIVE_AI_SCOPE_ONLY) ?: true,
@@ -220,15 +301,21 @@ class AgentSettingsRepository(api: MontoyaApi) {
             passiveAiResponseFingerprintDedupMinutes = (prefs.getInteger(KEY_PASSIVE_AI_FINGERPRINT_DEDUP_MINUTES) ?: 30).coerceIn(1, 240),
             passiveAiPromptCacheTtlMinutes = (prefs.getInteger(KEY_PASSIVE_AI_PROMPT_CACHE_TTL_MINUTES) ?: 30).coerceIn(1, 240),
             passiveAiEndpointCacheEntries = (prefs.getInteger(KEY_PASSIVE_AI_ENDPOINT_CACHE_ENTRIES) ?: 5_000).coerceIn(100, 50_000),
-            passiveAiResponseFingerprintCacheEntries = (prefs.getInteger(KEY_PASSIVE_AI_FINGERPRINT_CACHE_ENTRIES) ?: 5_000).coerceIn(100, 50_000),
+            passiveAiResponseFingerprintCacheEntries =
+                (
+                    prefs.getInteger(
+                        KEY_PASSIVE_AI_FINGERPRINT_CACHE_ENTRIES,
+                    ) ?: 5_000
+                ).coerceIn(100, 50_000),
             passiveAiPromptCacheEntries = (prefs.getInteger(KEY_PASSIVE_AI_PROMPT_CACHE_ENTRIES) ?: 500).coerceIn(50, 5_000),
             passiveAiRequestBodyMaxChars = (prefs.getInteger(KEY_PASSIVE_AI_REQUEST_BODY_MAX_CHARS) ?: 2_000).coerceIn(256, 20_000),
             passiveAiResponseBodyMaxChars = (prefs.getInteger(KEY_PASSIVE_AI_RESPONSE_BODY_MAX_CHARS) ?: 4_000).coerceIn(512, 40_000),
             passiveAiHeaderMaxCount = (prefs.getInteger(KEY_PASSIVE_AI_HEADER_MAX_COUNT) ?: 40).coerceIn(5, 120),
             passiveAiParamMaxCount = (prefs.getInteger(KEY_PASSIVE_AI_PARAM_MAX_COUNT) ?: 15).coerceIn(5, 100),
-            passiveAiExcludedExtensions = prefs.getString(KEY_PASSIVE_AI_EXCLUDED_EXTENSIONS).orEmpty().ifBlank {
-                Defaults.DEFAULT_EXCLUDED_EXTENSIONS_CSV
-            },
+            passiveAiExcludedExtensions =
+                prefs.getString(KEY_PASSIVE_AI_EXCLUDED_EXTENSIONS).orEmpty().ifBlank {
+                    Defaults.DEFAULT_EXCLUDED_EXTENSIONS_CSV
+                },
             passiveAiBatchSize = (prefs.getInteger(KEY_PASSIVE_AI_BATCH_SIZE) ?: 3).coerceIn(1, 5),
             passiveAiPersistentCacheEnabled = prefs.getBoolean(KEY_PASSIVE_AI_PERSISTENT_CACHE_ENABLED) ?: true,
             passiveAiPersistentCacheTtlHours = (prefs.getInteger(KEY_PASSIVE_AI_PERSISTENT_CACHE_TTL_HOURS) ?: 24).coerceIn(1, 168),
@@ -248,21 +335,32 @@ class AgentSettingsRepository(api: MontoyaApi) {
             activeAiUseCollaborator = prefs.getBoolean(KEY_ACTIVE_AI_USE_COLLABORATOR) ?: false,
             activeAiAdaptivePayloads = prefs.getBoolean(KEY_ACTIVE_AI_ADAPTIVE_PAYLOADS) ?: false,
             bountyPromptEnabled = prefs.getBoolean(KEY_BOUNTY_PROMPT_ENABLED) ?: false,
-            bountyPromptDir = prefs.getString(KEY_BOUNTY_PROMPT_DIR).orEmpty().trim().ifBlank { defaultBountyPromptDir() },
+            bountyPromptDir =
+                prefs
+                    .getString(KEY_BOUNTY_PROMPT_DIR)
+                    .orEmpty()
+                    .trim()
+                    .ifBlank { defaultBountyPromptDir() },
             bountyPromptAutoCreateIssues = prefs.getBoolean(KEY_BOUNTY_PROMPT_AUTO_CREATE_ISSUES) ?: true,
-            bountyPromptIssueConfidenceThreshold = (prefs.getInteger(KEY_BOUNTY_PROMPT_CONFIDENCE_THRESHOLD) ?: 90)
-                .coerceIn(0, 100),
-            bountyPromptEnabledPromptIds = parseIdSet(
-                prefs.getString(KEY_BOUNTY_PROMPT_ENABLED_IDS),
-                BountyPromptCatalog.defaultEnabledPromptIds()
-            ),
+            bountyPromptIssueConfidenceThreshold =
+                (prefs.getInteger(KEY_BOUNTY_PROMPT_CONFIDENCE_THRESHOLD) ?: 90)
+                    .coerceIn(0, 100),
+            bountyPromptEnabledPromptIds =
+                parseIdSet(
+                    prefs.getString(KEY_BOUNTY_PROMPT_ENABLED_IDS),
+                    BountyPromptCatalog.defaultEnabledPromptIds(),
+                ),
             aiRequestLoggerEnabled = prefs.getBoolean(KEY_AI_LOGGER_ENABLED) ?: true,
-            aiRequestLoggerMaxEntries = (prefs.getInteger(KEY_AI_LOGGER_MAX_ENTRIES) ?: 500).coerceIn(50, 5_000)
+            aiRequestLoggerMaxEntries = (prefs.getInteger(KEY_AI_LOGGER_MAX_ENTRIES) ?: 500).coerceIn(50, 5_000),
+            customPromptLibrary =
+                parseCustomPromptLibrary(prefs.getString(KEY_CUSTOM_PROMPT_LIBRARY)) { msg ->
+                    api.logging().logToError(msg)
+                },
         ).also { cachedSettings.set(it) }
     }
 
-    fun defaultSettings(): AgentSettings {
-        return AgentSettings(
+    fun defaultSettings(): AgentSettings =
+        AgentSettings(
             codexCmd = defaultCodexCmd(),
             geminiCmd = defaultGeminiCmd(),
             opencodeCmd = defaultOpenCodeCmd(),
@@ -306,7 +404,7 @@ class AgentSettingsRepository(api: MontoyaApi) {
             loginSequencePrompt = defaultLoginSequencePrompt(),
             hostAnonymizationSalt = McpSettings.generateToken(),
             preferredBackendId = "burp-ai",
-            privacyMode = PrivacyMode.OFF,
+            privacyMode = PrivacyMode.BALANCED,
             determinismMode = false,
             autoRestart = true,
             auditEnabled = false,
@@ -349,9 +447,9 @@ class AgentSettingsRepository(api: MontoyaApi) {
             bountyPromptIssueConfidenceThreshold = 90,
             bountyPromptEnabledPromptIds = BountyPromptCatalog.defaultEnabledPromptIds(),
             aiRequestLoggerEnabled = true,
-            aiRequestLoggerMaxEntries = 500
+            aiRequestLoggerMaxEntries = 500,
+            customPromptLibrary = emptyList(),
         )
-    }
 
     fun save(settings: AgentSettings) {
         // Atomically update the cached snapshot before persisting to disk
@@ -407,12 +505,12 @@ class AgentSettingsRepository(api: MontoyaApi) {
         prefs.setBoolean(KEY_PREPROCESS_PROXY_HISTORY, settings.preprocessProxyHistory)
         prefs.setInteger(
             KEY_PREPROCESS_MAX_RESPONSE_SIZE_KB,
-            settings.preprocessMaxResponseSizeKb.coerceIn(1, 10_240)
+            settings.preprocessMaxResponseSizeKb.coerceIn(1, 10_240),
         )
         prefs.setBoolean(KEY_PREPROCESS_FILTER_BINARY_CONTENT, settings.preprocessFilterBinaryContent)
         prefs.setString(
             KEY_PREPROCESS_ALLOWED_CONTENT_TYPES,
-            serializeContentTypeSet(settings.preprocessAllowedContentTypes)
+            serializeContentTypeSet(settings.preprocessAllowedContentTypes),
         )
         prefs.setBoolean(KEY_PASSIVE_AI_ENABLED, settings.passiveAiEnabled)
         prefs.setInteger(KEY_PASSIVE_AI_RATE, settings.passiveAiRateSeconds)
@@ -422,39 +520,39 @@ class AgentSettingsRepository(api: MontoyaApi) {
         prefs.setInteger(KEY_PASSIVE_AI_ENDPOINT_DEDUP_MINUTES, settings.passiveAiEndpointDedupMinutes.coerceIn(1, 240))
         prefs.setInteger(
             KEY_PASSIVE_AI_FINGERPRINT_DEDUP_MINUTES,
-            settings.passiveAiResponseFingerprintDedupMinutes.coerceIn(1, 240)
+            settings.passiveAiResponseFingerprintDedupMinutes.coerceIn(1, 240),
         )
         prefs.setInteger(
             KEY_PASSIVE_AI_PROMPT_CACHE_TTL_MINUTES,
-            settings.passiveAiPromptCacheTtlMinutes.coerceIn(1, 240)
+            settings.passiveAiPromptCacheTtlMinutes.coerceIn(1, 240),
         )
         prefs.setInteger(
             KEY_PASSIVE_AI_ENDPOINT_CACHE_ENTRIES,
-            settings.passiveAiEndpointCacheEntries.coerceIn(100, 50_000)
+            settings.passiveAiEndpointCacheEntries.coerceIn(100, 50_000),
         )
         prefs.setInteger(
             KEY_PASSIVE_AI_FINGERPRINT_CACHE_ENTRIES,
-            settings.passiveAiResponseFingerprintCacheEntries.coerceIn(100, 50_000)
+            settings.passiveAiResponseFingerprintCacheEntries.coerceIn(100, 50_000),
         )
         prefs.setInteger(
             KEY_PASSIVE_AI_PROMPT_CACHE_ENTRIES,
-            settings.passiveAiPromptCacheEntries.coerceIn(50, 5_000)
+            settings.passiveAiPromptCacheEntries.coerceIn(50, 5_000),
         )
         prefs.setInteger(
             KEY_PASSIVE_AI_REQUEST_BODY_MAX_CHARS,
-            settings.passiveAiRequestBodyMaxChars.coerceIn(256, 20_000)
+            settings.passiveAiRequestBodyMaxChars.coerceIn(256, 20_000),
         )
         prefs.setInteger(
             KEY_PASSIVE_AI_RESPONSE_BODY_MAX_CHARS,
-            settings.passiveAiResponseBodyMaxChars.coerceIn(512, 40_000)
+            settings.passiveAiResponseBodyMaxChars.coerceIn(512, 40_000),
         )
         prefs.setInteger(
             KEY_PASSIVE_AI_HEADER_MAX_COUNT,
-            settings.passiveAiHeaderMaxCount.coerceIn(5, 120)
+            settings.passiveAiHeaderMaxCount.coerceIn(5, 120),
         )
         prefs.setInteger(
             KEY_PASSIVE_AI_PARAM_MAX_COUNT,
-            settings.passiveAiParamMaxCount.coerceIn(5, 100)
+            settings.passiveAiParamMaxCount.coerceIn(5, 100),
         )
         prefs.setString(KEY_PASSIVE_AI_EXCLUDED_EXTENSIONS, settings.passiveAiExcludedExtensions)
         prefs.setInteger(KEY_PASSIVE_AI_BATCH_SIZE, settings.passiveAiBatchSize)
@@ -463,11 +561,11 @@ class AgentSettingsRepository(api: MontoyaApi) {
         prefs.setInteger(KEY_PASSIVE_AI_PERSISTENT_CACHE_MAX_MB, settings.passiveAiPersistentCacheMaxMb)
         prefs.setInteger(
             KEY_CONTEXT_REQUEST_BODY_MAX_CHARS,
-            settings.contextRequestBodyMaxChars.coerceIn(256, 40_000)
+            settings.contextRequestBodyMaxChars.coerceIn(256, 40_000),
         )
         prefs.setInteger(
             KEY_CONTEXT_RESPONSE_BODY_MAX_CHARS,
-            settings.contextResponseBodyMaxChars.coerceIn(512, 80_000)
+            settings.contextResponseBodyMaxChars.coerceIn(512, 80_000),
         )
         prefs.setBoolean(KEY_CONTEXT_COMPACT_JSON, settings.contextCompactJson)
         prefs.setBoolean(KEY_ACTIVE_AI_ENABLED, settings.activeAiEnabled)
@@ -486,14 +584,15 @@ class AgentSettingsRepository(api: MontoyaApi) {
         prefs.setBoolean(KEY_BOUNTY_PROMPT_AUTO_CREATE_ISSUES, settings.bountyPromptAutoCreateIssues)
         prefs.setInteger(
             KEY_BOUNTY_PROMPT_CONFIDENCE_THRESHOLD,
-            settings.bountyPromptIssueConfidenceThreshold.coerceIn(0, 100)
+            settings.bountyPromptIssueConfidenceThreshold.coerceIn(0, 100),
         )
         prefs.setString(
             KEY_BOUNTY_PROMPT_ENABLED_IDS,
-            serializeIdSet(settings.bountyPromptEnabledPromptIds)
+            serializeIdSet(settings.bountyPromptEnabledPromptIds),
         )
         prefs.setBoolean(KEY_AI_LOGGER_ENABLED, settings.aiRequestLoggerEnabled)
         prefs.setInteger(KEY_AI_LOGGER_MAX_ENTRIES, settings.aiRequestLoggerMaxEntries.coerceIn(50, 5_000))
+        prefs.setString(KEY_CUSTOM_PROMPT_LIBRARY, serializeCustomPromptLibrary(settings.customPromptLibrary))
         prefs.setInteger(KEY_SETTINGS_SCHEMA_VERSION, CURRENT_SETTINGS_SCHEMA_VERSION)
     }
 
@@ -504,6 +603,13 @@ class AgentSettingsRepository(api: MontoyaApi) {
         if (effectiveVersion < 2) {
             migrateToSchemaV2()
             effectiveVersion = 2
+        }
+
+        if (effectiveVersion < 3) {
+            // v3: introduces KEY_CUSTOM_PROMPT_LIBRARY. Absent key loads as empty list —
+            // no data migration needed, just a version stamp so future migrations see
+            // a clean baseline.
+            effectiveVersion = 3
         }
 
         if (storedVersion != effectiveVersion) {
@@ -639,16 +745,13 @@ class AgentSettingsRepository(api: MontoyaApi) {
         private const val KEY_BOUNTY_PROMPT_ENABLED_IDS = "bountyprompt.enabled.ids"
         private const val KEY_AI_LOGGER_ENABLED = "ai.logger.enabled"
         private const val KEY_AI_LOGGER_MAX_ENTRIES = "ai.logger.max.entries"
+        private const val KEY_CUSTOM_PROMPT_LIBRARY = "custom.prompt.library.v1"
         private const val KEY_SETTINGS_SCHEMA_VERSION = "settings.schema.version"
-        private const val CURRENT_SETTINGS_SCHEMA_VERSION = 2
+        private const val CURRENT_SETTINGS_SCHEMA_VERSION = 3
 
-        private fun defaultCodexCmd(): String {
-            return "codex chat"
-        }
+        private fun defaultCodexCmd(): String = "codex chat"
 
-        private fun defaultGeminiCmd(): String {
-            return "gemini --output-format text --model gemini-2.5-flash --yolo"
-        }
+        private fun defaultGeminiCmd(): String = "gemini --output-format text --model gemini-2.5-flash --yolo"
 
         private fun normalizeLegacyGeminiCmd(raw: String): String {
             if (raw.isBlank()) return raw
@@ -660,75 +763,45 @@ class AgentSettingsRepository(api: MontoyaApi) {
             }
         }
 
-        private fun defaultOpenCodeCmd(): String {
-            return "opencode"
-        }
+        private fun defaultOpenCodeCmd(): String = "opencode"
 
-        private fun defaultClaudeCmd(): String {
-            return "claude"
-        }
+        private fun defaultClaudeCmd(): String = "claude"
 
-        private fun defaultAgentProfile(): String {
-            return "pentester"
-        }
+        private fun defaultAgentProfile(): String = "pentester"
 
-        private fun defaultOllamaCliCmd(): String {
-            return "ollama run llama3.1"
-        }
+        private fun defaultOllamaCliCmd(): String = "ollama run llama3.1"
 
-        private fun defaultOllamaModel(): String {
-            return "llama3.1"
-        }
+        private fun defaultOllamaModel(): String = "llama3.1"
 
-        private fun defaultOllamaServeCmd(): String {
-            return "ollama serve"
-        }
+        private fun defaultOllamaServeCmd(): String = "ollama serve"
 
-        private fun defaultOllamaTimeoutSeconds(): Int {
-            return Defaults.CLI_PROCESS_TIMEOUT_SECONDS
-        }
+        private fun defaultOllamaTimeoutSeconds(): Int = Defaults.CLI_PROCESS_TIMEOUT_SECONDS
 
-        private fun defaultOllamaContextWindow(): Int {
-            return 8192
-        }
+        private fun defaultOllamaContextWindow(): Int = 8192
 
-        private fun defaultLmStudioModel(): String {
-            return "lmstudio"
-        }
+        private fun defaultLmStudioModel(): String = "lmstudio"
 
-        private fun defaultLmStudioTimeoutSeconds(): Int {
-            return Defaults.CLI_PROCESS_TIMEOUT_SECONDS
-        }
+        private fun defaultLmStudioTimeoutSeconds(): Int = Defaults.CLI_PROCESS_TIMEOUT_SECONDS
 
-        private fun defaultLmStudioServerCmd(): String {
-            return "lms server start"
-        }
+        private fun defaultLmStudioServerCmd(): String = "lms server start"
 
-        private fun defaultOpenAiCompatTimeoutSeconds(): Int {
-            return Defaults.CLI_PROCESS_TIMEOUT_SECONDS
-        }
+        private fun defaultOpenAiCompatTimeoutSeconds(): Int = Defaults.CLI_PROCESS_TIMEOUT_SECONDS
 
-        private fun defaultNvidiaNimUrl(): String {
-            return "https://integrate.api.nvidia.com"
-        }
+        private fun defaultNvidiaNimUrl(): String = "https://integrate.api.nvidia.com"
 
-        private fun defaultNvidiaNimTimeoutSeconds(): Int {
-            return Defaults.CLI_PROCESS_TIMEOUT_SECONDS
-        }
+        private fun defaultNvidiaNimTimeoutSeconds(): Int = Defaults.CLI_PROCESS_TIMEOUT_SECONDS
 
-        private fun defaultCopilotCmd(): String {
-            return "copilot"
-        }
+        private fun defaultCopilotCmd(): String = "copilot"
 
-        private fun defaultBountyPromptDir(): String {
-            return java.io.File(
-                System.getProperty("user.home"),
-                "Tools/BountyPrompt/prompts"
-            ).absolutePath
-        }
+        private fun defaultBountyPromptDir(): String =
+            java.io
+                .File(
+                    System.getProperty("user.home"),
+                    "Tools/BountyPrompt/prompts",
+                ).absolutePath
 
-        private fun defaultRequestPrompt(): String {
-            return """
+        private fun defaultRequestPrompt(): String =
+            """
 ### ROLE
 Analyze the provided HTTP traffic as a Senior Security Researcher.
 Response Language: English.
@@ -750,10 +823,9 @@ For each finding, provide:
 4. **Impact**: Potential consequences.
 5. **Remediation**: Actionable fix.
 """.trim()
-        }
 
-        private fun defaultIssuePrompt(): String {
-            return """
+        private fun defaultIssuePrompt(): String =
+            """
 ### ROLE
 Write a professional security vulnerability report.
 Response Language: English.
@@ -766,10 +838,9 @@ Response Language: English.
 5. **PoC**: Step-by-step reproduction instructions.
 6. **Remediation**: Detailed fix recommendation.
 """.trim()
-        }
 
-        private fun defaultIssueAnalyzePrompt(): String {
-            return """
+        private fun defaultIssueAnalyzePrompt(): String =
+            """
 ### TASK
 Analyze the provided security finding in depth.
 Response Language: English.
@@ -780,10 +851,9 @@ Response Language: English.
 - Cite **concrete evidence** from the data provided.
 - Provide a list of **manual validation steps** for a researcher.
 """.trim()
-        }
 
-        private fun defaultIssuePocPrompt(): String {
-            return """
+        private fun defaultIssuePocPrompt(): String =
+            """
 ### TASK
 Generate a step-by-step Proof of Concept (PoC) for validation.
 Response Language: English.
@@ -793,10 +863,9 @@ Response Language: English.
 2. document the **expected response** indicating success.
 3. define **safe validation criteria** to avoid production impact.
 """.trim()
-        }
 
-        private fun defaultIssueImpactPrompt(): String {
-            return """
+        private fun defaultIssueImpactPrompt(): String =
+            """
 ### TASK
 Assess the impact and overall risk of this finding.
 Response Language: English.
@@ -807,10 +876,9 @@ Response Language: English.
 - **Business Risk**: Financial, reputational, or operational.
 - **CVSS Vector**: Provide a suggested CVSS v3.1 vector.
 """.trim()
-        }
 
-        private fun defaultRequestSummaryPrompt(): String {
-            return """
+        private fun defaultRequestSummaryPrompt(): String =
+            """
 ### TASK
 Summarize the security profile of this endpoint.
 Response Language: English.
@@ -822,10 +890,9 @@ Response Language: English.
 - **Data Flow**: Type of data returned and its sensitivity.
 - **Security Observations**: Any immediate red flags or good practices noted.
 """.trim()
-        }
 
-        private fun defaultExplainJsPrompt(): String {
-            return """
+        private fun defaultExplainJsPrompt(): String =
+            """
 ### TASK
 Analyze the provided JavaScript code for security relevance.
 Response Language: English.
@@ -836,10 +903,9 @@ Response Language: English.
 - **Sensitive Data**: Identify hardcoded keys, endpoints, or patterns.
 - **Risk Note**: One-sentence summary of the security risk.
 """.trim()
-        }
 
-        private fun defaultAccessControlPrompt(): String {
-            return """
+        private fun defaultAccessControlPrompt(): String =
+            """
 ### TASK
 Design a systematic access control test plan for this request.
 Response Language: English.
@@ -854,10 +920,9 @@ For each test, provide:
 - **Modification**: What to change in the request.
 - **Expected Outcome**: What behavior would indicate a vulnerability.
 """.trim()
-        }
 
-        private fun defaultLoginSequencePrompt(): String {
-            return """
+        private fun defaultLoginSequencePrompt(): String =
+            """
 ### TASK
 Map the authentication flow based on the provided traffic.
 Response Language: English.
@@ -867,7 +932,6 @@ Response Language: English.
 - **Session Keys**: Tokens/Headers to capture for persistence.
 - **Failure Indicators**: How to detect session expiration.
 """.trim()
-        }
 
         private fun defaultMcpSettings(): McpSettings {
             val defaultPath = java.io.File(System.getProperty("user.home"), ".burp-ai-agent/certs/mcp-keystore.p12")
@@ -892,65 +956,103 @@ Response Language: English.
                 allowUnpreprocessedProxyHistory = Defaults.MCP_ALLOW_UNPREPROCESSED_PROXY_HISTORY,
                 toolToggles = emptyMap(),
                 enabledUnsafeTools = emptySet(),
-                unsafeEnabled = false
+                unsafeEnabled = false,
             )
         }
 
-        private fun parseIdSet(raw: String?, fallback: Set<String>): Set<String> {
-            val parsed = raw.orEmpty()
-                .split(',')
-                .map { it.trim() }
-                .filter { it.isNotBlank() }
-                .toSet()
+        private fun parseIdSet(
+            raw: String?,
+            fallback: Set<String>,
+        ): Set<String> {
+            val parsed =
+                raw
+                    .orEmpty()
+                    .split(',')
+                    .map { it.trim() }
+                    .filter { it.isNotBlank() }
+                    .toSet()
             return if (parsed.isEmpty()) fallback else parsed
         }
 
-        private fun parseContentTypeSet(raw: String?, fallback: Set<String>): Set<String> {
-            val parsed = raw.orEmpty()
-                .split(',')
-                .map { it.trim().lowercase() }
-                .filter { it.isNotBlank() }
-                .toSet()
+        private fun parseContentTypeSet(
+            raw: String?,
+            fallback: Set<String>,
+        ): Set<String> {
+            val parsed =
+                raw
+                    .orEmpty()
+                    .split(',')
+                    .map { it.trim().lowercase() }
+                    .filter { it.isNotBlank() }
+                    .toSet()
             return if (parsed.isEmpty()) fallback else parsed
         }
 
-        private fun serializeIdSet(ids: Set<String>): String {
-            return ids
+        private fun serializeIdSet(ids: Set<String>): String =
+            ids
                 .map { it.trim() }
                 .filter { it.isNotBlank() }
                 .toSortedSet()
                 .joinToString(",")
-        }
 
-        private fun serializeContentTypeSet(contentTypes: Set<String>): String {
-            return contentTypes
+        private fun serializeContentTypeSet(contentTypes: Set<String>): String =
+            contentTypes
                 .map { it.trim().lowercase() }
                 .filter { it.isNotBlank() }
                 .toSortedSet()
                 .joinToString(",")
+
+        private val customPromptMapper: ObjectMapper by lazy {
+            ObjectMapper().registerModule(KotlinModule.Builder().build())
+        }
+
+        internal fun parseCustomPromptLibrary(
+            raw: String?,
+            logger: (String) -> Unit,
+        ): List<CustomPromptDefinition> {
+            if (raw.isNullOrBlank()) return emptyList()
+            val decoded: List<CustomPromptDefinition> =
+                try {
+                    val listType =
+                        customPromptMapper.typeFactory
+                            .constructCollectionType(List::class.java, CustomPromptDefinition::class.java)
+                    customPromptMapper.readValue(raw, listType)
+                } catch (e: Exception) {
+                    logger("custom prompt library JSON invalid, falling back to empty: ${e.message}")
+                    return emptyList()
+                }
+            return decoded.filter { it.isValid() }
+        }
+
+        internal fun serializeCustomPromptLibrary(lib: List<CustomPromptDefinition>): String {
+            if (lib.isEmpty()) return ""
+            return customPromptMapper.writeValueAsString(lib.filter { it.isValid() })
         }
     }
 
     private fun loadMcpSettings(): McpSettings {
-        val token = (prefs.getString(KEY_MCP_TOKEN) ?: "").trim().ifBlank {
-            val generated = McpSettings.generateToken()
-            prefs.setString(KEY_MCP_TOKEN, generated)
-            generated
-        }
+        val token =
+            (prefs.getString(KEY_MCP_TOKEN) ?: "").trim().ifBlank {
+                val generated = McpSettings.generateToken()
+                prefs.setString(KEY_MCP_TOKEN, generated)
+                generated
+            }
         val tlsAuto = prefs.getBoolean(KEY_MCP_TLS_AUTO) ?: true
         val keystorePath = prefs.getString(KEY_MCP_TLS_KEYSTORE).orEmpty().trim()
-        val resolvedKeystorePath = if (tlsAuto && keystorePath.isBlank()) {
-            val defaultPath = java.io.File(System.getProperty("user.home"), ".burp-ai-agent/certs/mcp-keystore.p12")
-            prefs.setString(KEY_MCP_TLS_KEYSTORE, defaultPath.absolutePath)
-            defaultPath.absolutePath
-        } else {
-            keystorePath
-        }
-        val tlsPassword = prefs.getString(KEY_MCP_TLS_PASSWORD).orEmpty().trim().ifBlank {
-            val generated = McpSettings.generatePassword()
-            prefs.setString(KEY_MCP_TLS_PASSWORD, generated)
-            generated
-        }
+        val resolvedKeystorePath =
+            if (tlsAuto && keystorePath.isBlank()) {
+                val defaultPath = java.io.File(System.getProperty("user.home"), ".burp-ai-agent/certs/mcp-keystore.p12")
+                prefs.setString(KEY_MCP_TLS_KEYSTORE, defaultPath.absolutePath)
+                defaultPath.absolutePath
+            } else {
+                keystorePath
+            }
+        val tlsPassword =
+            prefs.getString(KEY_MCP_TLS_PASSWORD).orEmpty().trim().ifBlank {
+                val generated = McpSettings.generatePassword()
+                prefs.setString(KEY_MCP_TLS_PASSWORD, generated)
+                generated
+            }
         val toolToggles = McpSettings.parseToolToggles(prefs.getString(KEY_MCP_TOOL_TOGGLES))
         val enabledUnsafeTools = McpSettings.parseUnsafeToolSet(prefs.getString(KEY_MCP_UNSAFE_TOOLS))
         val allowedOrigins = McpSettings.parseAllowedOrigins(prefs.getString(KEY_MCP_ALLOWED_ORIGINS))
@@ -973,14 +1075,18 @@ Response Language: English.
             tlsKeystorePath = resolvedKeystorePath,
             tlsKeystorePassword = tlsPassword,
             scanTaskTtlMinutes = (prefs.getInteger(KEY_MCP_SCAN_TASK_TTL_MINUTES) ?: 120).coerceIn(5, 24 * 60),
-            collaboratorClientTtlMinutes = (prefs.getInteger(KEY_MCP_COLLABORATOR_TTL_MINUTES) ?: 60)
-                .coerceIn(5, 24 * 60),
+            collaboratorClientTtlMinutes =
+                (prefs.getInteger(KEY_MCP_COLLABORATOR_TTL_MINUTES) ?: 60)
+                    .coerceIn(5, 24 * 60),
             maxConcurrentRequests = (prefs.getInteger(KEY_MCP_MAX_CONCURRENT) ?: 4).coerceIn(1, 64),
-            maxBodyBytes = (prefs.getInteger(KEY_MCP_MAX_BODY_BYTES) ?: 2 * 1024 * 1024)
-                .coerceIn(256 * 1024, 100 * 1024 * 1024),
+            maxBodyBytes =
+                (prefs.getInteger(KEY_MCP_MAX_BODY_BYTES) ?: 2 * 1024 * 1024)
+                    .coerceIn(256 * 1024, 100 * 1024 * 1024),
             proxyHistoryMaxItemsPerRequest =
-                (prefs.getInteger(KEY_MCP_PROXY_HISTORY_MAX_ITEMS)
-                    ?: Defaults.MCP_PROXY_HISTORY_MAX_ITEMS_PER_REQUEST).coerceIn(1, 500),
+                (
+                    prefs.getInteger(KEY_MCP_PROXY_HISTORY_MAX_ITEMS)
+                        ?: Defaults.MCP_PROXY_HISTORY_MAX_ITEMS_PER_REQUEST
+                ).coerceIn(1, 500),
             proxyHistoryNewestFirst =
                 prefs.getBoolean(KEY_MCP_PROXY_HISTORY_NEWEST_FIRST) ?: Defaults.MCP_PROXY_HISTORY_NEWEST_FIRST,
             allowUnpreprocessedProxyHistory =
@@ -988,7 +1094,7 @@ Response Language: English.
                     ?: Defaults.MCP_ALLOW_UNPREPROCESSED_PROXY_HISTORY,
             toolToggles = toolToggles,
             enabledUnsafeTools = enabledUnsafeTools,
-            unsafeEnabled = prefs.getBoolean(KEY_MCP_UNSAFE) ?: false
+            unsafeEnabled = prefs.getBoolean(KEY_MCP_UNSAFE) ?: false,
         )
     }
 
@@ -1007,13 +1113,13 @@ Response Language: English.
         prefs.setInteger(KEY_MCP_SCAN_TASK_TTL_MINUTES, settings.scanTaskTtlMinutes.coerceIn(5, 24 * 60))
         prefs.setInteger(
             KEY_MCP_COLLABORATOR_TTL_MINUTES,
-            settings.collaboratorClientTtlMinutes.coerceIn(5, 24 * 60)
+            settings.collaboratorClientTtlMinutes.coerceIn(5, 24 * 60),
         )
         prefs.setInteger(KEY_MCP_MAX_CONCURRENT, settings.maxConcurrentRequests)
         prefs.setInteger(KEY_MCP_MAX_BODY_BYTES, settings.maxBodyBytes)
         prefs.setInteger(
             KEY_MCP_PROXY_HISTORY_MAX_ITEMS,
-            settings.proxyHistoryMaxItemsPerRequest.coerceIn(1, 500)
+            settings.proxyHistoryMaxItemsPerRequest.coerceIn(1, 500),
         )
         prefs.setBoolean(KEY_MCP_PROXY_HISTORY_NEWEST_FIRST, settings.proxyHistoryNewestFirst)
         prefs.setBoolean(KEY_MCP_ALLOW_UNPREPROCESSED_PROXY_HISTORY, settings.allowUnpreprocessedProxyHistory)

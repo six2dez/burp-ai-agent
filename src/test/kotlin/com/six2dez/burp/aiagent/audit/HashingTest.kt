@@ -4,7 +4,6 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
 class HashingTest {
-
     @Test
     fun sha256HexMatchesKnownVector() {
         val hash = Hashing.sha256Hex("hello")

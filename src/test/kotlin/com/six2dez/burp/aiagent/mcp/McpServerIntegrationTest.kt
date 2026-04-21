@@ -19,33 +19,33 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 
 class McpServerIntegrationTest {
-
     @Test
     fun startsServerAndServesHealthAndShutdownEndpoints() {
         val api = mock<MontoyaApi>(defaultAnswer = Answers.RETURNS_DEEP_STUBS)
         whenever(api.burpSuite().version().edition()).thenReturn(BurpSuiteEdition.PROFESSIONAL)
         val manager = KtorMcpServerManager(api)
         val port = freePort()
-        val settings = McpSettings(
-            enabled = true,
-            host = "127.0.0.1",
-            port = port,
-            externalEnabled = false,
-            stdioEnabled = false,
-            token = "integration-token",
-            allowedOrigins = emptyList(),
-            tlsEnabled = false,
-            tlsAutoGenerate = true,
-            tlsKeystorePath = "",
-            tlsKeystorePassword = "",
-            scanTaskTtlMinutes = 120,
-            collaboratorClientTtlMinutes = 60,
-            maxConcurrentRequests = 4,
-            maxBodyBytes = 262_144,
-            toolToggles = emptyMap(),
-            enabledUnsafeTools = emptySet(),
-            unsafeEnabled = false
-        )
+        val settings =
+            McpSettings(
+                enabled = true,
+                host = "127.0.0.1",
+                port = port,
+                externalEnabled = false,
+                stdioEnabled = false,
+                token = "integration-token",
+                allowedOrigins = emptyList(),
+                tlsEnabled = false,
+                tlsAutoGenerate = true,
+                tlsKeystorePath = "",
+                tlsKeystorePassword = "",
+                scanTaskTtlMinutes = 120,
+                collaboratorClientTtlMinutes = 60,
+                maxConcurrentRequests = 4,
+                maxBodyBytes = 262_144,
+                toolToggles = emptyMap(),
+                enabledUnsafeTools = emptySet(),
+                unsafeEnabled = false,
+            )
 
         val terminalState = AtomicReference<McpServerState?>()
         val started = CountDownLatch(1)
@@ -53,7 +53,7 @@ class McpServerIntegrationTest {
             settings,
             PrivacyMode.STRICT,
             determinismMode = false,
-            preprocessSettings = ResponsePreprocessorSettings()
+            preprocessSettings = ResponsePreprocessorSettings(),
         ) { state ->
             if (state is McpServerState.Running || state is McpServerState.Failed) {
                 terminalState.set(state)
@@ -66,24 +66,27 @@ class McpServerIntegrationTest {
             val state = terminalState.get()
             assertTrue(state is McpServerState.Running, "MCP failed to start: $state")
 
-            val health = httpRequest(
-                method = "GET",
-                url = "http://127.0.0.1:$port/__mcp/health"
-            )
+            val health =
+                httpRequest(
+                    method = "GET",
+                    url = "http://127.0.0.1:$port/__mcp/health",
+                )
             assertEquals(200, health.code)
             assertEquals("ok", health.body.trim())
 
-            val unauthorizedShutdown = httpRequest(
-                method = "POST",
-                url = "http://127.0.0.1:$port/__mcp/shutdown"
-            )
+            val unauthorizedShutdown =
+                httpRequest(
+                    method = "POST",
+                    url = "http://127.0.0.1:$port/__mcp/shutdown",
+                )
             assertEquals(401, unauthorizedShutdown.code)
 
-            val authorizedShutdown = httpRequest(
-                method = "POST",
-                url = "http://127.0.0.1:$port/__mcp/shutdown",
-                headers = mapOf("Authorization" to "Bearer integration-token")
-            )
+            val authorizedShutdown =
+                httpRequest(
+                    method = "POST",
+                    url = "http://127.0.0.1:$port/__mcp/shutdown",
+                    headers = mapOf("Authorization" to "Bearer integration-token"),
+                )
             assertEquals(200, authorizedShutdown.code)
         } finally {
             manager.shutdown()
@@ -99,7 +102,7 @@ class McpServerIntegrationTest {
     private fun httpRequest(
         method: String,
         url: String,
-        headers: Map<String, String> = emptyMap()
+        headers: Map<String, String> = emptyMap(),
     ): HttpResponse {
         val connection = URI(url).toURL().openConnection() as HttpURLConnection
         connection.requestMethod = method
@@ -121,6 +124,6 @@ class McpServerIntegrationTest {
 
     private data class HttpResponse(
         val code: Int,
-        val body: String
+        val body: String,
     )
 }

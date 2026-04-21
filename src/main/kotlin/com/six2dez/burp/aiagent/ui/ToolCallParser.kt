@@ -9,7 +9,10 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
-internal data class ParsedToolCall(val tool: String, val argsJson: String?)
+internal data class ParsedToolCall(
+    val tool: String,
+    val argsJson: String?,
+)
 
 internal object ToolCallParser {
     private const val MAX_JSON_CANDIDATES = 12
@@ -30,9 +33,10 @@ internal object ToolCallParser {
     }
 
     private fun parseToolJson(jsonText: String): ParsedToolCall? {
-        val rootObject = runCatching {
-            Json.parseToJsonElement(jsonText).jsonObject
-        }.getOrNull() ?: return null
+        val rootObject =
+            runCatching {
+                Json.parseToJsonElement(jsonText).jsonObject
+            }.getOrNull() ?: return null
         return parseToolCallObject(rootObject)
     }
 
@@ -58,9 +62,11 @@ internal object ToolCallParser {
         val responseObj = obj["response"].asObjectOrNull()
         firstToolCallObject(responseObj?.get("tool_calls").asArrayOrNull())?.let { return it }
 
-        val firstChoice = obj["choices"].asArrayOrNull()
-            ?.firstOrNull()
-            .asObjectOrNull()
+        val firstChoice =
+            obj["choices"]
+                .asArrayOrNull()
+                ?.firstOrNull()
+                .asObjectOrNull()
         if (firstChoice != null) {
             firstToolCallObject(firstChoice["tool_calls"].asArrayOrNull())?.let { return it }
             val choiceMessage = firstChoice["message"].asObjectOrNull()
@@ -69,9 +75,7 @@ internal object ToolCallParser {
         return null
     }
 
-    private fun firstToolCallObject(array: JsonArray?): JsonObject? {
-        return array?.firstOrNull().asObjectOrNull()
-    }
+    private fun firstToolCallObject(array: JsonArray?): JsonObject? = array?.firstOrNull().asObjectOrNull()
 
     private fun resolveToolName(obj: JsonObject): String? {
         val directTool = obj["tool"].asStringOrNull()?.trim()
@@ -80,18 +84,20 @@ internal object ToolCallParser {
         val directName = obj["name"].asStringOrNull()?.trim()
         if (!directName.isNullOrBlank()) return directName
 
-        val functionName = obj["function"]
-            .asObjectOrNull()
-            ?.get("name")
-            .asStringOrNull()
-            ?.trim()
+        val functionName =
+            obj["function"]
+                .asObjectOrNull()
+                ?.get("name")
+                .asStringOrNull()
+                ?.trim()
         if (!functionName.isNullOrBlank()) return functionName
 
-        val functionCallName = obj["function_call"]
-            .asObjectOrNull()
-            ?.get("name")
-            .asStringOrNull()
-            ?.trim()
+        val functionCallName =
+            obj["function_call"]
+                .asObjectOrNull()
+                ?.get("name")
+                .asStringOrNull()
+                ?.trim()
         if (!functionCallName.isNullOrBlank()) return functionCallName
 
         return null
@@ -107,14 +113,16 @@ internal object ToolCallParser {
         val input = obj["input"]
         if (input != null) return normalizeArgsJson(input)
 
-        val functionArgs = obj["function"]
-            .asObjectOrNull()
-            ?.get("arguments")
+        val functionArgs =
+            obj["function"]
+                .asObjectOrNull()
+                ?.get("arguments")
         if (functionArgs != null) return normalizeArgsJson(functionArgs)
 
-        val functionCallArgs = obj["function_call"]
-            .asObjectOrNull()
-            ?.get("arguments")
+        val functionCallArgs =
+            obj["function_call"]
+                .asObjectOrNull()
+                ?.get("arguments")
         return normalizeArgsJson(functionCallArgs)
     }
 
@@ -130,12 +138,16 @@ internal object ToolCallParser {
 
     private fun extractFencedJsonCandidates(text: String): List<String> {
         val regex = Regex("```(?:tool|json)\\s*([\\s\\S]*?)\\s*```", RegexOption.IGNORE_CASE)
-        return regex.findAll(text)
+        return regex
+            .findAll(text)
             .mapNotNull { match ->
-                val payload = match.groupValues.getOrNull(1)?.trim().orEmpty()
+                val payload =
+                    match.groupValues
+                        .getOrNull(1)
+                        ?.trim()
+                        .orEmpty()
                 if (payload.startsWith("{") && payload.endsWith("}")) payload else null
-            }
-            .take(MAX_JSON_CANDIDATES)
+            }.take(MAX_JSON_CANDIDATES)
             .toList()
     }
 
@@ -180,15 +192,9 @@ internal object ToolCallParser {
         return out
     }
 
-    private fun JsonElement?.asObjectOrNull(): JsonObject? {
-        return runCatching { this?.jsonObject }.getOrNull()
-    }
+    private fun JsonElement?.asObjectOrNull(): JsonObject? = runCatching { this?.jsonObject }.getOrNull()
 
-    private fun JsonElement?.asArrayOrNull(): JsonArray? {
-        return runCatching { this?.jsonArray }.getOrNull()
-    }
+    private fun JsonElement?.asArrayOrNull(): JsonArray? = runCatching { this?.jsonArray }.getOrNull()
 
-    private fun JsonElement?.asStringOrNull(): String? {
-        return runCatching { this?.jsonPrimitive?.contentOrNull }.getOrNull()
-    }
+    private fun JsonElement?.asStringOrNull(): String? = runCatching { this?.jsonPrimitive?.contentOrNull }.getOrNull()
 }

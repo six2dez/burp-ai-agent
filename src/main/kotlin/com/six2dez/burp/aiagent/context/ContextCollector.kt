@@ -12,53 +12,65 @@ import com.six2dez.burp.aiagent.redact.Redaction
 import com.six2dez.burp.aiagent.redact.RedactionPolicy
 import com.six2dez.burp.aiagent.util.SecurityExcerpts
 import java.net.URI
-import java.util.logging.Logger
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
+import java.util.logging.Logger
 
-class ContextCollector(private val api: MontoyaApi) {
+class ContextCollector(
+    private val api: MontoyaApi,
+) {
     private val log = Logger.getLogger(ContextCollector::class.java.name)
-    private val mapper = JsonMapper.builder()
-        .enable(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY)
-        .enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS)
-        .build()
-        .registerKotlinModule()
+    private val mapper =
+        JsonMapper
+            .builder()
+            .enable(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY)
+            .enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS)
+            .build()
+            .registerKotlinModule()
 
-    fun fromRequestResponses(rr: List<HttpRequestResponse>, options: ContextOptions): ContextCapture {
+    fun fromRequestResponses(
+        rr: List<HttpRequestResponse>,
+        options: ContextOptions,
+    ): ContextCapture {
         val policy = RedactionPolicy.fromMode(options.privacyMode)
-        val items = rr.map { item ->
-            val req = truncateHttpMessageBody(
-                item.request().toString(),
-                options.maxRequestBodyChars ?: DEFAULT_REQUEST_BODY_MAX_CHARS
-            )
-            val resp = item.response()?.toString()?.let {
-                truncateHttpMessageBody(
-                    it,
-                    options.maxResponseBodyChars ?: DEFAULT_RESPONSE_BODY_MAX_CHARS
-                )
-            }
+        val items =
+            rr
+                .map { item ->
+                    val req =
+                        truncateHttpMessageBody(
+                            item.request().toString(),
+                            options.maxRequestBodyChars ?: DEFAULT_REQUEST_BODY_MAX_CHARS,
+                        )
+                    val resp =
+                        item.response()?.toString()?.let {
+                            truncateHttpMessageBody(
+                                it,
+                                options.maxResponseBodyChars ?: DEFAULT_RESPONSE_BODY_MAX_CHARS,
+                            )
+                        }
 
-            val redactedReq = Redaction.apply(req, policy, stableHostSalt = options.hostSalt)
-            val redactedResp = resp?.let { Redaction.apply(it, policy, stableHostSalt = options.hostSalt) }
+                    val redactedReq = Redaction.apply(req, policy, stableHostSalt = options.hostSalt)
+                    val redactedResp = resp?.let { Redaction.apply(it, policy, stableHostSalt = options.hostSalt) }
 
-            HttpItem(
-                tool = null,
-                url = item.request().url(),
-                method = item.request().method(),
-                request = redactedReq,
-                response = redactedResp
-            )
-        }.let { list ->
-            if (options.deterministic) list.sortedBy { stableKey(it) } else list
-        }
+                    HttpItem(
+                        tool = null,
+                        url = item.request().url(),
+                        method = item.request().method(),
+                        request = redactedReq,
+                        response = redactedResp,
+                    )
+                }.let { list ->
+                    if (options.deterministic) list.sortedBy { stableKey(it) } else list
+                }
 
         // Global context cap: drop trailing items if total serialized size exceeds limit
         val cappedItems = capItemsBySize(items)
 
-        val env = BurpContextEnvelope(
-            capturedAtEpochMs = System.currentTimeMillis(),
-            items = cappedItems
-        )
+        val env =
+            BurpContextEnvelope(
+                capturedAtEpochMs = System.currentTimeMillis(),
+                items = cappedItems,
+            )
 
         val json = toJson(env, options.compactJson)
         val preview = buildHttpPreview(cappedItems, policy, options)
@@ -66,28 +78,35 @@ class ContextCollector(private val api: MontoyaApi) {
         return ContextCapture(contextJson = json, previewText = preview)
     }
 
-    fun fromAuditIssues(issues: List<AuditIssue>, options: ContextOptions): ContextCapture {
+    fun fromAuditIssues(
+        issues: List<AuditIssue>,
+        options: ContextOptions,
+    ): ContextCapture {
         val policy = RedactionPolicy.fromMode(options.privacyMode)
-        val items = issues.map { i ->
-            val host = i.httpService()?.host()
-            AuditIssueItem(
-                name = i.name(),
-                severity = i.severity()?.name,
-                confidence = i.confidence()?.name,
-                detail = i.detail(),
-                remediation = i.remediation(),
-                affectedHost = host?.let {
-                    if (policy.anonymizeHosts) Redaction.anonymizeHost(it, options.hostSalt) else it
+        val items =
+            issues
+                .map { i ->
+                    val host = i.httpService()?.host()
+                    AuditIssueItem(
+                        name = i.name(),
+                        severity = i.severity()?.name,
+                        confidence = i.confidence()?.name,
+                        detail = i.detail(),
+                        remediation = i.remediation(),
+                        affectedHost =
+                            host?.let {
+                                if (policy.anonymizeHosts) Redaction.anonymizeHost(it, options.hostSalt) else it
+                            },
+                    )
+                }.let { list ->
+                    if (options.deterministic) list.sortedBy { stableKey(it) } else list
                 }
-            )
-        }.let { list ->
-            if (options.deterministic) list.sortedBy { stableKey(it) } else list
-        }
 
-        val env = BurpContextEnvelope(
-            capturedAtEpochMs = System.currentTimeMillis(),
-            items = items
-        )
+        val env =
+            BurpContextEnvelope(
+                capturedAtEpochMs = System.currentTimeMillis(),
+                items = items,
+            )
 
         val json = toJson(env, options.compactJson)
         val preview = buildIssuePreview(items, policy, options)
@@ -95,47 +114,51 @@ class ContextCollector(private val api: MontoyaApi) {
         return ContextCapture(contextJson = json, previewText = preview)
     }
 
-    private fun toJson(env: BurpContextEnvelope, compact: Boolean): String {
-        return if (compact) {
+    private fun toJson(
+        env: BurpContextEnvelope,
+        compact: Boolean,
+    ): String =
+        if (compact) {
             mapper.writeValueAsString(env)
         } else {
             mapper.writerWithDefaultPrettyPrinter().writeValueAsString(env)
         }
-    }
 
     private fun buildHttpPreview(
         items: List<HttpItem>,
         policy: RedactionPolicy,
-        options: ContextOptions
+        options: ContextOptions,
     ): String {
-        val sampleLines = items.take(PREVIEW_MAX_ITEMS).map { item ->
-            val safeUrl = previewUrl(item.url, policy, options.hostSalt)
-            "${item.method ?: "?"} $safeUrl"
-        }
+        val sampleLines =
+            items.take(PREVIEW_MAX_ITEMS).map { item ->
+                val safeUrl = previewUrl(item.url, policy, options.hostSalt)
+                "${item.method ?: "?"} $safeUrl"
+            }
         return buildPreview(
             count = items.size,
             kind = "HTTP selection",
             policy = policy,
             deterministic = options.deterministic,
-            sampleLines = sampleLines
+            sampleLines = sampleLines,
         )
     }
 
     private fun buildIssuePreview(
         items: List<AuditIssueItem>,
         policy: RedactionPolicy,
-        options: ContextOptions
+        options: ContextOptions,
     ): String {
-        val sampleLines = items.take(PREVIEW_MAX_ITEMS).map { item ->
-            val host = item.affectedHost ?: "-"
-            "[${item.severity ?: "UNKNOWN"}] ${item.name} @ $host"
-        }
+        val sampleLines =
+            items.take(PREVIEW_MAX_ITEMS).map { item ->
+                val host = item.affectedHost ?: "-"
+                "[${item.severity ?: "UNKNOWN"}] ${item.name} @ $host"
+            }
         return buildPreview(
             count = items.size,
             kind = "Scanner findings",
             policy = policy,
             deterministic = options.deterministic,
-            sampleLines = sampleLines
+            sampleLines = sampleLines,
         )
     }
 
@@ -144,9 +167,9 @@ class ContextCollector(private val api: MontoyaApi) {
         kind: String,
         policy: RedactionPolicy,
         deterministic: Boolean,
-        sampleLines: List<String>
-    ): String {
-        return """
+        sampleLines: List<String>,
+    ): String =
+        """
             Kind: $kind
             Items: $count
             Redaction:
@@ -157,9 +180,12 @@ class ContextCollector(private val api: MontoyaApi) {
             Sample:
 ${sampleLines.ifEmpty { listOf("- (none)") }.joinToString(separator = "\n") { "  - $it" }}
         """.trimIndent()
-    }
 
-    private fun previewUrl(url: String?, policy: RedactionPolicy, hostSalt: String): String {
+    private fun previewUrl(
+        url: String?,
+        policy: RedactionPolicy,
+        hostSalt: String,
+    ): String {
         if (url.isNullOrBlank()) return "-"
         if (!policy.anonymizeHosts) return url
         return try {
@@ -187,12 +213,17 @@ ${sampleLines.ifEmpty { listOf("- (none)") }.joinToString(separator = "\n") { " 
     }
 
     private fun hashOf(value: String): String {
-        val digest = MessageDigest.getInstance("SHA-256")
-            .digest(value.toByteArray(StandardCharsets.UTF_8))
+        val digest =
+            MessageDigest
+                .getInstance("SHA-256")
+                .digest(value.toByteArray(StandardCharsets.UTF_8))
         return digest.take(8).joinToString("") { "%02x".format(it) }
     }
 
-    private fun truncateHttpMessageBody(raw: String, maxBodyChars: Int): String {
+    private fun truncateHttpMessageBody(
+        raw: String,
+        maxBodyChars: Int,
+    ): String {
         if (maxBodyChars <= 0) return raw
         val crlfIndex = raw.indexOf("\r\n\r\n")
         val splitIndex = if (crlfIndex >= 0) crlfIndex else raw.indexOf("\n\n")
@@ -204,11 +235,12 @@ ${sampleLines.ifEmpty { listOf("- (none)") }.joinToString(separator = "\n") { " 
         if (body.length <= maxBodyChars) return raw
         val truncated = body.take(maxBodyChars)
         val excerpts = SecurityExcerpts.extract(body, truncated.length)
-        val suffix = if (excerpts.isNullOrBlank()) {
-            "\n...[body truncated]..."
-        } else {
-            "\n...[body truncated]...\n\n=== SECURITY-RELEVANT EXCERPTS ===\n$excerpts"
-        }
+        val suffix =
+            if (excerpts.isNullOrBlank()) {
+                "\n...[body truncated]..."
+            } else {
+                "\n...[body truncated]...\n\n=== SECURITY-RELEVANT EXCERPTS ===\n$excerpts"
+            }
         return raw.substring(0, bodyStart) + truncated + suffix
     }
 
@@ -219,7 +251,9 @@ ${sampleLines.ifEmpty { listOf("- (none)") }.joinToString(separator = "\n") { " 
         for (item in items) {
             val itemJson = mapper.writeValueAsString(item)
             if (totalChars + itemJson.length > Defaults.MAX_CONTEXT_TOTAL_CHARS && result.isNotEmpty()) {
-                log.warning("[ContextCollector] Context cap reached at ${result.size}/${items.size} items (${totalChars} chars). Dropping ${items.size - result.size} trailing item(s).")
+                log.warning(
+                    "[ContextCollector] Context cap reached at ${result.size}/${items.size} items ($totalChars chars). Dropping ${items.size - result.size} trailing item(s).",
+                )
                 break
             }
             totalChars += itemJson.length

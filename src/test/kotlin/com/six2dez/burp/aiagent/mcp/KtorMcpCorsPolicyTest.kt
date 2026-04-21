@@ -7,7 +7,6 @@ import org.junit.jupiter.api.Test
 import org.mockito.kotlin.mock
 
 class KtorMcpCorsPolicyTest {
-
     private val manager = KtorMcpServerManager(mock<MontoyaApi>())
 
     @Test

@@ -9,13 +9,12 @@ object IssueUtils {
     private val uuidLikeRegex = Regex("^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$", RegexOption.IGNORE_CASE)
     private val objectIdLikeRegex = Regex("^[a-f0-9]{24}$", RegexOption.IGNORE_CASE)
 
-    fun canonicalIssueName(name: String): String {
-        return name
+    fun canonicalIssueName(name: String): String =
+        name
             .trim()
             .replace(aiPrefixRegex, "")
             .trim()
             .lowercase()
-    }
 
     /**
      * Normalize a URL for dedup comparison:
@@ -36,7 +35,8 @@ object IssueUtils {
 
     fun normalizePathSegments(path: String): String {
         if (path.isBlank()) return "/"
-        return path.split('/')
+        return path
+            .split('/')
             .joinToString("/") { segment ->
                 when {
                     segment.isBlank() -> ""
@@ -45,28 +45,27 @@ object IssueUtils {
                     objectIdLikeRegex.matches(segment) -> "{oid}"
                     else -> segment
                 }
-            }
-            .ifBlank { "/" }
+            }.ifBlank { "/" }
     }
 
-    fun formatIssueDetailHtml(lines: List<String>): String {
-        return lines.joinToString("<br>") { line ->
-            val escaped = line
-                .replace("&", "&amp;")
-                .replace("<", "&lt;")
-                .replace(">", "&gt;")
+    fun formatIssueDetailHtml(lines: List<String>): String =
+        lines.joinToString("<br>") { line ->
+            val escaped =
+                line
+                    .replace("&", "&amp;")
+                    .replace("<", "&lt;")
+                    .replace(">", "&gt;")
             if (escaped.startsWith("  ")) {
                 "&nbsp;&nbsp;" + escaped.drop(2)
             } else {
                 escaped
             }
         }
-    }
 
     fun hasEquivalentIssue(
         name: String,
         baseUrl: String,
-        issues: Iterable<Pair<String, String>>
+        issues: Iterable<Pair<String, String>>,
     ): Boolean {
         val canonicalName = canonicalIssueName(name)
         val normalizedUrl = normalizeUrl(baseUrl)
@@ -79,15 +78,16 @@ object IssueUtils {
         name: String,
         baseUrl: String,
         issues: Iterable<Pair<String, String>>,
-        ignoreCase: Boolean = false
+        ignoreCase: Boolean = false,
     ): Boolean {
         val normalizedUrl = normalizeUrl(baseUrl)
         return issues.any { issue ->
-            val sameName = if (ignoreCase) {
-                issue.first.equals(name, ignoreCase = true)
-            } else {
-                issue.first == name
-            }
+            val sameName =
+                if (ignoreCase) {
+                    issue.first.equals(name, ignoreCase = true)
+                } else {
+                    issue.first == name
+                }
             sameName && normalizeUrl(issue.second) == normalizedUrl
         }
     }

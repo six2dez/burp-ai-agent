@@ -7,7 +7,7 @@ import java.security.KeyStore
 data class McpTlsMaterial(
     val keyStore: KeyStore,
     val password: CharArray,
-    val keyAlias: String
+    val keyAlias: String,
 )
 
 object McpTls {
@@ -32,26 +32,40 @@ object McpTls {
         return McpTlsMaterial(keyStore = keyStore, password = password, keyAlias = alias)
     }
 
-    private fun generateSelfSigned(keystoreFile: File, password: CharArray) {
+    private fun generateSelfSigned(
+        keystoreFile: File,
+        password: CharArray,
+    ) {
         keystoreFile.parentFile?.mkdirs()
         val passStr = String(password)
 
         // Use keytool from the running JDK - available in all JDK versions
         val keytoolPath = findKeytool()
-        val process = ProcessBuilder(
-            keytoolPath,
-            "-genkeypair",
-            "-alias", "mcp",
-            "-keyalg", "RSA",
-            "-keysize", "2048",
-            "-validity", "365",
-            "-storetype", "PKCS12",
-            "-keystore", keystoreFile.absolutePath,
-            "-storepass", passStr,
-            "-keypass", passStr,
-            "-dname", "CN=burp-mcp",
-            "-sigalg", "SHA256withRSA"
-        ).redirectErrorStream(true).start()
+        val process =
+            ProcessBuilder(
+                keytoolPath,
+                "-genkeypair",
+                "-alias",
+                "mcp",
+                "-keyalg",
+                "RSA",
+                "-keysize",
+                "2048",
+                "-validity",
+                "365",
+                "-storetype",
+                "PKCS12",
+                "-keystore",
+                keystoreFile.absolutePath,
+                "-storepass",
+                passStr,
+                "-keypass",
+                passStr,
+                "-dname",
+                "CN=burp-mcp",
+                "-sigalg",
+                "SHA256withRSA",
+            ).redirectErrorStream(true).start()
 
         val output = process.inputStream.bufferedReader().readText()
         val exitCode = process.waitFor()

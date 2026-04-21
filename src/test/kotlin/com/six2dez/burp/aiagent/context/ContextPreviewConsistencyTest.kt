@@ -16,21 +16,21 @@ import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
 
 class ContextPreviewConsistencyTest {
-
     @Test
     fun httpPreview_isDeterministicAndHostRedactedInStrictMode() {
         val collector = ContextCollector(mock<MontoyaApi>())
         val rrBeta = requestResponse("POST", "https://api.beta.test/b")
         val rrAlpha = requestResponse("GET", "https://api.alpha.test/a")
 
-        val capture = collector.fromRequestResponses(
-            listOf(rrBeta, rrAlpha),
-            ContextOptions(
-                privacyMode = PrivacyMode.STRICT,
-                deterministic = true,
-                hostSalt = "preview-salt"
+        val capture =
+            collector.fromRequestResponses(
+                listOf(rrBeta, rrAlpha),
+                ContextOptions(
+                    privacyMode = PrivacyMode.STRICT,
+                    deterministic = true,
+                    hostSalt = "preview-salt",
+                ),
             )
-        )
 
         val preview = capture.previewText
         assertTrue(preview.contains("Sample:"))
@@ -59,14 +59,15 @@ class ContextPreviewConsistencyTest {
         whenever(issue.remediation()).thenReturn("remediation")
         whenever(issue.httpService()).thenReturn(service)
 
-        val capture = collector.fromAuditIssues(
-            listOf(issue),
-            ContextOptions(
-                privacyMode = PrivacyMode.STRICT,
-                deterministic = true,
-                hostSalt = "preview-salt"
+        val capture =
+            collector.fromAuditIssues(
+                listOf(issue),
+                ContextOptions(
+                    privacyMode = PrivacyMode.STRICT,
+                    deterministic = true,
+                    hostSalt = "preview-salt",
+                ),
             )
-        )
 
         val preview = capture.previewText
         assertTrue(preview.contains("SQL injection"))
@@ -74,7 +75,10 @@ class ContextPreviewConsistencyTest {
         assertFalse(preview.contains("internal.example"))
     }
 
-    private fun requestResponse(method: String, url: String): HttpRequestResponse {
+    private fun requestResponse(
+        method: String,
+        url: String,
+    ): HttpRequestResponse {
         val host = java.net.URI(url).host
         val path = java.net.URI(url).rawPath
         val request = mock<HttpRequest>()
@@ -84,14 +88,14 @@ class ContextPreviewConsistencyTest {
             "$method $path HTTP/1.1\\r\\n" +
                 "Host: $host\\r\\n" +
                 "Authorization: Bearer secret-token\\r\\n\\r\\n" +
-                "{\"demo\":\"value\"}"
+                "{\"demo\":\"value\"}",
         )
 
         val response = mock<HttpResponse>()
         whenever(response.toString()).thenReturn(
             "HTTP/1.1 200 OK\\r\\n" +
                 "Set-Cookie: session=secret\\r\\n\\r\\n" +
-                "ok"
+                "ok",
         )
 
         val rr = mock<HttpRequestResponse>()

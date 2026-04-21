@@ -8,21 +8,24 @@ import com.six2dez.burp.aiagent.backends.HealthCheckResult
 data class TransportResponse(
     val statusCode: Int,
     val body: String,
-    val isSuccessful: Boolean
+    val isSuccessful: Boolean,
 )
 
-class MontoyaHttpTransport(private val api: MontoyaApi) {
-
+class MontoyaHttpTransport(
+    private val api: MontoyaApi,
+) {
     fun post(
         url: String,
         headers: Map<String, String>,
         jsonBody: String,
-        timeoutMs: Long = 120_000
+        timeoutMs: Long = 120_000,
     ): TransportResponse {
-        var request = HttpRequest.httpRequestFromUrl(url)
-            .withMethod("POST")
-            .withBody(jsonBody)
-            .withAddedHeader("Content-Type", "application/json")
+        var request =
+            HttpRequest
+                .httpRequestFromUrl(url)
+                .withMethod("POST")
+                .withBody(jsonBody)
+                .withAddedHeader("Content-Type", "application/json")
         headers.forEach { (name, value) ->
             request = request.withAddedHeader(name, value)
         }
@@ -32,7 +35,7 @@ class MontoyaHttpTransport(private val api: MontoyaApi) {
     fun get(
         url: String,
         headers: Map<String, String>,
-        timeoutMs: Long = 3_000
+        timeoutMs: Long = 3_000,
     ): TransportResponse {
         var request = HttpRequest.httpRequestFromUrl(url)
         headers.forEach { (name, value) ->
@@ -44,9 +47,9 @@ class MontoyaHttpTransport(private val api: MontoyaApi) {
     fun healthCheckGet(
         url: String,
         headers: Map<String, String>,
-        timeoutMs: Long = 3_000
-    ): HealthCheckResult {
-        return try {
+        timeoutMs: Long = 3_000,
+    ): HealthCheckResult =
+        try {
             val resp = get(url, headers, timeoutMs)
             when {
                 resp.isSuccessful -> HealthCheckResult.Healthy
@@ -57,12 +60,16 @@ class MontoyaHttpTransport(private val api: MontoyaApi) {
         } catch (e: Exception) {
             HealthCheckResult.Unavailable(e.message ?: "Request failed")
         }
-    }
 
-    private fun execute(request: HttpRequest, timeoutMs: Long): TransportResponse {
-        val options = RequestOptions.requestOptions()
-            .withUpstreamTLSVerification()
-            .withResponseTimeout(timeoutMs)
+    private fun execute(
+        request: HttpRequest,
+        timeoutMs: Long,
+    ): TransportResponse {
+        val options =
+            RequestOptions
+                .requestOptions()
+                .withUpstreamTLSVerification()
+                .withResponseTimeout(timeoutMs)
         val result = api.http().sendRequest(request, options)
         val response = result.response()
         val code = response?.statusCode()?.toInt() ?: 0
@@ -70,7 +77,7 @@ class MontoyaHttpTransport(private val api: MontoyaApi) {
         return TransportResponse(
             statusCode = code,
             body = body,
-            isSuccessful = code in 200..299
+            isSuccessful = code in 200..299,
         )
     }
 }

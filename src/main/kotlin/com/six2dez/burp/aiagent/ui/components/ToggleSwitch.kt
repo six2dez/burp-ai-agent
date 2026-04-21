@@ -13,8 +13,9 @@ import javax.swing.Timer
  * Extends JToggleButton so isSelected, addActionListener, and addItemListener work natively.
  * Track: 44x22px rounded, Thumb: 18px circle, animated ~150ms transition.
  */
-class ToggleSwitch(selected: Boolean = false) : JToggleButton() {
-
+class ToggleSwitch(
+    selected: Boolean = false,
+) : JToggleButton() {
     private val trackWidth = 44
     private val trackHeight = 22
     private val thumbDiameter = 18
@@ -24,19 +25,20 @@ class ToggleSwitch(selected: Boolean = false) : JToggleButton() {
     private val animTimer: Timer
 
     init {
-        animTimer = Timer(15) {
-            val target = if (isSelected) maxThumbX() else minThumbX()
-            val delta = (maxThumbX() - minThumbX()) / 10f // ~150ms at 15ms interval
-            if (thumbX < target) {
-                thumbX = (thumbX + delta).coerceAtMost(target)
-            } else if (thumbX > target) {
-                thumbX = (thumbX - delta).coerceAtLeast(target)
+        animTimer =
+            Timer(15) {
+                val target = if (isSelected) maxThumbX() else minThumbX()
+                val delta = (maxThumbX() - minThumbX()) / 10f // ~150ms at 15ms interval
+                if (thumbX < target) {
+                    thumbX = (thumbX + delta).coerceAtMost(target)
+                } else if (thumbX > target) {
+                    thumbX = (thumbX - delta).coerceAtLeast(target)
+                }
+                repaint()
+                if (thumbX == target) {
+                    animTimer.stop()
+                }
             }
-            repaint()
-            if (thumbX == target) {
-                animTimer.stop()
-            }
-        }
 
         isSelected = selected
         isOpaque = false
@@ -54,6 +56,7 @@ class ToggleSwitch(selected: Boolean = false) : JToggleButton() {
     }
 
     private fun minThumbX(): Float = thumbPadding.toFloat()
+
     private fun maxThumbX(): Float = (trackWidth - thumbDiameter - thumbPadding).toFloat()
 
     override fun paintComponent(g: Graphics) {
@@ -62,9 +65,14 @@ class ToggleSwitch(selected: Boolean = false) : JToggleButton() {
 
         // Track
         val trackColor = if (isSelected) UiTheme.Colors.statusRunning else UiTheme.Colors.outlineVariant
-        g2.color = if (isEnabled) trackColor else trackColor.let {
-            java.awt.Color(it.red, it.green, it.blue, 100)
-        }
+        g2.color =
+            if (isEnabled) {
+                trackColor
+            } else {
+                trackColor.let {
+                    java.awt.Color(it.red, it.green, it.blue, 100)
+                }
+            }
         g2.fillRoundRect(0, 0, trackWidth, trackHeight, trackHeight, trackHeight)
 
         if (isFocusOwner) {
@@ -81,7 +89,9 @@ class ToggleSwitch(selected: Boolean = false) : JToggleButton() {
     }
 
     override fun getPreferredSize(): Dimension = Dimension(trackWidth, trackHeight)
+
     override fun getMinimumSize(): Dimension = Dimension(trackWidth, trackHeight)
+
     override fun getMaximumSize(): Dimension = Dimension(trackWidth, trackHeight)
 
     override fun setSelected(selected: Boolean) {

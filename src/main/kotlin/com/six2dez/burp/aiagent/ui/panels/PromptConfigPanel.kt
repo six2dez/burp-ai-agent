@@ -1,6 +1,7 @@
 package com.six2dez.burp.aiagent.ui.panels
 
 import com.six2dez.burp.aiagent.ui.UiTheme
+import com.six2dez.burp.aiagent.ui.components.ToggleSwitch
 import java.awt.BorderLayout
 import java.awt.Dimension
 import javax.swing.BoxLayout
@@ -11,7 +12,6 @@ import javax.swing.JScrollPane
 import javax.swing.JSpinner
 import javax.swing.JTextArea
 import javax.swing.border.EmptyBorder
-import com.six2dez.burp.aiagent.ui.components.ToggleSwitch
 
 class PromptConfigPanel(
     private val sectionPanel: (String, String, JComponent) -> JPanel,
@@ -30,7 +30,8 @@ class PromptConfigPanel(
     private val bountyPromptDir: javax.swing.JTextField,
     private val bountyPromptAutoCreateIssues: ToggleSwitch,
     private val bountyPromptIssueThreshold: JSpinner,
-    private val bountyPromptEnabledIds: JTextArea
+    private val bountyPromptEnabledIds: JTextArea,
+    private val customPromptLibrarySection: JComponent,
 ) : ConfigPanel {
     override fun build(): JPanel {
         val body = JPanel(BorderLayout())
@@ -79,17 +80,25 @@ class PromptConfigPanel(
         addRowFull(bountyGrid, "Prompt directory", bountyPromptDir)
         addRowFull(bountyGrid, "Auto-create issues", bountyPromptAutoCreateIssues)
         addRowFull(bountyGrid, "Issue confidence threshold", bountyPromptIssueThreshold)
-        val idsScroll = JScrollPane(bountyPromptEnabledIds).apply {
-            preferredSize = Dimension(preferredSize.width, 60)
-        }
+        val idsScroll =
+            JScrollPane(bountyPromptEnabledIds).apply {
+                preferredSize = Dimension(preferredSize.width, 60)
+            }
         addRowFull(bountyGrid, "Enabled prompt IDs", idsScroll)
         content.add(bountyGrid)
+
+        val libraryTitle = JLabel("Custom prompt library")
+        libraryTitle.font = UiTheme.Typography.label
+        libraryTitle.foreground = UiTheme.Colors.onSurfaceVariant
+        libraryTitle.border = EmptyBorder(12, 0, 6, 0)
+        content.add(libraryTitle)
+        content.add(customPromptLibrarySection)
 
         body.add(content, BorderLayout.CENTER)
         return sectionPanel(
             "Prompt Templates",
             "Edit built-in prompts and curated BountyPrompt context actions.",
-            body
+            body,
         )
     }
 }

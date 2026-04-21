@@ -1,6 +1,8 @@
 package com.six2dez.burp.aiagent.ui
 
 import burp.api.montoya.MontoyaApi
+import burp.api.montoya.core.BurpSuiteEdition
+import com.six2dez.burp.aiagent.agents.AgentProfileLoader
 import com.six2dez.burp.aiagent.audit.AuditLogger
 import com.six2dez.burp.aiagent.backends.BackendRegistry
 import com.six2dez.burp.aiagent.backends.HealthCheckResult
@@ -12,23 +14,22 @@ import com.six2dez.burp.aiagent.config.SeverityLevel
 import com.six2dez.burp.aiagent.config.toPreprocessorSettings
 import com.six2dez.burp.aiagent.mcp.McpSupervisor
 import com.six2dez.burp.aiagent.mcp.McpToolCatalog
-import com.six2dez.burp.aiagent.agents.AgentProfileLoader
 import com.six2dez.burp.aiagent.prompts.bountyprompt.BountyPromptCatalog
-import com.six2dez.burp.aiagent.ui.components.ToggleSwitch
-import com.six2dez.burp.aiagent.ui.panels.ActiveScanConfigPanel
-import com.six2dez.burp.aiagent.ui.panels.BackendConfigPanel
-import com.six2dez.burp.aiagent.ui.panels.BackendConfigState
-import com.six2dez.burp.aiagent.ui.panels.HelpConfigPanel
-import com.six2dez.burp.aiagent.ui.panels.McpConfigPanel
-import com.six2dez.burp.aiagent.ui.panels.ActiveScanQueuePanel
-import com.six2dez.burp.aiagent.ui.panels.PassiveScanConfigPanel
-import com.six2dez.burp.aiagent.ui.panels.PrivacyConfigPanel
-import com.six2dez.burp.aiagent.ui.panels.PromptConfigPanel
 import com.six2dez.burp.aiagent.redact.PrivacyMode
 import com.six2dez.burp.aiagent.scanner.PayloadRisk
 import com.six2dez.burp.aiagent.scanner.ScanMode
 import com.six2dez.burp.aiagent.supervisor.AgentSupervisor
-import burp.api.montoya.core.BurpSuiteEdition
+import com.six2dez.burp.aiagent.ui.components.CustomPromptLibraryEditor
+import com.six2dez.burp.aiagent.ui.components.ToggleSwitch
+import com.six2dez.burp.aiagent.ui.panels.ActiveScanConfigPanel
+import com.six2dez.burp.aiagent.ui.panels.ActiveScanQueuePanel
+import com.six2dez.burp.aiagent.ui.panels.BackendConfigPanel
+import com.six2dez.burp.aiagent.ui.panels.BackendConfigState
+import com.six2dez.burp.aiagent.ui.panels.HelpConfigPanel
+import com.six2dez.burp.aiagent.ui.panels.McpConfigPanel
+import com.six2dez.burp.aiagent.ui.panels.PassiveScanConfigPanel
+import com.six2dez.burp.aiagent.ui.panels.PrivacyConfigPanel
+import com.six2dez.burp.aiagent.ui.panels.PromptConfigPanel
 import java.awt.BorderLayout
 import java.awt.GridBagConstraints
 import java.awt.GridBagLayout
@@ -51,10 +52,14 @@ class SettingsPanel(
     private val audit: AuditLogger,
     private val mcpSupervisor: McpSupervisor,
     private val passiveAiScanner: com.six2dez.burp.aiagent.scanner.PassiveAiScanner,
-    private val activeAiScanner: com.six2dez.burp.aiagent.scanner.ActiveAiScanner
+    private val activeAiScanner: com.six2dez.burp.aiagent.scanner.ActiveAiScanner,
 ) {
     private val settingsRepo = AgentSettingsRepository(api)
     private var settings: AgentSettings = settingsRepo.load()
+    private val customPromptLibraryEditor =
+        CustomPromptLibraryEditor().apply {
+            load(settings.customPromptLibrary)
+        }
     var onMcpEnabledChanged: ((Boolean) -> Unit)? = null
     var onPassiveAiEnabledChanged: ((Boolean) -> Unit)? = null
     var onActiveAiEnabledChanged: ((Boolean) -> Unit)? = null
@@ -71,59 +76,64 @@ class SettingsPanel(
     private lateinit var privacyTab: JComponent
     private lateinit var helpTab: JComponent
 
-    private val backendConfigPanel = BackendConfigPanel(
-        BackendConfigState(
-            codexCmd = settings.codexCmd,
-            geminiCmd = settings.geminiCmd,
-            opencodeCmd = settings.opencodeCmd,
-            claudeCmd = settings.claudeCmd,
-            ollamaCliCmd = settings.ollamaCliCmd,
-            ollamaModel = settings.ollamaModel,
-            ollamaUrl = settings.ollamaUrl,
-            ollamaServeCmd = settings.ollamaServeCmd,
-            ollamaAutoStart = settings.ollamaAutoStart,
-            ollamaApiKey = settings.ollamaApiKey,
-            ollamaHeaders = settings.ollamaHeaders,
-            ollamaTimeoutSeconds = settings.ollamaTimeoutSeconds.toString(),
-            lmStudioUrl = settings.lmStudioUrl,
-            lmStudioModel = settings.lmStudioModel,
-            lmStudioTimeoutSeconds = settings.lmStudioTimeoutSeconds.toString(),
-            lmStudioServerCmd = settings.lmStudioServerCmd,
-            lmStudioAutoStart = settings.lmStudioAutoStart,
-            lmStudioApiKey = settings.lmStudioApiKey,
-            lmStudioHeaders = settings.lmStudioHeaders,
-            openAiCompatUrl = settings.openAiCompatibleUrl,
-            openAiCompatModel = settings.openAiCompatibleModel,
-            openAiCompatApiKey = settings.openAiCompatibleApiKey,
-            openAiCompatHeaders = settings.openAiCompatibleHeaders,
-            openAiCompatTimeoutSeconds = settings.openAiCompatibleTimeoutSeconds.toString(),
-            nvidiaNimUrl = settings.nvidiaNimUrl,
-            nvidiaNimModel = settings.nvidiaNimModel,
-            nvidiaNimApiKey = settings.nvidiaNimApiKey,
-            nvidiaNimHeaders = settings.nvidiaNimHeaders,
-            nvidiaNimTimeoutSeconds = settings.nvidiaNimTimeoutSeconds.toString(),
-            copilotCmd = settings.copilotCmd
+    private val backendConfigPanel =
+        BackendConfigPanel(
+            BackendConfigState(
+                codexCmd = settings.codexCmd,
+                geminiCmd = settings.geminiCmd,
+                opencodeCmd = settings.opencodeCmd,
+                claudeCmd = settings.claudeCmd,
+                ollamaCliCmd = settings.ollamaCliCmd,
+                ollamaModel = settings.ollamaModel,
+                ollamaUrl = settings.ollamaUrl,
+                ollamaServeCmd = settings.ollamaServeCmd,
+                ollamaAutoStart = settings.ollamaAutoStart,
+                ollamaApiKey = settings.ollamaApiKey,
+                ollamaHeaders = settings.ollamaHeaders,
+                ollamaTimeoutSeconds = settings.ollamaTimeoutSeconds.toString(),
+                lmStudioUrl = settings.lmStudioUrl,
+                lmStudioModel = settings.lmStudioModel,
+                lmStudioTimeoutSeconds = settings.lmStudioTimeoutSeconds.toString(),
+                lmStudioServerCmd = settings.lmStudioServerCmd,
+                lmStudioAutoStart = settings.lmStudioAutoStart,
+                lmStudioApiKey = settings.lmStudioApiKey,
+                lmStudioHeaders = settings.lmStudioHeaders,
+                openAiCompatUrl = settings.openAiCompatibleUrl,
+                openAiCompatModel = settings.openAiCompatibleModel,
+                openAiCompatApiKey = settings.openAiCompatibleApiKey,
+                openAiCompatHeaders = settings.openAiCompatibleHeaders,
+                openAiCompatTimeoutSeconds = settings.openAiCompatibleTimeoutSeconds.toString(),
+                nvidiaNimUrl = settings.nvidiaNimUrl,
+                nvidiaNimModel = settings.nvidiaNimModel,
+                nvidiaNimApiKey = settings.nvidiaNimApiKey,
+                nvidiaNimHeaders = settings.nvidiaNimHeaders,
+                nvidiaNimTimeoutSeconds = settings.nvidiaNimTimeoutSeconds.toString(),
+                copilotCmd = settings.copilotCmd,
+            ),
         )
-    )
-    private val profilePicker = JComboBox<String>().apply {
-        preferredSize = java.awt.Dimension(140, preferredSize.height)
-        maximumSize = java.awt.Dimension(140, preferredSize.height)
-    }
-    private val profileWarningLabel = JLabel().apply {
-        isVisible = false
-    }
+    private val profilePicker =
+        JComboBox<String>().apply {
+            preferredSize = java.awt.Dimension(140, preferredSize.height)
+            maximumSize = java.awt.Dimension(140, preferredSize.height)
+        }
+    private val profileWarningLabel =
+        JLabel().apply {
+            isVisible = false
+        }
     private val refreshProfilesBtn = JButton("Refresh")
-    private val preferredBackend = JComboBox(backends.listAllBackendIds().toTypedArray()).apply {
-        selectedItem = settings.preferredBackendId
-        preferredSize = java.awt.Dimension(140, preferredSize.height)
-        maximumSize = java.awt.Dimension(140, preferredSize.height)
-    }
+    private val preferredBackend =
+        JComboBox(backends.listAllBackendIds().toTypedArray()).apply {
+            selectedItem = settings.preferredBackendId
+            preferredSize = java.awt.Dimension(140, preferredSize.height)
+            maximumSize = java.awt.Dimension(140, preferredSize.height)
+        }
 
-    private val privacyMode = JComboBox(PrivacyMode.entries.toTypedArray()).apply {
-        selectedItem = settings.privacyMode
-        preferredSize = java.awt.Dimension(120, preferredSize.height)
-        maximumSize = java.awt.Dimension(120, preferredSize.height)
-    }
+    private val privacyMode =
+        JComboBox(PrivacyMode.entries.toTypedArray()).apply {
+            selectedItem = settings.privacyMode
+            preferredSize = java.awt.Dimension(120, preferredSize.height)
+            maximumSize = java.awt.Dimension(120, preferredSize.height)
+        }
     private val determinism = ToggleSwitch(settings.determinismMode)
     private val autoRestart = ToggleSwitch(settings.autoRestart)
     private val auditEnabled = ToggleSwitch(settings.auditEnabled)
@@ -138,263 +148,308 @@ class SettingsPanel(
     private val promptIssueImpact = JTextArea(settings.issueImpactPrompt, 3, 20)
     private val promptIssueFull = JTextArea(settings.issuePromptTemplate, 3, 20)
     private val bountyPromptEnabled = ToggleSwitch(settings.bountyPromptEnabled)
-    private val bountyPromptDir = JTextField(settings.bountyPromptDir, 24).apply {
-        preferredSize = java.awt.Dimension(320, preferredSize.height)
-    }
+    private val bountyPromptDir =
+        JTextField(settings.bountyPromptDir, 24).apply {
+            preferredSize = java.awt.Dimension(320, preferredSize.height)
+        }
     private val bountyPromptAutoCreateIssues = ToggleSwitch(settings.bountyPromptAutoCreateIssues)
-    private val bountyPromptIssueThreshold = JSpinner(
-        SpinnerNumberModel(settings.bountyPromptIssueConfidenceThreshold, 0, 100, 1)
-    ).apply {
-        preferredSize = java.awt.Dimension(80, preferredSize.height)
-        maximumSize = java.awt.Dimension(80, preferredSize.height)
-    }
-    private val bountyPromptEnabledIds = JTextArea(
-        settings.bountyPromptEnabledPromptIds.joinToString(","),
-        2,
-        20
-    )
+    private val bountyPromptIssueThreshold =
+        JSpinner(
+            SpinnerNumberModel(settings.bountyPromptIssueConfidenceThreshold, 0, 100, 1),
+        ).apply {
+            preferredSize = java.awt.Dimension(80, preferredSize.height)
+            maximumSize = java.awt.Dimension(80, preferredSize.height)
+        }
+    private val bountyPromptEnabledIds =
+        JTextArea(
+            settings.bountyPromptEnabledPromptIds.joinToString(","),
+            2,
+            20,
+        )
     private val aiLoggerEnabled = ToggleSwitch(settings.aiRequestLoggerEnabled)
-    private val aiLoggerMaxEntries = JSpinner(
-        SpinnerNumberModel(settings.aiRequestLoggerMaxEntries, 10, 5000, 50)
-    ).apply {
-        preferredSize = java.awt.Dimension(80, preferredSize.height)
-        maximumSize = java.awt.Dimension(80, preferredSize.height)
-    }
+    private val aiLoggerMaxEntries =
+        JSpinner(
+            SpinnerNumberModel(settings.aiRequestLoggerMaxEntries, 10, 5000, 50),
+        ).apply {
+            preferredSize = java.awt.Dimension(80, preferredSize.height)
+            maximumSize = java.awt.Dimension(80, preferredSize.height)
+        }
     private val privacyWarning = JLabel("Privacy mode is OFF. Raw traffic may be exposed via MCP and prompts.")
-    private val privacyActiveWarning = JLabel(
-        "STRICT anonymizes hosts in AI prompts but does not prevent active scanner from sending real requests to targets."
-    )
-    private val privacyRiskWarning = JLabel(
-        "High risk: Privacy OFF and Audit logging OFF reduce traceability and data protection."
-    )
+    private val privacyActiveWarning =
+        JLabel(
+            "STRICT anonymizes hosts in AI prompts but does not prevent active scanner from sending real requests to targets.",
+        )
+    private val privacyRiskWarning =
+        JLabel(
+            "High risk: Privacy OFF and Audit logging OFF reduce traceability and data protection.",
+        )
     private val saveFeedbackLabel = JLabel("No recent save activity.")
     private val mcpEnabled = ToggleSwitch(settings.mcpSettings.enabled)
-    private val mcpHost = JTextField(settings.mcpSettings.host, 15).apply {
-        preferredSize = java.awt.Dimension(140, preferredSize.height)
-        maximumSize = java.awt.Dimension(140, preferredSize.height)
-    }
-    private val mcpPort = JSpinner(SpinnerNumberModel(settings.mcpSettings.port, 1, 65535, 1)).apply {
-        preferredSize = java.awt.Dimension(80, preferredSize.height)
-        maximumSize = java.awt.Dimension(80, preferredSize.height)
-    }
+    private val mcpHost =
+        JTextField(settings.mcpSettings.host, 15).apply {
+            preferredSize = java.awt.Dimension(140, preferredSize.height)
+            maximumSize = java.awt.Dimension(140, preferredSize.height)
+        }
+    private val mcpPort =
+        JSpinner(SpinnerNumberModel(settings.mcpSettings.port, 1, 65535, 1)).apply {
+            preferredSize = java.awt.Dimension(80, preferredSize.height)
+            maximumSize = java.awt.Dimension(80, preferredSize.height)
+        }
     private val mcpExternal = JCheckBox("Allow external access (requires TLS)", settings.mcpSettings.externalEnabled)
     private val mcpStdio = JCheckBox("Enable stdio bridge", settings.mcpSettings.stdioEnabled)
     private val mcpTlsEnabled = JCheckBox("Enable TLS", settings.mcpSettings.tlsEnabled)
     private val mcpTlsAuto = JCheckBox("Auto-generate TLS certificate", settings.mcpSettings.tlsAutoGenerate)
     private val mcpKeystorePath = JTextField(settings.mcpSettings.tlsKeystorePath)
-    private val mcpKeystorePassword = JPasswordField(settings.mcpSettings.tlsKeystorePassword).apply {
-        preferredSize = java.awt.Dimension(200, preferredSize.height)
-    }
+    private val mcpKeystorePassword =
+        JPasswordField(settings.mcpSettings.tlsKeystorePassword).apply {
+            preferredSize = java.awt.Dimension(200, preferredSize.height)
+        }
     private val mcpToken = JTextField(settings.mcpSettings.token)
-    private val mcpAllowedOrigins = JTextArea(
-        settings.mcpSettings.allowedOrigins.joinToString("\n"),
-        3,
-        20
-    )
-    private val mcpCorsWarning = JLabel(
-        "External access is enabled with no allowed origins. CORS will allow any origin."
-    )
-    private val mcpRiskWarning = JLabel(
-        "High risk: External MCP and Unsafe mode together permit remote state-changing tool execution."
-    )
-    private val mcpTokenRegenerate = JButton("Regenerate token")
-    private val mcpMaxConcurrent = JSpinner(
-        SpinnerNumberModel(settings.mcpSettings.maxConcurrentRequests, 1, 64, 1)
-    ).apply {
-        preferredSize = java.awt.Dimension(70, preferredSize.height)
-        maximumSize = java.awt.Dimension(70, preferredSize.height)
-    }
-    private val mcpMaxBodyMb = JSpinner(
-        SpinnerNumberModel(
-            (settings.mcpSettings.maxBodyBytes / (1024 * 1024)).coerceAtLeast(1),
-            1,
-            100,
-            1
+    private val mcpAllowedOrigins =
+        JTextArea(
+            settings.mcpSettings.allowedOrigins.joinToString("\n"),
+            3,
+            20,
         )
-    ).apply {
-        preferredSize = java.awt.Dimension(70, preferredSize.height)
-        maximumSize = java.awt.Dimension(70, preferredSize.height)
-    }
-    private val mcpProxyHistoryMaxItems = JSpinner(
-        SpinnerNumberModel(settings.mcpSettings.proxyHistoryMaxItemsPerRequest, 1, 500, 1)
-    ).apply {
-        preferredSize = java.awt.Dimension(70, preferredSize.height)
-        maximumSize = java.awt.Dimension(70, preferredSize.height)
-    }
-    private val mcpProxyHistorySortOrder = JComboBox(arrayOf("Newest first", "Oldest first")).apply {
-        selectedItem = if (settings.mcpSettings.proxyHistoryNewestFirst) "Newest first" else "Oldest first"
-        preferredSize = java.awt.Dimension(120, preferredSize.height)
-        maximumSize = java.awt.Dimension(120, preferredSize.height)
-    }
-    private val mcpAllowUnpreprocessedProxyHistory = JCheckBox(
-        "Allow AI to request unpreprocessed proxy responses",
-        settings.mcpSettings.allowUnpreprocessedProxyHistory
-    )
+    private val mcpCorsWarning =
+        JLabel(
+            "External access is enabled with no allowed origins. CORS will allow any origin.",
+        )
+    private val mcpRiskWarning =
+        JLabel(
+            "High risk: External MCP and Unsafe mode together permit remote state-changing tool execution.",
+        )
+    private val mcpTokenRegenerate = JButton("Regenerate token")
+    private val mcpMaxConcurrent =
+        JSpinner(
+            SpinnerNumberModel(settings.mcpSettings.maxConcurrentRequests, 1, 64, 1),
+        ).apply {
+            preferredSize = java.awt.Dimension(70, preferredSize.height)
+            maximumSize = java.awt.Dimension(70, preferredSize.height)
+        }
+    private val mcpMaxBodyMb =
+        JSpinner(
+            SpinnerNumberModel(
+                (settings.mcpSettings.maxBodyBytes / (1024 * 1024)).coerceAtLeast(1),
+                1,
+                100,
+                1,
+            ),
+        ).apply {
+            preferredSize = java.awt.Dimension(70, preferredSize.height)
+            maximumSize = java.awt.Dimension(70, preferredSize.height)
+        }
+    private val mcpProxyHistoryMaxItems =
+        JSpinner(
+            SpinnerNumberModel(settings.mcpSettings.proxyHistoryMaxItemsPerRequest, 1, 500, 1),
+        ).apply {
+            preferredSize = java.awt.Dimension(70, preferredSize.height)
+            maximumSize = java.awt.Dimension(70, preferredSize.height)
+        }
+    private val mcpProxyHistorySortOrder =
+        JComboBox(arrayOf("Newest first", "Oldest first")).apply {
+            selectedItem = if (settings.mcpSettings.proxyHistoryNewestFirst) "Newest first" else "Oldest first"
+            preferredSize = java.awt.Dimension(120, preferredSize.height)
+            maximumSize = java.awt.Dimension(120, preferredSize.height)
+        }
+    private val mcpAllowUnpreprocessedProxyHistory =
+        JCheckBox(
+            "Allow AI to request unpreprocessed proxy responses",
+            settings.mcpSettings.allowUnpreprocessedProxyHistory,
+        )
     private val mcpUnsafe = JCheckBox("Unsafe mode (allow write/mutation tools)", settings.mcpSettings.unsafeEnabled)
     private val preprocessProxyHistory = ToggleSwitch(settings.preprocessProxyHistory)
-    private val preprocessMaxResponseSizeKb = JSpinner(
-        SpinnerNumberModel(settings.preprocessMaxResponseSizeKb, 1, 10_240, 1)
-    ).apply {
-        preferredSize = java.awt.Dimension(80, preferredSize.height)
-        maximumSize = java.awt.Dimension(80, preferredSize.height)
-    }
-    private val preprocessFilterBinaryContent = JCheckBox(
-        "Filter binary content (images, video, audio)",
-        settings.preprocessFilterBinaryContent
-    )
-    private val preprocessAllowedContentTypes = JTextArea(
-        settings.preprocessAllowedContentTypes.joinToString(","),
-        3,
-        20
-    )
+    private val preprocessMaxResponseSizeKb =
+        JSpinner(
+            SpinnerNumberModel(settings.preprocessMaxResponseSizeKb, 1, 10_240, 1),
+        ).apply {
+            preferredSize = java.awt.Dimension(80, preferredSize.height)
+            maximumSize = java.awt.Dimension(80, preferredSize.height)
+        }
+    private val preprocessFilterBinaryContent =
+        JCheckBox(
+            "Filter binary content (images, video, audio)",
+            settings.preprocessFilterBinaryContent,
+        )
+    private val preprocessAllowedContentTypes =
+        JTextArea(
+            settings.preprocessAllowedContentTypes.joinToString(","),
+            3,
+            20,
+        )
     private val mcpToolCheckboxes = mutableMapOf<String, JCheckBox>()
     private val mcpUnsafeApprovalCheckboxes = mutableMapOf<String, JCheckBox>()
-    
+
     // Passive AI Scanner UI components
     private val passiveAiEnabled = ToggleSwitch(settings.passiveAiEnabled)
     private val passiveAiScopeOnly = JCheckBox("In-scope only", settings.passiveAiScopeOnly)
-    private val passiveAiRateSpinner = JSpinner(SpinnerNumberModel(settings.passiveAiRateSeconds, 1, 60, 1)).apply {
-        preferredSize = java.awt.Dimension(70, preferredSize.height)
-        maximumSize = java.awt.Dimension(70, preferredSize.height)
-    }
-    private val passiveAiMaxSizeSpinner = JSpinner(SpinnerNumberModel(settings.passiveAiMaxSizeKb, 16, 1024, 1)).apply {
-        preferredSize = java.awt.Dimension(80, preferredSize.height)
-        maximumSize = java.awt.Dimension(80, preferredSize.height)
-    }
-    private val passiveAiExcludedExtensionsField = JTextField(settings.passiveAiExcludedExtensions, 30).apply {
-        toolTipText = "Comma-separated file extensions to skip (e.g. css,js,png,woff). Leave empty to disable."
-    }
-    private val passiveAiBatchSizeSpinner = JSpinner(
-        SpinnerNumberModel(settings.passiveAiBatchSize, 1, 5, 1)
-    ).apply {
-        preferredSize = java.awt.Dimension(60, preferredSize.height)
-        maximumSize = java.awt.Dimension(60, preferredSize.height)
-    }
+    private val passiveAiRateSpinner =
+        JSpinner(SpinnerNumberModel(settings.passiveAiRateSeconds, 1, 60, 1)).apply {
+            preferredSize = java.awt.Dimension(70, preferredSize.height)
+            maximumSize = java.awt.Dimension(70, preferredSize.height)
+        }
+    private val passiveAiMaxSizeSpinner =
+        JSpinner(SpinnerNumberModel(settings.passiveAiMaxSizeKb, 16, 1024, 1)).apply {
+            preferredSize = java.awt.Dimension(80, preferredSize.height)
+            maximumSize = java.awt.Dimension(80, preferredSize.height)
+        }
+    private val passiveAiExcludedExtensionsField =
+        JTextField(settings.passiveAiExcludedExtensions, 30).apply {
+            toolTipText = "Comma-separated file extensions to skip (e.g. css,js,png,woff). Leave empty to disable."
+        }
+    private val passiveAiBatchSizeSpinner =
+        JSpinner(
+            SpinnerNumberModel(settings.passiveAiBatchSize, 1, 5, 1),
+        ).apply {
+            preferredSize = java.awt.Dimension(60, preferredSize.height)
+            maximumSize = java.awt.Dimension(60, preferredSize.height)
+        }
     private val passiveAiPersistentCacheEnabled = JCheckBox("Enable persistent cache", settings.passiveAiPersistentCacheEnabled)
-    private val passiveAiPersistentCacheTtlSpinner = JSpinner(
-        SpinnerNumberModel(settings.passiveAiPersistentCacheTtlHours, 1, 168, 1)
-    ).apply {
-        preferredSize = java.awt.Dimension(80, preferredSize.height)
-        maximumSize = java.awt.Dimension(80, preferredSize.height)
-    }
-    private val passiveAiPersistentCacheMaxMbSpinner = JSpinner(
-        SpinnerNumberModel(settings.passiveAiPersistentCacheMaxMb, 10, 500, 10)
-    ).apply {
-        preferredSize = java.awt.Dimension(80, preferredSize.height)
-        maximumSize = java.awt.Dimension(80, preferredSize.height)
-    }
-    private val passiveAiMinSeverityCombo = JComboBox(arrayOf("LOW", "MEDIUM", "HIGH", "CRITICAL")).apply {
-        selectedItem = settings.passiveAiMinSeverity.name
-        preferredSize = java.awt.Dimension(100, preferredSize.height)
-        maximumSize = java.awt.Dimension(100, preferredSize.height)
-    }
-    private val passiveAiEndpointDedupSpinner = JSpinner(
-        SpinnerNumberModel(settings.passiveAiEndpointDedupMinutes, 1, 240, 1)
-    ).apply {
-        preferredSize = java.awt.Dimension(80, preferredSize.height)
-        maximumSize = java.awt.Dimension(80, preferredSize.height)
-    }
-    private val passiveAiFingerprintDedupSpinner = JSpinner(
-        SpinnerNumberModel(settings.passiveAiResponseFingerprintDedupMinutes, 1, 240, 1)
-    ).apply {
-        preferredSize = java.awt.Dimension(80, preferredSize.height)
-        maximumSize = java.awt.Dimension(80, preferredSize.height)
-    }
-    private val passiveAiPromptCacheTtlSpinner = JSpinner(
-        SpinnerNumberModel(settings.passiveAiPromptCacheTtlMinutes, 1, 240, 1)
-    ).apply {
-        preferredSize = java.awt.Dimension(80, preferredSize.height)
-        maximumSize = java.awt.Dimension(80, preferredSize.height)
-    }
-    private val passiveAiEndpointCacheEntriesSpinner = JSpinner(
-        SpinnerNumberModel(settings.passiveAiEndpointCacheEntries, 100, 50_000, 100)
-    ).apply {
-        preferredSize = java.awt.Dimension(95, preferredSize.height)
-        maximumSize = java.awt.Dimension(95, preferredSize.height)
-    }
-    private val passiveAiFingerprintCacheEntriesSpinner = JSpinner(
-        SpinnerNumberModel(settings.passiveAiResponseFingerprintCacheEntries, 100, 50_000, 100)
-    ).apply {
-        preferredSize = java.awt.Dimension(95, preferredSize.height)
-        maximumSize = java.awt.Dimension(95, preferredSize.height)
-    }
-    private val passiveAiPromptCacheEntriesSpinner = JSpinner(
-        SpinnerNumberModel(settings.passiveAiPromptCacheEntries, 50, 5_000, 50)
-    ).apply {
-        preferredSize = java.awt.Dimension(95, preferredSize.height)
-        maximumSize = java.awt.Dimension(95, preferredSize.height)
-    }
-    private val passiveAiRequestBodyMaxCharsSpinner = JSpinner(
-        SpinnerNumberModel(settings.passiveAiRequestBodyMaxChars, 256, 20_000, 256)
-    ).apply {
-        preferredSize = java.awt.Dimension(95, preferredSize.height)
-        maximumSize = java.awt.Dimension(95, preferredSize.height)
-    }
-    private val passiveAiResponseBodyMaxCharsSpinner = JSpinner(
-        SpinnerNumberModel(settings.passiveAiResponseBodyMaxChars, 512, 40_000, 256)
-    ).apply {
-        preferredSize = java.awt.Dimension(95, preferredSize.height)
-        maximumSize = java.awt.Dimension(95, preferredSize.height)
-    }
-    private val passiveAiHeaderMaxCountSpinner = JSpinner(
-        SpinnerNumberModel(settings.passiveAiHeaderMaxCount, 5, 120, 1)
-    ).apply {
-        preferredSize = java.awt.Dimension(80, preferredSize.height)
-        maximumSize = java.awt.Dimension(80, preferredSize.height)
-    }
-    private val passiveAiParamMaxCountSpinner = JSpinner(
-        SpinnerNumberModel(settings.passiveAiParamMaxCount, 5, 100, 1)
-    ).apply {
-        preferredSize = java.awt.Dimension(80, preferredSize.height)
-        maximumSize = java.awt.Dimension(80, preferredSize.height)
-    }
-    private val contextRequestBodyMaxCharsSpinner = JSpinner(
-        SpinnerNumberModel(settings.contextRequestBodyMaxChars, 256, 40_000, 256)
-    ).apply {
-        preferredSize = java.awt.Dimension(95, preferredSize.height)
-        maximumSize = java.awt.Dimension(95, preferredSize.height)
-    }
-    private val contextResponseBodyMaxCharsSpinner = JSpinner(
-        SpinnerNumberModel(settings.contextResponseBodyMaxChars, 512, 80_000, 256)
-    ).apply {
-        preferredSize = java.awt.Dimension(95, preferredSize.height)
-        maximumSize = java.awt.Dimension(95, preferredSize.height)
-    }
+    private val passiveAiPersistentCacheTtlSpinner =
+        JSpinner(
+            SpinnerNumberModel(settings.passiveAiPersistentCacheTtlHours, 1, 168, 1),
+        ).apply {
+            preferredSize = java.awt.Dimension(80, preferredSize.height)
+            maximumSize = java.awt.Dimension(80, preferredSize.height)
+        }
+    private val passiveAiPersistentCacheMaxMbSpinner =
+        JSpinner(
+            SpinnerNumberModel(settings.passiveAiPersistentCacheMaxMb, 10, 500, 10),
+        ).apply {
+            preferredSize = java.awt.Dimension(80, preferredSize.height)
+            maximumSize = java.awt.Dimension(80, preferredSize.height)
+        }
+    private val passiveAiMinSeverityCombo =
+        JComboBox(arrayOf("LOW", "MEDIUM", "HIGH", "CRITICAL")).apply {
+            selectedItem = settings.passiveAiMinSeverity.name
+            preferredSize = java.awt.Dimension(100, preferredSize.height)
+            maximumSize = java.awt.Dimension(100, preferredSize.height)
+        }
+    private val passiveAiEndpointDedupSpinner =
+        JSpinner(
+            SpinnerNumberModel(settings.passiveAiEndpointDedupMinutes, 1, 240, 1),
+        ).apply {
+            preferredSize = java.awt.Dimension(80, preferredSize.height)
+            maximumSize = java.awt.Dimension(80, preferredSize.height)
+        }
+    private val passiveAiFingerprintDedupSpinner =
+        JSpinner(
+            SpinnerNumberModel(settings.passiveAiResponseFingerprintDedupMinutes, 1, 240, 1),
+        ).apply {
+            preferredSize = java.awt.Dimension(80, preferredSize.height)
+            maximumSize = java.awt.Dimension(80, preferredSize.height)
+        }
+    private val passiveAiPromptCacheTtlSpinner =
+        JSpinner(
+            SpinnerNumberModel(settings.passiveAiPromptCacheTtlMinutes, 1, 240, 1),
+        ).apply {
+            preferredSize = java.awt.Dimension(80, preferredSize.height)
+            maximumSize = java.awt.Dimension(80, preferredSize.height)
+        }
+    private val passiveAiEndpointCacheEntriesSpinner =
+        JSpinner(
+            SpinnerNumberModel(settings.passiveAiEndpointCacheEntries, 100, 50_000, 100),
+        ).apply {
+            preferredSize = java.awt.Dimension(95, preferredSize.height)
+            maximumSize = java.awt.Dimension(95, preferredSize.height)
+        }
+    private val passiveAiFingerprintCacheEntriesSpinner =
+        JSpinner(
+            SpinnerNumberModel(settings.passiveAiResponseFingerprintCacheEntries, 100, 50_000, 100),
+        ).apply {
+            preferredSize = java.awt.Dimension(95, preferredSize.height)
+            maximumSize = java.awt.Dimension(95, preferredSize.height)
+        }
+    private val passiveAiPromptCacheEntriesSpinner =
+        JSpinner(
+            SpinnerNumberModel(settings.passiveAiPromptCacheEntries, 50, 5_000, 50),
+        ).apply {
+            preferredSize = java.awt.Dimension(95, preferredSize.height)
+            maximumSize = java.awt.Dimension(95, preferredSize.height)
+        }
+    private val passiveAiRequestBodyMaxCharsSpinner =
+        JSpinner(
+            SpinnerNumberModel(settings.passiveAiRequestBodyMaxChars, 256, 20_000, 256),
+        ).apply {
+            preferredSize = java.awt.Dimension(95, preferredSize.height)
+            maximumSize = java.awt.Dimension(95, preferredSize.height)
+        }
+    private val passiveAiResponseBodyMaxCharsSpinner =
+        JSpinner(
+            SpinnerNumberModel(settings.passiveAiResponseBodyMaxChars, 512, 40_000, 256),
+        ).apply {
+            preferredSize = java.awt.Dimension(95, preferredSize.height)
+            maximumSize = java.awt.Dimension(95, preferredSize.height)
+        }
+    private val passiveAiHeaderMaxCountSpinner =
+        JSpinner(
+            SpinnerNumberModel(settings.passiveAiHeaderMaxCount, 5, 120, 1),
+        ).apply {
+            preferredSize = java.awt.Dimension(80, preferredSize.height)
+            maximumSize = java.awt.Dimension(80, preferredSize.height)
+        }
+    private val passiveAiParamMaxCountSpinner =
+        JSpinner(
+            SpinnerNumberModel(settings.passiveAiParamMaxCount, 5, 100, 1),
+        ).apply {
+            preferredSize = java.awt.Dimension(80, preferredSize.height)
+            maximumSize = java.awt.Dimension(80, preferredSize.height)
+        }
+    private val contextRequestBodyMaxCharsSpinner =
+        JSpinner(
+            SpinnerNumberModel(settings.contextRequestBodyMaxChars, 256, 40_000, 256),
+        ).apply {
+            preferredSize = java.awt.Dimension(95, preferredSize.height)
+            maximumSize = java.awt.Dimension(95, preferredSize.height)
+        }
+    private val contextResponseBodyMaxCharsSpinner =
+        JSpinner(
+            SpinnerNumberModel(settings.contextResponseBodyMaxChars, 512, 80_000, 256),
+        ).apply {
+            preferredSize = java.awt.Dimension(95, preferredSize.height)
+            maximumSize = java.awt.Dimension(95, preferredSize.height)
+        }
     private val contextCompactJson = JCheckBox("Compact context JSON (manual actions)", settings.contextCompactJson)
     private val passiveAiStatusLabel = JLabel()
     private val passiveAiViewFindings = JButton("View findings")
     private val passiveAiResetStats = JButton("Reset stats")
-    
+
     // Active AI Scanner UI components
     private val activeAiEnabled = ToggleSwitch(settings.activeAiEnabled)
     private val activeAiScopeOnly = JCheckBox("In-scope only", settings.activeAiScopeOnly)
     private val activeAiAutoFromPassive = JCheckBox("Auto-queue passive findings", settings.activeAiAutoFromPassive)
-    private val activeAiMaxConcurrentSpinner = JSpinner(SpinnerNumberModel(settings.activeAiMaxConcurrent, 1, 10, 1)).apply {
-        preferredSize = java.awt.Dimension(70, preferredSize.height)
-        maximumSize = java.awt.Dimension(70, preferredSize.height)
-    }
-    private val activeAiMaxPayloadsSpinner = JSpinner(SpinnerNumberModel(settings.activeAiMaxPayloadsPerPoint, 1, 50, 5)).apply {
-        preferredSize = java.awt.Dimension(70, preferredSize.height)
-        maximumSize = java.awt.Dimension(70, preferredSize.height)
-    }
-    private val activeAiTimeoutSpinner = JSpinner(SpinnerNumberModel(settings.activeAiTimeoutSeconds, 5, 120, 5)).apply {
-        preferredSize = java.awt.Dimension(70, preferredSize.height)
-        maximumSize = java.awt.Dimension(70, preferredSize.height)
-    }
-    private val activeAiDelaySpinner = JSpinner(SpinnerNumberModel(settings.activeAiRequestDelayMs, 0, 5000, 100)).apply {
-        preferredSize = java.awt.Dimension(80, preferredSize.height)
-        maximumSize = java.awt.Dimension(80, preferredSize.height)
-    }
-    private val activeAiRiskLevelCombo = JComboBox(arrayOf("SAFE", "MODERATE", "DANGEROUS")).apply {
-        selectedItem = settings.activeAiMaxRiskLevel.name
-        preferredSize = java.awt.Dimension(110, preferredSize.height)
-        maximumSize = java.awt.Dimension(110, preferredSize.height)
-    }
-    private val activeAiScanModeCombo = JComboBox(arrayOf("BUG_BOUNTY", "PENTEST", "FULL")).apply {
-        selectedItem = settings.activeAiScanMode.name
-        preferredSize = java.awt.Dimension(120, preferredSize.height)
-        maximumSize = java.awt.Dimension(120, preferredSize.height)
-    }
+    private val activeAiMaxConcurrentSpinner =
+        JSpinner(SpinnerNumberModel(settings.activeAiMaxConcurrent, 1, 10, 1)).apply {
+            preferredSize = java.awt.Dimension(70, preferredSize.height)
+            maximumSize = java.awt.Dimension(70, preferredSize.height)
+        }
+    private val activeAiMaxPayloadsSpinner =
+        JSpinner(SpinnerNumberModel(settings.activeAiMaxPayloadsPerPoint, 1, 50, 5)).apply {
+            preferredSize = java.awt.Dimension(70, preferredSize.height)
+            maximumSize = java.awt.Dimension(70, preferredSize.height)
+        }
+    private val activeAiTimeoutSpinner =
+        JSpinner(SpinnerNumberModel(settings.activeAiTimeoutSeconds, 5, 120, 5)).apply {
+            preferredSize = java.awt.Dimension(70, preferredSize.height)
+            maximumSize = java.awt.Dimension(70, preferredSize.height)
+        }
+    private val activeAiDelaySpinner =
+        JSpinner(SpinnerNumberModel(settings.activeAiRequestDelayMs, 0, 5000, 100)).apply {
+            preferredSize = java.awt.Dimension(80, preferredSize.height)
+            maximumSize = java.awt.Dimension(80, preferredSize.height)
+        }
+    private val activeAiRiskLevelCombo =
+        JComboBox(arrayOf("SAFE", "MODERATE", "DANGEROUS")).apply {
+            selectedItem = settings.activeAiMaxRiskLevel.name
+            preferredSize = java.awt.Dimension(110, preferredSize.height)
+            maximumSize = java.awt.Dimension(110, preferredSize.height)
+        }
+    private val activeAiScanModeCombo =
+        JComboBox(arrayOf("BUG_BOUNTY", "PENTEST", "FULL")).apply {
+            selectedItem = settings.activeAiScanMode.name
+            preferredSize = java.awt.Dimension(120, preferredSize.height)
+            maximumSize = java.awt.Dimension(120, preferredSize.height)
+        }
     private val activeAiUseCollaborator = JCheckBox("Use Collaborator for SSRF OAST", settings.activeAiUseCollaborator)
     private val activeAiAdaptivePayloads = JCheckBox("AI adaptive payloads", settings.activeAiAdaptivePayloads)
     private val activeAiRiskDescription = JLabel()
@@ -453,11 +508,13 @@ class SettingsPanel(
         rotateSaltBtn.foreground = UiTheme.Colors.primary
         rotateSaltBtn.border = LineBorder(UiTheme.Colors.outline, 1, true)
         rotateSaltBtn.isFocusPainted = false
-        rotateSaltBtn.toolTipText = "Rotates the salt used for host anonymization (e.g. host-xxxxxx.local). Current: ${settings.hostAnonymizationSalt.take(8)}..."
+        rotateSaltBtn.toolTipText =
+            "Rotates the salt used for host anonymization (e.g. host-xxxxxx.local). Current: ${settings.hostAnonymizationSalt.take(8)}..."
         mcpToken.isEditable = true
         mcpToken.font = UiTheme.Typography.mono
         mcpToken.toolTipText = "Required for external access. Use as: Authorization: Bearer <token>"
-        mcpAllowedOrigins.toolTipText = "Allowed web origins for external mode (one per line, example: https://app.example.com). Leave empty to allow any origin."
+        mcpAllowedOrigins.toolTipText =
+            "Allowed web origins for external mode (one per line, example: https://app.example.com). Leave empty to allow any origin."
         mcpEnabled.toolTipText = "Enable the built-in MCP server."
         mcpHost.toolTipText = "Host/interface for MCP server binding."
         mcpPort.toolTipText = "Port for the MCP server."
@@ -555,38 +612,43 @@ class SettingsPanel(
         saveFeedbackLabel.border = EmptyBorder(6, 8, 6, 8)
         saveFeedbackLabel.isOpaque = true
 
-        val backendBody = JPanel(BorderLayout()).apply {
-            background = UiTheme.Colors.surface
-        }
-        val backendSection = sectionPanel(
-            title = "AI Backend",
-            subtitle = "Select the default backend and configure its connection.",
-            content = backendBody
-        ).apply {
-            backendBody.add(backendConfigPanel, BorderLayout.CENTER)
-            val profileGrid = formGrid()
-            val profileRow = JPanel().apply {
-                layout = BoxLayout(this, BoxLayout.X_AXIS)
+        val backendBody =
+            JPanel(BorderLayout()).apply {
                 background = UiTheme.Colors.surface
-                add(profilePicker)
-                add(Box.createRigidArea(java.awt.Dimension(6, 0)))
-                add(refreshProfilesBtn)
             }
-            addRowFull(profileGrid, "Agent profile", profileRow)
-            addSpacerRow(profileGrid, 4)
-            addRowFull(profileGrid, "Profile warnings", profileWarningLabel)
-            backendBody.add(profileGrid, BorderLayout.NORTH)
-        }
+        val backendSection =
+            sectionPanel(
+                title = "AI Backend",
+                subtitle = "Select the default backend and configure its connection.",
+                content = backendBody,
+            ).apply {
+                backendBody.add(backendConfigPanel, BorderLayout.CENTER)
+                val profileGrid = formGrid()
+                val profileRow =
+                    JPanel().apply {
+                        layout = BoxLayout(this, BoxLayout.X_AXIS)
+                        background = UiTheme.Colors.surface
+                        add(profilePicker)
+                        add(Box.createRigidArea(java.awt.Dimension(6, 0)))
+                        add(refreshProfilesBtn)
+                    }
+                addRowFull(profileGrid, "Agent profile", profileRow)
+                addSpacerRow(profileGrid, 4)
+                addRowFull(profileGrid, "Profile warnings", profileWarningLabel)
+                backendBody.add(profileGrid, BorderLayout.NORTH)
+            }
         val privacySection = privacySection()
-        val burpIntegrationBody = JPanel(BorderLayout()).apply {
-            background = UiTheme.Colors.surface
-        }
+        val burpIntegrationBody =
+            JPanel(BorderLayout()).apply {
+                background = UiTheme.Colors.surface
+            }
         burpIntegrationBody.add(buildMcpToolsPanel(), BorderLayout.CENTER)
-        val burpIntegrationSection = sectionPanel(
-            title = "Burp Integration",
-            subtitle = "Controls how Burp MCP tools are exposed.",
-            content = burpIntegrationBody
-        )
+        val burpIntegrationSection =
+            sectionPanel(
+                title = "Burp Integration",
+                subtitle = "Controls how Burp MCP tools are exposed.",
+                content = burpIntegrationBody,
+            )
         generalTab = buildTabPanel(listOf(backendSection), tabContentInsets)
         passiveScannerTab = buildTabPanel(listOf(passiveAiScannerSection()), tabContentInsets)
         mcpTab = buildTabPanel(listOf(mcpSection()), tabContentInsets)
@@ -636,40 +698,50 @@ class SettingsPanel(
             mcpToken.text = McpSettings.generateToken()
             updateRiskWarnings()
         }
-        mcpAllowedOrigins.document.addDocumentListener(object : DocumentListener {
-            override fun insertUpdate(e: DocumentEvent?) {
-                updateMcpCorsWarning()
-                updateRiskWarnings()
-            }
+        mcpAllowedOrigins.document.addDocumentListener(
+            object : DocumentListener {
+                override fun insertUpdate(e: DocumentEvent?) {
+                    updateMcpCorsWarning()
+                    updateRiskWarnings()
+                }
 
-            override fun removeUpdate(e: DocumentEvent?) {
-                updateMcpCorsWarning()
-                updateRiskWarnings()
-            }
+                override fun removeUpdate(e: DocumentEvent?) {
+                    updateMcpCorsWarning()
+                    updateRiskWarnings()
+                }
 
-            override fun changedUpdate(e: DocumentEvent?) {
-                updateMcpCorsWarning()
-                updateRiskWarnings()
-            }
-        })
-        mcpToken.document.addDocumentListener(object : DocumentListener {
-            override fun insertUpdate(e: DocumentEvent?) {
-                updateRiskWarnings()
-            }
+                override fun changedUpdate(e: DocumentEvent?) {
+                    updateMcpCorsWarning()
+                    updateRiskWarnings()
+                }
+            },
+        )
+        mcpToken.document.addDocumentListener(
+            object : DocumentListener {
+                override fun insertUpdate(e: DocumentEvent?) {
+                    updateRiskWarnings()
+                }
 
-            override fun removeUpdate(e: DocumentEvent?) {
-                updateRiskWarnings()
-            }
+                override fun removeUpdate(e: DocumentEvent?) {
+                    updateRiskWarnings()
+                }
 
-            override fun changedUpdate(e: DocumentEvent?) {
-                updateRiskWarnings()
-            }
-        })
+                override fun changedUpdate(e: DocumentEvent?) {
+                    updateRiskWarnings()
+                }
+            },
+        )
         rotateSaltBtn.addActionListener {
             val newSalt = McpSettings.generateToken()
             settings = settings.copy(hostAnonymizationSalt = newSalt)
-            rotateSaltBtn.toolTipText = "Rotates the salt used for host anonymization (e.g. host-xxxxxx.local). Current: ${newSalt.take(8)}..."
-            JOptionPane.showMessageDialog(dialogParentComponent(), "Salt rotated. New anonymized hosts will be different.", "Privacy", JOptionPane.INFORMATION_MESSAGE)
+            rotateSaltBtn.toolTipText =
+                "Rotates the salt used for host anonymization (e.g. host-xxxxxx.local). Current: ${newSalt.take(8)}..."
+            JOptionPane.showMessageDialog(
+                dialogParentComponent(),
+                "Salt rotated. New anonymized hosts will be different.",
+                "Privacy",
+                JOptionPane.INFORMATION_MESSAGE,
+            )
         }
         backendConfigPanel.onOpenCli = { backendId, command ->
             openExternalCli(backendId, command)
@@ -685,7 +757,7 @@ class SettingsPanel(
         refreshPassiveAiStatus()
         updateActiveRiskDescription()
         refreshActiveAiStatus()
-        
+
         // Passive AI Scanner event listeners
         passiveAiEnabled.addActionListener {
             applyPassiveAiSettings()
@@ -752,7 +824,7 @@ class SettingsPanel(
             passiveAiScanner.resetStats()
             refreshPassiveAiStatus()
         }
-        
+
         // Active AI Scanner event listeners
         activeAiEnabled.addActionListener {
             applyActiveAiSettings()
@@ -786,7 +858,7 @@ class SettingsPanel(
                     dialogParentComponent(),
                     "DANGEROUS mode may modify or delete data. Only use in authorized test environments.",
                     "Active Scanner Warning",
-                    JOptionPane.WARNING_MESSAGE
+                    JOptionPane.WARNING_MESSAGE,
                 )
             }
         }
@@ -813,15 +885,15 @@ class SettingsPanel(
             activeAiScanner.resetStats()
             refreshActiveAiStatus()
         }
-        
+
         // Timer to refresh scanner status periodically
-        statusRefreshTimer = javax.swing.Timer(2000) {
-            refreshPassiveAiStatus()
-            refreshActiveAiStatus()
-        }
+        statusRefreshTimer =
+            javax.swing.Timer(2000) {
+                refreshPassiveAiStatus()
+                refreshActiveAiStatus()
+            }
         statusRefreshTimer?.start()
         updateProfileWarnings()
-
     }
 
     private fun refreshProfileOptions() {
@@ -873,18 +945,19 @@ class SettingsPanel(
                 dialogParentComponent(),
                 "Failed to save settings: ${e.message ?: "unknown error"}",
                 "Custom AI Agent",
-                JOptionPane.ERROR_MESSAGE
+                JOptionPane.ERROR_MESSAGE,
             )
         }
     }
 
     fun restoreDefaultsWithConfirmation() {
-        val confirmed = JOptionPane.showConfirmDialog(
-            dialogParent,
-            "Restore default settings? This will overwrite current values.",
-            "Restore defaults",
-            JOptionPane.YES_NO_OPTION
-        )
+        val confirmed =
+            JOptionPane.showConfirmDialog(
+                dialogParent,
+                "Restore default settings? This will overwrite current values.",
+                "Restore defaults",
+                JOptionPane.YES_NO_OPTION,
+            )
         if (confirmed != JOptionPane.YES_OPTION) return
         val defaults = settingsRepo.defaultSettings()
         applySettingsToUi(defaults)
@@ -897,9 +970,7 @@ class SettingsPanel(
         backendConfigPanel.setBackend(preferredBackendId())
     }
 
-    fun preferredBackendId(): String {
-        return preferredBackend.selectedItem as? String ?: "codex-cli"
-    }
+    fun preferredBackendId(): String = preferredBackend.selectedItem as? String ?: "codex-cli"
 
     fun setMcpEnabled(enabled: Boolean) {
         mcpEnabled.isSelected = enabled
@@ -917,49 +988,55 @@ class SettingsPanel(
     }
 
     fun currentSettings(): AgentSettings {
-        val mcpSettings = McpSettings(
-            enabled = mcpEnabled.isSelected,
-            host = mcpHost.text.trim().ifBlank { "127.0.0.1" },
-            port = (mcpPort.value as? Int) ?: 9876,
-            externalEnabled = mcpExternal.isSelected,
-            stdioEnabled = mcpStdio.isSelected,
-            token = mcpToken.text.trim(),
-            allowedOrigins = parseAllowedOriginsInput(mcpAllowedOrigins.text),
-            tlsEnabled = mcpTlsEnabled.isSelected,
-            tlsAutoGenerate = mcpTlsAuto.isSelected,
-            tlsKeystorePath = mcpKeystorePath.text.trim(),
-            tlsKeystorePassword = String(mcpKeystorePassword.password),
-            scanTaskTtlMinutes = settings.mcpSettings.scanTaskTtlMinutes,
-            collaboratorClientTtlMinutes = settings.mcpSettings.collaboratorClientTtlMinutes,
-            maxConcurrentRequests = (mcpMaxConcurrent.value as? Int) ?: 4,
-            maxBodyBytes = ((mcpMaxBodyMb.value as? Int) ?: 2).coerceAtLeast(1) * 1024 * 1024,
-            proxyHistoryMaxItemsPerRequest = (mcpProxyHistoryMaxItems.value as? Int)
-                ?.coerceIn(1, 500)
-                ?: Defaults.MCP_PROXY_HISTORY_MAX_ITEMS_PER_REQUEST,
-            proxyHistoryNewestFirst =
-                (mcpProxyHistorySortOrder.selectedItem as? String) != "Oldest first",
-            allowUnpreprocessedProxyHistory = mcpAllowUnpreprocessedProxyHistory.isSelected,
-            toolToggles = collectMcpToolToggles(),
-            enabledUnsafeTools = collectEnabledUnsafeTools(),
-            unsafeEnabled = mcpUnsafe.isSelected
-        )
+        val mcpSettings =
+            McpSettings(
+                enabled = mcpEnabled.isSelected,
+                host = mcpHost.text.trim().ifBlank { "127.0.0.1" },
+                port = (mcpPort.value as? Int) ?: 9876,
+                externalEnabled = mcpExternal.isSelected,
+                stdioEnabled = mcpStdio.isSelected,
+                token = mcpToken.text.trim(),
+                allowedOrigins = parseAllowedOriginsInput(mcpAllowedOrigins.text),
+                tlsEnabled = mcpTlsEnabled.isSelected,
+                tlsAutoGenerate = mcpTlsAuto.isSelected,
+                tlsKeystorePath = mcpKeystorePath.text.trim(),
+                tlsKeystorePassword = String(mcpKeystorePassword.password),
+                scanTaskTtlMinutes = settings.mcpSettings.scanTaskTtlMinutes,
+                collaboratorClientTtlMinutes = settings.mcpSettings.collaboratorClientTtlMinutes,
+                maxConcurrentRequests = (mcpMaxConcurrent.value as? Int) ?: 4,
+                maxBodyBytes = ((mcpMaxBodyMb.value as? Int) ?: 2).coerceAtLeast(1) * 1024 * 1024,
+                proxyHistoryMaxItemsPerRequest =
+                    (mcpProxyHistoryMaxItems.value as? Int)
+                        ?.coerceIn(1, 500)
+                        ?: Defaults.MCP_PROXY_HISTORY_MAX_ITEMS_PER_REQUEST,
+                proxyHistoryNewestFirst =
+                    (mcpProxyHistorySortOrder.selectedItem as? String) != "Oldest first",
+                allowUnpreprocessedProxyHistory = mcpAllowUnpreprocessedProxyHistory.isSelected,
+                toolToggles = collectMcpToolToggles(),
+                enabledUnsafeTools = collectEnabledUnsafeTools(),
+                unsafeEnabled = mcpUnsafe.isSelected,
+            )
         val backendState = backendConfigPanel.currentBackendSettings()
-        val ollamaTimeoutSeconds = parseTimeoutSeconds(
-            backendState.ollamaTimeoutSeconds,
-            settings.ollamaTimeoutSeconds
-        )
-        val lmStudioTimeoutSeconds = parseTimeoutSeconds(
-            backendState.lmStudioTimeoutSeconds,
-            settings.lmStudioTimeoutSeconds
-        )
-        val openAiCompatTimeoutSeconds = parseTimeoutSeconds(
-            backendState.openAiCompatTimeoutSeconds,
-            settings.openAiCompatibleTimeoutSeconds
-        )
-        val nvidiaNimTimeoutSeconds = parseTimeoutSeconds(
-            backendState.nvidiaNimTimeoutSeconds,
-            settings.nvidiaNimTimeoutSeconds
-        )
+        val ollamaTimeoutSeconds =
+            parseTimeoutSeconds(
+                backendState.ollamaTimeoutSeconds,
+                settings.ollamaTimeoutSeconds,
+            )
+        val lmStudioTimeoutSeconds =
+            parseTimeoutSeconds(
+                backendState.lmStudioTimeoutSeconds,
+                settings.lmStudioTimeoutSeconds,
+            )
+        val openAiCompatTimeoutSeconds =
+            parseTimeoutSeconds(
+                backendState.openAiCompatTimeoutSeconds,
+                settings.openAiCompatibleTimeoutSeconds,
+            )
+        val nvidiaNimTimeoutSeconds =
+            parseTimeoutSeconds(
+                backendState.nvidiaNimTimeoutSeconds,
+                settings.nvidiaNimTimeoutSeconds,
+            )
         return AgentSettings(
             codexCmd = backendState.codexCmd,
             geminiCmd = backendState.geminiCmd,
@@ -1010,13 +1087,15 @@ class SettingsPanel(
             auditEnabled = auditEnabled.isSelected,
             mcpSettings = mcpSettings,
             preprocessProxyHistory = preprocessProxyHistory.isSelected,
-            preprocessMaxResponseSizeKb = (preprocessMaxResponseSizeKb.value as? Int)
-                ?: Defaults.PREPROCESS_MAX_RESPONSE_SIZE_KB,
+            preprocessMaxResponseSizeKb =
+                (preprocessMaxResponseSizeKb.value as? Int)
+                    ?: Defaults.PREPROCESS_MAX_RESPONSE_SIZE_KB,
             preprocessFilterBinaryContent = preprocessFilterBinaryContent.isSelected,
-            preprocessAllowedContentTypes = parseContentTypePrefixesInput(
-                preprocessAllowedContentTypes.text,
-                Defaults.PREPROCESS_ALLOWED_CONTENT_TYPES
-            ),
+            preprocessAllowedContentTypes =
+                parseContentTypePrefixesInput(
+                    preprocessAllowedContentTypes.text,
+                    Defaults.PREPROCESS_ALLOWED_CONTENT_TYPES,
+                ),
             passiveAiEnabled = passiveAiEnabled.isSelected,
             passiveAiRateSeconds = (passiveAiRateSpinner.value as? Int) ?: 5,
             passiveAiScopeOnly = passiveAiScopeOnly.isSelected,
@@ -1055,12 +1134,14 @@ class SettingsPanel(
             bountyPromptDir = bountyPromptDir.text.trim(),
             bountyPromptAutoCreateIssues = bountyPromptAutoCreateIssues.isSelected,
             bountyPromptIssueConfidenceThreshold = (bountyPromptIssueThreshold.value as? Int) ?: 90,
-            bountyPromptEnabledPromptIds = parseIdSetInput(
-                bountyPromptEnabledIds.text,
-                BountyPromptCatalog.defaultEnabledPromptIds()
-            ),
+            bountyPromptEnabledPromptIds =
+                parseIdSetInput(
+                    bountyPromptEnabledIds.text,
+                    BountyPromptCatalog.defaultEnabledPromptIds(),
+                ),
             aiRequestLoggerEnabled = aiLoggerEnabled.isSelected,
-            aiRequestLoggerMaxEntries = (aiLoggerMaxEntries.value as? Int) ?: 500
+            aiRequestLoggerMaxEntries = (aiLoggerMaxEntries.value as? Int) ?: 500,
+            customPromptLibrary = customPromptLibraryEditor.snapshot(),
         )
     }
 
@@ -1097,8 +1178,8 @@ class SettingsPanel(
                 nvidiaNimApiKey = updated.nvidiaNimApiKey,
                 nvidiaNimHeaders = updated.nvidiaNimHeaders,
                 nvidiaNimTimeoutSeconds = updated.nvidiaNimTimeoutSeconds.toString(),
-                copilotCmd = updated.copilotCmd
-            )
+                copilotCmd = updated.copilotCmd,
+            ),
         )
         profilePicker.selectedItem = updated.agentProfile
         privacyMode.selectedItem = updated.privacyMode
@@ -1117,6 +1198,7 @@ class SettingsPanel(
         bountyPromptEnabled.isSelected = updated.bountyPromptEnabled
         bountyPromptDir.text = updated.bountyPromptDir
         bountyPromptAutoCreateIssues.isSelected = updated.bountyPromptAutoCreateIssues
+        customPromptLibraryEditor.load(updated.customPromptLibrary)
         bountyPromptIssueThreshold.value = updated.bountyPromptIssueConfidenceThreshold
         bountyPromptEnabledIds.text = updated.bountyPromptEnabledPromptIds.joinToString(",")
         aiLoggerEnabled.isSelected = updated.aiRequestLoggerEnabled
@@ -1154,7 +1236,7 @@ class SettingsPanel(
         updateMcpCorsWarning()
         updateUnsafeToolStates()
         updateRiskWarnings()
-        
+
         // Passive AI Scanner settings
         passiveAiEnabled.isSelected = updated.passiveAiEnabled
         passiveAiScopeOnly.isSelected = updated.passiveAiScopeOnly
@@ -1180,7 +1262,7 @@ class SettingsPanel(
         contextResponseBodyMaxCharsSpinner.value = updated.contextResponseBodyMaxChars
         contextCompactJson.isSelected = updated.contextCompactJson
         refreshPassiveAiStatus()
-        
+
         // Active AI Scanner settings
         activeAiEnabled.isSelected = updated.activeAiEnabled
         activeAiScopeOnly.isSelected = updated.activeAiScopeOnly
@@ -1200,16 +1282,24 @@ class SettingsPanel(
         onActiveAiEnabledChanged?.invoke(updated.activeAiEnabled)
     }
 
-    private fun parseTimeoutSeconds(raw: String, fallback: Int): Int {
+    private fun parseTimeoutSeconds(
+        raw: String,
+        fallback: Int,
+    ): Int {
         val parsed = raw.trim().toIntOrNull() ?: return fallback.coerceIn(30, 3600)
         return parsed.coerceIn(30, 3600)
     }
 
-    private fun parseIdSetInput(raw: String, fallback: Set<String>): Set<String> {
-        val parsed = raw.split(',')
-            .map { it.trim() }
-            .filter { it.isNotBlank() }
-            .toSet()
+    private fun parseIdSetInput(
+        raw: String,
+        fallback: Set<String>,
+    ): Set<String> {
+        val parsed =
+            raw
+                .split(',')
+                .map { it.trim() }
+                .filter { it.isNotBlank() }
+                .toSet()
         return if (parsed.isEmpty()) fallback else parsed
     }
 
@@ -1220,23 +1310,26 @@ class SettingsPanel(
         saveFeedbackResetTimer = null
     }
 
-    private fun parseAllowedOriginsInput(raw: String): List<String> {
-        return raw
+    private fun parseAllowedOriginsInput(raw: String): List<String> =
+        raw
             .split('\n', ',', ';')
             .asSequence()
             .map { it.trim() }
             .filter { it.isNotBlank() }
             .distinct()
             .toList()
-    }
 
-    private fun parseContentTypePrefixesInput(raw: String, fallback: Set<String>): Set<String> {
-        val parsed = raw
-            .split('\n', ',', ';')
-            .asSequence()
-            .map { it.trim().lowercase() }
-            .filter { it.isNotBlank() }
-            .toSet()
+    private fun parseContentTypePrefixesInput(
+        raw: String,
+        fallback: Set<String>,
+    ): Set<String> {
+        val parsed =
+            raw
+                .split('\n', ',', ';')
+                .asSequence()
+                .map { it.trim().lowercase() }
+                .filter { it.isNotBlank() }
+                .toSet()
         return if (parsed.isEmpty()) fallback else parsed
     }
 
@@ -1251,16 +1344,16 @@ class SettingsPanel(
             updated.mcpSettings,
             updated.privacyMode,
             updated.determinismMode,
-            updated.toPreprocessorSettings()
+            updated.toPreprocessorSettings(),
         )
-        
+
         // Apply passive AI scanner settings
         passiveAiScanner.rateLimitSeconds = updated.passiveAiRateSeconds
         passiveAiScanner.scopeOnly = updated.passiveAiScopeOnly
         passiveAiScanner.maxSizeKb = updated.passiveAiMaxSizeKb
         passiveAiScanner.applyOptimizationSettings(updated)
         passiveAiScanner.setEnabled(updated.passiveAiEnabled)
-        
+
         // Apply active AI scanner settings
         activeAiScanner.maxConcurrent = updated.activeAiMaxConcurrent
         activeAiScanner.maxPayloadsPerPoint = updated.activeAiMaxPayloadsPerPoint
@@ -1271,7 +1364,7 @@ class SettingsPanel(
         activeAiScanner.scanMode = updated.activeAiScanMode
         activeAiScanner.useCollaborator = updated.activeAiUseCollaborator
         activeAiScanner.setEnabled(updated.activeAiEnabled)
-        
+
         api.logging().logToOutput("AI Agent settings saved.")
         onSettingsChanged?.invoke(updated)
         refreshPassiveAiStatus()
@@ -1289,7 +1382,11 @@ class SettingsPanel(
 
     private fun dialogParentComponent(): JComponent? = dialogParent
 
-    private fun sectionPanel(title: String, subtitle: String, content: JComponent): JPanel {
+    private fun sectionPanel(
+        title: String,
+        subtitle: String,
+        content: JComponent,
+    ): JPanel {
         val header = JPanel()
         header.layout = BoxLayout(header, BoxLayout.Y_AXIS)
         header.background = UiTheme.Colors.surface
@@ -1314,7 +1411,10 @@ class SettingsPanel(
         }
     }
 
-    private fun buildTabPanel(sections: List<JComponent>, border: EmptyBorder): JComponent {
+    private fun buildTabPanel(
+        sections: List<JComponent>,
+        border: EmptyBorder,
+    ): JComponent {
         val content = JPanel()
         content.layout = BoxLayout(content, BoxLayout.Y_AXIS)
         content.background = UiTheme.Colors.surface
@@ -1338,7 +1438,11 @@ class SettingsPanel(
         return grid
     }
 
-    private fun addRowFull(grid: JPanel, labelText: String, field: JComponent) {
+    private fun addRowFull(
+        grid: JPanel,
+        labelText: String,
+        field: JComponent,
+    ) {
         val row = nextRow(grid)
         val c = GridBagConstraints()
         c.gridx = 0
@@ -1356,11 +1460,15 @@ class SettingsPanel(
         c2.gridwidth = 3
         c2.weightx = 1.0
         c2.insets = Insets(3, 0, 3, 8)
-        
+
         // Don't expand small components (spinners, combos, small text fields)
-        val isSmallComponent = field is JSpinner || field is JComboBox<*> || field is JCheckBox || field is ToggleSwitch ||
-            (field is JTextField && field.columns <= 20)
-        
+        val isSmallComponent =
+            field is JSpinner ||
+                field is JComboBox<*> ||
+                field is JCheckBox ||
+                field is ToggleSwitch ||
+                (field is JTextField && field.columns <= 20)
+
         if (isSmallComponent) {
             c2.anchor = GridBagConstraints.WEST
             c2.fill = GridBagConstraints.NONE
@@ -1375,7 +1483,7 @@ class SettingsPanel(
         leftLabel: String,
         leftField: JComponent,
         rightLabel: String,
-        rightField: JComponent
+        rightField: JComponent,
     ) {
         val row = nextRow(grid)
 
@@ -1394,9 +1502,13 @@ class SettingsPanel(
         c2.gridy = row
         c2.weightx = 0.5
         c2.insets = Insets(3, 0, 3, 12)
-        
-        val isLeftSmall = leftField is JSpinner || leftField is JComboBox<*> || leftField is JCheckBox || leftField is ToggleSwitch ||
-            (leftField is JTextField && leftField.columns <= 20)
+
+        val isLeftSmall =
+            leftField is JSpinner ||
+                leftField is JComboBox<*> ||
+                leftField is JCheckBox ||
+                leftField is ToggleSwitch ||
+                (leftField is JTextField && leftField.columns <= 20)
         if (isLeftSmall) {
             c2.anchor = GridBagConstraints.WEST
             c2.fill = GridBagConstraints.NONE
@@ -1420,9 +1532,13 @@ class SettingsPanel(
         c4.gridy = row
         c4.weightx = 0.5
         c4.insets = Insets(3, 0, 3, 8)
-        
-        val isRightSmall = rightField is JSpinner || rightField is JComboBox<*> || rightField is JCheckBox || rightField is ToggleSwitch ||
-            (rightField is JTextField && rightField.columns <= 20)
+
+        val isRightSmall =
+            rightField is JSpinner ||
+                rightField is JComboBox<*> ||
+                rightField is JCheckBox ||
+                rightField is ToggleSwitch ||
+                (rightField is JTextField && rightField.columns <= 20)
         if (isRightSmall) {
             c4.anchor = GridBagConstraints.WEST
             c4.fill = GridBagConstraints.NONE
@@ -1438,7 +1554,10 @@ class SettingsPanel(
         return row
     }
 
-    private fun addSpacerRow(grid: JPanel, height: Int) {
+    private fun addSpacerRow(
+        grid: JPanel,
+        height: Int,
+    ) {
         val row = nextRow(grid)
         val c = GridBagConstraints()
         c.gridx = 0
@@ -1450,15 +1569,14 @@ class SettingsPanel(
         grid.add(Box.createRigidArea(java.awt.Dimension(0, height)), c)
     }
 
-    private fun helpSection(): JPanel {
-        return HelpConfigPanel(
+    private fun helpSection(): JPanel =
+        HelpConfigPanel(
             sectionPanel = ::sectionPanel,
-            dialogParentProvider = ::dialogParentComponent
+            dialogParentProvider = ::dialogParentComponent,
         ).build()
-    }
 
-    private fun privacySection(): JPanel {
-        return PrivacyConfigPanel(
+    private fun privacySection(): JPanel =
+        PrivacyConfigPanel(
             sectionPanel = ::sectionPanel,
             formGrid = ::formGrid,
             addRowFull = ::addRowFull,
@@ -1473,12 +1591,11 @@ class SettingsPanel(
             privacyRiskWarning = privacyRiskWarning,
             saveFeedback = saveFeedbackLabel,
             aiLoggerEnabled = aiLoggerEnabled,
-            aiLoggerMaxEntries = aiLoggerMaxEntries
+            aiLoggerMaxEntries = aiLoggerMaxEntries,
         ).build()
-    }
 
-    private fun passiveAiScannerSection(): JPanel {
-        return PassiveScanConfigPanel(
+    private fun passiveAiScannerSection(): JPanel =
+        PassiveScanConfigPanel(
             sectionPanel = ::sectionPanel,
             formGrid = ::formGrid,
             addRowFull = ::addRowFull,
@@ -1510,32 +1627,37 @@ class SettingsPanel(
             passiveAiStatusLabel = passiveAiStatusLabel,
             passiveAiViewFindings = passiveAiViewFindings,
             scannerTriageButton = scannerTriageButton,
-            passiveAiResetStats = passiveAiResetStats
+            passiveAiResetStats = passiveAiResetStats,
         ).build()
-    }
 
     private fun refreshPassiveAiStatus() {
         val status = passiveAiScanner.getStatus()
         val (manualInProgress, manualCompleted, manualTotal) = passiveAiScanner.getManualScanProgress()
-        
-        val statusText = buildString {
-            if (manualInProgress) {
-                append("Manual scan: $manualCompleted/$manualTotal | ")
-            }
-            if (status.enabled) {
-                val lastTime = if (status.lastAnalysisTime > 0) {
-                    val formatter = DateTimeFormatter.ofPattern("HH:mm:ss")
-                        .withZone(ZoneId.systemDefault())
-                    formatter.format(Instant.ofEpochMilli(status.lastAnalysisTime))
-                } else "Never"
-                append("Passive: ON | Analyzed: ${status.requestsAnalyzed} | Issues: ${status.issuesFound} | Last: $lastTime")
-            } else {
-                append("Passive: OFF")
-                if (!manualInProgress) {
-                    append(" | Total issues: ${status.issuesFound}")
+
+        val statusText =
+            buildString {
+                if (manualInProgress) {
+                    append("Manual scan: $manualCompleted/$manualTotal | ")
+                }
+                if (status.enabled) {
+                    val lastTime =
+                        if (status.lastAnalysisTime > 0) {
+                            val formatter =
+                                DateTimeFormatter
+                                    .ofPattern("HH:mm:ss")
+                                    .withZone(ZoneId.systemDefault())
+                            formatter.format(Instant.ofEpochMilli(status.lastAnalysisTime))
+                        } else {
+                            "Never"
+                        }
+                    append("Passive: ON | Analyzed: ${status.requestsAnalyzed} | Issues: ${status.issuesFound} | Last: $lastTime")
+                } else {
+                    append("Passive: OFF")
+                    if (!manualInProgress) {
+                        append(" | Total issues: ${status.issuesFound}")
+                    }
                 }
             }
-        }
         passiveAiStatusLabel.text = statusText
     }
 
@@ -1570,7 +1692,7 @@ class SettingsPanel(
                 dialogParentComponent(),
                 "No findings yet. Enable the scanner and browse the target to generate findings.",
                 "AI Passive Scanner Findings",
-                JOptionPane.INFORMATION_MESSAGE
+                JOptionPane.INFORMATION_MESSAGE,
             )
             return
         }
@@ -1578,9 +1700,14 @@ class SettingsPanel(
         val sb = StringBuilder()
         sb.append("Recent AI Passive Scanner Findings:\n\n")
         findings.reversed().forEach { finding ->
-            val time = java.time.Instant.ofEpochMilli(finding.timestamp)
-                .atZone(java.time.ZoneId.systemDefault())
-                .format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"))
+            val time =
+                java.time.Instant
+                    .ofEpochMilli(finding.timestamp)
+                    .atZone(java.time.ZoneId.systemDefault())
+                    .format(
+                        java.time.format.DateTimeFormatter
+                            .ofPattern("HH:mm:ss"),
+                    )
             sb.append("[$time] ${finding.severity} - ${finding.title}\n")
             sb.append("  URL: ${finding.url}\n")
             sb.append("  Detail: ${finding.detail.take(100)}${if (finding.detail.length > 100) "..." else ""}\n")
@@ -1599,7 +1726,7 @@ class SettingsPanel(
             dialogParentComponent(),
             JScrollPane(textArea),
             "AI Passive Scanner Findings (${findings.size} recent)",
-            JOptionPane.PLAIN_MESSAGE
+            JOptionPane.PLAIN_MESSAGE,
         )
     }
 
@@ -1610,7 +1737,7 @@ class SettingsPanel(
                 dialogParentComponent(),
                 "No active confirmations yet. Run active scans to generate findings.",
                 "AI Active Scanner Findings",
-                JOptionPane.INFORMATION_MESSAGE
+                JOptionPane.INFORMATION_MESSAGE,
             )
             return
         }
@@ -1618,9 +1745,14 @@ class SettingsPanel(
         val sb = StringBuilder()
         sb.append("Recent AI Active Scanner Confirmations:\n\n")
         findings.reversed().forEach { finding ->
-            val time = java.time.Instant.ofEpochMilli(finding.timestamp)
-                .atZone(java.time.ZoneId.systemDefault())
-                .format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"))
+            val time =
+                java.time.Instant
+                    .ofEpochMilli(finding.timestamp)
+                    .atZone(java.time.ZoneId.systemDefault())
+                    .format(
+                        java.time.format.DateTimeFormatter
+                            .ofPattern("HH:mm:ss"),
+                    )
             sb.append("[$time] ${finding.severity} - ${finding.title}\n")
             sb.append("  URL: ${finding.url}\n")
             sb.append("  Confidence: ${finding.confidence}%\n")
@@ -1637,7 +1769,7 @@ class SettingsPanel(
             dialogParentComponent(),
             JScrollPane(textArea),
             "AI Active Scanner Findings (${findings.size} recent)",
-            JOptionPane.PLAIN_MESSAGE
+            JOptionPane.PLAIN_MESSAGE,
         )
     }
 
@@ -1648,30 +1780,34 @@ class SettingsPanel(
             SwingUtilities.invokeLater {
                 val title = "Backend health: $backendId"
                 when (result) {
-                    is HealthCheckResult.Healthy -> JOptionPane.showMessageDialog(
-                        dialogParentComponent(),
-                        "Connection OK.",
-                        title,
-                        JOptionPane.INFORMATION_MESSAGE
-                    )
-                    is HealthCheckResult.Degraded -> JOptionPane.showMessageDialog(
-                        dialogParentComponent(),
-                        result.message,
-                        title,
-                        JOptionPane.WARNING_MESSAGE
-                    )
-                    is HealthCheckResult.Unavailable -> JOptionPane.showMessageDialog(
-                        dialogParentComponent(),
-                        result.message,
-                        title,
-                        JOptionPane.ERROR_MESSAGE
-                    )
-                    HealthCheckResult.Unknown -> JOptionPane.showMessageDialog(
-                        dialogParentComponent(),
-                        "No health signal available for this backend.",
-                        title,
-                        JOptionPane.INFORMATION_MESSAGE
-                    )
+                    is HealthCheckResult.Healthy ->
+                        JOptionPane.showMessageDialog(
+                            dialogParentComponent(),
+                            "Connection OK.",
+                            title,
+                            JOptionPane.INFORMATION_MESSAGE,
+                        )
+                    is HealthCheckResult.Degraded ->
+                        JOptionPane.showMessageDialog(
+                            dialogParentComponent(),
+                            result.message,
+                            title,
+                            JOptionPane.WARNING_MESSAGE,
+                        )
+                    is HealthCheckResult.Unavailable ->
+                        JOptionPane.showMessageDialog(
+                            dialogParentComponent(),
+                            result.message,
+                            title,
+                            JOptionPane.ERROR_MESSAGE,
+                        )
+                    HealthCheckResult.Unknown ->
+                        JOptionPane.showMessageDialog(
+                            dialogParentComponent(),
+                            "No health signal available for this backend.",
+                            title,
+                            JOptionPane.INFORMATION_MESSAGE,
+                        )
                 }
             }
         }.start()
@@ -1689,7 +1825,7 @@ class SettingsPanel(
                 dialogParentComponent(),
                 "No findings yet. Run passive or active scans to populate triage.",
                 "Scanner Triage",
-                JOptionPane.INFORMATION_MESSAGE
+                JOptionPane.INFORMATION_MESSAGE,
             )
             return
         }
@@ -1702,7 +1838,7 @@ class SettingsPanel(
             val source: String,
             val count: Int,
             val lastSeen: Long,
-            val detail: String
+            val detail: String,
         )
 
         val entries = mutableListOf<TriageEntry>()
@@ -1719,8 +1855,8 @@ class SettingsPanel(
                     source = "passive",
                     count = group.size,
                     lastSeen = group.maxOf { it.timestamp },
-                    detail = first.detail
-                )
+                    detail = first.detail,
+                ),
             )
         }
 
@@ -1736,23 +1872,29 @@ class SettingsPanel(
                     source = "active",
                     count = group.size,
                     lastSeen = group.maxOf { it.timestamp },
-                    detail = first.detail
-                )
+                    detail = first.detail,
+                ),
             )
         }
 
-        val sorted = entries.sortedWith(
-            compareByDescending<TriageEntry> { severityRank(it.severity) }
-                .thenByDescending { it.confidence }
-                .thenByDescending { it.lastSeen }
-        )
+        val sorted =
+            entries.sortedWith(
+                compareByDescending<TriageEntry> { severityRank(it.severity) }
+                    .thenByDescending { it.confidence }
+                    .thenByDescending { it.lastSeen },
+            )
 
         val sb = StringBuilder()
         sb.append("Scanner Triage Summary:\n\n")
         sorted.forEach { entry ->
-            val time = java.time.Instant.ofEpochMilli(entry.lastSeen)
-                .atZone(java.time.ZoneId.systemDefault())
-                .format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"))
+            val time =
+                java.time.Instant
+                    .ofEpochMilli(entry.lastSeen)
+                    .atZone(java.time.ZoneId.systemDefault())
+                    .format(
+                        java.time.format.DateTimeFormatter
+                            .ofPattern("HH:mm:ss"),
+                    )
             sb.append("[${entry.severity}] ${entry.title} (${entry.source}) x${entry.count}\n")
             sb.append("  URL: ${entry.url}\n")
             sb.append("  Confidence: ${entry.confidence}% | Last seen: $time\n")
@@ -1769,22 +1911,21 @@ class SettingsPanel(
             dialogParentComponent(),
             JScrollPane(textArea),
             "Scanner Triage (${sorted.size} grouped findings)",
-            JOptionPane.PLAIN_MESSAGE
+            JOptionPane.PLAIN_MESSAGE,
         )
     }
 
-    private fun severityRank(severity: String): Int {
-        return when (severity.uppercase()) {
+    private fun severityRank(severity: String): Int =
+        when (severity.uppercase()) {
             "CRITICAL" -> 4
             "HIGH" -> 3
             "MEDIUM" -> 2
             "LOW" -> 1
             else -> 0
         }
-    }
 
-    private fun activeAiScannerSection(): JPanel {
-        return ActiveScanConfigPanel(
+    private fun activeAiScannerSection(): JPanel =
+        ActiveScanConfigPanel(
             sectionPanel = ::sectionPanel,
             formGrid = ::formGrid,
             addRowFull = ::addRowFull,
@@ -1806,41 +1947,42 @@ class SettingsPanel(
             activeAiViewFindings = activeAiViewFindings,
             activeAiViewQueue = activeAiViewQueue,
             activeAiClearQueue = activeAiClearQueue,
-            activeAiResetStats = activeAiResetStats
+            activeAiResetStats = activeAiResetStats,
         ).build()
-    }
 
     private fun updateActiveRiskDescription() {
         val level = (activeAiRiskLevelCombo.selectedItem as? String ?: "SAFE").uppercase()
-        activeAiRiskDescription.text = when (level) {
-            "SAFE" -> "Read-only payloads. No data modified. Safe for bug bounty."
-            "MODERATE" -> "May read sensitive data. Could trigger IDS/WAF."
-            "DANGEROUS" -> "May modify or delete data. Only for authorized pentests."
-            else -> "Risk level not recognized."
-        }
+        activeAiRiskDescription.text =
+            when (level) {
+                "SAFE" -> "Read-only payloads. No data modified. Safe for bug bounty."
+                "MODERATE" -> "May read sensitive data. Could trigger IDS/WAF."
+                "DANGEROUS" -> "May modify or delete data. Only for authorized pentests."
+                else -> "Risk level not recognized."
+            }
     }
 
     private fun refreshActiveAiStatus() {
         val status = activeAiScanner.getStatus()
-        val statusText = buildString {
-            if (status.enabled) {
-                append("Active: ON")
-                if (status.scanning) {
-                    append(" | Scanning")
-                    status.currentTarget?.let { target ->
-                        append(" (${target.take(40)}...)")
+        val statusText =
+            buildString {
+                if (status.enabled) {
+                    append("Active: ON")
+                    if (status.scanning) {
+                        append(" | Scanning")
+                        status.currentTarget?.let { target ->
+                            append(" (${target.take(40)}...)")
+                        }
+                    }
+                    append(" | Queue: ${status.queueSize}")
+                    append(" | Scans: ${status.scansCompleted}")
+                    append(" | Confirmed: ${status.vulnsConfirmed}")
+                } else {
+                    append("Active: OFF")
+                    if (status.vulnsConfirmed > 0) {
+                        append(" | Confirmed: ${status.vulnsConfirmed}")
                     }
                 }
-                append(" | Queue: ${status.queueSize}")
-                append(" | Scans: ${status.scansCompleted}")
-                append(" | Confirmed: ${status.vulnsConfirmed}")
-            } else {
-                append("Active: OFF")
-                if (status.vulnsConfirmed > 0) {
-                    append(" | Confirmed: ${status.vulnsConfirmed}")
-                }
             }
-        }
         activeAiStatusLabel.text = statusText
     }
 
@@ -1858,8 +2000,8 @@ class SettingsPanel(
         refreshActiveAiStatus()
     }
 
-    private fun promptSection(): JPanel {
-        return PromptConfigPanel(
+    private fun promptSection(): JPanel =
+        PromptConfigPanel(
             sectionPanel = ::sectionPanel,
             formGrid = ::formGrid,
             addRowFull = ::addRowFull,
@@ -1876,12 +2018,12 @@ class SettingsPanel(
             bountyPromptDir = bountyPromptDir,
             bountyPromptAutoCreateIssues = bountyPromptAutoCreateIssues,
             bountyPromptIssueThreshold = bountyPromptIssueThreshold,
-            bountyPromptEnabledIds = bountyPromptEnabledIds
+            bountyPromptEnabledIds = bountyPromptEnabledIds,
+            customPromptLibrarySection = customPromptLibraryEditor.component(),
         ).build()
-    }
 
-    private fun mcpSection(): JPanel {
-        return McpConfigPanel(
+    private fun mcpSection(): JPanel =
+        McpConfigPanel(
             sectionPanel = ::sectionPanel,
             formGrid = ::formGrid,
             addRowFull = ::addRowFull,
@@ -1896,11 +2038,12 @@ class SettingsPanel(
             mcpTlsAuto = mcpTlsAuto,
             mcpKeystorePath = mcpKeystorePath,
             mcpKeystorePassword = mcpKeystorePassword,
-            mcpAllowedOrigins = JScrollPane(mcpAllowedOrigins).apply {
-                border = LineBorder(UiTheme.Colors.outline, 1, true)
-                verticalScrollBarPolicy = JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED
-                horizontalScrollBarPolicy = JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
-            },
+            mcpAllowedOrigins =
+                JScrollPane(mcpAllowedOrigins).apply {
+                    border = LineBorder(UiTheme.Colors.outline, 1, true)
+                    verticalScrollBarPolicy = JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED
+                    horizontalScrollBarPolicy = JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
+                },
             mcpCorsWarning = mcpCorsWarning,
             mcpRiskWarning = mcpRiskWarning,
             mcpMaxConcurrent = mcpMaxConcurrent,
@@ -1912,15 +2055,15 @@ class SettingsPanel(
             preprocessProxyHistory = preprocessProxyHistory,
             preprocessMaxResponseSizeKb = preprocessMaxResponseSizeKb,
             preprocessFilterBinaryContent = preprocessFilterBinaryContent,
-            preprocessAllowedContentTypes = JScrollPane(preprocessAllowedContentTypes).apply {
-                border = LineBorder(UiTheme.Colors.outline, 1, true)
-                verticalScrollBarPolicy = JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED
-                horizontalScrollBarPolicy = JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
-            },
+            preprocessAllowedContentTypes =
+                JScrollPane(preprocessAllowedContentTypes).apply {
+                    border = LineBorder(UiTheme.Colors.outline, 1, true)
+                    verticalScrollBarPolicy = JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED
+                    horizontalScrollBarPolicy = JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
+                },
             tokenPanelFactory = ::tokenPanel,
-            quickActionsFactory = ::mcpQuickActions
+            quickActionsFactory = ::mcpQuickActions,
         ).build()
-    }
 
     private fun tokenPanel(): JPanel {
         val panel = JPanel()
@@ -1971,11 +2114,12 @@ class SettingsPanel(
     private fun buildCurlCommand(): String {
         val url = buildSseUrl()
         val token = mcpToken.text.trim()
-        val header = if (mcpExternal.isSelected && token.isNotBlank()) {
-            "-H \"Authorization: Bearer $token\" "
-        } else {
-            ""
-        }
+        val header =
+            if (mcpExternal.isSelected && token.isNotBlank()) {
+                "-H \"Authorization: Bearer $token\" "
+            } else {
+                ""
+            }
         return "curl -v ${header}$url"
     }
 
@@ -1991,20 +2135,22 @@ class SettingsPanel(
         toolsPanel.background = UiTheme.Colors.surface
         toolsPanel.border = EmptyBorder(6, 8, 8, 8)
 
-        val selectAll = JButton("Select all").apply {
-            font = UiTheme.Typography.label
-            background = UiTheme.Colors.surface
-            foreground = UiTheme.Colors.primary
-            border = LineBorder(UiTheme.Colors.outline, 1, true)
-            isFocusPainted = false
-        }
-        val deselectAll = JButton("Deselect all").apply {
-            font = UiTheme.Typography.label
-            background = UiTheme.Colors.surface
-            foreground = UiTheme.Colors.primary
-            border = LineBorder(UiTheme.Colors.outline, 1, true)
-            isFocusPainted = false
-        }
+        val selectAll =
+            JButton("Select all").apply {
+                font = UiTheme.Typography.label
+                background = UiTheme.Colors.surface
+                foreground = UiTheme.Colors.primary
+                border = LineBorder(UiTheme.Colors.outline, 1, true)
+                isFocusPainted = false
+            }
+        val deselectAll =
+            JButton("Deselect all").apply {
+                font = UiTheme.Typography.label
+                background = UiTheme.Colors.surface
+                foreground = UiTheme.Colors.primary
+                border = LineBorder(UiTheme.Colors.outline, 1, true)
+                isFocusPainted = false
+            }
 
         val effectiveToggles = McpToolCatalog.mergeWithDefaults(settings.mcpSettings.toolToggles)
         val edition = api.burpSuite().version().edition()
@@ -2027,12 +2173,13 @@ class SettingsPanel(
                 checkbox.foreground = UiTheme.Colors.onSurface
                 checkbox.putClientProperty("unsafeOnly", tool.unsafeOnly)
                 checkbox.putClientProperty("description", tool.description)
-                checkbox.toolTipText = when {
-                    !tool.unsafeOnly -> tool.description
-                    unsafeEnabled -> "${tool.description} Allowed by global unsafe mode."
-                    unsafeAllowlist.contains(tool.id) -> "${tool.description} Allowed by per-tool unsafe approval."
-                    else -> "${tool.description} Blocked until unsafe mode is enabled globally or approved in allowlist."
-                }
+                checkbox.toolTipText =
+                    when {
+                        !tool.unsafeOnly -> tool.description
+                        unsafeEnabled -> "${tool.description} Allowed by global unsafe mode."
+                        unsafeAllowlist.contains(tool.id) -> "${tool.description} Allowed by per-tool unsafe approval."
+                        else -> "${tool.description} Blocked until unsafe mode is enabled globally or approved in allowlist."
+                    }
                 if (tool.proOnly && edition != BurpSuiteEdition.PROFESSIONAL) {
                     checkbox.isEnabled = false
                     checkbox.putClientProperty("proDisabled", true)
@@ -2049,9 +2196,11 @@ class SettingsPanel(
             toolsPanel.add(Box.createRigidArea(java.awt.Dimension(0, 8)))
         }
 
-        val unsafeTools = McpToolCatalog.all()
-            .filter { it.unsafeOnly }
-            .sortedBy { it.title }
+        val unsafeTools =
+            McpToolCatalog
+                .all()
+                .filter { it.unsafeOnly }
+                .sortedBy { it.title }
         if (unsafeTools.isNotEmpty()) {
             val allowlistHeader = JLabel("Unsafe Allowlist (applies when global unsafe mode is OFF)")
             allowlistHeader.font = UiTheme.Typography.label
@@ -2062,14 +2211,15 @@ class SettingsPanel(
             allowlistGrid.background = UiTheme.Colors.surface
             unsafeTools.forEach { tool ->
                 val approved = unsafeAllowlist.contains(tool.id)
-                val approval = JCheckBox(tool.title, approved).apply {
-                    font = UiTheme.Typography.body
-                    background = UiTheme.Colors.surface
-                    foreground = UiTheme.Colors.onSurface
-                    toolTipText = tool.description
-                    putClientProperty("proOnly", tool.proOnly)
-                    putClientProperty("toolId", tool.id)
-                }
+                val approval =
+                    JCheckBox(tool.title, approved).apply {
+                        font = UiTheme.Typography.body
+                        background = UiTheme.Colors.surface
+                        foreground = UiTheme.Colors.onSurface
+                        toolTipText = tool.description
+                        putClientProperty("proOnly", tool.proOnly)
+                        putClientProperty("toolId", tool.id)
+                    }
                 val proDisabled = tool.proOnly && edition != BurpSuiteEdition.PROFESSIONAL
                 if (proDisabled) {
                     approval.isEnabled = false
@@ -2128,26 +2278,33 @@ class SettingsPanel(
             val toolId = mcpToolCheckboxes.entries.firstOrNull { it.value === checkbox }?.key
             val allowlisted = toolId != null && mcpUnsafeApprovalCheckboxes[toolId]?.isSelected == true
             checkbox.isEnabled = true
-            checkbox.toolTipText = if (unsafeOnly) {
-                when {
-                    unsafeEnabled -> "$description Allowed by global unsafe mode."
-                    allowlisted -> "$description Allowed by per-tool unsafe approval."
-                    else -> "$description Blocked until unsafe mode is enabled globally or approved in allowlist."
+            checkbox.toolTipText =
+                if (unsafeOnly) {
+                    when {
+                        unsafeEnabled -> "$description Allowed by global unsafe mode."
+                        allowlisted -> "$description Allowed by per-tool unsafe approval."
+                        else -> "$description Blocked until unsafe mode is enabled globally or approved in allowlist."
+                    }
+                } else {
+                    description
                 }
-            } else {
-                description
-            }
         }
         mcpUnsafeApprovalCheckboxes.forEach { (id, checkbox) ->
             val proOnly = checkbox.getClientProperty("proOnly") as? Boolean ?: false
             val proDisabled = proOnly && api.burpSuite().version().edition() != BurpSuiteEdition.PROFESSIONAL
             checkbox.isEnabled = !unsafeEnabled && !proDisabled
-            val description = McpToolCatalog.all().firstOrNull { it.id == id }?.description.orEmpty()
-            checkbox.toolTipText = when {
-                proDisabled -> "$description (Pro only)"
-                unsafeEnabled -> "$description Ignored while global unsafe mode is ON."
-                else -> description
-            }
+            val description =
+                McpToolCatalog
+                    .all()
+                    .firstOrNull { it.id == id }
+                    ?.description
+                    .orEmpty()
+            checkbox.toolTipText =
+                when {
+                    proDisabled -> "$description (Pro only)"
+                    unsafeEnabled -> "$description Ignored while global unsafe mode is ON."
+                    else -> description
+                }
         }
         updateProfileWarnings()
         updateRiskWarnings()
@@ -2166,54 +2323,64 @@ class SettingsPanel(
         val unsafeEnabled = mcpUnsafe.isSelected
         val tokenBlank = mcpToken.text.trim().isBlank()
 
-        val mcpMessage = when {
-            !mcpOn -> null
-            external && unsafeEnabled ->
-                "High risk: External MCP + Unsafe mode allows remote state-changing tool execution."
-            external && tokenBlank ->
-                "High risk: External MCP is enabled with an empty token."
-            external && selectedPrivacy == PrivacyMode.OFF ->
-                "Warning: External MCP with Privacy OFF may expose raw traffic."
-            else -> null
-        }
+        val mcpMessage =
+            when {
+                !mcpOn -> null
+                external && unsafeEnabled ->
+                    "High risk: External MCP + Unsafe mode allows remote state-changing tool execution."
+                external && tokenBlank ->
+                    "High risk: External MCP is enabled with an empty token."
+                external && selectedPrivacy == PrivacyMode.OFF ->
+                    "Warning: External MCP with Privacy OFF may expose raw traffic."
+                else -> null
+            }
         mcpRiskWarning.text = mcpMessage ?: "MCP risk checks passed."
-        mcpRiskWarning.background = when {
-            mcpMessage == null -> UiTheme.Colors.statusRunning
-            mcpMessage.startsWith("High risk") -> UiTheme.Colors.statusCrashed
-            else -> UiTheme.Colors.statusTerminal
-        }
+        mcpRiskWarning.background =
+            when {
+                mcpMessage == null -> UiTheme.Colors.statusRunning
+                mcpMessage.startsWith("High risk") -> UiTheme.Colors.statusCrashed
+                else -> UiTheme.Colors.statusTerminal
+            }
         mcpRiskWarning.isVisible = mcpMessage != null
 
-        val privacyMessage = when {
-            selectedPrivacy == PrivacyMode.OFF && !auditEnabled.isSelected ->
-                "High risk: Privacy OFF and Audit logging OFF reduce traceability and data protection."
-            selectedPrivacy == PrivacyMode.OFF && activeAiEnabled.isSelected ->
-                "Warning: Privacy OFF with Active Scanner ON may expose sensitive request/response data."
-            else -> null
-        }
+        val privacyMessage =
+            when {
+                selectedPrivacy == PrivacyMode.OFF && !auditEnabled.isSelected ->
+                    "High risk: Privacy OFF and Audit logging OFF reduce traceability and data protection."
+                selectedPrivacy == PrivacyMode.OFF && activeAiEnabled.isSelected ->
+                    "Warning: Privacy OFF with Active Scanner ON may expose sensitive request/response data."
+                else -> null
+            }
         privacyRiskWarning.text = privacyMessage ?: "Privacy risk checks passed."
-        privacyRiskWarning.background = when {
-            privacyMessage == null -> UiTheme.Colors.statusRunning
-            privacyMessage.startsWith("High risk") -> UiTheme.Colors.statusCrashed
-            else -> UiTheme.Colors.statusTerminal
-        }
+        privacyRiskWarning.background =
+            when {
+                privacyMessage == null -> UiTheme.Colors.statusRunning
+                privacyMessage.startsWith("High risk") -> UiTheme.Colors.statusCrashed
+                else -> UiTheme.Colors.statusTerminal
+            }
         privacyRiskWarning.isVisible = privacyMessage != null
     }
 
-    private fun updateSaveFeedback(message: String, backgroundColor: java.awt.Color, resetMs: Int? = null) {
+    private fun updateSaveFeedback(
+        message: String,
+        backgroundColor: java.awt.Color,
+        resetMs: Int? = null,
+    ) {
         saveFeedbackResetTimer?.stop()
         saveFeedbackResetTimer = null
         saveFeedbackLabel.text = message
         saveFeedbackLabel.background = backgroundColor
         saveFeedbackLabel.foreground = UiTheme.Colors.onPrimary
         if (resetMs != null && resetMs > 0) {
-            saveFeedbackResetTimer = javax.swing.Timer(resetMs) {
-                saveFeedbackLabel.text = "No recent save activity."
-                saveFeedbackLabel.background = UiTheme.Colors.outlineVariant
-            }.also { timer ->
-                timer.isRepeats = false
-                timer.start()
-            }
+            saveFeedbackResetTimer =
+                javax.swing
+                    .Timer(resetMs) {
+                        saveFeedbackLabel.text = "No recent save activity."
+                        saveFeedbackLabel.background = UiTheme.Colors.outlineVariant
+                    }.also { timer ->
+                        timer.isRepeats = false
+                        timer.start()
+                    }
         }
     }
 
@@ -2236,15 +2403,12 @@ class SettingsPanel(
         mcpCorsWarning.isVisible = external && !hasAllowedOrigins
     }
 
-    private fun collectMcpToolToggles(): Map<String, Boolean> {
-        return mcpToolCheckboxes.mapValues { it.value.isSelected }
-    }
+    private fun collectMcpToolToggles(): Map<String, Boolean> = mcpToolCheckboxes.mapValues { it.value.isSelected }
 
-    private fun collectEnabledUnsafeTools(): Set<String> {
-        return mcpUnsafeApprovalCheckboxes
+    private fun collectEnabledUnsafeTools(): Set<String> =
+        mcpUnsafeApprovalCheckboxes
             .filterValues { it.isSelected }
             .keys
-    }
 
     private fun applyUnsafeToolApprovals(enabledUnsafeTools: Set<String>) {
         mcpUnsafeApprovalCheckboxes.forEach { (id, checkbox) ->
@@ -2294,9 +2458,7 @@ class SettingsPanel(
         return available to reasons
     }
 
-    private fun availableMcpTools(): Set<String> {
-        return availableMcpToolsWithReasons().first
-    }
+    private fun availableMcpTools(): Set<String> = availableMcpToolsWithReasons().first
 
     private fun applyFieldStyle(field: JTextField) {
         field.font = UiTheme.Typography.mono
@@ -2327,33 +2489,48 @@ class SettingsPanel(
         combo.border = LineBorder(UiTheme.Colors.outline, 1, true)
     }
 
-    private fun openExternalCli(backendId: String, command: String) {
+    private fun openExternalCli(
+        backendId: String,
+        command: String,
+    ) {
         if (command.isBlank()) {
-            JOptionPane.showMessageDialog(dialogParentComponent(), "Command is empty for $backendId.", "Custom AI Agent", JOptionPane.WARNING_MESSAGE)
+            JOptionPane.showMessageDialog(
+                dialogParentComponent(),
+                "Command is empty for $backendId.",
+                "Custom AI Agent",
+                JOptionPane.WARNING_MESSAGE,
+            )
             return
         }
         try {
             val os = System.getProperty("os.name").lowercase()
-            val process = when {
-                os.contains("win") -> {
-                    ProcessBuilder("cmd.exe", "/c", "start", "\"AI Agent CLI\"", "cmd.exe", "/k", command)
+            val process =
+                when {
+                    os.contains("win") -> {
+                        ProcessBuilder("cmd.exe", "/c", "start", "\"AI Agent CLI\"", "cmd.exe", "/k", command)
+                    }
+                    os.contains("mac") -> {
+                        val escaped = command.replace("\\", "\\\\").replace("\"", "\\\"")
+                        ProcessBuilder("osascript", "-e", "tell application \"Terminal\" to do script \"$escaped\"")
+                    }
+                    else -> {
+                        val shellCmd =
+                            "x-terminal-emulator -e bash -lc ${shellQuote("$command; exec bash")} " +
+                                "|| gnome-terminal -- bash -lc ${shellQuote("$command; exec bash")} " +
+                                "|| konsole -e bash -lc ${shellQuote("$command; exec bash")} " +
+                                "|| xterm -e bash -lc ${shellQuote("$command; exec bash")}"
+                        ProcessBuilder("sh", "-c", shellCmd)
+                    }
                 }
-                os.contains("mac") -> {
-                    val escaped = command.replace("\\", "\\\\").replace("\"", "\\\"")
-                    ProcessBuilder("osascript", "-e", "tell application \"Terminal\" to do script \"$escaped\"")
-                }
-                else -> {
-                    val shellCmd = "x-terminal-emulator -e bash -lc ${shellQuote("$command; exec bash")} " +
-                        "|| gnome-terminal -- bash -lc ${shellQuote("$command; exec bash")} " +
-                        "|| konsole -e bash -lc ${shellQuote("$command; exec bash")} " +
-                        "|| xterm -e bash -lc ${shellQuote("$command; exec bash")}"
-                    ProcessBuilder("sh", "-c", shellCmd)
-                }
-            }
             process.start()
         } catch (e: Exception) {
             api.logging().logToError("Failed to open CLI for $backendId: ${e.message}")
-            JOptionPane.showMessageDialog(dialogParentComponent(), "Failed to open CLI: ${e.message}", "Custom AI Agent", JOptionPane.ERROR_MESSAGE)
+            JOptionPane.showMessageDialog(
+                dialogParentComponent(),
+                "Failed to open CLI: ${e.message}",
+                "Custom AI Agent",
+                JOptionPane.ERROR_MESSAGE,
+            )
         }
     }
 
@@ -2362,5 +2539,4 @@ class SettingsPanel(
         if (value.none { it.isWhitespace() || it == '"' || it == '\'' }) return value
         return "'" + value.replace("'", "'\"'\"'") + "'"
     }
-
 }

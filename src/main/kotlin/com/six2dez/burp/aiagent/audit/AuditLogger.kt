@@ -12,7 +12,9 @@ import java.nio.charset.StandardCharsets
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
-class AuditLogger(private val api: MontoyaApi) {
+class AuditLogger(
+    private val api: MontoyaApi,
+) {
     companion object {
         @Volatile
         private var globalEmitter: ((String, Any) -> Unit)? = null
@@ -21,18 +23,23 @@ class AuditLogger(private val api: MontoyaApi) {
             globalEmitter = emitter
         }
 
-        fun emitGlobal(type: String, payload: Any) {
+        fun emitGlobal(
+            type: String,
+            payload: Any,
+        ) {
             globalEmitter?.invoke(type, payload)
         }
     }
 
     @Volatile
     private var enabled: Boolean = true
-    private val mapper = JsonMapper.builder()
-        .enable(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY)
-        .enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS)
-        .build()
-        .registerKotlinModule()
+    private val mapper =
+        JsonMapper
+            .builder()
+            .enable(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY)
+            .enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS)
+            .build()
+            .registerKotlinModule()
     private val baseDir: File = File(System.getProperty("user.home"), ".burp-ai-agent").also { it.mkdirs() }
     private val logFile: File = File(baseDir, "audit.jsonl")
     private val bundleDir: File = File(baseDir, "bundles").also { it.mkdirs() }
@@ -44,16 +51,20 @@ class AuditLogger(private val api: MontoyaApi) {
 
     fun isEnabled(): Boolean = enabled
 
-    fun logEvent(type: String, payload: Any) {
+    fun logEvent(
+        type: String,
+        payload: Any,
+    ) {
         if (!enabled) return
         try {
             val payloadJson = mapper.writeValueAsString(payload)
-            val record = mapOf(
-                "ts" to System.currentTimeMillis(),
-                "type" to type,
-                "payload" to payload,
-                "payloadSha256" to Hashing.sha256Hex(payloadJson)
-            )
+            val record =
+                mapOf(
+                    "ts" to System.currentTimeMillis(),
+                    "type" to type,
+                    "payload" to payload,
+                    "payloadSha256" to Hashing.sha256Hex(payloadJson),
+                )
             logFile.appendText(mapper.writeValueAsString(record) + "\n")
         } catch (e: Exception) {
             api.logging().logToError("Audit log failed: ${e.message}")
@@ -67,7 +78,11 @@ class AuditLogger(private val api: MontoyaApi) {
         promptText: String,
         contextJson: String?,
         privacyMode: PrivacyMode,
-        determinismMode: Boolean
+        determinismMode: Boolean,
+        promptSource: String? = null,
+        promptId: String? = null,
+        promptTitle: String? = null,
+        contextKind: String? = null,
     ): PromptBundle {
         val sha = Hashing.sha256Hex(promptText)
         val contextSha = contextJson?.let { Hashing.sha256Hex(it) }
@@ -82,7 +97,11 @@ class AuditLogger(private val api: MontoyaApi) {
             contextJson = contextJson,
             contextSha256 = contextSha,
             privacyMode = privacyMode.name,
-            determinismMode = determinismMode
+            determinismMode = determinismMode,
+            promptSource = promptSource,
+            promptId = promptId,
+            promptTitle = promptTitle,
+            contextKind = contextKind,
         )
     }
 
@@ -105,9 +124,15 @@ class AuditLogger(private val api: MontoyaApi) {
         return file
     }
 
-    data class ContextFile(val file: File, val sha256: String)
+    data class ContextFile(
+        val file: File,
+        val sha256: String,
+    )
 
-    fun writeContextFile(sessionId: String, contextJson: String): ContextFile {
+    fun writeContextFile(
+        sessionId: String,
+        contextJson: String,
+    ): ContextFile {
         val sha = Hashing.sha256Hex(contextJson)
         val file = File(contextDir, "context-$sessionId-${sha.take(8)}.json")
         file.writeText(contextJson)

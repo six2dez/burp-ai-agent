@@ -20,18 +20,19 @@ import org.mockito.kotlin.whenever
 import kotlin.test.assertEquals
 
 class ActiveScannerQueueModelTest {
-
     @Test
     fun manualScanPopulatesQueueSnapshotAndRespectsLimit() {
         val scanner = newScannerForQueueTests()
 
-        val queued = scanner.manualScan(
-            requests = listOf(
-                requestResponse("http://example.com/?id=1", "id", "1"),
-                requestResponse("http://example.com/?id=2", "id", "2")
-            ),
-            vulnClasses = listOf(VulnClass.SQLI)
-        )
+        val queued =
+            scanner.manualScan(
+                requests =
+                    listOf(
+                        requestResponse("http://example.com/?id=1", "id", "1"),
+                        requestResponse("http://example.com/?id=2", "id", "2"),
+                    ),
+                vulnClasses = listOf(VulnClass.SQLI),
+            )
 
         assertEquals(2, queued)
         val allItems = scanner.getQueueItems(limit = 500)
@@ -44,10 +45,11 @@ class ActiveScannerQueueModelTest {
     fun cancelQueuedTargetRemovesOnlyMatchingId() {
         val scanner = newScannerForQueueTests()
 
-        val queued = scanner.manualScan(
-            requests = listOf(requestResponse("http://example.com/?id=9", "id", "9")),
-            vulnClasses = listOf(VulnClass.SQLI)
-        )
+        val queued =
+            scanner.manualScan(
+                requests = listOf(requestResponse("http://example.com/?id=9", "id", "9")),
+                vulnClasses = listOf(VulnClass.SQLI),
+            )
         assertEquals(1, queued)
 
         val targetId = scanner.getQueueItems(limit = 10).first().id
@@ -62,7 +64,7 @@ class ActiveScannerQueueModelTest {
             api = api,
             supervisor = mock<AgentSupervisor>(),
             audit = mock<AuditLogger>(),
-            getSettings = { baselineSettings() }
+            getSettings = { baselineSettings() },
         ).apply {
             scopeOnly = false
             maxQueueSize = 64
@@ -70,7 +72,11 @@ class ActiveScannerQueueModelTest {
         }
     }
 
-    private fun requestResponse(url: String, name: String, value: String): HttpRequestResponse {
+    private fun requestResponse(
+        url: String,
+        name: String,
+        value: String,
+    ): HttpRequestResponse {
         val param = mock<ParsedHttpParameter>()
         whenever(param.type()).thenReturn(HttpParameterType.URL)
         whenever(param.name()).thenReturn(name)
@@ -88,8 +94,8 @@ class ActiveScannerQueueModelTest {
         return requestResponse
     }
 
-    private fun baselineSettings(): AgentSettings {
-        return AgentSettings(
+    private fun baselineSettings(): AgentSettings =
+        AgentSettings(
             codexCmd = "codex",
             geminiCmd = "gemini",
             opencodeCmd = "opencode",
@@ -131,26 +137,27 @@ class ActiveScannerQueueModelTest {
             determinismMode = false,
             autoRestart = true,
             auditEnabled = true,
-            mcpSettings = McpSettings(
-                enabled = false,
-                host = "127.0.0.1",
-                port = 8765,
-                externalEnabled = false,
-                stdioEnabled = false,
-                token = "token",
-                allowedOrigins = emptyList(),
-                tlsEnabled = false,
-                tlsAutoGenerate = true,
-                tlsKeystorePath = "",
-                tlsKeystorePassword = "",
-                scanTaskTtlMinutes = 120,
-                collaboratorClientTtlMinutes = 60,
-                maxConcurrentRequests = 4,
-                maxBodyBytes = 262_144,
-                toolToggles = emptyMap(),
-                enabledUnsafeTools = emptySet(),
-                unsafeEnabled = false
-            ),
+            mcpSettings =
+                McpSettings(
+                    enabled = false,
+                    host = "127.0.0.1",
+                    port = 8765,
+                    externalEnabled = false,
+                    stdioEnabled = false,
+                    token = "token",
+                    allowedOrigins = emptyList(),
+                    tlsEnabled = false,
+                    tlsAutoGenerate = true,
+                    tlsKeystorePath = "",
+                    tlsKeystorePassword = "",
+                    scanTaskTtlMinutes = 120,
+                    collaboratorClientTtlMinutes = 60,
+                    maxConcurrentRequests = 4,
+                    maxBodyBytes = 262_144,
+                    toolToggles = emptyMap(),
+                    enabledUnsafeTools = emptySet(),
+                    unsafeEnabled = false,
+                ),
             passiveAiEnabled = false,
             passiveAiRateSeconds = 5,
             passiveAiScopeOnly = true,
@@ -170,7 +177,6 @@ class ActiveScannerQueueModelTest {
             bountyPromptDir = "",
             bountyPromptAutoCreateIssues = true,
             bountyPromptIssueConfidenceThreshold = 90,
-            bountyPromptEnabledPromptIds = emptySet()
+            bountyPromptEnabledPromptIds = emptySet(),
         )
-    }
 }

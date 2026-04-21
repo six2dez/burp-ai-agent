@@ -5,12 +5,17 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import java.net.URI
 
 object InjectionPointExtractor {
-    private val jsonFieldPattern = Regex("\"([A-Za-z0-9_\\-]+)\"\\s*:\\s*(\"([^\"\\\\]*(?:\\\\.[^\"\\\\]*)*)\"|(-?\\d+(?:\\.\\d+)?)|(true|false|null))")
+    private val jsonFieldPattern =
+        Regex("\"([A-Za-z0-9_\\-]+)\"\\s*:\\s*(\"([^\"\\\\]*(?:\\\\.[^\"\\\\]*)*)\"|(-?\\d+(?:\\.\\d+)?)|(true|false|null))")
     private val xmlElementPattern = Regex("<([A-Za-z0-9_\\-]+)>([^<]{1,200})</\\1>")
     private val pathIdPattern = Regex("([0-9]+|[a-f0-9-]{36}|[a-f0-9]{24})", RegexOption.IGNORE_CASE)
     private val jsonMapper = ObjectMapper()
 
-    fun extract(request: HttpRequest, headerAllowlist: Set<String>, maxFields: Int = 20): List<InjectionPoint> {
+    fun extract(
+        request: HttpRequest,
+        headerAllowlist: Set<String>,
+        maxFields: Int = 20,
+    ): List<InjectionPoint> {
         val points = mutableListOf<InjectionPoint>()
 
         request.parameters().filter { it.type().name == "URL" }.forEach { param ->
@@ -31,7 +36,12 @@ object InjectionPointExtractor {
             }
         }
 
-        val body = try { request.bodyToString() } catch (_: Exception) { "" }
+        val body =
+            try {
+                request.bodyToString()
+            } catch (_: Exception) {
+                ""
+            }
         val contentType = request.headerValue("Content-Type")?.lowercase() ?: ""
         if (body.isNotBlank()) {
             if (contentType.contains("json") || body.trimStart().startsWith("{") || body.trimStart().startsWith("[")) {
@@ -42,22 +52,30 @@ object InjectionPointExtractor {
             }
         }
 
-        val path = try { URI(request.url()).path ?: "" } catch (_: Exception) { "" }
+        val path =
+            try {
+                URI(request.url()).path ?: ""
+            } catch (_: Exception) {
+                ""
+            }
         pathIdPattern.findAll(path).forEach { match ->
             points.add(
                 InjectionPoint(
                     type = InjectionType.PATH_SEGMENT,
                     name = "path_id",
                     originalValue = match.value,
-                    position = match.range.first
-                )
+                    position = match.range.first,
+                ),
             )
         }
 
         return points
     }
 
-    private fun extractJsonFields(body: String, maxFields: Int): List<InjectionPoint> {
+    private fun extractJsonFields(
+        body: String,
+        maxFields: Int,
+    ): List<InjectionPoint> {
         val results = mutableListOf<InjectionPoint>()
         try {
             val root = jsonMapper.readTree(body)
@@ -66,13 +84,14 @@ object InjectionPointExtractor {
                 while (fields.hasNext() && results.size < maxFields) {
                     val field = fields.next()
                     val valueNode = field.value
-                    val value = when {
-                        valueNode.isTextual -> valueNode.asText()
-                        valueNode.isNumber -> valueNode.numberValue().toString()
-                        valueNode.isBoolean -> valueNode.booleanValue().toString()
-                        valueNode.isNull -> "null"
-                        else -> continue
-                    }
+                    val value =
+                        when {
+                            valueNode.isTextual -> valueNode.asText()
+                            valueNode.isNumber -> valueNode.numberValue().toString()
+                            valueNode.isBoolean -> valueNode.booleanValue().toString()
+                            valueNode.isNull -> "null"
+                            else -> continue
+                        }
                     results.add(InjectionPoint(InjectionType.JSON_FIELD, field.key, value))
                 }
                 if (results.isNotEmpty()) {
@@ -84,16 +103,20 @@ object InjectionPointExtractor {
         }
         for (match in jsonFieldPattern.findAll(body)) {
             val name = match.groupValues[1]
-            val value = match.groupValues[3]
-                .ifEmpty { match.groupValues[4] }
-                .ifEmpty { match.groupValues[5] }
+            val value =
+                match.groupValues[3]
+                    .ifEmpty { match.groupValues[4] }
+                    .ifEmpty { match.groupValues[5] }
             results.add(InjectionPoint(InjectionType.JSON_FIELD, name, value))
             if (results.size >= maxFields) break
         }
         return results
     }
 
-    private fun extractXmlElements(body: String, maxFields: Int): List<InjectionPoint> {
+    private fun extractXmlElements(
+        body: String,
+        maxFields: Int,
+    ): List<InjectionPoint> {
         val results = mutableListOf<InjectionPoint>()
         for (match in xmlElementPattern.findAll(body)) {
             val name = match.groupValues[1]

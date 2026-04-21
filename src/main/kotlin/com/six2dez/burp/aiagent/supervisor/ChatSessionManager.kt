@@ -10,11 +10,10 @@ import java.util.concurrent.ConcurrentHashMap
  * or Ollama/LM Studio in-memory conversation history).
  */
 class ChatSessionManager {
-
     private data class ChatConnectionState(
         val backendId: String,
         val cliSessionId: String?,
-        val connection: AgentConnection?
+        val connection: AgentConnection?,
     )
 
     private val sessions = ConcurrentHashMap<String, ChatConnectionState>()
@@ -22,7 +21,10 @@ class ChatSessionManager {
     /**
      * Returns the stored cliSessionId for a chat session, or null if none.
      */
-    fun cliSessionIdFor(chatId: String, requestedBackendId: String): String? {
+    fun cliSessionIdFor(
+        chatId: String,
+        requestedBackendId: String,
+    ): String? {
         val state = sessions[chatId] ?: return null
         if (state.backendId != requestedBackendId) return null
         return state.cliSessionId
@@ -32,7 +34,10 @@ class ChatSessionManager {
      * Returns an existing reusable connection for HTTP backends (Ollama/LM Studio)
      * that maintain in-memory conversation history.
      */
-    fun existingConnectionFor(chatId: String, backendId: String): AgentConnection? {
+    fun existingConnectionFor(
+        chatId: String,
+        backendId: String,
+    ): AgentConnection? {
         val state = sessions[chatId] ?: return null
         if (state.backendId != backendId) return null
         val conn = state.connection ?: return null
@@ -44,13 +49,18 @@ class ChatSessionManager {
      * For CLI backends: stores the cliSessionId for resume on next message.
      * For HTTP backends: stores the connection for reuse (conversation history).
      */
-    fun updateSession(chatId: String, backendId: String, connection: AgentConnection) {
+    fun updateSession(
+        chatId: String,
+        backendId: String,
+        connection: AgentConnection,
+    ) {
         val cliSessionId = (connection as? SessionAwareConnection)?.cliSessionId()
-        sessions[chatId] = ChatConnectionState(
-            backendId = backendId,
-            cliSessionId = cliSessionId,
-            connection = connection
-        )
+        sessions[chatId] =
+            ChatConnectionState(
+                backendId = backendId,
+                cliSessionId = cliSessionId,
+                connection = connection,
+            )
     }
 
     /**

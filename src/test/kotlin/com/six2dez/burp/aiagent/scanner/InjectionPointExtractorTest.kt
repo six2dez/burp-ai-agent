@@ -10,7 +10,6 @@ import kotlin.test.Test
 import kotlin.test.assertTrue
 
 class InjectionPointExtractorTest {
-
     @Test
     fun extractsJsonAndPathAndHeaderPoints() {
         val urlParam = mock<ParsedHttpParameter>()
@@ -33,10 +32,11 @@ class InjectionPointExtractorTest {
         whenever(request.headerValue("Content-Type")).thenReturn("application/json")
         whenever(request.bodyToString()).thenReturn("{\"userId\":123,\"role\":\"user\"}")
         whenever(request.url()).thenReturn("http://example.com/api/users/123?search=test")
-        val points = InjectionPointExtractor.extract(
-            request,
-            setOf("x-forwarded-host")
-        )
+        val points =
+            InjectionPointExtractor.extract(
+                request,
+                setOf("x-forwarded-host"),
+            )
 
         assertTrue(points.any { it.type == InjectionType.URL_PARAM && it.name == "search" })
         assertTrue(points.any { it.type == InjectionType.COOKIE && it.name == "session" })
@@ -54,10 +54,11 @@ class InjectionPointExtractorTest {
         whenever(request.headerValue("Content-Type")).thenReturn("application/xml")
         whenever(request.bodyToString()).thenReturn("<order><id>42</id><item>book</item></order>")
         whenever(request.url()).thenReturn("http://example.com/api/order")
-        val points = InjectionPointExtractor.extract(
-            request,
-            emptySet()
-        )
+        val points =
+            InjectionPointExtractor.extract(
+                request,
+                emptySet(),
+            )
 
         assertTrue(points.any { it.type == InjectionType.XML_ELEMENT && it.name == "id" && it.originalValue == "42" })
         assertTrue(points.any { it.type == InjectionType.XML_ELEMENT && it.name == "item" && it.originalValue == "book" })

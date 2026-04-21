@@ -6,7 +6,9 @@ import javax.swing.BorderFactory
 import javax.swing.JPanel
 import javax.swing.JTextArea
 
-class McpHelpPanel(api: MontoyaApi) {
+class McpHelpPanel(
+    api: MontoyaApi,
+) {
     val panel = JPanel(BorderLayout())
 
     init {
@@ -16,7 +18,8 @@ class McpHelpPanel(api: MontoyaApi) {
         t.wrapStyleWord = true
         t.border = BorderFactory.createTitledBorder("MCP notes (Codex/Gemini)")
 
-        t.text = """
+        t.text =
+            """
             This extension ships its own MCP server:
             - SSE endpoint: http://127.0.0.1:9876/sse (or https when TLS is enabled).
             - Optional stdio bridge can be enabled in settings for clients that require stdio.
@@ -28,7 +31,7 @@ class McpHelpPanel(api: MontoyaApi) {
             Claude Desktop:
             - Add a custom MCP server in Claude Desktop and point it to this SSE endpoint.
             - If TLS is enabled, use https and provide the Bearer token.
-        """.trimIndent()
+            """.trimIndent()
 
         panel.add(t, BorderLayout.CENTER)
     }

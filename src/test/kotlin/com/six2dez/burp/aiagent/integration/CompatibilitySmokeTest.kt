@@ -8,7 +8,6 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class CompatibilitySmokeTest {
-
     @Test
     fun mcpToolCatalog_defaultsCoverAllRegisteredTools() {
         val allIds = McpToolCatalog.all().map { it.id }

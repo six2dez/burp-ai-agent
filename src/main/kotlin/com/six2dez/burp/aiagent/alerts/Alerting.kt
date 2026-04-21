@@ -11,17 +11,22 @@ object Alerting {
     var transport: MontoyaHttpTransport? = null
     private val fallbackClient = OkHttpClient()
 
-    fun sendWebhook(webhookUrl: String, text: String) {
+    fun sendWebhook(
+        webhookUrl: String,
+        text: String,
+    ) {
         try {
             val json = """{"text":${escapeJson(text)}}"""
             val t = transport
             if (t != null) {
                 t.post(webhookUrl, emptyMap(), json, 10_000)
             } else {
-                val req = Request.Builder()
-                    .url(webhookUrl)
-                    .post(json.toRequestBody("application/json".toMediaType()))
-                    .build()
+                val req =
+                    Request
+                        .Builder()
+                        .url(webhookUrl)
+                        .post(json.toRequestBody("application/json".toMediaType()))
+                        .build()
                 fallbackClient.newCall(req).execute().use { }
             }
         } catch (_: Exception) {
@@ -35,6 +40,11 @@ object Alerting {
     }
 
     private fun escapeJson(s: String): String =
-        "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"")
-            .replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t") + "\""
+        "\"" +
+            s
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r")
+                .replace("\t", "\\t") + "\""
 }

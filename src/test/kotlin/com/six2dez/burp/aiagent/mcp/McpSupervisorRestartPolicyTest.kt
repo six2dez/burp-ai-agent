@@ -18,42 +18,45 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
 class McpSupervisorRestartPolicyTest {
-
     @Test
     fun bindConflict_requestsTakeoverAndRetriesWithBoundedPolicy() {
         val api = mock<MontoyaApi>(defaultAnswer = Answers.RETURNS_DEEP_STUBS)
-        val manager = ScriptedServerManager(
-            scriptedStates = ArrayDeque(
-                listOf(
-                    McpServerState.Failed(BindException("Address already in use")),
-                    McpServerState.Running
-                )
-            ),
-            fallbackState = McpServerState.Running,
-            expectedStarts = 2
-        )
-        val takeoverClient = FakeTakeoverClient(
-            probeResult = true,
-            shutdownResult = true
-        )
+        val manager =
+            ScriptedServerManager(
+                scriptedStates =
+                    ArrayDeque(
+                        listOf(
+                            McpServerState.Failed(BindException("Address already in use")),
+                            McpServerState.Running,
+                        ),
+                    ),
+                fallbackState = McpServerState.Running,
+                expectedStarts = 2,
+            )
+        val takeoverClient =
+            FakeTakeoverClient(
+                probeResult = true,
+                shutdownResult = true,
+            )
         val scheduler = Executors.newSingleThreadScheduledExecutor()
-        val supervisor = McpSupervisor(
-            api = api,
-            serverManager = manager,
-            stdioBridge = McpStdioBridge(api),
-            scheduler = scheduler,
-            takeoverClientOverride = takeoverClient,
-            maxRestartAttempts = 2,
-            maxTakeoverAttempts = 2,
-            restartDelayMs = 10,
-            takeoverRetryDelayMs = 10
-        )
+        val supervisor =
+            McpSupervisor(
+                api = api,
+                serverManager = manager,
+                stdioBridge = McpStdioBridge(api),
+                scheduler = scheduler,
+                takeoverClientOverride = takeoverClient,
+                maxRestartAttempts = 2,
+                maxTakeoverAttempts = 2,
+                restartDelayMs = 10,
+                takeoverRetryDelayMs = 10,
+            )
 
         supervisor.applySettings(
             settings(enabled = true),
             PrivacyMode.STRICT,
             determinismMode = false,
-            preprocessSettings = ResponsePreprocessorSettings()
+            preprocessSettings = ResponsePreprocessorSettings(),
         )
 
         assertTrue(manager.awaitStarts(timeoutMs = 1_000))
@@ -68,33 +71,36 @@ class McpSupervisorRestartPolicyTest {
     @Test
     fun nonBindFailures_stopAfterRetryBudgetExhaustion() {
         val api = mock<MontoyaApi>(defaultAnswer = Answers.RETURNS_DEEP_STUBS)
-        val manager = ScriptedServerManager(
-            scriptedStates = ArrayDeque(),
-            fallbackState = McpServerState.Failed(IllegalStateException("boom")),
-            expectedStarts = 3
-        )
-        val takeoverClient = FakeTakeoverClient(
-            probeResult = false,
-            shutdownResult = false
-        )
+        val manager =
+            ScriptedServerManager(
+                scriptedStates = ArrayDeque(),
+                fallbackState = McpServerState.Failed(IllegalStateException("boom")),
+                expectedStarts = 3,
+            )
+        val takeoverClient =
+            FakeTakeoverClient(
+                probeResult = false,
+                shutdownResult = false,
+            )
         val scheduler = Executors.newSingleThreadScheduledExecutor()
-        val supervisor = McpSupervisor(
-            api = api,
-            serverManager = manager,
-            stdioBridge = McpStdioBridge(api),
-            scheduler = scheduler,
-            takeoverClientOverride = takeoverClient,
-            maxRestartAttempts = 2,
-            maxTakeoverAttempts = 1,
-            restartDelayMs = 10,
-            takeoverRetryDelayMs = 10
-        )
+        val supervisor =
+            McpSupervisor(
+                api = api,
+                serverManager = manager,
+                stdioBridge = McpStdioBridge(api),
+                scheduler = scheduler,
+                takeoverClientOverride = takeoverClient,
+                maxRestartAttempts = 2,
+                maxTakeoverAttempts = 1,
+                restartDelayMs = 10,
+                takeoverRetryDelayMs = 10,
+            )
 
         supervisor.applySettings(
             settings(enabled = true),
             PrivacyMode.STRICT,
             determinismMode = false,
-            preprocessSettings = ResponsePreprocessorSettings()
+            preprocessSettings = ResponsePreprocessorSettings(),
         )
 
         assertTrue(manager.awaitStarts(timeoutMs = 1_000))
@@ -106,8 +112,8 @@ class McpSupervisorRestartPolicyTest {
         supervisor.shutdown()
     }
 
-    private fun settings(enabled: Boolean): McpSettings {
-        return McpSettings(
+    private fun settings(enabled: Boolean): McpSettings =
+        McpSettings(
             enabled = enabled,
             host = "127.0.0.1",
             port = 8765,
@@ -125,13 +131,12 @@ class McpSupervisorRestartPolicyTest {
             maxBodyBytes = 262_144,
             toolToggles = emptyMap(),
             enabledUnsafeTools = emptySet(),
-            unsafeEnabled = false
+            unsafeEnabled = false,
         )
-    }
 
     private class FakeTakeoverClient(
         private val probeResult: Boolean,
-        private val shutdownResult: Boolean
+        private val shutdownResult: Boolean,
     ) : McpTakeoverClient {
         val probeCalls = AtomicInteger(0)
         val shutdownCalls = AtomicInteger(0)
@@ -150,7 +155,7 @@ class McpSupervisorRestartPolicyTest {
     private class ScriptedServerManager(
         private val scriptedStates: ArrayDeque<McpServerState>,
         private val fallbackState: McpServerState,
-        expectedStarts: Int
+        expectedStarts: Int,
     ) : McpServerManager {
         val startCalls = AtomicInteger(0)
         private val startLatch = CountDownLatch(expectedStarts)
@@ -162,7 +167,7 @@ class McpSupervisorRestartPolicyTest {
             privacyMode: PrivacyMode,
             determinismMode: Boolean,
             preprocessSettings: ResponsePreprocessorSettings,
-            callback: (McpServerState) -> Unit
+            callback: (McpServerState) -> Unit,
         ) {
             startCalls.incrementAndGet()
             startLatch.countDown()
@@ -176,8 +181,6 @@ class McpSupervisorRestartPolicyTest {
 
         override fun shutdown() = Unit
 
-        fun awaitStarts(timeoutMs: Long): Boolean {
-            return startLatch.await(timeoutMs, TimeUnit.MILLISECONDS)
-        }
+        fun awaitStarts(timeoutMs: Long): Boolean = startLatch.await(timeoutMs, TimeUnit.MILLISECONDS)
     }
 }

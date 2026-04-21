@@ -17,7 +17,6 @@ import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
 
 class McpToolAuditEventsTest {
-
     private val events = mutableListOf<Pair<String, Map<String, Any?>>>()
 
     @AfterEach
@@ -68,9 +67,10 @@ class McpToolAuditEventsTest {
         installCollector()
         val context = contextFor(toolEnabled = true)
 
-        val result = runTool(context, "status", """{"token":"very-secret"}""") {
-            error("boom /Users/alice/very-secret.txt")
-        }
+        val result =
+            runTool(context, "status", """{"token":"very-secret"}""") {
+                error("boom /Users/alice/very-secret.txt")
+            }
 
         assertTrue(result.isError == true)
         assertEquals(listOf("mcp_tool_start", "mcp_tool_end"), events.map { it.first })
@@ -105,7 +105,7 @@ class McpToolAuditEventsTest {
             enabledUnsafeTools = emptySet(),
             limiter = McpRequestLimiter(2),
             edition = BurpSuiteEdition.PROFESSIONAL,
-            maxBodyBytes = 1024
+            maxBodyBytes = 1024,
         )
     }
 }

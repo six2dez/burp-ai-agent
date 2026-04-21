@@ -5,7 +5,7 @@ object BackendDiagnostics {
         val backendId: String,
         val attempt: Int,
         val delayMs: Long,
-        val reason: String?
+        val reason: String?,
     )
 
     @Volatile
@@ -39,14 +39,19 @@ object BackendDiagnostics {
         }
     }
 
-    fun logRetry(backendId: String, attempt: Int, delayMs: Long, reason: String?) {
+    fun logRetry(
+        backendId: String,
+        attempt: Int,
+        delayMs: Long,
+        reason: String?,
+    ) {
         retry?.invoke(
             RetryEvent(
                 backendId = backendId,
                 attempt = attempt,
                 delayMs = delayMs,
-                reason = reason
-            )
+                reason = reason,
+            ),
         )
     }
 }

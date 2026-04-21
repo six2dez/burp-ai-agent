@@ -7,7 +7,9 @@ import javax.swing.JPanel
 import javax.swing.border.EmptyBorder
 import javax.swing.border.LineBorder
 
-class DependencyBanner(message: String) : JPanel(BorderLayout()) {
+class DependencyBanner(
+    message: String,
+) : JPanel(BorderLayout()) {
     private val label = JLabel(message)
 
     init {

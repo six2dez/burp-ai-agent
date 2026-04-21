@@ -1,13 +1,13 @@
 package com.six2dez.burp.aiagent.agents
 
-import java.nio.file.Files
-import java.nio.file.Path
-import kotlin.io.path.writeText
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import java.nio.file.Files
+import java.nio.file.Path
+import kotlin.io.path.writeText
 
 class AgentProfileLoaderTest {
     private lateinit var tempDir: Path
@@ -51,13 +51,14 @@ class AgentProfileLoaderTest {
             - issue_create: create findings
             Use /tool proxy_http_history {}
             {"tool":"repeater_tab","args":{}}
-            """.trimIndent()
+            """.trimIndent(),
         )
 
-        val warnings = AgentProfileLoader.validateProfile(
-            profileName = "custom",
-            availableTools = setOf("status", "proxy_http_history")
-        )
+        val warnings =
+            AgentProfileLoader.validateProfile(
+                profileName = "custom",
+                availableTools = setOf("status", "proxy_http_history"),
+            )
 
         assertTrue(warnings.any { it.contains("issue_create") })
         assertTrue(warnings.any { it.contains("repeater_tab") })
@@ -71,13 +72,14 @@ class AgentProfileLoaderTest {
             [GLOBAL]
             - status
             Use /tool proxy_http_history {}
-            """.trimIndent()
+            """.trimIndent(),
         )
 
-        val warnings = AgentProfileLoader.validateProfile(
-            profileName = "custom",
-            availableTools = setOf("status", "proxy_http_history")
-        )
+        val warnings =
+            AgentProfileLoader.validateProfile(
+                profileName = "custom",
+                availableTools = setOf("status", "proxy_http_history"),
+            )
 
         assertFalse(warnings.isNotEmpty())
     }
@@ -96,13 +98,14 @@ class AgentProfileLoaderTest {
             AUTOMATIC ISSUE CREATION:
             - Automatically create issues when verified
             - Creates [AI Passive] issues automatically when confidence >= 85%
-            """.trimIndent()
+            """.trimIndent(),
         )
 
-        val warnings = AgentProfileLoader.validateProfile(
-            profileName = "custom",
-            availableTools = setOf("status", "issue_create")
-        )
+        val warnings =
+            AgentProfileLoader.validateProfile(
+                profileName = "custom",
+                availableTools = setOf("status", "issue_create"),
+            )
 
         assertTrue(warnings.any { it.contains("http1_request") })
         assertTrue(warnings.any { it.contains("http2_request") })
@@ -119,17 +122,19 @@ class AgentProfileLoaderTest {
             Available MCP Tools:
             - status: Check status
             - http1_request / http2_request: Send test requests
-            """.trimIndent()
+            """.trimIndent(),
         )
 
-        val warnings = AgentProfileLoader.validateProfile(
-            profileName = "custom",
-            availableTools = setOf("status"),
-            disabledReasons = mapOf(
-                "http1_request" to "requires Unsafe mode or explicit per-tool unsafe approval.",
-                "http2_request" to "requires Unsafe mode or explicit per-tool unsafe approval."
+        val warnings =
+            AgentProfileLoader.validateProfile(
+                profileName = "custom",
+                availableTools = setOf("status"),
+                disabledReasons =
+                    mapOf(
+                        "http1_request" to "requires Unsafe mode or explicit per-tool unsafe approval.",
+                        "http2_request" to "requires Unsafe mode or explicit per-tool unsafe approval.",
+                    ),
             )
-        )
 
         assertFalse(warnings.any { it.contains("http1_request") })
         assertFalse(warnings.any { it.contains("http2_request") })
@@ -142,16 +147,18 @@ class AgentProfileLoaderTest {
             """
             [GLOBAL]
             Use /tool http1_request {}
-            """.trimIndent()
+            """.trimIndent(),
         )
 
-        val warnings = AgentProfileLoader.validateProfile(
-            profileName = "custom",
-            availableTools = emptySet(),
-            disabledReasons = mapOf(
-                "http1_request" to "requires Unsafe mode or explicit per-tool unsafe approval."
+        val warnings =
+            AgentProfileLoader.validateProfile(
+                profileName = "custom",
+                availableTools = emptySet(),
+                disabledReasons =
+                    mapOf(
+                        "http1_request" to "requires Unsafe mode or explicit per-tool unsafe approval.",
+                    ),
             )
-        )
 
         assertTrue(warnings.any { it.contains("http1_request") })
     }

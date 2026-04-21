@@ -6,7 +6,6 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class IssueUtilsTest {
-
     @Test
     fun canonicalIssueName_stripsAiPrefixesAndNormalizesCase() {
         assertEquals("sql injection", IssueUtils.canonicalIssueName("[AI] SQL Injection"))
@@ -16,10 +15,11 @@ class IssueUtilsTest {
 
     @Test
     fun hasEquivalentIssue_matchesCanonicalNameOnSameBaseUrl() {
-        val issues = listOf(
-            "[AI Passive] SQL Injection" to "https://example.test/path",
-            "Other issue" to "https://example.test/other"
-        )
+        val issues =
+            listOf(
+                "[AI Passive] SQL Injection" to "https://example.test/path",
+                "Other issue" to "https://example.test/other",
+            )
 
         assertTrue(IssueUtils.hasEquivalentIssue("[AI] sql injection", "https://example.test/path", issues))
         assertFalse(IssueUtils.hasEquivalentIssue("[AI] sql injection", "https://example.test/other", issues))

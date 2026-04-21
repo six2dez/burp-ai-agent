@@ -10,7 +10,6 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
 class McpRequestLimiterConcurrencyTest {
-
     @Test
     fun limiterDoesNotExceedConfiguredConcurrency() {
         val limiter = McpRequestLimiter(maxConcurrent = 3)

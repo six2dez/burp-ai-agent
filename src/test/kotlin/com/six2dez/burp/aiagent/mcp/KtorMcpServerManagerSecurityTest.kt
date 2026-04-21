@@ -9,7 +9,6 @@ import org.mockito.kotlin.mock
 import java.lang.reflect.Method
 
 class KtorMcpServerManagerSecurityTest {
-
     private val manager = KtorMcpServerManager(mock<MontoyaApi>())
 
     @Test
@@ -29,14 +28,15 @@ class KtorMcpServerManagerSecurityTest {
 
     @Test
     fun parseExternalCorsHosts_normalizes_filters_and_deduplicatesOrigins() {
-        val hosts = invokeCorsHosts(
-            listOf(
-                "https://Example.com",
-                "http://example.com:8443/path",
-                "://broken-origin",
-                "https://example.com"
+        val hosts =
+            invokeCorsHosts(
+                listOf(
+                    "https://Example.com",
+                    "http://example.com:8443/path",
+                    "://broken-origin",
+                    "https://example.com",
+                ),
             )
-        )
 
         assertEquals(2, hosts.size)
         val rendered = hosts.joinToString("\n") { it.toString() }
@@ -46,12 +46,16 @@ class KtorMcpServerManagerSecurityTest {
         assertTrue(rendered.contains("scheme=http"))
     }
 
-    private fun invokeBoolean(methodName: String, vararg args: String): Boolean {
-        val method: Method = manager.javaClass.getDeclaredMethod(
-            methodName,
-            String::class.java,
-            String::class.java
-        )
+    private fun invokeBoolean(
+        methodName: String,
+        vararg args: String,
+    ): Boolean {
+        val method: Method =
+            manager.javaClass.getDeclaredMethod(
+                methodName,
+                String::class.java,
+                String::class.java,
+            )
         method.isAccessible = true
         return method.invoke(manager, args[0], args[1]) as Boolean
     }

@@ -1,12 +1,12 @@
 package com.six2dez.burp.aiagent.backends
 
 import burp.api.montoya.MontoyaApi
+import com.six2dez.burp.aiagent.backends.burpai.BurpAiBackend
+import com.six2dez.burp.aiagent.backends.cli.ClaudeCliBackendFactory
 import com.six2dez.burp.aiagent.backends.cli.CodexCliBackendFactory
+import com.six2dez.burp.aiagent.backends.cli.CopilotCliBackendFactory
 import com.six2dez.burp.aiagent.backends.cli.GeminiCliBackendFactory
 import com.six2dez.burp.aiagent.backends.cli.OpenCodeCliBackendFactory
-import com.six2dez.burp.aiagent.backends.cli.ClaudeCliBackendFactory
-import com.six2dez.burp.aiagent.backends.cli.CopilotCliBackendFactory
-import com.six2dez.burp.aiagent.backends.burpai.BurpAiBackend
 import com.six2dez.burp.aiagent.backends.http.HttpBackendSupport
 import com.six2dez.burp.aiagent.backends.lmstudio.LmStudioBackendFactory
 import com.six2dez.burp.aiagent.backends.nvidia.NvidiaNimBackendFactory
@@ -18,7 +18,9 @@ import java.net.URLClassLoader
 import java.util.ServiceLoader
 import java.util.concurrent.ConcurrentHashMap
 
-class BackendRegistry(private val api: MontoyaApi) {
+class BackendRegistry(
+    private val api: MontoyaApi,
+) {
     private val backends = ConcurrentHashMap<String, AiBackend>()
     private val availabilityCache = ConcurrentHashMap<Pair<String, Int>, Boolean>()
     private var externalClassLoader: URLClassLoader? = null
@@ -47,7 +49,7 @@ class BackendRegistry(private val api: MontoyaApi) {
                 OllamaBackendFactory(),
                 NvidiaNimBackendFactory(),
                 OpenAiCompatibleBackendFactory(),
-                CopilotCliBackendFactory()
+                CopilotCliBackendFactory(),
             ).forEach { f ->
                 val b = f.create()
                 backends[b.id] = b
@@ -81,21 +83,23 @@ class BackendRegistry(private val api: MontoyaApi) {
             .filter { backend ->
                 val cacheKey = Pair(backend.id, settingsHash)
                 availabilityCache.getOrPut(cacheKey) { backend.isAvailable(settings) }
-            }
-            .sortedBy { it.displayName }
+            }.sortedBy { it.displayName }
             .map { it.id }
     }
 
     /** Returns all registered backend IDs regardless of availability. */
-    fun listAllBackendIds(): List<String> {
-        return backends.values
+    fun listAllBackendIds(): List<String> =
+        backends.values
             .sortedBy { it.displayName }
             .map { it.id }
-    }
 
-    fun healthCheck(backendId: String, settings: AgentSettings): HealthCheckResult {
-        val backend = backends[backendId]
-            ?: return HealthCheckResult.Unavailable("Backend not found: $backendId")
+    fun healthCheck(
+        backendId: String,
+        settings: AgentSettings,
+    ): HealthCheckResult {
+        val backend =
+            backends[backendId]
+                ?: return HealthCheckResult.Unavailable("Backend not found: $backendId")
         return try {
             val result = backend.healthCheck(settings)
             if (result is HealthCheckResult.Unknown) {
@@ -132,7 +136,10 @@ class BackendRegistry(private val api: MontoyaApi) {
             externalClassLoader = cl
             api.logging().logToOutput("Loaded external backend JARs: ${jars.joinToString { it.name }}")
         } catch (e: Exception) {
-            try { cl.close() } catch (_: Exception) {}
+            try {
+                cl.close()
+            } catch (_: Exception) {
+            }
             api.logging().logToError("Failed loading external backend JARs: ${e.message}")
         }
     }

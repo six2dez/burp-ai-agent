@@ -7,10 +7,10 @@ import org.junit.jupiter.api.assertTimeoutPreemptively
 import java.time.Duration
 
 class MarkdownRendererPerformanceTest {
-
     @Test
     fun toHtml_rendersCommonMarkdownShapes() {
-        val input = """
+        val input =
+            """
             # Title
             ## Subtitle
             ### Section
@@ -22,7 +22,7 @@ class MarkdownRendererPerformanceTest {
             ```kotlin
             val x = 1
             ```
-        """.trimIndent()
+            """.trimIndent()
 
         val html = MarkdownRenderer.toHtml(input, isDark = false)
 
@@ -44,15 +44,16 @@ class MarkdownRendererPerformanceTest {
 
     @Test
     fun toHtml_handlesAsteriskHeavyInputWithinBoundedTime() {
-        val payload = buildString {
-            repeat(12_000) {
-                append("*")
+        val payload =
+            buildString {
+                repeat(12_000) {
+                    append("*")
+                }
+                append("normal text")
+                repeat(12_000) {
+                    append("*")
+                }
             }
-            append("normal text")
-            repeat(12_000) {
-                append("*")
-            }
-        }
 
         assertTimeoutPreemptively(Duration.ofSeconds(2)) {
             MarkdownRenderer.toHtml(payload, isDark = true)

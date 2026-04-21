@@ -1,22 +1,22 @@
 package com.six2dez.burp.aiagent.ui.panels
 
 import com.six2dez.burp.aiagent.ui.UiTheme
+import com.six2dez.burp.aiagent.ui.components.ToggleSwitch
 import java.awt.BorderLayout
 import java.awt.CardLayout
 import java.awt.GridBagConstraints
 import java.awt.GridBagLayout
 import java.awt.Insets
+import javax.swing.JButton
 import javax.swing.JComponent
 import javax.swing.JLabel
 import javax.swing.JPanel
-import javax.swing.JTextField
-import javax.swing.JTextArea
-import javax.swing.JScrollPane
 import javax.swing.JPasswordField
-import javax.swing.JButton
+import javax.swing.JScrollPane
+import javax.swing.JTextArea
+import javax.swing.JTextField
 import javax.swing.border.EmptyBorder
 import javax.swing.border.LineBorder
-import com.six2dez.burp.aiagent.ui.components.ToggleSwitch
 
 data class BackendConfigState(
     val codexCmd: String = "",
@@ -48,11 +48,11 @@ data class BackendConfigState(
     val nvidiaNimApiKey: String = "",
     val nvidiaNimHeaders: String = "",
     val nvidiaNimTimeoutSeconds: String = "",
-    val copilotCmd: String = ""
+    val copilotCmd: String = "",
 )
 
 class BackendConfigPanel(
-    initialState: BackendConfigState = BackendConfigState()
+    initialState: BackendConfigState = BackendConfigState(),
 ) : JPanel(BorderLayout()) {
     var onOpenCli: ((backendId: String, command: String) -> Unit)? = null
     var onTestConnection: ((backendId: String) -> Unit)? = null
@@ -172,8 +172,8 @@ class BackendConfigPanel(
         cardLayout.show(cards, id)
     }
 
-    fun currentBackendSettings(): BackendConfigState {
-        return BackendConfigState(
+    fun currentBackendSettings(): BackendConfigState =
+        BackendConfigState(
             codexCmd = codexCmd.text.trim(),
             geminiCmd = geminiCmd.text.trim(),
             opencodeCmd = opencodeCmd.text.trim(),
@@ -203,9 +203,8 @@ class BackendConfigPanel(
             nvidiaNimApiKey = String(nvidiaNimApiKey.password).trim(),
             nvidiaNimHeaders = nvidiaNimHeaders.text.trim(),
             nvidiaNimTimeoutSeconds = nvidiaNimTimeout.text.trim(),
-            copilotCmd = copilotCmd.text.trim()
+            copilotCmd = copilotCmd.text.trim(),
         )
-    }
 
     fun applyState(state: BackendConfigState) {
         codexCmd.text = state.codexCmd
@@ -240,7 +239,10 @@ class BackendConfigPanel(
         copilotCmd.text = state.copilotCmd
     }
 
-    private fun buildSingleFieldPanel(labelText: String, field: JComponent): JPanel {
+    private fun buildSingleFieldPanel(
+        labelText: String,
+        field: JComponent,
+    ): JPanel {
         val panel = JPanel(GridBagLayout())
         panel.background = UiTheme.Colors.surface
         panel.border = EmptyBorder(4, 8, 0, 8)
@@ -253,7 +255,7 @@ class BackendConfigPanel(
         labelText: String,
         field: JComponent,
         backendId: String,
-        commandProvider: () -> String
+        commandProvider: () -> String,
     ): JPanel {
         val panel = JPanel(GridBagLayout())
         panel.background = UiTheme.Colors.surface
@@ -264,8 +266,8 @@ class BackendConfigPanel(
             1,
             buildButtonRowPanel(
                 buildOpenCliButton(backendId, commandProvider),
-                buildTestConnectionButton(backendId)
-            )
+                buildTestConnectionButton(backendId),
+            ),
         )
         addVerticalFiller(panel, 2)
         return panel
@@ -277,23 +279,28 @@ class BackendConfigPanel(
         panel.border = EmptyBorder(8, 8, 8, 8)
         var row = 0
 
-        val info = JTextArea(
-            "Burp AI uses the built-in AI provider. No configuration needed.\n\n" +
-            "Requires Burp Suite Professional with AI features enabled.\n" +
-            "Go to Extensions > Settings and enable 'Use AI'."
-        ).apply {
-            isEditable = false
-            isOpaque = false
-            lineWrap = true
-            wrapStyleWord = true
-            font = UiTheme.Typography.body
-            border = null
-        }
-        val gbc = GridBagConstraints().apply {
-            gridx = 0; gridy = row++; gridwidth = 2
-            fill = GridBagConstraints.HORIZONTAL; insets = Insets(4, 0, 4, 0)
-            weightx = 1.0
-        }
+        val info =
+            JTextArea(
+                "Burp AI uses the built-in AI provider. No configuration needed.\n\n" +
+                    "Requires Burp Suite Professional with AI features enabled.\n" +
+                    "Go to Extensions > Settings and enable 'Use AI'.",
+            ).apply {
+                isEditable = false
+                isOpaque = false
+                lineWrap = true
+                wrapStyleWord = true
+                font = UiTheme.Typography.body
+                border = null
+            }
+        val gbc =
+            GridBagConstraints().apply {
+                gridx = 0
+                gridy = row++
+                gridwidth = 2
+                fill = GridBagConstraints.HORIZONTAL
+                insets = Insets(4, 0, 4, 0)
+                weightx = 1.0
+            }
         panel.add(info, gbc)
         addVerticalFiller(panel, row)
         return panel
@@ -310,8 +317,8 @@ class BackendConfigPanel(
             row++,
             buildButtonRowPanel(
                 buildOpenCliButton("ollama", { ollamaCliCmd.text.trim() }),
-                buildTestConnectionButton("ollama")
-            )
+                buildTestConnectionButton("ollama"),
+            ),
         )
         addRow(panel, row++, "Ollama model", ollamaModel)
         addRow(panel, row++, "Ollama base URL", ollamaUrl)
@@ -333,8 +340,8 @@ class BackendConfigPanel(
             1,
             buildButtonRowPanel(
                 buildOpenCliButton("opencode-cli", { opencodeCmd.text.trim() }),
-                buildTestConnectionButton("opencode-cli")
-            )
+                buildTestConnectionButton("opencode-cli"),
+            ),
         )
         return panel
     }
@@ -382,75 +389,99 @@ class BackendConfigPanel(
         return panel
     }
 
-    private fun addRow(panel: JPanel, row: Int, labelText: String, field: JComponent) {
+    private fun addRow(
+        panel: JPanel,
+        row: Int,
+        labelText: String,
+        field: JComponent,
+    ) {
         val label = JLabel(labelText)
         label.font = UiTheme.Typography.body
         label.foreground = UiTheme.Colors.onSurface
 
-        val labelConstraints = GridBagConstraints().apply {
-            gridx = 0
-            gridy = row
-            anchor = GridBagConstraints.WEST
-            insets = Insets(4, 0, 4, 10)
-        }
-        val fieldConstraints = GridBagConstraints().apply {
-            gridx = 1
-            gridy = row
-            weightx = 1.0
-            fill = GridBagConstraints.HORIZONTAL
-            insets = Insets(4, 0, 4, 0)
-        }
+        val labelConstraints =
+            GridBagConstraints().apply {
+                gridx = 0
+                gridy = row
+                anchor = GridBagConstraints.WEST
+                insets = Insets(4, 0, 4, 10)
+            }
+        val fieldConstraints =
+            GridBagConstraints().apply {
+                gridx = 1
+                gridy = row
+                weightx = 1.0
+                fill = GridBagConstraints.HORIZONTAL
+                insets = Insets(4, 0, 4, 0)
+            }
         panel.add(label, labelConstraints)
         panel.add(field, fieldConstraints)
     }
 
-    private fun addButtonRow(panel: JPanel, row: Int, component: JComponent) {
-        val labelConstraints = GridBagConstraints().apply {
-            gridx = 0
-            gridy = row
-            anchor = GridBagConstraints.WEST
-            insets = Insets(4, 0, 4, 10)
-        }
-        val buttonConstraints = GridBagConstraints().apply {
-            gridx = 1
-            gridy = row
-            anchor = GridBagConstraints.WEST
-            insets = Insets(4, 0, 4, 0)
-        }
+    private fun addButtonRow(
+        panel: JPanel,
+        row: Int,
+        component: JComponent,
+    ) {
+        val labelConstraints =
+            GridBagConstraints().apply {
+                gridx = 0
+                gridy = row
+                anchor = GridBagConstraints.WEST
+                insets = Insets(4, 0, 4, 10)
+            }
+        val buttonConstraints =
+            GridBagConstraints().apply {
+                gridx = 1
+                gridy = row
+                anchor = GridBagConstraints.WEST
+                insets = Insets(4, 0, 4, 0)
+            }
         panel.add(JLabel(""), labelConstraints)
         panel.add(component, buttonConstraints)
     }
 
-    private fun addToggleRow(panel: JPanel, row: Int, labelText: String, toggle: ToggleSwitch) {
+    private fun addToggleRow(
+        panel: JPanel,
+        row: Int,
+        labelText: String,
+        toggle: ToggleSwitch,
+    ) {
         val label = JLabel(labelText)
         label.font = UiTheme.Typography.body
         label.foreground = UiTheme.Colors.onSurface
-        val labelConstraints = GridBagConstraints().apply {
-            gridx = 0
-            gridy = row
-            anchor = GridBagConstraints.WEST
-            insets = Insets(6, 0, 4, 10)
-        }
-        val toggleConstraints = GridBagConstraints().apply {
-            gridx = 1
-            gridy = row
-            anchor = GridBagConstraints.WEST
-            insets = Insets(6, 0, 4, 0)
-        }
+        val labelConstraints =
+            GridBagConstraints().apply {
+                gridx = 0
+                gridy = row
+                anchor = GridBagConstraints.WEST
+                insets = Insets(6, 0, 4, 10)
+            }
+        val toggleConstraints =
+            GridBagConstraints().apply {
+                gridx = 1
+                gridy = row
+                anchor = GridBagConstraints.WEST
+                insets = Insets(6, 0, 4, 0)
+            }
         panel.add(label, labelConstraints)
         panel.add(toggle, toggleConstraints)
     }
 
-    private fun addVerticalFiller(panel: JPanel, row: Int) {
+    private fun addVerticalFiller(
+        panel: JPanel,
+        row: Int,
+    ) {
         val filler = JPanel()
         filler.isOpaque = false
-        val constraints = GridBagConstraints().apply {
-            gridx = 0
-            gridy = row
-            gridwidth = 2
-            weighty = 1.0
-            fill = GridBagConstraints.VERTICAL
-        }
+        val constraints =
+            GridBagConstraints().apply {
+                gridx = 0
+                gridy = row
+                gridwidth = 2
+                weighty = 1.0
+                fill = GridBagConstraints.VERTICAL
+            }
         panel.add(filler, constraints)
     }
 
@@ -470,28 +501,29 @@ class BackendConfigPanel(
         area.wrapStyleWord = true
     }
 
-    private fun buildOpenCliButton(backendId: String, commandProvider: () -> String): JButton {
-        return JButton("Open CLI").apply {
+    private fun buildOpenCliButton(
+        backendId: String,
+        commandProvider: () -> String,
+    ): JButton =
+        JButton("Open CLI").apply {
             font = UiTheme.Typography.body
             toolTipText = "Open a terminal with the configured command and MCP tools access."
             addActionListener {
                 onOpenCli?.invoke(backendId, commandProvider())
             }
         }
-    }
 
-    private fun buildTestConnectionButton(backendId: String): JButton {
-        return JButton("Test connection").apply {
+    private fun buildTestConnectionButton(backendId: String): JButton =
+        JButton("Test connection").apply {
             font = UiTheme.Typography.body
             toolTipText = "Run backend health check with current settings."
             addActionListener {
                 onTestConnection?.invoke(backendId)
             }
         }
-    }
 
-    private fun buildButtonRowPanel(vararg buttons: JButton): JPanel {
-        return JPanel().apply {
+    private fun buildButtonRowPanel(vararg buttons: JButton): JPanel =
+        JPanel().apply {
             layout = javax.swing.BoxLayout(this, javax.swing.BoxLayout.X_AXIS)
             isOpaque = false
             buttons.forEachIndexed { index, button ->
@@ -501,6 +533,4 @@ class BackendConfigPanel(
                 }
             }
         }
-    }
-
 }

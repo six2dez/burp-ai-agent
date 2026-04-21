@@ -16,14 +16,21 @@ Thanks for your interest in contributing! Here's how to get started.
    ```bash
    ./gradlew clean shadowJar
    ```
-   Output JAR: `build/libs/Burp-AI-Agent-<version>.jar`
+   Output JAR: `build/libs/Custom-AI-Agent-<version>.jar`
 
 4. **Run tests**:
    ```bash
    ./gradlew test
    ```
 
-5. **Load in Burp**: Open Burp Suite, go to **Extensions > Installed > Add**, select the JAR.
+5. **Lint and coverage** (optional but recommended before opening a PR):
+   ```bash
+   ./gradlew ktlintFormat        # auto-fix style
+   ./gradlew ktlintCheck         # verify style (non-blocking in CI until baseline is clean)
+   ./gradlew jacocoTestReport    # HTML at build/reports/jacoco/test/html/index.html
+   ```
+
+6. **Load in Burp**: Open Burp Suite, go to **Extensions > Installed > Add**, select the JAR.
 
 ## Project Structure
 

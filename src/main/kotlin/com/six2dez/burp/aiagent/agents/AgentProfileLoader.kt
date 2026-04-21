@@ -8,28 +8,31 @@ import java.util.concurrent.atomic.AtomicReference
 
 data class AgentProfile(
     val global: String,
-    val sections: Map<String, String>
+    val sections: Map<String, String>,
 )
 
 object AgentProfileLoader {
-    private val defaultBaseDir: Path = Paths.get(
-        System.getProperty("user.home"),
-        ".burp-ai-agent",
-        "AGENTS"
-    )
+    private val defaultBaseDir: Path =
+        Paths.get(
+            System.getProperty("user.home"),
+            ".burp-ai-agent",
+            "AGENTS",
+        )
+
     @Volatile
     internal var baseDirOverride: Path? = null
-    private val bundledProfiles = listOf(
-        "pentester.md",
-        "bughunter.md",
-        "auditor.md"
-    )
+    private val bundledProfiles =
+        listOf(
+            "pentester.md",
+            "bughunter.md",
+            "auditor.md",
+        )
 
     /** Atomically-cached profile entry: path + modification time + parsed profile */
     private data class CacheEntry(
         val path: Path,
         val modified: Long,
-        val profile: AgentProfile
+        val profile: AgentProfile,
     )
 
     private val cacheRef = AtomicReference<CacheEntry?>(null)
@@ -39,7 +42,7 @@ object AgentProfileLoader {
     private data class ReferencedTools(
         val all: Set<String>,
         val catalog: Set<String>,
-        val explicit: Set<String>
+        val explicit: Set<String>,
     )
 
     fun setActiveProfile(profileName: String) {
@@ -68,8 +71,7 @@ object AgentProfileLoader {
                     .filter { it.lowercase().endsWith(".md") }
                     .map { name ->
                         if (name.lowercase().endsWith(".md")) name.dropLast(3) else name
-                    }
-                    .distinct()
+                    }.distinct()
                     .sorted(String.CASE_INSENSITIVE_ORDER)
                     .toList()
             }
@@ -82,20 +84,22 @@ object AgentProfileLoader {
     fun validateProfile(
         profileName: String,
         availableTools: Set<String>,
-        disabledReasons: Map<String, String> = emptyMap()
+        disabledReasons: Map<String, String> = emptyMap(),
     ): List<String> {
         val path = resolveProfilePathByName(profileName) ?: return emptyList()
-        val text = try {
-            Files.readString(path)
-        } catch (e: Exception) {
-            BackendDiagnostics.logError("Failed to read AGENTS profile for validation: ${path}. ${e.message}")
-            return emptyList()
-        }
+        val text =
+            try {
+                Files.readString(path)
+            } catch (e: Exception) {
+                BackendDiagnostics.logError("Failed to read AGENTS profile for validation: $path. ${e.message}")
+                return emptyList()
+            }
         val referencedTools = extractReferencedTools(text)
         if (referencedTools.all.isEmpty()) return emptyList()
-        val missing = referencedTools.all
-            .filter { it !in availableTools }
-            .sorted()
+        val missing =
+            referencedTools.all
+                .filter { it !in availableTools }
+                .sorted()
         if (missing.isEmpty()) return emptyList()
         return missing.mapNotNull { tool ->
             val reason = disabledReasons[tool]
@@ -113,7 +117,7 @@ object AgentProfileLoader {
     private fun shouldSuppressMissingWarning(
         tool: String,
         reason: String,
-        referencedTools: ReferencedTools
+        referencedTools: ReferencedTools,
     ): Boolean {
         val fromCatalogOnly = tool in referencedTools.catalog && tool !in referencedTools.explicit
         if (!fromCatalogOnly) return false
@@ -146,8 +150,9 @@ object AgentProfileLoader {
             sections.add(profile.global.trim())
         }
         val sectionKey = sectionKeyForAction(actionName)
-        val section = profile.sections[sectionKey]
-            ?: profile.sections["DEFAULT"]
+        val section =
+            profile.sections[sectionKey]
+                ?: profile.sections["DEFAULT"]
         if (!section.isNullOrBlank()) {
             sections.add(section.trim())
         }
@@ -161,11 +166,12 @@ object AgentProfileLoader {
 
     private fun compactInstructions(raw: String): String {
         val withoutToolCatalog = stripExplicitToolCatalog(raw)
-        val compactWhitespace = withoutToolCatalog
-            .replace("\r\n", "\n")
-            .replace(Regex("[ \t]+\n"), "\n")
-            .replace(Regex("\n{3,}"), "\n\n")
-            .trim()
+        val compactWhitespace =
+            withoutToolCatalog
+                .replace("\r\n", "\n")
+                .replace(Regex("[ \t]+\n"), "\n")
+                .replace(Regex("\n{3,}"), "\n\n")
+                .trim()
         if (compactWhitespace.length <= MAX_INSTRUCTION_CHARS) return compactWhitespace
         return compactWhitespace.take(MAX_INSTRUCTION_CHARS) + "\n...[instructions truncated]..."
     }
@@ -194,24 +200,26 @@ object AgentProfileLoader {
 
     private fun loadProfile(): AgentProfile? {
         val profilePath = resolveProfilePath() ?: return null
-        val modified = try {
-            Files.getLastModifiedTime(profilePath).toMillis()
-        } catch (e: Exception) {
-            BackendDiagnostics.logError("Failed to read AGENTS profile timestamp: ${profilePath}. ${e.message}")
-            -1L
-        }
+        val modified =
+            try {
+                Files.getLastModifiedTime(profilePath).toMillis()
+            } catch (e: Exception) {
+                BackendDiagnostics.logError("Failed to read AGENTS profile timestamp: $profilePath. ${e.message}")
+                -1L
+            }
         // Atomic read of the entire cache entry — no torn reads
         val cached = cacheRef.get()
         if (cached != null && profilePath == cached.path && modified == cached.modified) {
             return cached.profile
         }
 
-        val text = try {
-            Files.readString(profilePath)
-        } catch (e: Exception) {
-            BackendDiagnostics.logError("Failed to read AGENTS profile: ${profilePath}. ${e.message}")
-            return null
-        }
+        val text =
+            try {
+                Files.readString(profilePath)
+            } catch (e: Exception) {
+                BackendDiagnostics.logError("Failed to read AGENTS profile: $profilePath. ${e.message}")
+                return null
+            }
         val parsed = parseProfile(text)
         // Atomic write of all three fields together
         cacheRef.set(CacheEntry(path = profilePath, modified = modified, profile = parsed))
@@ -221,21 +229,23 @@ object AgentProfileLoader {
     private fun resolveProfilePath(): Path? {
         val baseDir = baseDir()
         val defaultFile = baseDir.resolve("default")
-        val profileName = if (Files.isRegularFile(defaultFile)) {
-            try {
-                Files.readString(defaultFile).trim()
-            } catch (e: Exception) {
-                BackendDiagnostics.logError("Failed to read AGENTS default profile marker: ${e.message}")
+        val profileName =
+            if (Files.isRegularFile(defaultFile)) {
+                try {
+                    Files.readString(defaultFile).trim()
+                } catch (e: Exception) {
+                    BackendDiagnostics.logError("Failed to read AGENTS default profile marker: ${e.message}")
+                    ""
+                }
+            } else {
                 ""
             }
-        } else {
-            ""
-        }
-        val candidate = if (profileName.isNotBlank()) {
-            baseDir.resolve(profileName)
-        } else {
-            baseDir.resolve("pentester.md")
-        }
+        val candidate =
+            if (profileName.isNotBlank()) {
+                baseDir.resolve(profileName)
+            } else {
+                baseDir.resolve("pentester.md")
+            }
         return if (Files.isRegularFile(candidate)) candidate else null
     }
 
@@ -257,9 +267,7 @@ object AgentProfileLoader {
         cacheRef.set(null)
     }
 
-    private fun baseDir(): Path {
-        return baseDirOverride ?: defaultBaseDir
-    }
+    private fun baseDir(): Path = baseDirOverride ?: defaultBaseDir
 
     internal fun setBaseDirForTests(path: Path?) {
         baseDirOverride = path
@@ -271,32 +279,34 @@ object AgentProfileLoader {
             return "CHAT"
         }
         val normalized = actionName.trim().uppercase()
-        val mapped = when (normalized) {
-            "FIND VULNERABILITIES" -> "REQUEST_ANALYSIS"
-            "ANALYZE REQUEST" -> "REQUEST_ANALYSIS"
-            "ANALYZE THIS REQUEST" -> "ANALYZE_REQUEST"
-            "QUICK RECON" -> "ANALYZE_REQUEST"
-            "QUICK TRIAGE" -> "ANALYZE_REQUEST"
-            "SUMMARIZE REQUEST/RESPONSE" -> "REQUEST_SUMMARY"
-            "EXPLAIN HEADERS" -> "HEADERS"
-            "EXPLAIN JS" -> "JS_ANALYSIS"
-            "LOGIN SEQUENCE" -> "LOGIN_SEQUENCE"
-            "ACCESS CONTROL" -> "ACCESS_CONTROL"
-            "ANALYZE THIS ISSUE" -> "ISSUE_ANALYSIS"
-            "ISSUE ANALYSIS" -> "ISSUE_ANALYSIS"
-            "GENERATE POC & VALIDATE" -> "POC"
-            "POC & VALIDATION" -> "POC"
-            "POC STEPS" -> "POC"
-            "IMPACT & SEVERITY" -> "ISSUE_IMPACT"
-            "ANALYZE IMPACT" -> "ISSUE_IMPACT"
-            "FULL REPORT" -> "FULL_REPORT"
-            "FULL VULN REPORT" -> "FULL_REPORT"
-            "ESCALATION PATHS" -> "ESCALATION_PATHS"
-            "CHAT" -> "CHAT"
-            else -> null
-        }
+        val mapped =
+            when (normalized) {
+                "FIND VULNERABILITIES" -> "REQUEST_ANALYSIS"
+                "ANALYZE REQUEST" -> "REQUEST_ANALYSIS"
+                "ANALYZE THIS REQUEST" -> "ANALYZE_REQUEST"
+                "QUICK RECON" -> "ANALYZE_REQUEST"
+                "QUICK TRIAGE" -> "ANALYZE_REQUEST"
+                "SUMMARIZE REQUEST/RESPONSE" -> "REQUEST_SUMMARY"
+                "EXPLAIN HEADERS" -> "HEADERS"
+                "EXPLAIN JS" -> "JS_ANALYSIS"
+                "LOGIN SEQUENCE" -> "LOGIN_SEQUENCE"
+                "ACCESS CONTROL" -> "ACCESS_CONTROL"
+                "ANALYZE THIS ISSUE" -> "ISSUE_ANALYSIS"
+                "ISSUE ANALYSIS" -> "ISSUE_ANALYSIS"
+                "GENERATE POC & VALIDATE" -> "POC"
+                "POC & VALIDATION" -> "POC"
+                "POC STEPS" -> "POC"
+                "IMPACT & SEVERITY" -> "ISSUE_IMPACT"
+                "ANALYZE IMPACT" -> "ISSUE_IMPACT"
+                "FULL REPORT" -> "FULL_REPORT"
+                "FULL VULN REPORT" -> "FULL_REPORT"
+                "ESCALATION PATHS" -> "ESCALATION_PATHS"
+                "CHAT" -> "CHAT"
+                else -> null
+            }
         if (mapped != null) return mapped
-        return actionName.trim()
+        return actionName
+            .trim()
             .replace(Regex("[^A-Za-z0-9]+"), "_")
             .trim('_')
             .uppercase()
@@ -320,10 +330,11 @@ object AgentProfileLoader {
         }
 
         val global = sections["GLOBAL"]?.toString().orEmpty().trim()
-        val parsedSections = sections
-            .filterKeys { it != "GLOBAL" }
-            .mapValues { it.value.toString().trim() }
-            .filterValues { it.isNotBlank() }
+        val parsedSections =
+            sections
+                .filterKeys { it != "GLOBAL" }
+                .mapValues { it.value.toString().trim() }
+                .filterValues { it.isNotBlank() }
         return AgentProfile(global = global, sections = parsedSections)
     }
 
@@ -358,14 +369,15 @@ object AgentProfileLoader {
             slashToolPattern.findAll(line).forEach { m -> explicitTools.add(m.groupValues[1].lowercase()) }
             jsonToolPattern.findAll(line).forEach { m -> explicitTools.add(m.groupValues[1].lowercase()) }
         }
-        val allTools = linkedSetOf<String>().apply {
-            addAll(catalogTools)
-            addAll(explicitTools)
-        }
+        val allTools =
+            linkedSetOf<String>().apply {
+                addAll(catalogTools)
+                addAll(explicitTools)
+            }
         return ReferencedTools(
             all = allTools,
             catalog = catalogTools,
-            explicit = explicitTools
+            explicit = explicitTools,
         )
     }
 }

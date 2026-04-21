@@ -9,12 +9,12 @@ internal data class PendingAnalysis(
     val requestResponse: HttpRequestResponse,
     val minSeverity: String,
     val host: String,
-    val enqueuedAtMs: Long = System.currentTimeMillis()
+    val enqueuedAtMs: Long = System.currentTimeMillis(),
 )
 
 internal class BatchAnalysisQueue(
     maxBatchSize: Int = DEFAULT_BATCH_SIZE,
-    private val flushTimeoutMs: Long = DEFAULT_FLUSH_TIMEOUT_MS
+    private val flushTimeoutMs: Long = DEFAULT_FLUSH_TIMEOUT_MS,
 ) {
     @Volatile
     var maxBatchSize: Int = maxBatchSize

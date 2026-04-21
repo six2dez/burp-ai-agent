@@ -4,14 +4,15 @@ data class ResponsePreprocessorSettings(
     val preprocessProxyHistory: Boolean = true,
     val preprocessMaxResponseSizeKb: Int = 20,
     val preprocessFilterBinaryContent: Boolean = true,
-    val preprocessAllowedContentTypes: Set<String> = setOf(
-        "text/",
-        "application/json",
-        "application/xml",
-        "application/javascript",
-        "application/x-www-form-urlencoded",
-        "multipart/form-data"
-    )
+    val preprocessAllowedContentTypes: Set<String> =
+        setOf(
+            "text/",
+            "application/json",
+            "application/xml",
+            "application/javascript",
+            "application/x-www-form-urlencoded",
+            "multipart/form-data",
+        ),
 )
 
 /**
@@ -19,20 +20,30 @@ data class ResponsePreprocessorSettings(
  * Filters out binary content and truncates large responses.
  */
 object ResponsePreprocessor {
-
     /**
      * Binary content type prefixes that should be filtered out
      */
-    private val BINARY_CONTENT_PREFIXES = setOf(
-        "image/", "video/", "audio/", "font/",
-        "application/octet-stream", "application/pdf",
-        "application/zip", "application/gzip", "application/x-tar",
-        "application/x-bzip2", "application/x-7z-compressed",
-        "application/java-archive", "application/vnd.ms-excel",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "application/vnd.ms-powerpoint", "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-    )
+    private val BINARY_CONTENT_PREFIXES =
+        setOf(
+            "image/",
+            "video/",
+            "audio/",
+            "font/",
+            "application/octet-stream",
+            "application/pdf",
+            "application/zip",
+            "application/gzip",
+            "application/x-tar",
+            "application/x-bzip2",
+            "application/x-7z-compressed",
+            "application/java-archive",
+            "application/vnd.ms-excel",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "application/msword",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/vnd.ms-powerpoint",
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        )
 
     /**
      * Preprocesses a response string based on settings.
@@ -40,17 +51,21 @@ object ResponsePreprocessor {
      * @param settings Agent settings containing preprocessing configuration
      * @return Preprocessed response string
      */
-    fun preprocessResponse(response: String, settings: ResponsePreprocessorSettings): String {
+    fun preprocessResponse(
+        response: String,
+        settings: ResponsePreprocessorSettings,
+    ): String {
         if (!settings.preprocessProxyHistory) {
             return response
         }
 
         // Extract headers and body
-        val (separator, headerEndIndex) = when {
-            response.contains("\r\n\r\n") -> "\r\n\r\n" to response.indexOf("\r\n\r\n")
-            response.contains("\n\n") -> "\n\n" to response.indexOf("\n\n")
-            else -> "" to -1
-        }
+        val (separator, headerEndIndex) =
+            when {
+                response.contains("\r\n\r\n") -> "\r\n\r\n" to response.indexOf("\r\n\r\n")
+                response.contains("\n\n") -> "\n\n" to response.indexOf("\n\n")
+                else -> "" to -1
+            }
         if (headerEndIndex < 0) {
             // No body separator found, return as-is
             return response
@@ -97,7 +112,10 @@ object ResponsePreprocessor {
     /**
      * Checks if a content type is binary and should be filtered.
      */
-    fun isBinaryContentType(contentType: String, allowedTypes: Set<String>): Boolean {
+    fun isBinaryContentType(
+        contentType: String,
+        allowedTypes: Set<String>,
+    ): Boolean {
         val lowerContentType = contentType.lowercase()
 
         // Check if it matches any allowed type prefix
@@ -129,7 +147,10 @@ object ResponsePreprocessor {
      * @param maxSizeBytes Maximum size in bytes
      * @return Truncated body with SNIP placeholder
      */
-    fun truncateResponse(body: String, maxSizeBytes: Int): String {
+    fun truncateResponse(
+        body: String,
+        maxSizeBytes: Int,
+    ): String {
         val bodyBytes = body.toByteArray(Charsets.UTF_8)
         if (bodyBytes.size <= maxSizeBytes) {
             return body
@@ -149,7 +170,10 @@ object ResponsePreprocessor {
         return "$firstPortion\n[SNIP - $truncatedBytes bytes truncated]\n$lastPortion"
     }
 
-    private fun takeFirstBytesSafe(text: String, maxBytes: Int): String {
+    private fun takeFirstBytesSafe(
+        text: String,
+        maxBytes: Int,
+    ): String {
         if (maxBytes <= 0) return ""
         val out = StringBuilder()
         var used = 0
@@ -162,7 +186,10 @@ object ResponsePreprocessor {
         return out.toString()
     }
 
-    private fun takeLastBytesSafe(text: String, maxBytes: Int): String {
+    private fun takeLastBytesSafe(
+        text: String,
+        maxBytes: Int,
+    ): String {
         if (maxBytes <= 0) return ""
         val reversed = StringBuilder()
         var used = 0

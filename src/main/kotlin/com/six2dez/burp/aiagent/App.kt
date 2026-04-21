@@ -1,9 +1,10 @@
 package com.six2dez.burp.aiagent
 
 import burp.api.montoya.MontoyaApi
-import burp.api.montoya.ui.contextmenu.ContextMenuItemsProvider
-import burp.api.montoya.ui.contextmenu.ContextMenuEvent
 import burp.api.montoya.ui.contextmenu.AuditIssueContextMenuEvent
+import burp.api.montoya.ui.contextmenu.ContextMenuEvent
+import burp.api.montoya.ui.contextmenu.ContextMenuItemsProvider
+import com.six2dez.burp.aiagent.agents.AgentProfileLoader
 import com.six2dez.burp.aiagent.alerts.Alerting
 import com.six2dez.burp.aiagent.audit.ActivityType
 import com.six2dez.burp.aiagent.audit.AiRequestLogger
@@ -11,16 +12,14 @@ import com.six2dez.burp.aiagent.audit.AuditLogger
 import com.six2dez.burp.aiagent.audit.RollingLogConfig
 import com.six2dez.burp.aiagent.backends.BackendDiagnostics
 import com.six2dez.burp.aiagent.backends.BackendRegistry
-import com.six2dez.burp.aiagent.agents.AgentProfileLoader
-import com.six2dez.burp.aiagent.config.toPreprocessorSettings
 import com.six2dez.burp.aiagent.config.AgentSettingsRepository
+import com.six2dez.burp.aiagent.config.toPreprocessorSettings
 import com.six2dez.burp.aiagent.context.ContextCollector
 import com.six2dez.burp.aiagent.mcp.McpSupervisor
 import com.six2dez.burp.aiagent.redact.Redaction
 import com.six2dez.burp.aiagent.scanner.ActiveAiScanner
 import com.six2dez.burp.aiagent.scanner.AiScanCheck
 import com.six2dez.burp.aiagent.scanner.PassiveAiScanner
-import com.six2dez.burp.aiagent.scanner.PayloadRisk
 import com.six2dez.burp.aiagent.supervisor.AgentSupervisor
 import com.six2dez.burp.aiagent.ui.MainTab
 import com.six2dez.burp.aiagent.ui.UiActions
@@ -75,7 +74,7 @@ object App {
         passiveAiScanner = PassiveAiScanner(api, supervisor, auditLogger) { settingsRepo.load() }
         passiveAiScanner.aiRequestLogger = aiRequestLogger
         activeAiScanner = ActiveAiScanner(api, supervisor, auditLogger) { settingsRepo.load() }
-        
+
         AgentProfileLoader.ensureBundledProfilesInstalled()
         val settings = settingsRepo.load()
         AgentProfileLoader.setActiveProfile(settings.agentProfile)
@@ -89,11 +88,12 @@ object App {
                 backendId = event.backendId,
                 detail = "Retry attempt ${event.attempt} in ${event.delayMs}ms: ${event.reason ?: "unknown"}",
                 durationMs = event.delayMs,
-                metadata = mapOf(
-                    "attempt" to event.attempt.toString(),
-                    "delayMs" to event.delayMs.toString(),
-                    "reason" to (event.reason ?: "")
-                )
+                metadata =
+                    mapOf(
+                        "attempt" to event.attempt.toString(),
+                        "delayMs" to event.delayMs.toString(),
+                        "reason" to (event.reason ?: ""),
+                    ),
             )
         }
         auditLogger.setEnabled(settings.auditEnabled)
@@ -102,17 +102,17 @@ object App {
             settings.mcpSettings,
             settings.privacyMode,
             settings.determinismMode,
-            settings.toPreprocessorSettings()
+            settings.toPreprocessorSettings(),
         )
-        
+
         // Initialize passive AI scanner
         passiveAiScanner.rateLimitSeconds = settings.passiveAiRateSeconds
         passiveAiScanner.scopeOnly = settings.passiveAiScopeOnly
         passiveAiScanner.maxSizeKb = settings.passiveAiMaxSizeKb
         passiveAiScanner.applyOptimizationSettings(settings)
-        passiveAiScanner.activeScanner = activeAiScanner  // Wire passive -> active
+        passiveAiScanner.activeScanner = activeAiScanner // Wire passive -> active
         passiveAiScanner.setEnabled(settings.passiveAiEnabled)
-        
+
         // Initialize active AI scanner
         activeAiScanner.maxConcurrent = settings.activeAiMaxConcurrent
         activeAiScanner.maxPayloadsPerPoint = settings.activeAiMaxPayloadsPerPoint
@@ -129,23 +129,25 @@ object App {
         api.userInterface().registerSuiteTab("Custom AI Agent", ui.root)
 
         // Context menu: requests/responses (all editions)
-        api.userInterface().registerContextMenuItemsProvider(object : ContextMenuItemsProvider {
-            override fun provideMenuItems(event: ContextMenuEvent) =
-                UiActions.requestResponseMenuItems(
-                    api,
-                    event,
-                    ui,
-                    mcpSupervisor,
-                    passiveAiScanner,
-                    activeAiScanner,
-                    auditLogger
-                )
+        api.userInterface().registerContextMenuItemsProvider(
+            object : ContextMenuItemsProvider {
+                override fun provideMenuItems(event: ContextMenuEvent) =
+                    UiActions.requestResponseMenuItems(
+                        api,
+                        event,
+                        ui,
+                        mcpSupervisor,
+                        passiveAiScanner,
+                        activeAiScanner,
+                        auditLogger,
+                    )
 
-            // Scanner findings (Pro): use the dedicated event type
-            override fun provideMenuItems(event: AuditIssueContextMenuEvent) =
-                UiActions.auditIssueMenuItems(api, event, ui, mcpSupervisor)
-        })
-        
+                // Scanner findings (Pro): use the dedicated event type
+                override fun provideMenuItems(event: AuditIssueContextMenuEvent) =
+                    UiActions.auditIssueMenuItems(api, event, ui, mcpSupervisor)
+            },
+        )
+
         // Register AI ScanCheck with Burp Scanner (Burp Pro only - Option A)
         // This integrates with Burp's native active scanner
         try {
@@ -157,7 +159,13 @@ object App {
             api.logging().logToOutput("AI ScanCheck not registered (Burp Pro required): ${e.message}")
         }
 
-        api.logging().logToOutput("AI Agent extension loaded. Backends discovered: ${backendRegistry.listBackendIds(settingsRepo.load()).joinToString(", ")}")
+        api.logging().logToOutput(
+            "AI Agent extension loaded. Backends discovered: ${backendRegistry.listBackendIds(settingsRepo.load()).joinToString(", ")}",
+        )
+        api.logging().logToOutput(
+            "Privacy mode: ${settings.privacyMode.name}. " +
+                "Change it in Settings > Privacy. Context captured from menus is previewed before being sent to the AI.",
+        )
     }
 
     fun shutdown() {
@@ -199,25 +207,32 @@ object App {
             return
         }
 
-        val directory = System.getProperty("burp.ai.logger.rolling.dir")
-            ?.takeIf { it.isNotBlank() }
-            ?: Paths.get(System.getProperty("user.home"), ".burp-ai-agent", "logs").toString()
-        val maxBytes = System.getProperty("burp.ai.logger.rolling.maxBytes")?.toLongOrNull()
-            ?: AiRequestLogger.DEFAULT_ROLLING_MAX_FILE_BYTES
-        val maxFiles = System.getProperty("burp.ai.logger.rolling.maxFiles")?.toIntOrNull()
-            ?: AiRequestLogger.DEFAULT_ROLLING_MAX_FILES
+        val directory =
+            System
+                .getProperty("burp.ai.logger.rolling.dir")
+                ?.takeIf { it.isNotBlank() }
+                ?: Paths.get(System.getProperty("user.home"), ".burp-ai-agent", "logs").toString()
+        val maxBytes =
+            System.getProperty("burp.ai.logger.rolling.maxBytes")?.toLongOrNull()
+                ?: AiRequestLogger.DEFAULT_ROLLING_MAX_FILE_BYTES
+        val maxFiles =
+            System.getProperty("burp.ai.logger.rolling.maxFiles")?.toIntOrNull()
+                ?: AiRequestLogger.DEFAULT_ROLLING_MAX_FILES
 
         aiRequestLogger.configureRollingPersistence(
             RollingLogConfig(
                 directory = Paths.get(directory),
                 maxFileBytes = maxBytes,
-                maxFiles = maxFiles
-            )
+                maxFiles = maxFiles,
+            ),
         )
         api.logging().logToOutput("AI logger rolling persistence enabled at $directory")
     }
 
-    private fun safeShutdownStep(component: String, action: () -> Unit) {
+    private fun safeShutdownStep(
+        component: String,
+        action: () -> Unit,
+    ) {
         try {
             action()
         } catch (_: InterruptedException) {

@@ -19,7 +19,7 @@ class ActionCard(
     target: String,
     privacySummary: String,
     payloadPreview: String,
-    initiallyExpanded: Boolean = false
+    initiallyExpanded: Boolean = false,
 ) : JPanel(GridBagLayout()) {
     private val actionLabel = JLabel(actionName)
     private val sourceLabel = JLabel(source)
@@ -62,14 +62,15 @@ class ActionCard(
         setPayloadPreview(payloadPreview)
         updateExpandedState()
 
-        val constraints = GridBagConstraints().apply {
-            gridx = 0
-            gridy = 0
-            anchor = GridBagConstraints.WEST
-            fill = GridBagConstraints.HORIZONTAL
-            weightx = 1.0
-            insets = Insets(8, 10, 0, 10)
-        }
+        val constraints =
+            GridBagConstraints().apply {
+                gridx = 0
+                gridy = 0
+                anchor = GridBagConstraints.WEST
+                fill = GridBagConstraints.HORIZONTAL
+                weightx = 1.0
+                insets = Insets(8, 10, 0, 10)
+            }
         add(actionLabel, constraints)
 
         constraints.gridy++
@@ -114,7 +115,10 @@ class ActionCard(
         repaint()
     }
 
-    private fun limitLines(raw: String, maxLines: Int): String {
+    private fun limitLines(
+        raw: String,
+        maxLines: Int,
+    ): String {
         if (raw.isBlank()) {
             return raw
         }

@@ -11,7 +11,6 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
 class AiRequestLoggerTest {
-
     private lateinit var logger: AiRequestLogger
 
     @BeforeEach
@@ -27,7 +26,7 @@ class AiRequestLoggerTest {
                 type = ActivityType.PROMPT_SENT,
                 source = "test",
                 backendId = "test-backend",
-                detail = "Entry $i"
+                detail = "Entry $i",
             )
         }
 
@@ -56,7 +55,7 @@ class AiRequestLoggerTest {
             type = ActivityType.MCP_TOOL_CALL,
             source = "mcp",
             backendId = "test",
-            detail = "Tool execution"
+            detail = "Tool execution",
         )
 
         assertEquals(1, count.get())
@@ -116,12 +115,12 @@ class AiRequestLoggerTest {
             sessionId = "s1",
             durationMs = 150,
             tokenUsage = TokenUsage(10, 20),
-            metadata = mapOf("custom" to "val")
+            metadata = mapOf("custom" to "val"),
         )
 
         val exported = logger.exportAsMapList()
         assertEquals(1, exported.size)
-        
+
         val map = exported.first()
         assertEquals(ActivityType.PROMPT_SENT.name, map["type"])
         assertEquals("chat", map["source"])
@@ -130,7 +129,7 @@ class AiRequestLoggerTest {
         assertEquals(150L, map["durationMs"])
         assertEquals(10, map["inputTokens"])
         assertEquals(20, map["outputTokens"])
-        
+
         @Suppress("UNCHECKED_CAST")
         val meta = map["metadata"] as Map<String, String>
         assertEquals("val", meta["custom"])
@@ -144,8 +143,8 @@ class AiRequestLoggerTest {
                 RollingLogConfig(
                     directory = tempDir,
                     maxFileBytes = 1_000_000,
-                    maxFiles = 3
-                )
+                    maxFiles = 3,
+                ),
             )
 
             logger.log(ActivityType.PROMPT_SENT, "chat", "b1", "First entry")
@@ -170,8 +169,8 @@ class AiRequestLoggerTest {
                 RollingLogConfig(
                     directory = tempDir,
                     maxFileBytes = AiRequestLogger.MIN_ROLLING_FILE_BYTES,
-                    maxFiles = 2
-                )
+                    maxFiles = 2,
+                ),
             )
 
             repeat(8) { index ->
@@ -179,7 +178,7 @@ class AiRequestLoggerTest {
                     type = ActivityType.PROMPT_SENT,
                     source = "chat",
                     backendId = "b1",
-                    detail = "Entry $index " + "x".repeat(3000)
+                    detail = "Entry $index " + "x".repeat(3000),
                 )
             }
 
@@ -194,7 +193,7 @@ class AiRequestLoggerTest {
     fun `test clear and disabled state`() {
         logger.log(ActivityType.PROMPT_SENT, "test", "test", "test")
         assertEquals(1, logger.size())
-        
+
         logger.clear()
         assertEquals(0, logger.size())
 

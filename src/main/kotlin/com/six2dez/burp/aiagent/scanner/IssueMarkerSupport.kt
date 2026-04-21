@@ -9,7 +9,6 @@ import burp.api.montoya.http.message.HttpRequestResponse
  * response (evidence) so Burp shows highlighted regions in finding details.
  */
 object IssueMarkerSupport {
-
     private const val MAX_MARKERS = 5
 
     /**
@@ -18,7 +17,7 @@ object IssueMarkerSupport {
      */
     fun markRequestPayload(
         reqResp: HttpRequestResponse,
-        payloadValue: String
+        payloadValue: String,
     ): HttpRequestResponse {
         if (payloadValue.isBlank()) return reqResp
         val reqBytes = reqResp.request().toByteArray()
@@ -30,7 +29,7 @@ object IssueMarkerSupport {
             val idx = reqStr.indexOf(term)
             if (idx >= 0) {
                 return reqResp.withRequestMarkers(
-                    Marker.marker(idx, idx + term.length)
+                    Marker.marker(idx, idx + term.length),
                 )
             }
         }
@@ -43,7 +42,7 @@ object IssueMarkerSupport {
      */
     fun markResponseEvidence(
         reqResp: HttpRequestResponse,
-        evidence: String
+        evidence: String,
     ): HttpRequestResponse {
         val resp = reqResp.response() ?: return reqResp
         if (evidence.isBlank()) return reqResp
@@ -55,7 +54,10 @@ object IssueMarkerSupport {
         var matchedLength = 0
         for (prefix in prefixes) {
             idx = respStr.indexOf(prefix)
-            if (idx >= 0) { matchedLength = prefix.length; break }
+            if (idx >= 0) {
+                matchedLength = prefix.length
+                break
+            }
         }
         if (idx < 0) return reqResp
         val endIdx = (idx + matchedLength).coerceAtMost(respBytes.length())
@@ -68,7 +70,7 @@ object IssueMarkerSupport {
      */
     fun markResponseFromDetail(
         reqResp: HttpRequestResponse,
-        detail: String
+        detail: String,
     ): HttpRequestResponse {
         val resp = reqResp.response() ?: return reqResp
         val respBytes = resp.toByteArray()

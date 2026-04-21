@@ -9,7 +9,6 @@ import org.junit.jupiter.api.Test
 import org.mockito.kotlin.mock
 
 class RegistryTtlTest {
-
     @AfterEach
     fun resetRegistries() {
         ScannerTaskRegistry.clear()

@@ -14,28 +14,29 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 
 class NvidiaNimBackendFactory : AiBackendFactory {
-    override fun create(): AiBackend = OpenAiCompatibleBackend(
-        id = "nvidia-nim",
-        displayName = "NVIDIA NIM",
-        defaultBaseUrl = DEFAULT_BASE_URL,
-        baseUrlSelector = { it.nvidiaNimUrl.trim() },
-        modelSelector = { it.nvidiaNimModel.trim() },
-        apiKeySelector = { it.nvidiaNimApiKey },
-        headersSelector = { it.nvidiaNimHeaders },
-        timeoutSelector = { it.nvidiaNimTimeoutSeconds },
-        streaming = true,
-        defaultHeaders = mapOf("Accept" to "text/event-stream"),
-        payloadCustomizer = { payload ->
-            payload["max_tokens"] = 16384
-            payload["top_p"] = 1.0
-            payload["chat_template_kwargs"] = mapOf("thinking" to true)
-            val temp = payload["temperature"]
-            if (temp is Number && temp.toDouble() == 0.7) {
-                payload["temperature"] = 1.0
-            }
-        },
-        healthCheckProvider = ::nimHealthCheck
-    )
+    override fun create(): AiBackend =
+        OpenAiCompatibleBackend(
+            id = "nvidia-nim",
+            displayName = "NVIDIA NIM",
+            defaultBaseUrl = DEFAULT_BASE_URL,
+            baseUrlSelector = { it.nvidiaNimUrl.trim() },
+            modelSelector = { it.nvidiaNimModel.trim() },
+            apiKeySelector = { it.nvidiaNimApiKey },
+            headersSelector = { it.nvidiaNimHeaders },
+            timeoutSelector = { it.nvidiaNimTimeoutSeconds },
+            streaming = true,
+            defaultHeaders = mapOf("Accept" to "text/event-stream"),
+            payloadCustomizer = { payload ->
+                payload["max_tokens"] = 16384
+                payload["top_p"] = 1.0
+                payload["chat_template_kwargs"] = mapOf("thinking" to true)
+                val temp = payload["temperature"]
+                if (temp is Number && temp.toDouble() == 0.7) {
+                    payload["temperature"] = 1.0
+                }
+            },
+            healthCheckProvider = ::nimHealthCheck,
+        )
 
     companion object {
         const val DEFAULT_BASE_URL: String = "https://integrate.api.nvidia.com"
@@ -49,30 +50,34 @@ class NvidiaNimBackendFactory : AiBackendFactory {
                 return HealthCheckResult.Unavailable("NVIDIA NIM model is empty.")
             }
 
-            val headers = withDefaultAcceptHeader(
-                HeaderParser.withBearerToken(
-                    settings.nvidiaNimApiKey,
-                    HeaderParser.parse(settings.nvidiaNimHeaders)
+            val headers =
+                withDefaultAcceptHeader(
+                    HeaderParser.withBearerToken(
+                        settings.nvidiaNimApiKey,
+                        HeaderParser.parse(settings.nvidiaNimHeaders),
+                    ),
                 )
-            )
-            val payload = mapOf(
-                "model" to model,
-                "messages" to listOf(mapOf("role" to "user", "content" to "Hey")),
-                "max_tokens" to 16,
-                "temperature" to 1.0,
-                "top_p" to 1.0,
-                "stream" to false,
-                "chat_template_kwargs" to mapOf("thinking" to true)
-            )
+            val payload =
+                mapOf(
+                    "model" to model,
+                    "messages" to listOf(mapOf("role" to "user", "content" to "Hey")),
+                    "max_tokens" to 16,
+                    "temperature" to 1.0,
+                    "top_p" to 1.0,
+                    "stream" to false,
+                    "chat_template_kwargs" to mapOf("thinking" to true),
+                )
 
             return try {
                 val url = buildChatCompletionsUrl(baseUrl)
                 val client = HttpBackendSupport.sharedClient(baseUrl, settings.nvidiaNimTimeoutSeconds.toLong().coerceIn(5L, 30L))
-                val request = Request.Builder()
-                    .url(url)
-                    .post(mapper.writeValueAsString(payload).toRequestBody("application/json".toMediaType()))
-                    .apply { headers.forEach { (name, value) -> header(name, value) } }
-                    .build()
+                val request =
+                    Request
+                        .Builder()
+                        .url(url)
+                        .post(mapper.writeValueAsString(payload).toRequestBody("application/json".toMediaType()))
+                        .apply { headers.forEach { (name, value) -> header(name, value) } }
+                        .build()
                 client.newCall(request).execute().use { response ->
                     when {
                         response.isSuccessful -> HealthCheckResult.Healthy

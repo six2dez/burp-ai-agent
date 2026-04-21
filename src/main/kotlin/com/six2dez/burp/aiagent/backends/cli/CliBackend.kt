@@ -10,8 +10,8 @@ import com.six2dez.burp.aiagent.backends.SessionAwareConnection
 import com.six2dez.burp.aiagent.config.Defaults
 import java.io.BufferedReader
 import java.io.InputStreamReader
-import java.util.Locale
 import java.util.ArrayDeque
+import java.util.Locale
 import java.util.concurrent.Executors
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
@@ -21,9 +21,8 @@ import java.util.concurrent.atomic.AtomicReference
 
 class CliBackend(
     override val id: String,
-    override val displayName: String
+    override val displayName: String,
 ) : AiBackend {
-
     /** Avoid spamming "Found X CLI" on every isAvailable() call. */
     private val availabilityLogged = AtomicBoolean(false)
 
@@ -38,42 +37,48 @@ class CliBackend(
     }
 
     override fun isAvailable(settings: com.six2dez.burp.aiagent.config.AgentSettings): Boolean {
-        val command = when (id) {
-            "claude-cli" -> settings.claudeCmd
-            "gemini-cli" -> settings.geminiCmd
-            "codex-cli" -> settings.codexCmd
-            "opencode-cli" -> settings.opencodeCmd
-            "copilot-cli" -> settings.copilotCmd
-            "ollama" -> settings.ollamaCliCmd
-            else -> ""
-        }
+        val command =
+            when (id) {
+                "claude-cli" -> settings.claudeCmd
+                "gemini-cli" -> settings.geminiCmd
+                "codex-cli" -> settings.codexCmd
+                "opencode-cli" -> settings.opencodeCmd
+                "copilot-cli" -> settings.copilotCmd
+                "ollama" -> settings.ollamaCliCmd
+                else -> ""
+            }
         if (command.isBlank()) return false
         val cmdList = command.trim().split("\\s+".toRegex())
-        val env = mapOf("PATH" to com.six2dez.burp.aiagent.supervisor.AgentSupervisor.buildCliPathStatic())
+        val env =
+            mapOf(
+                "PATH" to
+                    com.six2dez.burp.aiagent.supervisor.AgentSupervisor
+                        .buildCliPathStatic(),
+            )
         val resolved = resolveCommand(cmdList, env)
         if (resolved.isEmpty()) return false
         val executable = resolved[0]
         val file = java.io.File(executable)
         val available = file.exists() && file.canExecute()
         if (available && availabilityLogged.compareAndSet(false, true)) {
-            com.six2dez.burp.aiagent.backends.BackendDiagnostics.log("[Custom AI Agent] Found $displayName: $executable")
+            com.six2dez.burp.aiagent.backends.BackendDiagnostics
+                .log("[Custom AI Agent] Found $displayName: $executable")
         }
         return available
     }
 
-    override fun healthCheck(settings: com.six2dez.burp.aiagent.config.AgentSettings): HealthCheckResult {
-        return if (isAvailable(settings)) {
+    override fun healthCheck(settings: com.six2dez.burp.aiagent.config.AgentSettings): HealthCheckResult =
+        if (isAvailable(settings)) {
             HealthCheckResult.Healthy
         } else {
             HealthCheckResult.Unavailable("CLI command is not resolvable or executable.")
         }
-    }
 
     private class NonInteractiveCliConnection(
         private val backendId: String,
         private val baseCommand: List<String>,
         private val env: Map<String, String>,
-        initialCliSessionId: String? = null
+        initialCliSessionId: String? = null,
     ) : SessionAwareConnection {
         private val executor = Executors.newSingleThreadExecutor()
         private val _cliSessionId = AtomicReference<String?>(initialCliSessionId)
@@ -89,155 +94,176 @@ class CliBackend(
             onComplete: (Throwable?) -> Unit,
             systemPrompt: String?,
             jsonMode: Boolean,
-            maxOutputTokens: Int?
+            maxOutputTokens: Int?,
         ) {
             try {
-            executor.submit {
-                val historyText = buildCliHistory(history)
-                val finalText = historyText + text
-                val outputFile = if (backendId == "codex-cli") {
-                    java.io.File.createTempFile("burp-ai-agent-codex", ".txt")
-                } else {
-                    null
-                }
+                executor.submit {
+                    val historyText = buildCliHistory(history)
+                    val finalText = historyText + text
+                    val outputFile =
+                        if (backendId == "codex-cli") {
+                            java.io.File.createTempFile("burp-ai-agent-codex", ".txt")
+                        } else {
+                            null
+                        }
 
-                // Build transcript for stateless CLIs
-                val promptToSend: String
-                val promptFile: java.io.File?
-                val combinedText = if (_cliSessionId.get() == null) finalText else text
-                if ((backendId == "claude-cli" || backendId == "copilot-cli") && combinedText.length > Defaults.LARGE_PROMPT_THRESHOLD) {
-                    val tFile = java.io.File.createTempFile("burp_uv_prompt_", ".txt")
-                    try {
-                        // Set restrictive permissions (owner-only read/write)
-                        val posixPath = tFile.toPath()
+                    // Build transcript for stateless CLIs
+                    val promptToSend: String
+                    val promptFile: java.io.File?
+                    val combinedText = if (_cliSessionId.get() == null) finalText else text
+                    if ((backendId == "claude-cli" || backendId == "copilot-cli") &&
+                        combinedText.length > Defaults.LARGE_PROMPT_THRESHOLD
+                    ) {
+                        val tFile = java.io.File.createTempFile("burp_uv_prompt_", ".txt")
                         try {
-                            java.nio.file.Files.setPosixFilePermissions(
-                                posixPath,
-                                setOf(
-                                    java.nio.file.attribute.PosixFilePermission.OWNER_READ,
-                                    java.nio.file.attribute.PosixFilePermission.OWNER_WRITE
-                                )
-                            )
-                        } catch (_: UnsupportedOperationException) {
-                            // Non-POSIX filesystem (Windows) — skip
-                        }
-                        tFile.writeText(combinedText)
-                    } catch (e: Exception) {
-                        tFile.delete()
-                        onComplete(e)
-                        return@submit
-                    }
-                    promptFile = tFile
-                    promptToSend = "Please process the instructions and data provided in the following file:\n${tFile.absolutePath}"
-                } else {
-                    promptFile = null
-                    promptToSend = combinedText
-                }
-
-                val (cmd, stdinText) = buildCommand(promptToSend, outputFile)
-                var process: Process? = null
-                try {
-                    val resolvedCmd = resolveCommand(cmd, env)
-                    if (resolvedCmd.isEmpty()) {
-                        onComplete(IllegalStateException("CLI executable not found for $backendId"))
-                        return@submit
-                    }
-                    process = ProcessBuilder(normalizeWindowsCommand(resolvedCmd))
-                        .apply { environment().putAll(env) }
-                        .redirectErrorStream(true)
-                        .directory(java.io.File(System.getProperty("user.home")))
-                        .start()
-
-                    if (!stdinText.isNullOrBlank()) {
-                        process.outputStream.bufferedWriter().use { writer ->
-                            writer.write(stdinText)
-                            writer.newLine()
-                        }
-                    } else {
-                        process.outputStream.close()
-                    }
-
-                    val rawOutput = StringBuilder()
-                    val lastOutputAt = java.util.concurrent.atomic.AtomicLong(0L)
-                    val hasOutput = java.util.concurrent.atomic.AtomicBoolean(false)
-                    val readerThread = Thread({
-                        val reader = BufferedReader(InputStreamReader(process.inputStream))
-                        reader.forEachLine { line ->
-                            rawOutput.appendLine(line)
-                            hasOutput.set(true)
-                            lastOutputAt.set(System.currentTimeMillis())
-                        }
-                    }, "burp-ai-agent-cli-reader")
-                    readerThread.isDaemon = true
-                    readerThread.start()
-
-                    var terminatedAfterIdle = false
-                    if (backendId == "opencode-cli") {
-                        val start = System.currentTimeMillis()
-                        while (true) {
-                            if (process.waitFor(200, TimeUnit.MILLISECONDS)) break
-                            val idleMs = System.currentTimeMillis() - lastOutputAt.get()
-                            if (hasOutput.get() && idleMs > Defaults.OPENCODE_IDLE_TIMEOUT_MS) {
-                                terminatedAfterIdle = true
-                                process.destroyForcibly()
-                                break
-                            }
-                            if (System.currentTimeMillis() - start > Defaults.CLI_PROCESS_TIMEOUT_SECONDS * 1000L) break
-                        }
-                    } else {
-                        if (!process.waitFor(Defaults.CLI_PROCESS_TIMEOUT_SECONDS.toLong(), TimeUnit.SECONDS)) {
-                            process.destroyForcibly()
+                            // Set restrictive permissions (owner-only read/write)
+                            val posixPath = tFile.toPath()
                             try {
-                                readerThread.join(2000)
-                            } catch (_: InterruptedException) {
-                                Thread.currentThread().interrupt()
+                                java.nio.file.Files.setPosixFilePermissions(
+                                    posixPath,
+                                    setOf(
+                                        java.nio.file.attribute.PosixFilePermission.OWNER_READ,
+                                        java.nio.file.attribute.PosixFilePermission.OWNER_WRITE,
+                                    ),
+                                )
+                            } catch (_: UnsupportedOperationException) {
+                                // Non-POSIX filesystem (Windows) — skip
                             }
+                            tFile.writeText(combinedText)
+                        } catch (e: Exception) {
+                            tFile.delete()
+                            onComplete(e)
+                            return@submit
+                        }
+                        promptFile = tFile
+                        promptToSend = "Please process the instructions and data provided in the following file:\n${tFile.absolutePath}"
+                    } else {
+                        promptFile = null
+                        promptToSend = combinedText
+                    }
+
+                    val (cmd, stdinText) = buildCommand(promptToSend, outputFile)
+                    var process: Process? = null
+                    try {
+                        val resolvedCmd = resolveCommand(cmd, env)
+                        if (resolvedCmd.isEmpty()) {
+                            onComplete(IllegalStateException("CLI executable not found for $backendId"))
+                            return@submit
+                        }
+                        process =
+                            ProcessBuilder(normalizeWindowsCommand(resolvedCmd))
+                                .apply { environment().putAll(env) }
+                                .redirectErrorStream(true)
+                                .directory(java.io.File(System.getProperty("user.home")))
+                                .start()
+
+                        if (!stdinText.isNullOrBlank()) {
+                            process.outputStream.bufferedWriter().use { writer ->
+                                writer.write(stdinText)
+                                writer.newLine()
+                            }
+                        } else {
+                            process.outputStream.close()
+                        }
+
+                        val rawOutput = StringBuilder()
+                        val lastOutputAt =
+                            java.util.concurrent.atomic
+                                .AtomicLong(0L)
+                        val hasOutput =
+                            java.util.concurrent.atomic
+                                .AtomicBoolean(false)
+                        val readerThread =
+                            Thread({
+                                val reader = BufferedReader(InputStreamReader(process.inputStream))
+                                reader.forEachLine { line ->
+                                    rawOutput.appendLine(line)
+                                    hasOutput.set(true)
+                                    lastOutputAt.set(System.currentTimeMillis())
+                                }
+                            }, "burp-ai-agent-cli-reader")
+                        readerThread.isDaemon = true
+                        readerThread.start()
+
+                        var terminatedAfterIdle = false
+                        if (backendId == "opencode-cli") {
+                            val start = System.currentTimeMillis()
+                            while (true) {
+                                if (process.waitFor(200, TimeUnit.MILLISECONDS)) break
+                                val idleMs = System.currentTimeMillis() - lastOutputAt.get()
+                                if (hasOutput.get() && idleMs > Defaults.OPENCODE_IDLE_TIMEOUT_MS) {
+                                    terminatedAfterIdle = true
+                                    process.destroyForcibly()
+                                    break
+                                }
+                                if (System.currentTimeMillis() - start > Defaults.CLI_PROCESS_TIMEOUT_SECONDS * 1000L) break
+                            }
+                        } else {
+                            if (!process.waitFor(Defaults.CLI_PROCESS_TIMEOUT_SECONDS.toLong(), TimeUnit.SECONDS)) {
+                                process.destroyForcibly()
+                                try {
+                                    readerThread.join(2000)
+                                } catch (_: InterruptedException) {
+                                    Thread.currentThread().interrupt()
+                                }
+                                val tail = rawOutput.toString().trim().take(2000)
+                                val msg =
+                                    if (tail.isBlank()) {
+                                        "CLI command timed out"
+                                    } else {
+                                        "CLI command timed out: $tail"
+                                    }
+                                onComplete(IllegalStateException(msg))
+                                return@submit
+                            }
+                        }
+                        try {
+                            readerThread.join(2000)
+                        } catch (_: InterruptedException) {
+                            Thread.currentThread().interrupt()
+                        }
+                        if (!terminatedAfterIdle && process.exitValue() != 0) {
                             val tail = rawOutput.toString().trim().take(2000)
-                            val msg = if (tail.isBlank()) {
-                                "CLI command timed out"
-                            } else {
-                                "CLI command timed out: $tail"
-                            }
+                            val msg =
+                                if (tail.isBlank()) {
+                                    "CLI command failed (exit=${process.exitValue()})"
+                                } else {
+                                    "CLI command failed (exit=${process.exitValue()}): $tail"
+                                }
                             onComplete(IllegalStateException(msg))
                             return@submit
                         }
-                    }
-                    try {
-                        readerThread.join(2000)
-                    } catch (_: InterruptedException) {
-                        Thread.currentThread().interrupt()
-                    }
-                    if (!terminatedAfterIdle && process.exitValue() != 0) {
-                        val tail = rawOutput.toString().trim().take(2000)
-                        val msg = if (tail.isBlank()) {
-                            "CLI command failed (exit=${process.exitValue()})"
-                        } else {
-                            "CLI command failed (exit=${process.exitValue()}): $tail"
-                        }
-                        onComplete(IllegalStateException(msg))
-                        return@submit
-                    }
 
-                    val stdoutText = stripAnsiCodes(rawOutput.toString())
-                    val finalMessage = when (backendId) {
-                        "codex-cli" -> readCodexOutput(outputFile, stdoutText, text)
-                        "gemini-cli" -> readGeminiOutput(stdoutText, text)
-                        "opencode-cli" -> readOpenCodeOutput(stdoutText, text)
-                        "claude-cli" -> readClaudeOutput(stdoutText, text)
-                        "copilot-cli" -> readCopilotOutput(stdoutText, text)
-                        else -> stdoutText.trim()
+                        val stdoutText = stripAnsiCodes(rawOutput.toString())
+                        val finalMessage =
+                            when (backendId) {
+                                "codex-cli" -> readCodexOutput(outputFile, stdoutText, text)
+                                "gemini-cli" -> readGeminiOutput(stdoutText, text)
+                                "opencode-cli" -> readOpenCodeOutput(stdoutText, text)
+                                "claude-cli" -> readClaudeOutput(stdoutText, text)
+                                "copilot-cli" -> readCopilotOutput(stdoutText, text)
+                                else -> stdoutText.trim()
+                            }
+                        if (finalMessage.isNotBlank()) onChunk(finalMessage)
+                        onComplete(null)
+                    } catch (e: Exception) {
+                        onComplete(e)
+                    } finally {
+                        // Guaranteed cleanup: kill process, delete temp files
+                        try {
+                            process?.destroyForcibly()
+                        } catch (_: Exception) {
+                        }
+                        try {
+                            promptFile?.delete()
+                        } catch (_: Exception) {
+                        }
+                        try {
+                            outputFile?.delete()
+                        } catch (_: Exception) {
+                        }
                     }
-                    if (finalMessage.isNotBlank()) onChunk(finalMessage)
-                    onComplete(null)
-                } catch (e: Exception) {
-                    onComplete(e)
-                } finally {
-                    // Guaranteed cleanup: kill process, delete temp files
-                    try { process?.destroyForcibly() } catch (_: Exception) {}
-                    try { promptFile?.delete() } catch (_: Exception) {}
-                    try { outputFile?.delete() } catch (_: Exception) {}
                 }
-            }
             } catch (e: java.util.concurrent.RejectedExecutionException) {
                 onComplete(IllegalStateException("Backend connection has been stopped", e))
             }
@@ -252,8 +278,11 @@ class CliBackend(
             }
         }
 
-        private fun buildCommand(prompt: String, outputFile: java.io.File?): Pair<List<String>, String?> {
-            return when (backendId) {
+        private fun buildCommand(
+            prompt: String,
+            outputFile: java.io.File?,
+        ): Pair<List<String>, String?> =
+            when (backendId) {
                 "codex-cli" -> {
                     val cmd = buildCodexExecCommand(baseCommand, outputFile)
                     cmd to prompt
@@ -276,9 +305,11 @@ class CliBackend(
                 }
                 else -> baseCommand to prompt
             }
-        }
 
-        private fun buildCodexExecCommand(cmd: List<String>, outputFile: java.io.File?): List<String> {
+        private fun buildCodexExecCommand(
+            cmd: List<String>,
+            outputFile: java.io.File?,
+        ): List<String> {
             val base = cmd.firstOrNull() ?: "codex"
             val extras = cmd.drop(1)
             val hasExec = extras.contains("exec")
@@ -338,20 +369,44 @@ class CliBackend(
             return filtered
         }
 
-        private fun readCodexOutput(outputFile: java.io.File?, stdout: String, prompt: String): String {
-            val fileText = outputFile?.takeIf { it.exists() }?.readText()?.trim().orEmpty()
+        private fun readCodexOutput(
+            outputFile: java.io.File?,
+            stdout: String,
+            prompt: String,
+        ): String {
+            val fileText =
+                outputFile
+                    ?.takeIf { it.exists() }
+                    ?.readText()
+                    ?.trim()
+                    .orEmpty()
             if (fileText.isNotBlank()) return fileText
-            val inputLines = prompt.lines().map { it.trim() }.filter { it.isNotBlank() }.toSet()
-            return stdout.lineSequence()
+            val inputLines =
+                prompt
+                    .lines()
+                    .map { it.trim() }
+                    .filter { it.isNotBlank() }
+                    .toSet()
+            return stdout
+                .lineSequence()
                 .map { it.trim() }
                 .filter { it.isNotBlank() && !inputLines.contains(it) }
                 .joinToString("\n")
                 .trim()
         }
 
-        private fun readGeminiOutput(stdout: String, prompt: String): String {
-            val inputLines = prompt.lines().map { it.trim() }.filter { it.isNotBlank() }.toSet()
-            return stdout.lineSequence()
+        private fun readGeminiOutput(
+            stdout: String,
+            prompt: String,
+        ): String {
+            val inputLines =
+                prompt
+                    .lines()
+                    .map { it.trim() }
+                    .filter { it.isNotBlank() }
+                    .toSet()
+            return stdout
+                .lineSequence()
                 .map { it.trim() }
                 .filter { it.isNotBlank() && !inputLines.contains(it) }
                 .filterNot { isGeminiNoiseLine(it) }
@@ -373,7 +428,10 @@ class CliBackend(
                 lower.startsWith("send over your first target")
         }
 
-        private fun buildOpenCodeCommand(cmd: List<String>, prompt: String): List<String> {
+        private fun buildOpenCodeCommand(
+            cmd: List<String>,
+            prompt: String,
+        ): List<String> {
             val base = cmd.firstOrNull() ?: "opencode"
             val extras = cmd.drop(1)
             val args = mutableListOf<String>()
@@ -384,13 +442,19 @@ class CliBackend(
             return args
         }
 
-        private fun readOpenCodeOutput(stdout: String, prompt: String): String {
+        private fun readOpenCodeOutput(
+            stdout: String,
+            prompt: String,
+        ): String {
             // Only dedup long prompt lines (>=40 chars) — short lines match real content too often
-            val inputLines = prompt.lines()
-                .map { it.trim() }
-                .filter { it.length >= 40 }
-                .toSet()
-            return stdout.lineSequence()
+            val inputLines =
+                prompt
+                    .lines()
+                    .map { it.trim() }
+                    .filter { it.length >= 40 }
+                    .toSet()
+            return stdout
+                .lineSequence()
                 .map { it.trim() }
                 .filter { it.isNotBlank() && !inputLines.contains(it) }
                 .filterNot { isOpenCodeNoiseLine(it) }
@@ -423,23 +487,37 @@ class CliBackend(
                 args.add(currentSessionId)
             } else {
                 // First message: generate a new session id (atomic CAS to avoid races)
-                val newId = java.util.UUID.randomUUID().toString()
+                val newId =
+                    java.util.UUID
+                        .randomUUID()
+                        .toString()
                 if (_cliSessionId.compareAndSet(null, newId)) {
                     args.add("--session-id")
                     args.add(newId)
                 } else {
                     // Another thread won the race — resume their session
                     args.add("--resume")
-                    args.add(_cliSessionId.get()
-                        ?: throw IllegalStateException("CLI session ID lost between CAS and read"))
+                    args.add(
+                        _cliSessionId.get()
+                            ?: throw IllegalStateException("CLI session ID lost between CAS and read"),
+                    )
                 }
             }
             return args
         }
 
-        private fun readClaudeOutput(stdout: String, prompt: String): String {
-            val inputLines = prompt.lines().map { it.trim() }.filter { it.isNotBlank() }.toSet()
-            return stdout.lineSequence()
+        private fun readClaudeOutput(
+            stdout: String,
+            prompt: String,
+        ): String {
+            val inputLines =
+                prompt
+                    .lines()
+                    .map { it.trim() }
+                    .filter { it.isNotBlank() }
+                    .toSet()
+            return stdout
+                .lineSequence()
                 .map { it.trim() }
                 .filter { it.isNotBlank() && !inputLines.contains(it) }
                 .joinToString("\n")
@@ -461,9 +539,18 @@ class CliBackend(
             return args
         }
 
-        private fun readCopilotOutput(stdout: String, prompt: String): String {
-            val inputLines = prompt.lines().map { it.trim() }.filter { it.isNotBlank() }.toSet()
-            return stdout.lineSequence()
+        private fun readCopilotOutput(
+            stdout: String,
+            prompt: String,
+        ): String {
+            val inputLines =
+                prompt
+                    .lines()
+                    .map { it.trim() }
+                    .filter { it.isNotBlank() }
+                    .toSet()
+            return stdout
+                .lineSequence()
                 .map { it.trim() }
                 .filter { it.isNotBlank() && !inputLines.contains(it) }
                 .joinToString("\n")
@@ -475,8 +562,9 @@ class CliBackend(
         cmd: List<String>,
         env: Map<String, String>,
         private val usePty: Boolean,
-        private val embeddedMode: Boolean
-    ) : AgentConnection, DiagnosableConnection {
+        private val embeddedMode: Boolean,
+    ) : AgentConnection,
+        DiagnosableConnection {
         private val alive = AtomicBoolean(true)
         private val exitCode = AtomicInteger(Int.MIN_VALUE)
         private val process: Process = startProcess(cmd, env)
@@ -523,7 +611,7 @@ class CliBackend(
             onComplete: (Throwable?) -> Unit,
             systemPrompt: String?,
             jsonMode: Boolean,
-            maxOutputTokens: Int?
+            maxOutputTokens: Int?,
         ) {
             if (!isAlive()) {
                 onComplete(buildExitError())
@@ -610,9 +698,14 @@ class CliBackend(
         private fun readEmbeddedResponse(
             text: String,
             onChunk: (String) -> Unit,
-            onComplete: (Throwable?) -> Unit
+            onComplete: (Throwable?) -> Unit,
         ) {
-            val inputLines = text.lines().map { it.trim() }.filter { it.isNotBlank() }.toSet()
+            val inputLines =
+                text
+                    .lines()
+                    .map { it.trim() }
+                    .filter { it.isNotBlank() }
+                    .toSet()
             val start = System.currentTimeMillis()
             var lastRead = System.currentTimeMillis()
             var received = false
@@ -643,18 +736,22 @@ class CliBackend(
         private fun buildExitError(): Throwable {
             val code = exitCode()
             val tail = lastOutputTail().orEmpty()
-            val msg = buildString {
-                append("Process not alive")
-                if (code != null) append(" (exit=$code)")
-                if (tail.isNotBlank()) {
-                    append(": ")
-                    append(tail.take(2000))
+            val msg =
+                buildString {
+                    append("Process not alive")
+                    if (code != null) append(" (exit=$code)")
+                    if (tail.isNotBlank()) {
+                        append(": ")
+                        append(tail.take(2000))
+                    }
                 }
-            }
             return IllegalStateException(msg)
         }
 
-        private fun startProcess(cmd: List<String>, env: Map<String, String>): Process {
+        private fun startProcess(
+            cmd: List<String>,
+            env: Map<String, String>,
+        ): Process {
             val resolvedCmd = resolveCommand(cmd, env)
             if (resolvedCmd.isEmpty()) {
                 throw IllegalStateException("CLI executable not found")
@@ -695,7 +792,6 @@ class CliBackend(
             val os = System.getProperty("os.name").lowercase(Locale.ROOT)
             return os.contains("mac") || os.contains("nix") || os.contains("nux")
         }
-
     }
 }
 
@@ -743,7 +839,7 @@ private fun buildCliHistory(history: List<ChatMessage>?): String {
 private fun limitCliHistory(
     history: List<ChatMessage>,
     maxMessages: Int,
-    maxChars: Int
+    maxChars: Int,
 ): List<ChatMessage> {
     if (history.isEmpty()) return emptyList()
     val trimmed = history.takeLast(maxMessages)
@@ -763,7 +859,10 @@ private fun limitCliHistory(
     return result.toList()
 }
 
-private fun resolveCommand(cmd: List<String>, env: Map<String, String>): List<String> {
+private fun resolveCommand(
+    cmd: List<String>,
+    env: Map<String, String>,
+): List<String> {
     if (cmd.isEmpty()) return cmd
     val first = cmd[0]
 
@@ -773,7 +872,8 @@ private fun resolveCommand(cmd: List<String>, env: Map<String, String>): List<St
         return if (firstFile.exists()) {
             cmd
         } else {
-            com.six2dez.burp.aiagent.backends.BackendDiagnostics.log("[Custom AI Agent] Absolute path not found: $first")
+            com.six2dez.burp.aiagent.backends.BackendDiagnostics
+                .log("[Custom AI Agent] Absolute path not found: $first")
             emptyList()
         }
     }
@@ -824,21 +924,21 @@ private fun resolveWindowsNpmShim(executable: String): String? {
 
 private fun stripAnsiCodes(text: String): String {
     if (text.isEmpty()) return text
-    
+
     var result = text
-    
+
     // Strip all ANSI escape sequences
     // CSI sequences: ESC [ ... letter (e.g., \u001B[0m, \u001B[1;31m)
     result = result.replace(Regex("\\u001B\\[[0-9;]*[a-zA-Z]"), "")
-    
+
     // OSC sequences: ESC ] ... BEL (e.g., \u001B]0;title\u0007)
     result = result.replace(Regex("\\u001B\\][^\\u0007]*\\u0007"), "")
-    
+
     // Other escape sequences (e.g., \u001B>, \u001B=)
     result = result.replace(Regex("\\u001B[><=][^\\u0007\\u001B\\\\]*[\\u0007\\u001B\\\\]"), "")
-    
+
     // Strip any remaining literal ANSI-like patterns (e.g., "[0m", "[1m")
     result = result.replace(Regex("\\[\\d+m"), "")
-    
+
     return result
 }

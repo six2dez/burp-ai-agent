@@ -11,9 +11,10 @@ object IssueText {
         var text = input.replace("\r\n", "\n").replace("\r", "\n")
 
         // Remove fenced code blocks but keep their content.
-        text = text.replace(fencedCodeRegex) { m ->
-            m.groupValues[1]
-        }
+        text =
+            text.replace(fencedCodeRegex) { m ->
+                m.groupValues[1]
+            }
 
         // Inline code/backticks.
         text = text.replace("`", "")
@@ -26,7 +27,12 @@ object IssueText {
         text = text.replace(blockquoteRegex, "")
 
         // Bold/italic markers.
-        text = text.replace("**", "").replace("__", "").replace("*", "").replace("_", "")
+        text =
+            text
+                .replace("**", "")
+                .replace("__", "")
+                .replace("*", "")
+                .replace("_", "")
 
         return text.trim()
     }

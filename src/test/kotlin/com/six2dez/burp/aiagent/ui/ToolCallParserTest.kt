@@ -7,7 +7,6 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class ToolCallParserTest {
-
     @Test
     fun `extracts direct tool payload`() {
         val payload = """{"tool":"status","args":{}}"""
@@ -19,12 +18,13 @@ class ToolCallParserTest {
 
     @Test
     fun `extracts fenced json tool payload`() {
-        val payload = """
+        val payload =
+            """
             I will query Burp first.
             ```json
             {"name":"proxy_http_history","arguments":{"limit":5}}
             ```
-        """.trimIndent()
+            """.trimIndent()
         val call = ToolCallParser.extractFirst(payload)
         assertNotNull(call)
         assertEquals("proxy_http_history", call?.tool)
@@ -33,7 +33,8 @@ class ToolCallParserTest {
 
     @Test
     fun `extracts openai style tool_calls payload`() {
-        val payload = """
+        val payload =
+            """
             {
               "choices": [
                 {
@@ -52,7 +53,7 @@ class ToolCallParserTest {
                 }
               ]
             }
-        """.trimIndent()
+            """.trimIndent()
         val call = ToolCallParser.extractFirst(payload)
         assertNotNull(call)
         assertEquals("http1_request", call?.tool)

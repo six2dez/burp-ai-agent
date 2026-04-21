@@ -24,7 +24,7 @@ import kotlinx.io.buffered
 
 class McpStdioBridge(
     private val api: MontoyaApi,
-    private val contextFactory: McpRuntimeContextFactory = McpRuntimeContextFactory(api)
+    private val contextFactory: McpRuntimeContextFactory = McpRuntimeContextFactory(api),
 ) {
     private var scope: CoroutineScope? = null
     private var job: Job? = null
@@ -39,19 +39,22 @@ class McpStdioBridge(
         settings: McpSettings,
         privacyMode: PrivacyMode,
         determinismMode: Boolean,
-        preprocessSettings: ResponsePreprocessorSettings
+        preprocessSettings: ResponsePreprocessorSettings,
     ) {
         stop()
         val context = contextFactory.create(settings, privacyMode, determinismMode, preprocessSettings)
 
-        val mcpServer = Server(
-            serverInfo = Implementation("burp-ai-agent", "0.1.0"),
-            options = ServerOptions(
-                capabilities = ServerCapabilities(
-                    tools = ServerCapabilities.Tools(listChanged = false)
-                )
+        val mcpServer =
+            Server(
+                serverInfo = Implementation("burp-ai-agent", "0.1.0"),
+                options =
+                    ServerOptions(
+                        capabilities =
+                            ServerCapabilities(
+                                tools = ServerCapabilities.Tools(listChanged = false),
+                            ),
+                    ),
             )
-        )
         mcpServer.registerTools(api, context)
 
         val source = System.`in`.asSource().buffered()
@@ -63,10 +66,11 @@ class McpStdioBridge(
 
         val newScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
         scope = newScope
-        job = newScope.launch {
-            mcpServer.connect(stdioTransport)
-            stdioTransport.start()
-        }
+        job =
+            newScope.launch {
+                mcpServer.connect(stdioTransport)
+                stdioTransport.start()
+            }
 
         api.logging().logToOutput("MCP stdio bridge started.")
     }

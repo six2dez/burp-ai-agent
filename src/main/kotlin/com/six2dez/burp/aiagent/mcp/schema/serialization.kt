@@ -8,78 +8,78 @@ import com.six2dez.burp.aiagent.mcp.tools.ResponsePreprocessor
 import com.six2dez.burp.aiagent.mcp.tools.ResponsePreprocessorSettings
 import kotlinx.serialization.Serializable
 
-fun AuditIssue.toSerializableForm(): IssueDetails {
-    return IssueDetails(
+fun AuditIssue.toSerializableForm(): IssueDetails =
+    IssueDetails(
         name = name(),
         detail = detail(),
         remediation = remediation(),
-        httpService = HttpService(
-            host = httpService().host(),
-            port = httpService().port(),
-            secure = httpService().secure()
-        ),
+        httpService =
+            HttpService(
+                host = httpService().host(),
+                port = httpService().port(),
+                secure = httpService().secure(),
+            ),
         baseUrl = baseUrl(),
         severity = AuditIssueSeverity.valueOf(severity().name),
         confidence = AuditIssueConfidence.valueOf(confidence().name),
         requestResponses = requestResponses().map { it.toSerializableForm() },
-        collaboratorInteractions = collaboratorInteractions().map {
-            Interaction(
-                interactionId = it.id().toString(),
-                timestamp = it.timeStamp().toString()
-            )
-        },
-        definition = AuditIssueDefinition(
-            id = definition().name(),
-            background = definition().background(),
-            remediation = definition().remediation(),
-            typeIndex = definition().typeIndex(),
-        )
+        collaboratorInteractions =
+            collaboratorInteractions().map {
+                Interaction(
+                    interactionId = it.id().toString(),
+                    timestamp = it.timeStamp().toString(),
+                )
+            },
+        definition =
+            AuditIssueDefinition(
+                id = definition().name(),
+                background = definition().background(),
+                remediation = definition().remediation(),
+                typeIndex = definition().typeIndex(),
+            ),
     )
-}
 
-fun burp.api.montoya.http.message.HttpRequestResponse.toSerializableForm(): HttpRequestResponse {
-    return HttpRequestResponse(
+fun burp.api.montoya.http.message.HttpRequestResponse.toSerializableForm(): HttpRequestResponse =
+    HttpRequestResponse(
         request = request()?.toString() ?: "<no request>",
         response = response()?.toString() ?: "<no response>",
-        notes = annotations().notes()
+        notes = annotations().notes(),
     )
-}
 
-fun ProxyHttpRequestResponse.toSerializableForm(
-    preprocessorSettings: ResponsePreprocessorSettings? = null
-): HttpRequestResponse {
+fun ProxyHttpRequestResponse.toSerializableForm(preprocessorSettings: ResponsePreprocessorSettings? = null): HttpRequestResponse {
     val rawResponse = response()?.toString() ?: "<no response>"
-    val processedResponse = if (preprocessorSettings != null && rawResponse != "<no response>") {
-        ResponsePreprocessor.preprocessResponse(rawResponse, preprocessorSettings)
-    } else {
-        rawResponse
-    }
+    val processedResponse =
+        if (preprocessorSettings != null && rawResponse != "<no response>") {
+            ResponsePreprocessor.preprocessResponse(rawResponse, preprocessorSettings)
+        } else {
+            rawResponse
+        }
 
     return HttpRequestResponse(
         request = request()?.toString() ?: "<no request>",
         response = processedResponse,
-        notes = annotations().notes()
+        notes = annotations().notes(),
     )
 }
 
-fun ProxyWebSocketMessage.toSerializableForm(): WebSocketMessage {
-    return WebSocketMessage(
+fun ProxyWebSocketMessage.toSerializableForm(): WebSocketMessage =
+    WebSocketMessage(
         payload = payload()?.toString() ?: "<no payload>",
         direction =
-            if (direction() == Direction.CLIENT_TO_SERVER)
+            if (direction() == Direction.CLIENT_TO_SERVER) {
                 WebSocketMessageDirection.CLIENT_TO_SERVER
-            else
-                WebSocketMessageDirection.SERVER_TO_CLIENT,
-        notes = annotations().notes()
+            } else {
+                WebSocketMessageDirection.SERVER_TO_CLIENT
+            },
+        notes = annotations().notes(),
     )
-}
 
 fun burp.api.montoya.http.message.HttpRequestResponse.toSiteMapEntry(): SiteMapEntry {
     val req = request()
     return SiteMapEntry(
         url = req?.url() ?: "<no url>",
         request = req?.toString() ?: "<no request>",
-        response = response()?.toString() ?: "<no response>"
+        response = response()?.toString() ?: "<no response>",
     )
 }
 
@@ -94,14 +94,14 @@ data class IssueDetails(
     val confidence: AuditIssueConfidence,
     val requestResponses: List<HttpRequestResponse>,
     val collaboratorInteractions: List<Interaction>,
-    val definition: AuditIssueDefinition
+    val definition: AuditIssueDefinition,
 )
 
 @Serializable
 data class HttpService(
     val host: String,
     val port: Int,
-    val secure: Boolean
+    val secure: Boolean,
 )
 
 @Serializable
@@ -110,27 +110,27 @@ enum class AuditIssueSeverity {
     MEDIUM,
     LOW,
     INFORMATION,
-    FALSE_POSITIVE;
+    FALSE_POSITIVE,
 }
 
 @Serializable
 enum class AuditIssueConfidence {
     CERTAIN,
     FIRM,
-    TENTATIVE
+    TENTATIVE,
 }
 
 @Serializable
 data class HttpRequestResponse(
     val request: String?,
     val response: String?,
-    val notes: String?
+    val notes: String?,
 )
 
 @Serializable
 data class Interaction(
     val interactionId: String,
-    val timestamp: String
+    val timestamp: String,
 )
 
 @Serializable
@@ -138,25 +138,25 @@ data class AuditIssueDefinition(
     val id: String,
     val background: String?,
     val remediation: String?,
-    val typeIndex: Int
+    val typeIndex: Int,
 )
 
 @Serializable
 enum class WebSocketMessageDirection {
     CLIENT_TO_SERVER,
-    SERVER_TO_CLIENT
+    SERVER_TO_CLIENT,
 }
 
 @Serializable
 data class WebSocketMessage(
     val payload: String?,
     val direction: WebSocketMessageDirection,
-    val notes: String?
+    val notes: String?,
 )
 
 @Serializable
 data class SiteMapEntry(
     val url: String,
     val request: String,
-    val response: String
+    val response: String,
 )

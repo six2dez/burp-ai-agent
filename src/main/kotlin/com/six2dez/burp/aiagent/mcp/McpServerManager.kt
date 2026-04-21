@@ -7,13 +7,16 @@ import com.six2dez.burp.aiagent.redact.PrivacyMode
 
 interface McpServerManager {
     fun setAiRequestLogger(logger: AiRequestLogger)
+
     fun start(
         settings: McpSettings,
         privacyMode: PrivacyMode,
         determinismMode: Boolean,
         preprocessSettings: ResponsePreprocessorSettings,
-        callback: (McpServerState) -> Unit
+        callback: (McpServerState) -> Unit,
     )
+
     fun stop(callback: (McpServerState) -> Unit)
+
     fun shutdown()
 }

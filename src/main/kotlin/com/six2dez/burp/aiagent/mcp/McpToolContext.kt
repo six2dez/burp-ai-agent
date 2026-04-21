@@ -29,10 +29,12 @@ data class McpToolContext(
     val preprocessMaxResponseSizeKb: Int = Defaults.PREPROCESS_MAX_RESPONSE_SIZE_KB,
     val preprocessFilterBinaryContent: Boolean = Defaults.PREPROCESS_FILTER_BINARY_CONTENT,
     val preprocessAllowedContentTypes: Set<String> = Defaults.PREPROCESS_ALLOWED_CONTENT_TYPES,
-    val aiRequestLogger: AiRequestLogger? = null
+    val aiRequestLogger: AiRequestLogger? = null,
 ) {
     fun isToolEnabled(name: String): Boolean = toolToggles[name] ?: false
+
     fun isUnsafeTool(name: String): Boolean = unsafeTools.contains(name)
+
     fun isUnsafeToolAllowed(name: String): Boolean {
         if (!isUnsafeTool(name)) return true
         if (unsafeEnabled) return true
@@ -45,19 +47,20 @@ data class McpToolContext(
         return Redaction.apply(raw, policy, stableHostSalt = hostSalt)
     }
 
-    fun resolveHost(host: String): String {
-        return Redaction.deAnonymizeHost(host, hostSalt) ?: host
-    }
+    fun resolveHost(host: String): String = Redaction.deAnonymizeHost(host, hostSalt) ?: host
 
     fun limitOutput(raw: String): String {
         val limit = maxBodyBytes.coerceAtLeast(1)
         val bytes = raw.toByteArray(Charsets.UTF_8)
         if (bytes.size <= limit) return raw
         val truncated = String(bytes, 0, limit, Charsets.UTF_8)
-        return "$truncated... (truncated ${bytes.size} bytes to ${limit} bytes)"
+        return "$truncated... (truncated ${bytes.size} bytes to $limit bytes)"
     }
 
-    fun limitedJoin(items: Sequence<String>, separator: String = "\n\n"): String {
+    fun limitedJoin(
+        items: Sequence<String>,
+        separator: String = "\n\n",
+    ): String {
         val builder = LimitedStringBuilder(maxBodyBytes.coerceAtLeast(1))
         var first = true
         for (item in items) {
@@ -70,12 +73,11 @@ data class McpToolContext(
         return builder.build()
     }
 
-    fun responsePreprocessorSettings(): ResponsePreprocessorSettings {
-        return ResponsePreprocessorSettings(
+    fun responsePreprocessorSettings(): ResponsePreprocessorSettings =
+        ResponsePreprocessorSettings(
             preprocessProxyHistory = preprocessProxyHistory,
             preprocessMaxResponseSizeKb = preprocessMaxResponseSizeKb,
             preprocessFilterBinaryContent = preprocessFilterBinaryContent,
-            preprocessAllowedContentTypes = preprocessAllowedContentTypes
+            preprocessAllowedContentTypes = preprocessAllowedContentTypes,
         )
-    }
 }

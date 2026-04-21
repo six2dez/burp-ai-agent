@@ -16,17 +16,17 @@ import org.mockito.kotlin.whenever
 import java.util.concurrent.ConcurrentHashMap
 
 class BackendHealthCheckTest {
-
     @Test
     fun healthCheckUsesExplicitBackendSignal() {
         val registry = createRegistry()
         val map = backendsField(registry)
         map.clear()
-        map["test"] = FakeBackend(
-            id = "test",
-            health = HealthCheckResult.Degraded("Auth token rejected."),
-            available = true
-        )
+        map["test"] =
+            FakeBackend(
+                id = "test",
+                health = HealthCheckResult.Degraded("Auth token rejected."),
+                available = true,
+            )
 
         val result = registry.healthCheck("test", baselineSettings())
         assertTrue(result is HealthCheckResult.Degraded)
@@ -38,16 +38,18 @@ class BackendHealthCheckTest {
         val registry = createRegistry()
         val map = backendsField(registry)
         map.clear()
-        map["ok"] = FakeBackend(
-            id = "ok",
-            health = HealthCheckResult.Unknown,
-            available = true
-        )
-        map["bad"] = FakeBackend(
-            id = "bad",
-            health = HealthCheckResult.Unknown,
-            available = false
-        )
+        map["ok"] =
+            FakeBackend(
+                id = "ok",
+                health = HealthCheckResult.Unknown,
+                available = true,
+            )
+        map["bad"] =
+            FakeBackend(
+                id = "bad",
+                health = HealthCheckResult.Unknown,
+                available = false,
+            )
 
         val settings = baselineSettings()
         val okResult = registry.healthCheck("ok", settings)
@@ -79,8 +81,8 @@ class BackendHealthCheckTest {
         return field.get(registry) as ConcurrentHashMap<String, AiBackend>
     }
 
-    private fun baselineSettings(): AgentSettings {
-        return AgentSettings(
+    private fun baselineSettings(): AgentSettings =
+        AgentSettings(
             codexCmd = "codex",
             geminiCmd = "gemini",
             opencodeCmd = "opencode",
@@ -122,26 +124,27 @@ class BackendHealthCheckTest {
             determinismMode = false,
             autoRestart = true,
             auditEnabled = true,
-            mcpSettings = McpSettings(
-                enabled = false,
-                host = "127.0.0.1",
-                port = 8765,
-                externalEnabled = false,
-                stdioEnabled = false,
-                token = "token",
-                allowedOrigins = emptyList(),
-                tlsEnabled = false,
-                tlsAutoGenerate = true,
-                tlsKeystorePath = "",
-                tlsKeystorePassword = "",
-                scanTaskTtlMinutes = 120,
-                collaboratorClientTtlMinutes = 60,
-                maxConcurrentRequests = 4,
-                maxBodyBytes = 262_144,
-                toolToggles = emptyMap(),
-                enabledUnsafeTools = emptySet(),
-                unsafeEnabled = false
-            ),
+            mcpSettings =
+                McpSettings(
+                    enabled = false,
+                    host = "127.0.0.1",
+                    port = 8765,
+                    externalEnabled = false,
+                    stdioEnabled = false,
+                    token = "token",
+                    allowedOrigins = emptyList(),
+                    tlsEnabled = false,
+                    tlsAutoGenerate = true,
+                    tlsKeystorePath = "",
+                    tlsKeystorePassword = "",
+                    scanTaskTtlMinutes = 120,
+                    collaboratorClientTtlMinutes = 60,
+                    maxConcurrentRequests = 4,
+                    maxBodyBytes = 262_144,
+                    toolToggles = emptyMap(),
+                    enabledUnsafeTools = emptySet(),
+                    unsafeEnabled = false,
+                ),
             passiveAiEnabled = false,
             passiveAiRateSeconds = 5,
             passiveAiScopeOnly = true,
@@ -161,20 +164,17 @@ class BackendHealthCheckTest {
             bountyPromptDir = "",
             bountyPromptAutoCreateIssues = true,
             bountyPromptIssueConfidenceThreshold = 90,
-            bountyPromptEnabledPromptIds = emptySet()
+            bountyPromptEnabledPromptIds = emptySet(),
         )
-    }
 
     private class FakeBackend(
         override val id: String,
         private val health: HealthCheckResult,
-        private val available: Boolean
+        private val available: Boolean,
     ) : AiBackend {
         override val displayName: String = id
 
-        override fun launch(config: BackendLaunchConfig): AgentConnection {
-            throw UnsupportedOperationException("Not needed for this test")
-        }
+        override fun launch(config: BackendLaunchConfig): AgentConnection = throw UnsupportedOperationException("Not needed for this test")
 
         override fun isAvailable(settings: AgentSettings): Boolean = available
 

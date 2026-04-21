@@ -6,8 +6,8 @@ import javax.swing.Box
 import javax.swing.BoxLayout
 import javax.swing.JButton
 import javax.swing.JCheckBox
-import javax.swing.JComponent
 import javax.swing.JComboBox
+import javax.swing.JComponent
 import javax.swing.JLabel
 import javax.swing.JPanel
 import javax.swing.JSpinner
@@ -47,7 +47,7 @@ class PassiveScanConfigPanel(
     private val passiveAiStatusLabel: JLabel,
     private val passiveAiViewFindings: JButton,
     private val scannerTriageButton: JButton,
-    private val passiveAiResetStats: JButton
+    private val passiveAiResetStats: JButton,
 ) : ConfigPanel {
     override fun build(): JPanel {
         val body = JPanel(BorderLayout())
@@ -105,7 +105,8 @@ class PassiveScanConfigPanel(
         passiveAiParamMaxCountSpinner.toolTipText = "Max parameters included in prompt metadata."
 
         passiveAiExcludedExtensionsField.font = UiTheme.Typography.body
-        passiveAiExcludedExtensionsField.toolTipText = "Comma-separated file extensions to skip (e.g. css,js,png,woff,ico). Leave empty to disable."
+        passiveAiExcludedExtensionsField.toolTipText =
+            "Comma-separated file extensions to skip (e.g. css,js,png,woff,ico). Leave empty to disable."
 
         passiveAiBatchSizeSpinner.font = UiTheme.Typography.body
         passiveAiBatchSizeSpinner.toolTipText = "Group N requests per AI call (1 = disabled). Reduces API calls by 60-70%."
@@ -167,7 +168,7 @@ class PassiveScanConfigPanel(
             "Endpoint dedup (min)",
             passiveAiEndpointDedupSpinner,
             "Response dedup (min)",
-            passiveAiFingerprintDedupSpinner
+            passiveAiFingerprintDedupSpinner,
         )
         addSpacerRow(grid, 4)
         addRowPair(
@@ -175,7 +176,7 @@ class PassiveScanConfigPanel(
             "Prompt cache TTL (min)",
             passiveAiPromptCacheTtlSpinner,
             "Prompt cache entries",
-            passiveAiPromptCacheEntriesSpinner
+            passiveAiPromptCacheEntriesSpinner,
         )
         addSpacerRow(grid, 4)
         addRowPair(
@@ -183,7 +184,7 @@ class PassiveScanConfigPanel(
             "Endpoint cache entries",
             passiveAiEndpointCacheEntriesSpinner,
             "Fingerprint cache entries",
-            passiveAiFingerprintCacheEntriesSpinner
+            passiveAiFingerprintCacheEntriesSpinner,
         )
         addSpacerRow(grid, 4)
         addRowPair(
@@ -191,7 +192,7 @@ class PassiveScanConfigPanel(
             "Req body chars (AI)",
             passiveAiRequestBodyMaxCharsSpinner,
             "Resp body chars (AI)",
-            passiveAiResponseBodyMaxCharsSpinner
+            passiveAiResponseBodyMaxCharsSpinner,
         )
         addSpacerRow(grid, 4)
         addRowPair(
@@ -199,7 +200,7 @@ class PassiveScanConfigPanel(
             "Max headers",
             passiveAiHeaderMaxCountSpinner,
             "Max params",
-            passiveAiParamMaxCountSpinner
+            passiveAiParamMaxCountSpinner,
         )
         addSpacerRow(grid, 4)
         addRowFull(grid, "Excluded extensions", passiveAiExcludedExtensionsField)
@@ -213,7 +214,7 @@ class PassiveScanConfigPanel(
             "Persistent TTL (hrs)",
             passiveAiPersistentCacheTtlSpinner,
             "Persistent max (MB)",
-            passiveAiPersistentCacheMaxMbSpinner
+            passiveAiPersistentCacheMaxMbSpinner,
         )
         addSpacerRow(grid, 4)
         addRowPair(
@@ -221,7 +222,7 @@ class PassiveScanConfigPanel(
             "Req body chars (manual)",
             contextRequestBodyMaxCharsSpinner,
             "Resp body chars (manual)",
-            contextResponseBodyMaxCharsSpinner
+            contextResponseBodyMaxCharsSpinner,
         )
         addSpacerRow(grid, 4)
         addRowFull(grid, "Manual context JSON", contextCompactJson)
@@ -243,7 +244,7 @@ class PassiveScanConfigPanel(
         return sectionPanel(
             "AI Passive Scanner",
             "Automatically analyze proxy traffic for vulnerabilities (XSS, SQLi, IDOR, BOLA, BAC, etc.)",
-            body
+            body,
         )
     }
 }
