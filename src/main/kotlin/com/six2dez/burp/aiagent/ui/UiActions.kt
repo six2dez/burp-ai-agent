@@ -110,7 +110,7 @@ object UiActions {
             val count = passiveAiScanner.manualScan(targets)
             JOptionPane.showMessageDialog(
                 tab.root,
-                "Queued $count request(s) for AI passive analysis.\n\nFindings will appear in Target → Issues with [AI] prefix.",
+                "Queued $count request(s) for AI passive analysis.\n\nFindings will appear in Target → Issues with [AI Passive] prefix.",
                 "AI Passive Scan Started",
                 JOptionPane.INFORMATION_MESSAGE,
             )

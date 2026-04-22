@@ -74,7 +74,7 @@ class KtorMcpServerManager(
 
                 val mcpServer =
                     Server(
-                        serverInfo = Implementation("burp-ai-agent", "0.1.0"),
+                        serverInfo = Implementation("burp-ai-agent", "0.6.0"),
                         options =
                             ServerOptions(
                                 capabilities =

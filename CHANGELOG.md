@@ -4,16 +4,19 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
-
 ## [0.6.0] - 2026-04-21
+
+### Breaking Changes
+
+- **JAR artifact renamed**: the release output is now `Custom-AI-Agent-<version>.jar` instead of `Burp-AI-Agent-<version>.jar`. Update any script, CI job, packaging step, or download URL that hard-codes the old filename.
+- **Default privacy mode changed**: new installs and users without an explicitly saved privacy mode now default to `BALANCED` (cookie stripping + token redaction) instead of `OFF`. Users with a previously saved explicit selection keep their choice. If you relied on raw outbound traffic by default, switch the mode back to `OFF` in Settings after upgrading.
 
 ### Changed
 
-- **Privacy-by-default**: Default privacy mode is now `BALANCED` instead of `OFF`. New users, and users who never explicitly chose a mode, get cookie stripping and token redaction before any HTTP data is sent to an AI backend. Users with an existing explicit mode keep their choice.
+- **Privacy-by-default**: Default privacy mode is now `BALANCED` instead of `OFF` for new users and users who never explicitly chose a mode. See Breaking Changes above.
 - **Redaction coverage expanded**: the token redactor now also strips `X-Auth-Token`, `X-Access-Token`, `X-Session-Token`, `X-CSRF-Token`, `X-Api-Secret`, `X-Client-Secret` and their non-prefixed variants; Basic auth values are replaced with `Basic [REDACTED]`; URL query parameters named `access_token`, `api_key`, `apikey`, `auth`, `token`, `key`, `secret`, `password`, `pwd`, `session`, `sid`, `code` have their value redacted in-place.
 - **Vulnerability class inventory**: removed the duplicate `RACE_CONDITION` entry; race-condition issues now use the single canonical `RACE_CONDITION_TOCTOU`. A new `VulnClassInventoryTest` locks the 62-class count plus severity and remediation coverage, so any future drift in `VulnClass` fails the build.
-- **JAR artifact renamed**: build output is now `Custom-AI-Agent-<version>.jar` (was `Burp-AI-Agent-<version>.jar`). CI, release workflows, and `CONTRIBUTING.md` updated; any external script or download URL that hard-codes the old name must be updated.
+- **JAR artifact renamed** to `Custom-AI-Agent-<version>.jar`. CI, release workflows, and `CONTRIBUTING.md` updated. See Breaking Changes above.
 
 ### Added
 
@@ -37,6 +40,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - **Stale settings cache across UI instances**: `SettingsPanel` and `MainTab` own separate `AgentSettingsRepository` instances, each with its own in-memory cache. Before this fix, saving any setting (prompts, backends, privacy mode, scanner config) from the Settings tab could leave the right-click menu reading a stale snapshot until Burp restart. `AgentSettingsRepository.invalidate()` is now called on every save-through-Settings event so the next menu build re-reads from preferences.
 - **Runtime defaults restored**: token budget and CLI idle-timeout defaults were missing from `Defaults.kt` after an earlier refactor, causing some backends to launch with zero-valued limits. Defaults are now explicit again.
 - **MCP preprocess change detection**: fixed a case where changing proxy-history preprocessing settings did not invalidate the tool schema, so MCP clients kept seeing the old schema until the MCP server restarted. Also gated the proxy-history tool schema on the active preprocessor settings so clients can distinguish between `preprocessed` and `raw` shapes.
+
+### Upgrade Notes
+
+- **Settings schema v3**: first launch of v0.6.0 migrates settings transparently (`AgentSettings.migrateIfNeeded`). No user action required.
+- **Custom prompt library**: existing saved prompts (if any) are preserved; the new submenu appears automatically on HTTP and Scanner Issue context menus.
+- **MCP clients**: if the proxy-history tool schema looks different, it is because preprocessing now gates the schema. Toggling `allowUnpreprocessedProxyHistory` in Settings → MCP restores the raw shape.
+- **Packagers / downstream scripts**: update artifact name from `Burp-AI-Agent-*.jar` to `Custom-AI-Agent-*.jar`.
 
 ## [0.5.0] - 2026-04-02
 
