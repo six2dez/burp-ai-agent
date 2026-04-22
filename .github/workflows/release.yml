@@ -64,7 +64,7 @@ jobs:
           echo "notes_file=release_notes.md" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           body_path: ${{ steps.extract_notes.outputs.notes_file }}
           generate_release_notes: true
