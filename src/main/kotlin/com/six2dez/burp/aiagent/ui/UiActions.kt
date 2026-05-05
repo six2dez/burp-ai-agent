@@ -24,6 +24,7 @@ import com.six2dez.burp.aiagent.prompts.bountyprompt.BountyPromptOutputParser
 import com.six2dez.burp.aiagent.prompts.bountyprompt.BountyPromptOutputType
 import com.six2dez.burp.aiagent.prompts.bountyprompt.BountyPromptTagResolver
 import com.six2dez.burp.aiagent.scanner.ActiveAiScanner
+import com.six2dez.burp.aiagent.scanner.InjectionPointExtractor
 import com.six2dez.burp.aiagent.scanner.JsEndpointExtractor
 import com.six2dez.burp.aiagent.scanner.PassiveAiScanner
 import com.six2dez.burp.aiagent.scanner.VulnClass
@@ -312,9 +313,19 @@ object UiActions {
 
         val customPromptsMenu = buildHttpCustomPromptsMenu(api, tab, mcpSupervisor, targets, targetLabel)
 
-        return listOf(
+        // Optional: AI scan limited to the highlighted insertion point. Only surfaces when the
+        // user invoked the menu from a request editor with a non-empty REQUEST-side selection.
+        val aiScanInsertionPoint =
+            buildAiScanInsertionPointItem(
+                tab = tab,
+                event = event,
+                activeAiScanner = activeAiScanner,
+            )
+
+        return listOfNotNull(
             aiScan,
             aiActiveScan,
+            aiScanInsertionPoint,
             targetedTestsMenu,
             bountyPromptMenu,
             findVulns,
@@ -326,6 +337,83 @@ object UiActions {
             login,
             customPromptsMenu,
         )
+    }
+
+    private fun buildAiScanInsertionPointItem(
+        tab: MainTab,
+        event: ContextMenuEvent,
+        activeAiScanner: ActiveAiScanner?,
+    ): JMenuItem? {
+        val editor = event.messageEditorRequestResponse().orElse(null) ?: return null
+        if (editor.selectionContext().name != "REQUEST") return null
+        val rangeOpt = editor.selectionOffsets()
+        if (!rangeOpt.isPresent) return null
+        val range = rangeOpt.get()
+        val selectionStart = range.startIndexInclusive()
+        val selectionEnd = range.endIndexExclusive()
+        if (selectionEnd <= selectionStart) return null
+        val requestResponse = editor.requestResponse() ?: return null
+        val request = requestResponse.request() ?: return null
+
+        val insertionPoint =
+            InjectionPointExtractor.matchInsertionPoint(
+                request = request,
+                selectionStart = selectionStart,
+                selectionEnd = selectionEnd,
+            ) ?: return null
+
+        val label =
+            "AI Scan on Selected Insertion Point (${insertionPoint.type.name.lowercase().replace('_', ' ')}: ${insertionPoint.name})"
+        val item = JMenuItem(label)
+        item.toolTipText = "Run AI active tests against just the highlighted parameter / header / field."
+        item.addActionListener {
+            if (!ensureActiveScannerEnabled(tab, activeAiScanner)) return@addActionListener
+            val scanner = activeAiScanner ?: return@addActionListener
+            val selectedClasses = showVulnClassSelectionDialog(tab) ?: return@addActionListener
+            if (selectedClasses.isEmpty()) {
+                JOptionPane.showMessageDialog(
+                    tab.root,
+                    "No vulnerability classes selected.",
+                    "AI Insertion Point Scan",
+                    JOptionPane.WARNING_MESSAGE,
+                )
+                return@addActionListener
+            }
+            val preQueue = scanner.getStatus().queueSize
+            val confirmed =
+                JOptionPane.showConfirmDialog(
+                    tab.root,
+                    "This will run ${selectedClasses.size} vuln class test(s) against the selected " +
+                        "insertion point (${insertionPoint.type.name}: ${insertionPoint.name}).\n" +
+                        "Current queue: $preQueue\n\n" +
+                        "Continue?",
+                    "Confirm AI Insertion Point Scan",
+                    JOptionPane.YES_NO_OPTION,
+                    JOptionPane.WARNING_MESSAGE,
+                )
+            if (confirmed != JOptionPane.YES_OPTION) return@addActionListener
+            val count = scanner.manualScanInsertionPoint(requestResponse, insertionPoint, selectedClasses)
+            val postQueue = scanner.getStatus().queueSize
+            if (count == 0) {
+                JOptionPane.showMessageDialog(
+                    tab.root,
+                    "No targets were queued. The active scan queue may be full (max ${scanner.maxQueueSize}) or " +
+                        "the request is out of scope.",
+                    "AI Insertion Point Scan",
+                    JOptionPane.WARNING_MESSAGE,
+                )
+                return@addActionListener
+            }
+            JOptionPane.showMessageDialog(
+                tab.root,
+                "Queued $count target(s) for the selected insertion point.\n\n" +
+                    "Queue size: $preQueue -> $postQueue\n" +
+                    "Confirmed findings will appear in Target → Issues with [AI] Confirmed prefix.",
+                "AI Insertion Point Scan Started",
+                JOptionPane.INFORMATION_MESSAGE,
+            )
+        }
+        return item
     }
 
     fun auditIssueMenuItems(

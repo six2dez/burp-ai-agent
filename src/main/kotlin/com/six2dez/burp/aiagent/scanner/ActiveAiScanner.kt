@@ -201,6 +201,59 @@ class ActiveAiScanner(
         return queued
     }
 
+    /**
+     * Manually scan a single, user-selected insertion point against the requested vuln classes.
+     * Used by the "AI Scan on Selected Insertion Point" right-click action — the caller has
+     * already resolved the parameter / header / JSON field that overlaps the editor selection,
+     * so we skip [InjectionPointExtractor.extract] and queue one target per filtered vuln class.
+     *
+     * Like [manualScan], this bypasses the dedup `processedTargets` window used by [queueTarget]:
+     * re-invoking on the same insertion point queues fresh targets each time. That matches the
+     * existing manual-scan UX where the user is consciously asking for another pass.
+     */
+    fun manualScanInsertionPoint(
+        request: HttpRequestResponse,
+        insertionPoint: InjectionPoint,
+        vulnClasses: List<VulnClass>,
+    ): Int {
+        var queued = 0
+        val filteredClasses =
+            vulnClasses
+                .filterNot { it in ScanPolicy.PASSIVE_ONLY_VULN_CLASSES }
+                .filter { ScanPolicy.isAllowedForMode(scanMode, it) }
+
+        if (scopeOnly && !api.scope().isInScope(request.request().url())) {
+            return 0
+        }
+
+        for (vulnClass in filteredClasses) {
+            val target =
+                ActiveScanTarget(
+                    originalRequest = request,
+                    injectionPoint = insertionPoint,
+                    vulnHint = VulnHint(vulnClass, 50, "Manual scan (selected insertion point)"),
+                    priority = 60,
+                )
+            if (offerIfQueueNotFull(target)) {
+                queued++
+            }
+        }
+
+        if (queued > 0) {
+            api
+                .logging()
+                .logToOutput(
+                    "[ActiveAiScanner] Insertion-point scan: $queued target(s) queued for " +
+                        "${insertionPoint.type}:${insertionPoint.name}",
+                )
+            if (!scanning.get() && enabled.get()) {
+                startProcessing()
+            }
+        }
+
+        return queued
+    }
+
     private fun offerIfQueueNotFull(target: ActiveScanTarget): Boolean {
         if (scanQueue.size >= maxQueueSize.coerceAtLeast(1)) {
             api.logging().logToError("[ActiveAiScanner] Queue limit reached ($maxQueueSize). Dropping target: ${target.id}")
