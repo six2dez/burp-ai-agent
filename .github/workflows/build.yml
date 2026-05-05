@@ -50,14 +50,14 @@ jobs:
 
       - name: Upload JAR artifact (Linux only)
         if: matrix.os == 'ubuntu-latest'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Custom-AI-Agent-${{ github.sha }}
           path: build/libs/Custom-AI-Agent-*.jar
 
       - name: Upload test reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-report-${{ matrix.os }}-${{ github.sha }}
           path: |
@@ -66,7 +66,7 @@ jobs:
 
       - name: Upload coverage report (Linux only)
         if: matrix.os == 'ubuntu-latest' && always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-${{ github.sha }}
           path: build/reports/jacoco/test/**
