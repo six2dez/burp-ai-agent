@@ -47,7 +47,7 @@ dependencies {
     implementation("org.slf4j:slf4j-simple:2.0.16")
 
     testImplementation(kotlin("test"))
-    testImplementation("org.junit.jupiter:junit-jupiter:5.11.3")
+    testImplementation("org.junit.jupiter:junit-jupiter:6.0.3")
     testImplementation("net.portswigger.burp.extensions:montoya-api:2026.2")
     testImplementation("org.mockito.kotlin:mockito-kotlin:5.4.0")
 }
