@@ -17,7 +17,7 @@ jobs:
           distribution: temurin
           java-version: '21'
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
       - name: ktlint check (non-blocking until baseline is clean)
         run: ./gradlew ktlintCheck --no-daemon
         continue-on-error: true
@@ -40,7 +40,7 @@ jobs:
           java-version: '21'
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Run fast verification suite
         run: ./gradlew test -PexcludeHeavyTests=true --no-daemon
