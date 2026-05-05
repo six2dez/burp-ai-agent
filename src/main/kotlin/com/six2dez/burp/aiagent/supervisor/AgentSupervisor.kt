@@ -770,6 +770,33 @@ class AgentSupervisor(
                     cliSessionId = cliSessionId,
                 )
             }
+            "perplexity" -> {
+                val url = (settings?.perplexityUrl ?: prefs.getString("perplexity.url") ?: "https://api.perplexity.ai").trim()
+                val model = (settings?.perplexityModel ?: prefs.getString("perplexity.model") ?: "").trim()
+                val timeoutSeconds =
+                    settings?.perplexityTimeoutSeconds
+                        ?: (prefs.getInteger("perplexity.timeoutSeconds") ?: Defaults.CLI_PROCESS_TIMEOUT_SECONDS)
+                val apiKey = settings?.perplexityApiKey ?: prefs.getString("perplexity.apiKey").orEmpty()
+                val rawHeaders = settings?.perplexityHeaders ?: prefs.getString("perplexity.headers").orEmpty()
+                val headers =
+                    HeaderParser.withBearerToken(
+                        apiKey,
+                        HeaderParser.parse(rawHeaders),
+                    )
+                BackendLaunchConfig(
+                    backendId = backendId,
+                    displayName = "Perplexity",
+                    baseUrl = url,
+                    model = model,
+                    headers = headers,
+                    requestTimeoutSeconds = timeoutSeconds.toLong(),
+                    embeddedMode = embeddedMode,
+                    sessionId = sessionId,
+                    determinismMode = determinism,
+                    env = baseEnv,
+                    cliSessionId = cliSessionId,
+                )
+            }
             "copilot-cli" -> {
                 val cmd = (settings?.copilotCmd ?: prefs.getString("copilot.cmd") ?: "copilot").trim()
                 val env = embeddedCliEnv(baseEnv, embeddedMode)

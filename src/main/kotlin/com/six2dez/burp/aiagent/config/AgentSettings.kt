@@ -54,6 +54,11 @@ data class AgentSettings(
     val nvidiaNimApiKey: String = "",
     val nvidiaNimHeaders: String = "",
     val nvidiaNimTimeoutSeconds: Int = 60,
+    val perplexityUrl: String = "https://api.perplexity.ai",
+    val perplexityModel: String = "",
+    val perplexityApiKey: String = "",
+    val perplexityHeaders: String = "",
+    val perplexityTimeoutSeconds: Int = 60,
     val copilotCmd: String = "",
     val requestPromptTemplate: String,
     val issuePromptTemplate: String,
@@ -249,6 +254,16 @@ class AgentSettingsRepository(
             nvidiaNimTimeoutSeconds =
                 (prefs.getInteger(KEY_NVIDIA_NIM_TIMEOUT) ?: defaultNvidiaNimTimeoutSeconds())
                     .coerceIn(30, 3600),
+            perplexityUrl =
+                (prefs.getString(KEY_PERPLEXITY_URL) ?: defaultPerplexityUrl()).trim().ifBlank {
+                    defaultPerplexityUrl()
+                },
+            perplexityModel = prefs.getString(KEY_PERPLEXITY_MODEL).orEmpty().trim(),
+            perplexityApiKey = prefs.getString(KEY_PERPLEXITY_API_KEY).orEmpty().trim(),
+            perplexityHeaders = prefs.getString(KEY_PERPLEXITY_HEADERS).orEmpty(),
+            perplexityTimeoutSeconds =
+                (prefs.getInteger(KEY_PERPLEXITY_TIMEOUT) ?: defaultPerplexityTimeoutSeconds())
+                    .coerceIn(30, 3600),
             copilotCmd =
                 prefs
                     .getString(KEY_COPILOT_CMD)
@@ -392,6 +407,11 @@ class AgentSettingsRepository(
             nvidiaNimApiKey = "",
             nvidiaNimHeaders = "",
             nvidiaNimTimeoutSeconds = defaultNvidiaNimTimeoutSeconds(),
+            perplexityUrl = defaultPerplexityUrl(),
+            perplexityModel = "",
+            perplexityApiKey = "",
+            perplexityHeaders = "",
+            perplexityTimeoutSeconds = defaultPerplexityTimeoutSeconds(),
             copilotCmd = defaultCopilotCmd(),
             requestPromptTemplate = defaultRequestPrompt(),
             issuePromptTemplate = defaultIssuePrompt(),
@@ -485,6 +505,11 @@ class AgentSettingsRepository(
         prefs.setString(KEY_NVIDIA_NIM_API_KEY, settings.nvidiaNimApiKey)
         prefs.setString(KEY_NVIDIA_NIM_HEADERS, settings.nvidiaNimHeaders)
         prefs.setInteger(KEY_NVIDIA_NIM_TIMEOUT, settings.nvidiaNimTimeoutSeconds.coerceIn(30, 3600))
+        prefs.setString(KEY_PERPLEXITY_URL, settings.perplexityUrl)
+        prefs.setString(KEY_PERPLEXITY_MODEL, settings.perplexityModel)
+        prefs.setString(KEY_PERPLEXITY_API_KEY, settings.perplexityApiKey)
+        prefs.setString(KEY_PERPLEXITY_HEADERS, settings.perplexityHeaders)
+        prefs.setInteger(KEY_PERPLEXITY_TIMEOUT, settings.perplexityTimeoutSeconds.coerceIn(30, 3600))
         prefs.setString(KEY_COPILOT_CMD, settings.copilotCmd)
         prefs.setString(KEY_PROMPT_FIND_VULNS, settings.requestPromptTemplate)
         prefs.setString(KEY_PROMPT_FULL_REPORT, settings.issuePromptTemplate)
@@ -663,6 +688,11 @@ class AgentSettingsRepository(
         private const val KEY_NVIDIA_NIM_API_KEY = "nvidia.nim.apiKey"
         private const val KEY_NVIDIA_NIM_HEADERS = "nvidia.nim.headers"
         private const val KEY_NVIDIA_NIM_TIMEOUT = "nvidia.nim.timeoutSeconds"
+        private const val KEY_PERPLEXITY_URL = "perplexity.url"
+        private const val KEY_PERPLEXITY_MODEL = "perplexity.model"
+        private const val KEY_PERPLEXITY_API_KEY = "perplexity.apiKey"
+        private const val KEY_PERPLEXITY_HEADERS = "perplexity.headers"
+        private const val KEY_PERPLEXITY_TIMEOUT = "perplexity.timeoutSeconds"
         private const val KEY_COPILOT_CMD = "copilot.cmd"
         private const val KEY_PROMPT_FIND_VULNS = "prompt.find_vulns"
         private const val KEY_PROMPT_QUICK_RECON = "prompt.quick_recon"
@@ -788,6 +818,10 @@ class AgentSettingsRepository(
         private fun defaultOpenAiCompatTimeoutSeconds(): Int = Defaults.CLI_PROCESS_TIMEOUT_SECONDS
 
         private fun defaultNvidiaNimUrl(): String = "https://integrate.api.nvidia.com"
+
+        private fun defaultPerplexityUrl(): String = "https://api.perplexity.ai"
+
+        private fun defaultPerplexityTimeoutSeconds(): Int = Defaults.CLI_PROCESS_TIMEOUT_SECONDS
 
         private fun defaultNvidiaNimTimeoutSeconds(): Int = Defaults.CLI_PROCESS_TIMEOUT_SECONDS
 

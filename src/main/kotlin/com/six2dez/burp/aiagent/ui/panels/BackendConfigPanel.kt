@@ -48,6 +48,11 @@ data class BackendConfigState(
     val nvidiaNimApiKey: String = "",
     val nvidiaNimHeaders: String = "",
     val nvidiaNimTimeoutSeconds: String = "",
+    val perplexityUrl: String = "https://api.perplexity.ai",
+    val perplexityModel: String = "",
+    val perplexityApiKey: String = "",
+    val perplexityHeaders: String = "",
+    val perplexityTimeoutSeconds: String = "",
     val copilotCmd: String = "",
 )
 
@@ -88,6 +93,11 @@ class BackendConfigPanel(
     private val nvidiaNimApiKey = JPasswordField(initialState.nvidiaNimApiKey)
     private val nvidiaNimHeaders = JTextArea(initialState.nvidiaNimHeaders, 3, 20)
     private val nvidiaNimTimeout = JTextField(initialState.nvidiaNimTimeoutSeconds)
+    private val perplexityUrl = JTextField(initialState.perplexityUrl)
+    private val perplexityModel = JTextField(initialState.perplexityModel)
+    private val perplexityApiKey = JPasswordField(initialState.perplexityApiKey)
+    private val perplexityHeaders = JTextArea(initialState.perplexityHeaders, 3, 20)
+    private val perplexityTimeout = JTextField(initialState.perplexityTimeoutSeconds)
     private val copilotCmd = JTextField(initialState.copilotCmd)
 
     init {
@@ -121,6 +131,11 @@ class BackendConfigPanel(
         applyFieldStyle(nvidiaNimApiKey)
         applyAreaStyle(nvidiaNimHeaders)
         applyFieldStyle(nvidiaNimTimeout)
+        applyFieldStyle(perplexityUrl)
+        applyFieldStyle(perplexityModel)
+        applyFieldStyle(perplexityApiKey)
+        applyAreaStyle(perplexityHeaders)
+        applyFieldStyle(perplexityTimeout)
         applyFieldStyle(copilotCmd)
 
         codexCmd.toolTipText = "Command used to launch Codex CLI."
@@ -152,6 +167,11 @@ class BackendConfigPanel(
         nvidiaNimApiKey.toolTipText = "NVIDIA API key (Authorization: Bearer ...)."
         nvidiaNimHeaders.toolTipText = "Extra headers (one per line: Header: value)."
         nvidiaNimTimeout.toolTipText = "Request timeout in seconds."
+        perplexityUrl.toolTipText = "Base URL for Perplexity. Leave the default unless you use a custom endpoint."
+        perplexityModel.toolTipText = "Model name sent to Perplexity (for example, sonar, sonar-pro, sonar-reasoning)."
+        perplexityApiKey.toolTipText = "Perplexity API key (Authorization: Bearer pplx-...)."
+        perplexityHeaders.toolTipText = "Extra headers (one per line: Header: value)."
+        perplexityTimeout.toolTipText = "Request timeout in seconds."
         copilotCmd.toolTipText = "Command used to launch Copilot CLI (e.g., copilot)."
 
         cards.add(buildBurpAiPanel(), "burp-ai")
@@ -163,6 +183,7 @@ class BackendConfigPanel(
         cards.add(buildLmStudioPanel(), "lmstudio")
         cards.add(buildOpenAiCompatPanel(), "openai-compatible")
         cards.add(buildNvidiaNimPanel(), "nvidia-nim")
+        cards.add(buildPerplexityPanel(), "perplexity")
         cards.add(buildSingleFieldPanelWithCli("Copilot CLI command", copilotCmd, "copilot-cli") { copilotCmd.text.trim() }, "copilot-cli")
 
         add(cards, BorderLayout.CENTER)
@@ -203,6 +224,11 @@ class BackendConfigPanel(
             nvidiaNimApiKey = String(nvidiaNimApiKey.password).trim(),
             nvidiaNimHeaders = nvidiaNimHeaders.text.trim(),
             nvidiaNimTimeoutSeconds = nvidiaNimTimeout.text.trim(),
+            perplexityUrl = perplexityUrl.text.trim(),
+            perplexityModel = perplexityModel.text.trim(),
+            perplexityApiKey = String(perplexityApiKey.password).trim(),
+            perplexityHeaders = perplexityHeaders.text.trim(),
+            perplexityTimeoutSeconds = perplexityTimeout.text.trim(),
             copilotCmd = copilotCmd.text.trim(),
         )
 
@@ -236,6 +262,11 @@ class BackendConfigPanel(
         nvidiaNimApiKey.text = state.nvidiaNimApiKey
         nvidiaNimHeaders.text = state.nvidiaNimHeaders
         nvidiaNimTimeout.text = state.nvidiaNimTimeoutSeconds
+        perplexityUrl.text = state.perplexityUrl
+        perplexityModel.text = state.perplexityModel
+        perplexityApiKey.text = state.perplexityApiKey
+        perplexityHeaders.text = state.perplexityHeaders
+        perplexityTimeout.text = state.perplexityTimeoutSeconds
         copilotCmd.text = state.copilotCmd
     }
 
@@ -385,6 +416,20 @@ class BackendConfigPanel(
         addRow(panel, 3, "API key (Bearer)", nvidiaNimApiKey)
         addRow(panel, 4, "Extra headers", JScrollPane(nvidiaNimHeaders))
         addRow(panel, 5, "Timeout (seconds)", nvidiaNimTimeout)
+        addVerticalFiller(panel, 6)
+        return panel
+    }
+
+    private fun buildPerplexityPanel(): JPanel {
+        val panel = JPanel(GridBagLayout())
+        panel.background = UiTheme.Colors.surface
+        panel.border = EmptyBorder(8, 8, 8, 8)
+        addRow(panel, 0, "Base URL", perplexityUrl)
+        addButtonRow(panel, 1, buildButtonRowPanel(buildTestConnectionButton("perplexity")))
+        addRow(panel, 2, "Model", perplexityModel)
+        addRow(panel, 3, "API key (Bearer)", perplexityApiKey)
+        addRow(panel, 4, "Extra headers", JScrollPane(perplexityHeaders))
+        addRow(panel, 5, "Timeout (seconds)", perplexityTimeout)
         addVerticalFiller(panel, 6)
         return panel
     }

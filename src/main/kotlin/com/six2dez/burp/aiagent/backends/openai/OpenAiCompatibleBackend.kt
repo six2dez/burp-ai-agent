@@ -39,6 +39,12 @@ class OpenAiCompatibleBackend(
     private val defaultHeaders: Map<String, String> = emptyMap(),
     private val payloadCustomizer: ((MutableMap<String, Any?>) -> Unit)? = null,
     private val healthCheckProvider: ((AgentSettings) -> HealthCheckResult)? = null,
+    // Path appended to a bare-host base URL (no /v\d+ and no /chat/completions). Defaults to the
+    // OpenAI shape; Perplexity overrides to "/chat/completions" because its API has no /v1 prefix.
+    private val chatCompletionsBasePath: String = "/v1/chat/completions",
+    // OpenAI-style {"type":"json_object"} response_format. Perplexity's Sonar API rejects this
+    // field, so set false there; the scanner prompts still ask the model for JSON in plain text.
+    private val supportsJsonObjectResponseFormat: Boolean = true,
 ) : AiBackend {
     override val supportsSystemRole: Boolean = true
 
@@ -65,6 +71,8 @@ class OpenAiCompatibleBackend(
             payloadCustomizer = payloadCustomizer,
             transport = config.transport,
             timeoutSeconds = timeoutSeconds,
+            chatCompletionsBasePath = chatCompletionsBasePath,
+            supportsJsonObjectResponseFormat = supportsJsonObjectResponseFormat,
             debugLog = { BackendDiagnostics.log("[$id] $it") },
             errorLog = { BackendDiagnostics.logError("[$id] $it") },
         )
@@ -105,6 +113,8 @@ class OpenAiCompatibleBackend(
         private val payloadCustomizer: ((MutableMap<String, Any?>) -> Unit)?,
         private val transport: MontoyaHttpTransport?,
         private val timeoutSeconds: Long,
+        private val chatCompletionsBasePath: String,
+        private val supportsJsonObjectResponseFormat: Boolean,
         private val debugLog: (String) -> Unit,
         private val errorLog: (String) -> Unit,
     ) : AgentConnection,
@@ -172,7 +182,7 @@ class OpenAiCompatibleBackend(
                             if (maxOutputTokens != null) {
                                 payload["max_tokens"] = maxOutputTokens
                             }
-                            if (jsonMode) {
+                            if (jsonMode && supportsJsonObjectResponseFormat) {
                                 payload["response_format"] = mapOf("type" to "json_object")
                             }
 
@@ -401,7 +411,10 @@ class OpenAiCompatibleBackend(
             if (lower.endsWith("/chat/completions")) return trimmed
             if (versionedEndpointRegex.matches(trimmed)) return trimmed
             if (versionedBaseRegex.matches(trimmed)) return "$trimmed/chat/completions"
-            return "$trimmed/v1/chat/completions"
+            // Bare host: append the backend-specific fallback path. Defaults to "/v1/chat/completions"
+            // but Perplexity overrides to "/chat/completions" because its API exposes no /v1 prefix.
+            val path = if (chatCompletionsBasePath.startsWith("/")) chatCompletionsBasePath else "/$chatCompletionsBasePath"
+            return "$trimmed$path"
         }
     }
 

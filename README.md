@@ -9,7 +9,7 @@ Burp AI Agent is an extension for Burp Suite that integrates AI into your securi
 
 ## Highlights
 
-- **10 AI Backends** — Burp AI (built-in), Ollama, LM Studio, NVIDIA NIM, Generic OpenAI-compatible, Gemini CLI, Claude CLI, Codex CLI, OpenCode CLI, Copilot CLI.
+- **11 AI Backends** — Burp AI (built-in), Ollama, LM Studio, NVIDIA NIM, Perplexity, Generic OpenAI-compatible, Gemini CLI, Claude CLI, Codex CLI, OpenCode CLI, Copilot CLI.
 - **53+ MCP Tools** — Let Claude Desktop (or any MCP client) drive Burp autonomously.
 - **62 Vulnerability Classes** — Passive and Active AI scanners across injection, auth, crypto, and more.
 - **Burp Scan Skill** — Use your preferred AI coding assistant (Claude Code, Gemini CLI, Codex, etc.) as a scanner via MCP.
@@ -54,6 +54,7 @@ Open the **AI Agent** tab and go to **Settings**. Pick a backend:
 | **Ollama** | Local HTTP | Install [Ollama](https://ollama.com), run `ollama serve`, pull a model (`ollama pull llama3.1`). |
 | **LM Studio** | Local HTTP | Install [LM Studio](https://lmstudio.ai), load a model, start the server. |
 | **NVIDIA NIM** | HTTP | Use the default `https://integrate.api.nvidia.com` endpoint, set your NVIDIA API key, and choose a model such as `moonshotai/kimi-k2.5`. |
+| **Perplexity** | HTTP | Use the default `https://api.perplexity.ai` endpoint, set your `pplx-...` API key, and choose a model such as `sonar`, `sonar-pro`, or `sonar-reasoning`. |
 | **Generic OpenAI-compatible** | HTTP | Provide a base URL and model for any OpenAI-compatible provider. |
 | **Gemini CLI** | Cloud CLI | Install `gemini`, run `gemini auth login`. |
 | **Claude CLI** | Cloud CLI | Install `claude`, set `ANTHROPIC_API_KEY` or run `claude login`. |

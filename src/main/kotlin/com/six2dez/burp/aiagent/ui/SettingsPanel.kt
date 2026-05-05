@@ -108,6 +108,11 @@ class SettingsPanel(
                 nvidiaNimApiKey = settings.nvidiaNimApiKey,
                 nvidiaNimHeaders = settings.nvidiaNimHeaders,
                 nvidiaNimTimeoutSeconds = settings.nvidiaNimTimeoutSeconds.toString(),
+                perplexityUrl = settings.perplexityUrl,
+                perplexityModel = settings.perplexityModel,
+                perplexityApiKey = settings.perplexityApiKey,
+                perplexityHeaders = settings.perplexityHeaders,
+                perplexityTimeoutSeconds = settings.perplexityTimeoutSeconds.toString(),
                 copilotCmd = settings.copilotCmd,
             ),
         )
@@ -1037,6 +1042,11 @@ class SettingsPanel(
                 backendState.nvidiaNimTimeoutSeconds,
                 settings.nvidiaNimTimeoutSeconds,
             )
+        val perplexityTimeoutSeconds =
+            parseTimeoutSeconds(
+                backendState.perplexityTimeoutSeconds,
+                settings.perplexityTimeoutSeconds,
+            )
         return AgentSettings(
             codexCmd = backendState.codexCmd,
             geminiCmd = backendState.geminiCmd,
@@ -1069,6 +1079,11 @@ class SettingsPanel(
             nvidiaNimApiKey = backendState.nvidiaNimApiKey,
             nvidiaNimHeaders = backendState.nvidiaNimHeaders,
             nvidiaNimTimeoutSeconds = nvidiaNimTimeoutSeconds,
+            perplexityUrl = backendState.perplexityUrl,
+            perplexityModel = backendState.perplexityModel,
+            perplexityApiKey = backendState.perplexityApiKey,
+            perplexityHeaders = backendState.perplexityHeaders,
+            perplexityTimeoutSeconds = perplexityTimeoutSeconds,
             copilotCmd = backendState.copilotCmd,
             requestPromptTemplate = promptRequest.text.trim(),
             issuePromptTemplate = promptIssueFull.text.trim(),
@@ -1178,6 +1193,11 @@ class SettingsPanel(
                 nvidiaNimApiKey = updated.nvidiaNimApiKey,
                 nvidiaNimHeaders = updated.nvidiaNimHeaders,
                 nvidiaNimTimeoutSeconds = updated.nvidiaNimTimeoutSeconds.toString(),
+                perplexityUrl = updated.perplexityUrl,
+                perplexityModel = updated.perplexityModel,
+                perplexityApiKey = updated.perplexityApiKey,
+                perplexityHeaders = updated.perplexityHeaders,
+                perplexityTimeoutSeconds = updated.perplexityTimeoutSeconds.toString(),
                 copilotCmd = updated.copilotCmd,
             ),
         )

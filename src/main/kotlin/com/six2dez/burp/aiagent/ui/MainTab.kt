@@ -702,6 +702,13 @@ class MainTab(
                     else -> null
                 }
             }
+            "perplexity" -> {
+                when {
+                    settings.perplexityUrl.isBlank() -> "Perplexity URL is empty."
+                    settings.perplexityModel.isBlank() -> "Perplexity model is empty."
+                    else -> null
+                }
+            }
             "burp-ai" -> null
             else -> "Unsupported backend: ${settings.preferredBackendId}"
         }
