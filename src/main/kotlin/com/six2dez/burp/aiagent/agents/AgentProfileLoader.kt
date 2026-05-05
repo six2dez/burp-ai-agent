@@ -349,6 +349,9 @@ object AgentProfileLoader {
         val toolTokenPattern = Regex("[a-z][a-z0-9_\\-]*", RegexOption.IGNORE_CASE)
         val slashToolPattern = Regex("/tool\\s+([a-z0-9_\\-]+)", RegexOption.IGNORE_CASE)
         val jsonToolPattern = Regex("\"tool\"\\s*:\\s*\"([a-z0-9_\\-]+)\"", RegexOption.IGNORE_CASE)
+        // Strip inline JSON object/array literals so words like "arguments", "name" inside example
+        // payloads are never tokenised as catalog tools.
+        val inlineLiteralPattern = Regex("\\{[^{}]*}|\\[[^\\[\\]]*]")
         var inExplicitToolList = false
         for (line in lines) {
             if (toolListHeaderPattern.matches(line)) {
@@ -360,8 +363,12 @@ object AgentProfileLoader {
                     inExplicitToolList = false
                 } else {
                     bulletEntryPattern.find(line)?.groupValues?.getOrNull(1)?.let { toolExpr ->
-                        toolTokenPattern.findAll(toolExpr).forEach { token ->
-                            catalogTools.add(token.value.lowercase())
+                        val cleaned = inlineLiteralPattern.replace(toolExpr, " ")
+                        toolTokenPattern.findAll(cleaned).forEach { token ->
+                            val lowered = token.value.lowercase()
+                            if (lowered !in catalogTokenDenylist) {
+                                catalogTools.add(lowered)
+                            }
                         }
                     }
                 }
@@ -380,4 +387,38 @@ object AgentProfileLoader {
             explicit = explicitTools,
         )
     }
+
+    // Tokens that appear inside JSON tool-schema documentation or in narrative bullet preambles
+    // ("the tool with arguments and parameters:") and must NOT be reported as referenced tools.
+    // Conservative list: only words that are obviously JSON-schema scaffolding (`arguments`,
+    // `parameters`, `properties`, `required`) or English connectors. Words like `name`, `type`,
+    // `result`, `description` are deliberately *excluded* because a third-party MCP server could
+    // legitimately register a tool with those names — if such a tool is documented only in
+    // narrative prose (no `/tool ...` or `"tool": "..."` reference) we'd rather report a false
+    // positive than silently miss it. The explicit-reference branches (`/tool ...`, `"tool": "..."`)
+    // ignore this denylist by design because they already point at a concrete tool name.
+    private val catalogTokenDenylist =
+        setOf(
+            "arguments",
+            "parameters",
+            "properties",
+            "required",
+            "and",
+            "or",
+            "with",
+            "the",
+            "a",
+            "an",
+            "of",
+            "for",
+            "to",
+            "tool",
+            "tools",
+            "use",
+            "uses",
+            "using",
+            "call",
+            "calls",
+            "calling",
+        )
 }

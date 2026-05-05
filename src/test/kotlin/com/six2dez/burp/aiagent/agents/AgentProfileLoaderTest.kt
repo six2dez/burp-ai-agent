@@ -162,4 +162,75 @@ class AgentProfileLoaderTest {
 
         assertTrue(warnings.any { it.contains("http1_request") })
     }
+
+    @Test
+    fun `validate profile does not flag JSON keywords inside example payloads as missing tools`() {
+        val custom = tempDir.resolve("custom.md")
+        custom.writeText(
+            """
+            [GLOBAL]
+            Available MCP Tools:
+            - example_tool: invoke as {"name": "example_tool", "arguments": {"foo": "bar"}}
+            - another_tool: see {"tool": "another_tool", "parameters": ["x", "y"]}
+            """.trimIndent(),
+        )
+
+        val warnings =
+            AgentProfileLoader.validateProfile(
+                profileName = "custom",
+                availableTools = setOf("example_tool", "another_tool"),
+            )
+
+        assertFalse(warnings.any { it.contains("'arguments'") })
+        assertFalse(warnings.any { it.contains("'parameters'") })
+        assertFalse(warnings.any { it.contains("'name'") })
+    }
+
+    @Test
+    fun `validate profile does not flag English connectors in narrative bullets`() {
+        val custom = tempDir.resolve("custom.md")
+        custom.writeText(
+            """
+            [GLOBAL]
+            Available MCP Tools:
+            - the tool with arguments and parameters: invoked as needed
+            - call or use http1_request: when proxying
+            """.trimIndent(),
+        )
+
+        val warnings =
+            AgentProfileLoader.validateProfile(
+                profileName = "custom",
+                availableTools = setOf("http1_request"),
+            )
+
+        assertFalse(warnings.any { it.contains("'arguments'") })
+        assertFalse(warnings.any { it.contains("'parameters'") })
+        assertFalse(warnings.any { it.contains("'and'") })
+        assertFalse(warnings.any { it.contains("'with'") })
+        assertFalse(warnings.any { it.contains("'or'") })
+        assertFalse(warnings.any { it.contains("'tool'") })
+        assertFalse(warnings.any { it.contains("'use'") })
+    }
+
+    @Test
+    fun `validate profile still flags real tool names that are missing`() {
+        val custom = tempDir.resolve("custom.md")
+        custom.writeText(
+            """
+            [GLOBAL]
+            Available MCP Tools:
+            - status: check
+            - genuine_missing_tool: invoke
+            """.trimIndent(),
+        )
+
+        val warnings =
+            AgentProfileLoader.validateProfile(
+                profileName = "custom",
+                availableTools = setOf("status"),
+            )
+
+        assertTrue(warnings.any { it.contains("genuine_missing_tool") })
+    }
 }

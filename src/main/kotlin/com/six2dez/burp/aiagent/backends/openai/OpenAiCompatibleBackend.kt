@@ -338,7 +338,9 @@ class OpenAiCompatibleBackend(
                     onComplete(IllegalStateException("$backendDisplayName response body was empty"))
                     return
                 }
-            val streamReader = BufferedReader(InputStreamReader(body.byteStream()))
+            // Force UTF-8 on SSE chunks: OpenAI-compatible servers send `text/event-stream` without
+            // an explicit charset, so a default-charset reader can mojibake multibyte content.
+            val streamReader = BufferedReader(InputStreamReader(body.byteStream(), Charsets.UTF_8))
             val fullContent = StringBuilder()
             var emittedAny = false
             var line: String?

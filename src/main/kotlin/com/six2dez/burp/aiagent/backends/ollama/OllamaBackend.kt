@@ -312,13 +312,12 @@ class OllamaBackend : AiBackend {
                                 return@submit
                             }
 
-                            // Extract content from either 'content' or 'response' field
+                            // Extract content from either 'content' or 'response' field. Use takeIf so
+                            // a blank `message.content` (e.g. `{"message": {}}`) doesn't shadow a real
+                            // value in the legacy `response` field.
                             val content =
-                                node
-                                    .path("message")
-                                    .path("content")
-                                    .asText()
-                                    .ifBlank { node.path("response").asText() }
+                                node.path("message").path("content").asText().takeIf { it.isNotBlank() }
+                                    ?: node.path("response").asText("")
                             val promptTokens = node.path("prompt_eval_count").asInt(-1)
                             val completionTokens = node.path("eval_count").asInt(-1)
                             if (promptTokens >= 0 || completionTokens >= 0) {
@@ -331,7 +330,16 @@ class OllamaBackend : AiBackend {
                             }
 
                             if (content.isBlank()) {
-                                onComplete(IllegalStateException("Ollama response content was empty"))
+                                // Snippet capped at 200 chars; the body can echo prompt content, so we
+                                // keep this short — enough to diagnose response shape, not enough to
+                                // leak meaningful prompt fragments into Burp's error log.
+                                val snippet = body.take(200).replace("\n", " ")
+                                errorLog("response content empty; raw body snippet: $snippet")
+                                onComplete(
+                                    IllegalStateException(
+                                        "Ollama response content was empty. Raw body snippet: $snippet",
+                                    ),
+                                )
                                 return@submit
                             }
 

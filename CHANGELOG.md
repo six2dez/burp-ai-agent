@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.6.1] - 2026-05-05
+
+### Fixed
+
+- **UTF-8 mojibake in Montoya HTTP backends (#61)**: `MontoyaHttpTransport` now decodes response bodies explicitly with UTF-8 instead of relying on Burp's `bodyToString()`, which silently used the JVM platform charset. This regressed in v0.6.0 when several backends (Ollama, LM Studio, OpenAI-compatible, NVIDIA NIM) were routed through the Montoya transport. Multibyte content (e.g. Chinese, emoji) now round-trips correctly. The OpenAI-compatible SSE streaming path (`OpenAiCompatibleBackend`) also gains an explicit UTF-8 charset on its `InputStreamReader`, since `text/event-stream` is typically served without a `charset` parameter.
+- **"AI replies null" diagnostics for local models (#48)**: `OllamaBackend` and `LmStudioBackend` now include a 200-character snippet of the raw response body in the `IllegalStateException` they raise when content is empty, making it possible to tell whether the upstream actually sent an empty payload, returned an unexpected shape, or was mojibaked by the v0.6.0 charset bug. `LmStudioBackend` additionally raises a distinct error when the `choices` array is missing or empty (previously masked by `path(0)`). Most reports of this issue should be resolved by the #61 charset fix above.
+- **Profile validation false-positive for JSON keywords (#60)**: `AgentProfileLoader.extractReferencedTools` no longer treats JSON example payload keys (`arguments`, `parameters`, `name`, `type`, …) or English narrative connectors (`and`, `or`, `with`, `the`, `tool`, …) as referenced tools when they appear inside a bullet's preamble in the "Available MCP Tools:" section. Inline JSON object/array literals are stripped before tokenisation, and a denylist filters the remaining preamble tokens. Real tool names with snake_case identifiers are unaffected; explicit-reference branches (`/tool ...`, `"tool": "..."`) ignore the denylist by design.
+
 ## [0.6.0] - 2026-04-21
 
 ### Breaking Changes

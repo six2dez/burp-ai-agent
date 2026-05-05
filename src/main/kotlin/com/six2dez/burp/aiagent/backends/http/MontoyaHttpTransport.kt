@@ -3,6 +3,7 @@ package com.six2dez.burp.aiagent.backends.http
 import burp.api.montoya.MontoyaApi
 import burp.api.montoya.http.RequestOptions
 import burp.api.montoya.http.message.requests.HttpRequest
+import burp.api.montoya.http.message.responses.HttpResponse
 import com.six2dez.burp.aiagent.backends.HealthCheckResult
 
 data class TransportResponse(
@@ -71,13 +72,22 @@ class MontoyaHttpTransport(
                 .withUpstreamTLSVerification()
                 .withResponseTimeout(timeoutMs)
         val result = api.http().sendRequest(request, options)
-        val response = result.response()
-        val code = response?.statusCode()?.toInt() ?: 0
-        val body = response?.bodyToString() ?: ""
-        return TransportResponse(
-            statusCode = code,
-            body = body,
-            isSuccessful = code in 200..299,
-        )
+        return decodeResponse(result.response())
+    }
+
+    companion object {
+        // Force UTF-8: Montoya's bodyToString() decodes with the JVM platform charset, which mojibakes
+        // multibyte responses (e.g. Chinese, emoji) on hosts whose default charset isn't UTF-8.
+        // OpenAI-compatible servers commonly return Content-Type: application/json without an explicit
+        // charset parameter, so we cannot rely on the server-declared charset either.
+        internal fun decodeResponse(response: HttpResponse?): TransportResponse {
+            val code = response?.statusCode()?.toInt() ?: 0
+            val body = response?.body()?.bytes?.toString(Charsets.UTF_8) ?: ""
+            return TransportResponse(
+                statusCode = code,
+                body = body,
+                isSuccessful = code in 200..299,
+            )
+        }
     }
 }

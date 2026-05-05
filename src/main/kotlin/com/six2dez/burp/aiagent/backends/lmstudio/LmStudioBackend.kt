@@ -199,9 +199,20 @@ class LmStudioBackend : AiBackend {
                                 return@submit
                             }
                             val node = mapper.readTree(body)
+                            val choices = node.path("choices")
+                            if (!choices.isArray || choices.isEmpty) {
+                                // Snippet capped at 200 chars; see Ollama backend for rationale.
+                                val snippet = body.take(200).replace("\n", " ")
+                                errorLog("missing or empty 'choices' array; raw body snippet: $snippet")
+                                onComplete(
+                                    IllegalStateException(
+                                        "LM Studio response had no 'choices'. Raw body snippet: $snippet",
+                                    ),
+                                )
+                                return@submit
+                            }
                             val content =
-                                node
-                                    .path("choices")
+                                choices
                                     .path(0)
                                     .path("message")
                                     .path("content")
@@ -218,7 +229,13 @@ class LmStudioBackend : AiBackend {
                                 )
                             }
                             if (content.isBlank()) {
-                                onComplete(IllegalStateException("LM Studio response content was empty"))
+                                val snippet = body.take(200).replace("\n", " ")
+                                errorLog("response content empty; raw body snippet: $snippet")
+                                onComplete(
+                                    IllegalStateException(
+                                        "LM Studio response content was empty. Raw body snippet: $snippet",
+                                    ),
+                                )
                                 return@submit
                             }
                             debugLog("response <- ${content.take(200)}")
