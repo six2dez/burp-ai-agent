@@ -85,6 +85,18 @@ class AgentSupervisor(
         settingsRef.set(settings)
     }
 
+    /**
+     * Returns the state of Burp Pro's built-in **"Use AI" for extensions** preference.
+     *
+     * IMPORTANT: this flag is *only* relevant to the `burp-ai` backend, which delegates inference
+     * to Burp Pro's bundled AI provider. Every other backend in this plugin (CLI agents like
+     * Claude Code / Codex / Gemini, plus HTTP backends like Ollama, LM Studio, OpenAI-compatible,
+     * NVIDIA NIM, Perplexity) is independent of Burp's AI features and must keep working when the
+     * toggle is off — including in Burp Community where the toggle does not exist at all.
+     *
+     * Callers should prefer [requiresBurpAiAndDisabled] to gate startup / send paths, so non-AI
+     * backends are not accidentally blocked by Burp's preference.
+     */
     fun isAiEnabled(): Boolean =
         try {
             api.ai().isEnabled()
@@ -92,13 +104,30 @@ class AgentSupervisor(
             false
         }
 
+    /**
+     * `true` iff [backendId] is the Burp-bundled `burp-ai` backend AND Burp Pro's `Use AI`
+     * preference is currently OFF. Used to short-circuit start / send paths with a clear error
+     * message; non-AI backends always return `false` regardless of the preference.
+     */
+    fun requiresBurpAiAndDisabled(backendId: String): Boolean = backendId == "burp-ai" && !isAiEnabled()
+
+    /**
+     * `true` iff the currently-running backend is `burp-ai` AND Burp Pro's `Use AI` toggle is OFF.
+     * Returns false when no backend is running, or when the running backend doesn't depend on
+     * Burp's bundled AI. Background scanners use this to skip work that would fail at send time.
+     */
+    fun isBlockedByBurpAiGate(): Boolean {
+        val running = stateRef.get() as? AgentState.Running ?: return false
+        return requiresBurpAiAndDisabled(running.backendId)
+    }
+
     fun currentSessionId(): String? = (stateRef.get() as? AgentState.Running)?.sessionId
 
     fun lastStartError(): String? = lastErrorRef.get()
 
     fun startOrAttach(backendId: String): Boolean {
-        if (!isAiEnabled()) {
-            val msg = "AI features are disabled in Burp Suite settings. Enable 'Use AI' for extensions."
+        if (requiresBurpAiAndDisabled(backendId)) {
+            val msg = "Burp AI is disabled in Burp Suite settings. Enable 'Use AI' for extensions, or pick a different backend."
             lastErrorRef.set(msg)
             api.logging().logToOutput(msg)
             return false
@@ -253,14 +282,13 @@ class AgentSupervisor(
         jsonMode: Boolean = false,
         maxOutputTokens: Int? = null,
     ) {
-        if (!isAiEnabled()) {
-            onComplete(IllegalStateException("AI features are disabled in Burp Suite settings."))
-            return
-        }
-
         val current = stateRef.get()
         if (current !is AgentState.Running) {
             onComplete(IllegalStateException("No active session"))
+            return
+        }
+        if (requiresBurpAiAndDisabled(current.backendId)) {
+            onComplete(IllegalStateException("Burp AI is disabled in Burp Suite settings."))
             return
         }
 
@@ -380,8 +408,8 @@ class AgentSupervisor(
         maxOutputTokens: Int? = null,
         launchMetadata: Map<String, String>? = null,
     ): com.six2dez.burp.aiagent.backends.AgentConnection? {
-        if (!isAiEnabled()) {
-            onComplete(IllegalStateException("AI features are disabled in Burp Suite settings."))
+        if (requiresBurpAiAndDisabled(backendId)) {
+            onComplete(IllegalStateException("Burp AI is disabled in Burp Suite settings."))
             return null
         }
 

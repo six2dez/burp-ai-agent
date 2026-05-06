@@ -34,7 +34,7 @@ class BurpAiBackend(
             if (api.ai().isEnabled()) {
                 HealthCheckResult.Healthy
             } else {
-                HealthCheckResult.Unavailable("Burp AI is not enabled. Enable 'Use AI' in Burp Suite settings.")
+                HealthCheckResult.Unavailable("Burp AI is disabled. Enable 'Use AI' in Burp Suite settings.")
             }
         } catch (e: Exception) {
             HealthCheckResult.Unavailable("Burp AI unavailable: ${e.message}")

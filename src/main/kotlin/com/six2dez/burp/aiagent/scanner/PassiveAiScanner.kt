@@ -298,7 +298,7 @@ class PassiveAiScanner(
     private val handler =
         object : ProxyResponseHandler {
             override fun handleResponseReceived(response: InterceptedResponse): ProxyResponseReceivedAction {
-                if (!enabled.get() || !supervisor.isAiEnabled()) {
+                if (!enabled.get() || supervisor.isBlockedByBurpAiGate()) {
                     return ProxyResponseReceivedAction.continueWith(response)
                 }
 

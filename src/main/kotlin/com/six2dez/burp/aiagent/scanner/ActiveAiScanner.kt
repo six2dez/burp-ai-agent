@@ -125,7 +125,7 @@ class ActiveAiScanner(
      * Called by PassiveAiScanner when it detects a potential vulnerability
      */
     fun queueTarget(target: ActiveScanTarget) {
-        if (!enabled.get() || !supervisor.isAiEnabled()) return
+        if (!enabled.get() || supervisor.isBlockedByBurpAiGate()) return
         if (target.vulnHint.vulnClass in ScanPolicy.PASSIVE_ONLY_VULN_CLASSES) return
         if (!ScanPolicy.isAllowedForMode(scanMode, target.vulnHint.vulnClass)) return
 
