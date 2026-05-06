@@ -4,6 +4,31 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Perplexity backend (#59)**: dedicated `Perplexity` factory in **Settings → Backend** with the standard URL / Model / API key / Headers / Timeout fields. Targets `https://api.perplexity.ai/chat/completions` (no `/v1` prefix) and ships sensible defaults for the Sonar family (`sonar`, `sonar-pro`, `sonar-reasoning`, `sonar-reasoning-pro`, `sonar-deep-research`, `r1-1776`). The model is a free-form field so any future Perplexity model name works without an extension update. ServiceLoader registers the factory automatically; no MCP / settings migration needed.
+- **AI scan on selected insertion point (#46)**: new right-click entry **"AI Scan on Selected Insertion Point"** that scopes an active scan to the parameter / header / JSON field overlapping the user's text selection in the request editor. Resolves URL/BODY/COOKIE parameters via Montoya's `ParsedHttpParameter.valueOffsets()`, falls back to header line matching and JSON/XML body field substring match. Reuses the existing vuln class picker (`showVulnClassSelectionDialog`) and queues one `ActiveScanTarget` per selected class with priority 60 so insertion-point scans jump ahead of the background passive queue. The menu item is hidden when there is no editor selection or the selection misses every candidate.
+- **Custom prompt library UX (#47)**: the Settings → Prompt Templates editor gains:
+  - A live **search filter** that matches case-insensitively across title and prompt text.
+  - A **★ Favorite** toggle that pins entries to the top — favorites are persisted, surfaced first in the right-click submenus, and round-trip through import/export.
+  - **JSON Import / Export** buttons. Export writes a pretty-printed `.json` with favorites first; import merges by id (existing entries replaced, new ones appended) and de-duplicates the input file defensively so malformed exports cannot introduce ambiguous ids.
+  - Move Up / Down now respects the favorites grouping so reorders cannot scramble it.
+
+### Changed
+
+- **`OpenAiCompatibleBackend` is more configurable, no behavior change for existing backends**: two new constructor parameters with backwards-compatible defaults, used to wire Perplexity into the same code path as NVIDIA NIM / Generic OpenAI-compatible without forking the connection class.
+  - `chatCompletionsBasePath: String = "/v1/chat/completions"` — overridden by Perplexity to `"/chat/completions"` because its API has no `/v1` prefix. The bare-host fallback in `buildChatCompletionsUrl` now uses this value; explicit `/v\d+` user URLs are unaffected.
+  - `supportsJsonObjectResponseFormat: Boolean = true` — Perplexity's Sonar API rejects `{"type":"json_object"}`, so the connection skips the `response_format` field for that backend even when callers (e.g. the passive scanner) set `jsonMode = true`. Scanner prompts continue to ask for JSON in the system message.
+- **`AgentSettings` schema (additive)**: 5 new optional fields (`perplexityUrl`, `perplexityModel`, `perplexityApiKey`, `perplexityHeaders`, `perplexityTimeoutSeconds`) and 1 new optional field on `CustomPromptDefinition` (`isFavorite`). All default to safe values, so saved settings from earlier versions load unchanged. No `migrateIfNeeded` bump required.
+- **Custom prompt library order on save**: `CustomPromptLibraryEditor.snapshot()` now persists entries with favorites first. Right-click submenus iterate library order via `filterForMenu`, so the visible menu order matches the editor without any extra sorting.
+
+### Upgrade Notes
+
+- **Perplexity API key**: if you previously configured Perplexity via the Generic OpenAI-compatible backend, switch to the dedicated `Perplexity` entry in Settings → Backend; the dedicated factory uses the right URL shape and skips the unsupported `response_format` field automatically.
+- **Saved prompt libraries**: existing entries load with `isFavorite = false`. Open Settings → Prompt Templates and click **★ Favorite** on the prompts you want pinned; the edit dialog also exposes the same toggle.
+
 ## [0.6.1] - 2026-05-05
 
 ### Fixed

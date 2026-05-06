@@ -87,4 +87,62 @@ class CustomPromptFilterTest {
     fun validEntryRecognizedAsValid() {
         assertEquals(true, http.isValid())
     }
+
+    @Test
+    fun searchFilterEmptyQueryReturnsLibraryUnchanged() {
+        val library = listOf(http, issue, dual)
+        assertEquals(library, CustomPromptDefinition.searchFilter(library, ""))
+        assertEquals(library, CustomPromptDefinition.searchFilter(library, "   "))
+    }
+
+    @Test
+    fun searchFilterMatchesByTitleCaseInsensitive() {
+        val library = listOf(http, issue, dual)
+        val result = CustomPromptDefinition.searchFilter(library, "ONLY")
+        assertEquals(listOf(http, issue), result)
+    }
+
+    @Test
+    fun searchFilterMatchesByPromptTextSubstring() {
+        val withTextHaystack =
+            CustomPromptDefinition(
+                id = "haystack",
+                title = "Generic title",
+                promptText = "find-the-needle inside this prompt",
+                tags = setOf(CustomPromptTag.HTTP_SELECTION),
+            )
+        val library = listOf(http, issue, dual, withTextHaystack)
+        // Substring lives only inside the prompt text; should match exactly one entry.
+        val result = CustomPromptDefinition.searchFilter(library, "needle")
+        assertEquals(listOf(withTextHaystack), result)
+    }
+
+    @Test
+    fun searchFilterReturnsEmptyWhenNoMatch() {
+        val library = listOf(http, issue, dual)
+        assertEquals(emptyList<CustomPromptDefinition>(), CustomPromptDefinition.searchFilter(library, "nothing-here"))
+    }
+
+    @Test
+    fun sortFavoritesFirstPreservesOrderWithinGroups() {
+        val a = http.copy(id = "a", title = "A", isFavorite = false)
+        val b = http.copy(id = "b", title = "B", isFavorite = true)
+        val c = http.copy(id = "c", title = "C", isFavorite = false)
+        val d = http.copy(id = "d", title = "D", isFavorite = true)
+        val sorted = CustomPromptDefinition.sortFavoritesFirst(listOf(a, b, c, d))
+        // Favorites in original order, then non-favorites in original order.
+        assertEquals(listOf(b, d, a, c), sorted)
+    }
+
+    @Test
+    fun sortFavoritesFirstNoFavoritesReturnsLibraryUnchanged() {
+        val library = listOf(http, issue, dual)
+        assertEquals(library, CustomPromptDefinition.sortFavoritesFirst(library))
+    }
+
+    @Test
+    fun sortFavoritesFirstAllFavoritesReturnsLibraryUnchanged() {
+        val library = listOf(http, issue, dual).map { it.copy(isFavorite = true) }
+        assertEquals(library, CustomPromptDefinition.sortFavoritesFirst(library))
+    }
 }
