@@ -98,7 +98,7 @@ object CustomPromptDialog {
             }
 
         val footer =
-            JLabel("Manage saved prompts under Settings → Prompt Templates.").apply {
+            JLabel("Manage saved prompts under Settings → Custom Prompts.").apply {
                 font = UiTheme.Typography.label
                 foreground = UiTheme.Colors.onSurfaceVariant
             }

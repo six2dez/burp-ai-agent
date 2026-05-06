@@ -29,6 +29,7 @@ import com.six2dez.burp.aiagent.ui.panels.HelpConfigPanel
 import com.six2dez.burp.aiagent.ui.panels.McpConfigPanel
 import com.six2dez.burp.aiagent.ui.panels.PassiveScanConfigPanel
 import com.six2dez.burp.aiagent.ui.panels.PrivacyConfigPanel
+import com.six2dez.burp.aiagent.ui.panels.CustomPromptsConfigPanel
 import com.six2dez.burp.aiagent.ui.panels.PromptConfigPanel
 import java.awt.BorderLayout
 import java.awt.GridBagConstraints
@@ -73,6 +74,7 @@ class SettingsPanel(
     private lateinit var mcpTab: JComponent
     private lateinit var burpIntegrationTab: JComponent
     private lateinit var promptsTab: JComponent
+    private lateinit var customPromptsTab: JComponent
     private lateinit var privacyTab: JComponent
     private lateinit var helpTab: JComponent
 
@@ -179,15 +181,7 @@ class SettingsPanel(
             preferredSize = java.awt.Dimension(80, preferredSize.height)
             maximumSize = java.awt.Dimension(80, preferredSize.height)
         }
-    private val privacyWarning = JLabel("Privacy mode is OFF. Raw traffic may be exposed via MCP and prompts.")
-    private val privacyActiveWarning =
-        JLabel(
-            "STRICT anonymizes hosts in AI prompts but does not prevent active scanner from sending real requests to targets.",
-        )
-    private val privacyRiskWarning =
-        JLabel(
-            "High risk: Privacy OFF and Audit logging OFF reduce traceability and data protection.",
-        )
+    private val privacyNotice = com.six2dez.burp.aiagent.ui.components.SubtleNotice()
     private val saveFeedbackLabel = JLabel("No recent save activity.")
     private val mcpEnabled = ToggleSwitch(settings.mcpSettings.enabled)
     private val mcpHost =
@@ -216,14 +210,7 @@ class SettingsPanel(
             3,
             20,
         )
-    private val mcpCorsWarning =
-        JLabel(
-            "External access is enabled with no allowed origins. CORS will allow any origin.",
-        )
-    private val mcpRiskWarning =
-        JLabel(
-            "High risk: External MCP and Unsafe mode together permit remote state-changing tool execution.",
-        )
+    private val mcpNotice = com.six2dez.burp.aiagent.ui.components.SubtleNotice()
     private val mcpTokenRegenerate = JButton("Regenerate token")
     private val mcpMaxConcurrent =
         JSpinner(
@@ -581,36 +568,8 @@ class SettingsPanel(
             "Replace unreadable binary response bodies with a content-type placeholder."
         preprocessAllowedContentTypes.toolTipText =
             "Comma-separated allowed readable content-type prefixes (e.g. text/,application/json)."
-        mcpCorsWarning.font = UiTheme.Typography.body
-        mcpCorsWarning.foreground = UiTheme.Colors.onPrimary
-        mcpCorsWarning.background = UiTheme.Colors.statusTerminal
-        mcpCorsWarning.border = EmptyBorder(6, 8, 6, 8)
-        mcpCorsWarning.isOpaque = true
-        mcpCorsWarning.isVisible = false
-        mcpRiskWarning.font = UiTheme.Typography.body
-        mcpRiskWarning.foreground = UiTheme.Colors.onPrimary
-        mcpRiskWarning.background = UiTheme.Colors.statusCrashed
-        mcpRiskWarning.border = EmptyBorder(6, 8, 6, 8)
-        mcpRiskWarning.isOpaque = true
-        mcpRiskWarning.isVisible = false
-        privacyWarning.font = UiTheme.Typography.body
-        privacyWarning.foreground = UiTheme.Colors.onPrimary
-        privacyWarning.background = UiTheme.Colors.statusCrashed
-        privacyWarning.border = EmptyBorder(6, 8, 6, 8)
-        privacyWarning.isOpaque = true
-        privacyWarning.isVisible = settings.privacyMode == PrivacyMode.OFF
-        privacyActiveWarning.font = UiTheme.Typography.body
-        privacyActiveWarning.foreground = UiTheme.Colors.onPrimary
-        privacyActiveWarning.background = UiTheme.Colors.statusTerminal
-        privacyActiveWarning.border = EmptyBorder(6, 8, 6, 8)
-        privacyActiveWarning.isOpaque = true
-        privacyActiveWarning.isVisible = settings.privacyMode == PrivacyMode.STRICT && settings.activeAiEnabled
-        privacyRiskWarning.font = UiTheme.Typography.body
-        privacyRiskWarning.foreground = UiTheme.Colors.onPrimary
-        privacyRiskWarning.background = UiTheme.Colors.statusCrashed
-        privacyRiskWarning.border = EmptyBorder(6, 8, 6, 8)
-        privacyRiskWarning.isOpaque = true
-        privacyRiskWarning.isVisible = false
+        // mcpNotice styles itself via UiTheme; refreshMcpNotice() decides level + visibility.
+        // privacyNotice styles itself via UiTheme; just seed the message with the current settings.
         saveFeedbackLabel.font = UiTheme.Typography.body
         saveFeedbackLabel.foreground = UiTheme.Colors.onPrimary
         saveFeedbackLabel.background = UiTheme.Colors.outlineVariant
@@ -658,6 +617,7 @@ class SettingsPanel(
         passiveScannerTab = buildTabPanel(listOf(passiveAiScannerSection()), tabContentInsets)
         mcpTab = buildTabPanel(listOf(mcpSection()), tabContentInsets)
         promptsTab = buildTabPanel(listOf(promptSection()), tabContentInsets)
+        customPromptsTab = buildTabPanel(listOf(customPromptsSection()), tabContentInsets)
         privacyTab = buildTabPanel(listOf(privacySection), tabContentInsets)
         activeScannerTab = buildTabPanel(listOf(activeAiScannerSection()), tabContentInsets)
         burpIntegrationTab = buildTabPanel(listOf(burpIntegrationSection), tabContentInsets)
@@ -674,12 +634,14 @@ class SettingsPanel(
             updateProfileWarnings()
         }
         privacyMode.addActionListener {
-            updatePrivacyWarnings()
+            // updateRiskWarnings already routes through refreshPrivacyNotice; no need to call
+            // updatePrivacyWarnings separately (would re-compose the same advisory twice).
             updateRiskWarnings()
         }
         mcpExternal.addActionListener {
             updateMcpTlsState()
-            updateMcpCorsWarning()
+            // updateRiskWarnings() routes through refreshMcpNotice() which already covers the
+            // CORS-open advisory; calling updateMcpCorsWarning() here as well would refresh twice.
             updateRiskWarnings()
         }
         mcpTlsEnabled.addActionListener {
@@ -705,18 +667,17 @@ class SettingsPanel(
         }
         mcpAllowedOrigins.document.addDocumentListener(
             object : DocumentListener {
+                // updateRiskWarnings() already routes through refreshMcpNotice() which covers the
+                // CORS-open advisory; calling updateMcpCorsWarning() in addition would refresh twice.
                 override fun insertUpdate(e: DocumentEvent?) {
-                    updateMcpCorsWarning()
                     updateRiskWarnings()
                 }
 
                 override fun removeUpdate(e: DocumentEvent?) {
-                    updateMcpCorsWarning()
                     updateRiskWarnings()
                 }
 
                 override fun changedUpdate(e: DocumentEvent?) {
-                    updateMcpCorsWarning()
                     updateRiskWarnings()
                 }
             },
@@ -929,6 +890,8 @@ class SettingsPanel(
     fun burpIntegrationTabComponent(): JComponent = burpIntegrationTab
 
     fun promptsTabComponent(): JComponent = promptsTab
+
+    fun customPromptsTabComponent(): JComponent = customPromptsTab
 
     fun privacyTabComponent(): JComponent = privacyTab
 
@@ -1249,7 +1212,8 @@ class SettingsPanel(
         applyMcpToolToggles(updated.mcpSettings.toolToggles)
         applyUnsafeToolApprovals(updated.mcpSettings.enabledUnsafeTools)
 
-        privacyWarning.isVisible = updated.privacyMode == PrivacyMode.OFF
+        // Privacy advisory now lives in `privacyNotice` (SubtleNotice); the next call routes
+        // through `refreshPrivacyNotice()` which decides level + visibility from current state.
         updatePrivacyWarnings()
         backendConfigPanel.setBackend(preferredBackendId())
         updateMcpTlsState()
@@ -1606,9 +1570,7 @@ class SettingsPanel(
             autoRestart = autoRestart,
             determinism = determinism,
             rotateSaltBtn = rotateSaltBtn,
-            privacyWarning = privacyWarning,
-            privacyActiveWarning = privacyActiveWarning,
-            privacyRiskWarning = privacyRiskWarning,
+            privacyNotice = privacyNotice,
             saveFeedback = saveFeedbackLabel,
             aiLoggerEnabled = aiLoggerEnabled,
             aiLoggerMaxEntries = aiLoggerMaxEntries,
@@ -2034,12 +1996,20 @@ class SettingsPanel(
             promptIssuePoc = promptIssuePoc,
             promptIssueImpact = promptIssueImpact,
             promptIssueFull = promptIssueFull,
+        ).build()
+
+    private fun customPromptsSection(): JPanel =
+        CustomPromptsConfigPanel(
+            sectionPanel = ::sectionPanel,
+            formGrid = ::formGrid,
+            addRowFull = ::addRowFull,
+            addRowPair = ::addRowPair,
+            customPromptLibrarySection = customPromptLibraryEditor.component(),
             bountyPromptEnabled = bountyPromptEnabled,
             bountyPromptDir = bountyPromptDir,
             bountyPromptAutoCreateIssues = bountyPromptAutoCreateIssues,
             bountyPromptIssueThreshold = bountyPromptIssueThreshold,
             bountyPromptEnabledIds = bountyPromptEnabledIds,
-            customPromptLibrarySection = customPromptLibraryEditor.component(),
         ).build()
 
     private fun mcpSection(): JPanel =
@@ -2064,8 +2034,7 @@ class SettingsPanel(
                     verticalScrollBarPolicy = JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED
                     horizontalScrollBarPolicy = JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
                 },
-            mcpCorsWarning = mcpCorsWarning,
-            mcpRiskWarning = mcpRiskWarning,
+            mcpNotice = mcpNotice,
             mcpMaxConcurrent = mcpMaxConcurrent,
             mcpMaxBodyMb = mcpMaxBodyMb,
             mcpProxyHistoryMaxItems = mcpProxyHistoryMaxItems,
@@ -2331,54 +2300,120 @@ class SettingsPanel(
     }
 
     private fun updatePrivacyWarnings() {
-        val selected = privacyMode.selectedItem as? PrivacyMode ?: PrivacyMode.STRICT
-        privacyWarning.isVisible = selected == PrivacyMode.OFF
-        privacyActiveWarning.isVisible = selected == PrivacyMode.STRICT && activeAiEnabled.isSelected
+        refreshPrivacyNotice()
     }
 
     private fun updateRiskWarnings() {
+        refreshPrivacyNotice()
+        refreshMcpNotice()
+    }
+
+    /**
+     * Compose a single advisory for the Privacy & Logging tab. Replaces the previous trio of
+     * stacked red `JLabel` banners (`privacyWarning` + `privacyActiveWarning` + `privacyRiskWarning`)
+     * with one [SubtleNotice] whose level + message reflect the active risk combination.
+     */
+    private fun refreshPrivacyNotice() {
+        val selectedPrivacy = privacyMode.selectedItem as? PrivacyMode ?: PrivacyMode.STRICT
+        val auditOff = !auditEnabled.isSelected
+        val activeOn = activeAiEnabled.isSelected
+
+        val (level, htmlMessage) =
+            when {
+                selectedPrivacy == PrivacyMode.OFF && auditOff && activeOn ->
+                    com.six2dez.burp.aiagent.ui.components.SubtleNotice.Level.RISK to
+                        "<b>Privacy OFF + Audit logging OFF + Active Scanner ON.</b> " +
+                        "Raw traffic may reach MCP and prompts, with no audit trail and live payloads going to targets."
+                selectedPrivacy == PrivacyMode.OFF && auditOff ->
+                    com.six2dez.burp.aiagent.ui.components.SubtleNotice.Level.RISK to
+                        "<b>Privacy OFF + Audit logging OFF.</b> Raw traffic may reach MCP and prompts; " +
+                        "without audit logs, traceability and data-protection guarantees are reduced."
+                selectedPrivacy == PrivacyMode.OFF && activeOn ->
+                    com.six2dez.burp.aiagent.ui.components.SubtleNotice.Level.RISK to
+                        "<b>Privacy OFF + Active Scanner ON.</b> Raw traffic may reach MCP and prompts " +
+                        "while the active scanner sends payloads to real targets."
+                selectedPrivacy == PrivacyMode.OFF ->
+                    com.six2dez.burp.aiagent.ui.components.SubtleNotice.Level.WARN to
+                        "<b>Privacy mode is OFF.</b> Raw traffic may reach MCP and prompts."
+                selectedPrivacy == PrivacyMode.STRICT && activeOn ->
+                    com.six2dez.burp.aiagent.ui.components.SubtleNotice.Level.INFO to
+                        "STRICT anonymizes hosts in AI prompts but does not prevent the active scanner " +
+                        "from sending real requests to targets."
+                else -> null to null
+            }
+        if (level != null && htmlMessage != null) {
+            privacyNotice.setMessage(level, htmlMessage)
+        } else {
+            privacyNotice.hideNotice()
+        }
+    }
+
+    /**
+     * Compose a single advisory for the MCP Server tab. Replaces the previous pair of stacked
+     * banners (`mcpCorsWarning` + `mcpRiskWarning`) with one [SubtleNotice] that surfaces
+     * **every** applicable misconfiguration as a bulleted list — accent color follows the
+     * highest-severity entry. Earlier draft used a `when` chain that returned only the first
+     * matching branch, dropping the CORS-open warning in combined-risk states; the accumulator
+     * below preserves all caveats simultaneously.
+     */
+    private fun refreshMcpNotice() {
         val selectedPrivacy = privacyMode.selectedItem as? PrivacyMode ?: PrivacyMode.STRICT
         val mcpOn = mcpEnabled.isSelected
         val external = mcpExternal.isSelected
         val unsafeEnabled = mcpUnsafe.isSelected
         val tokenBlank = mcpToken.text.trim().isBlank()
+        val hasAllowedOrigins = parseAllowedOriginsInput(mcpAllowedOrigins.text).isNotEmpty()
 
-        val mcpMessage =
-            when {
-                !mcpOn -> null
-                external && unsafeEnabled ->
-                    "High risk: External MCP + Unsafe mode allows remote state-changing tool execution."
-                external && tokenBlank ->
-                    "High risk: External MCP is enabled with an empty token."
-                external && selectedPrivacy == PrivacyMode.OFF ->
-                    "Warning: External MCP with Privacy OFF may expose raw traffic."
-                else -> null
-            }
-        mcpRiskWarning.text = mcpMessage ?: "MCP risk checks passed."
-        mcpRiskWarning.background =
-            when {
-                mcpMessage == null -> UiTheme.Colors.statusRunning
-                mcpMessage.startsWith("High risk") -> UiTheme.Colors.statusCrashed
-                else -> UiTheme.Colors.statusTerminal
-            }
-        mcpRiskWarning.isVisible = mcpMessage != null
+        if (!mcpOn) {
+            mcpNotice.hideNotice()
+            return
+        }
 
-        val privacyMessage =
-            when {
-                selectedPrivacy == PrivacyMode.OFF && !auditEnabled.isSelected ->
-                    "High risk: Privacy OFF and Audit logging OFF reduce traceability and data protection."
-                selectedPrivacy == PrivacyMode.OFF && activeAiEnabled.isSelected ->
-                    "Warning: Privacy OFF with Active Scanner ON may expose sensitive request/response data."
-                else -> null
+        data class Item(
+            val level: com.six2dez.burp.aiagent.ui.components.SubtleNotice.Level,
+            val html: String,
+        )
+        val items = mutableListOf<Item>()
+        if (external && unsafeEnabled) {
+            items +=
+                Item(
+                    com.six2dez.burp.aiagent.ui.components.SubtleNotice.Level.RISK,
+                    "<b>External MCP + Unsafe mode.</b> Remote callers can invoke state-changing tools.",
+                )
+        }
+        if (external && tokenBlank) {
+            items +=
+                Item(
+                    com.six2dez.burp.aiagent.ui.components.SubtleNotice.Level.RISK,
+                    "<b>External MCP with empty token.</b> The endpoint is reachable without authentication.",
+                )
+        }
+        if (external && selectedPrivacy == PrivacyMode.OFF) {
+            items +=
+                Item(
+                    com.six2dez.burp.aiagent.ui.components.SubtleNotice.Level.WARN,
+                    "<b>External MCP with Privacy OFF.</b> Raw traffic may leave the host.",
+                )
+        }
+        if (external && !hasAllowedOrigins) {
+            items +=
+                Item(
+                    com.six2dez.burp.aiagent.ui.components.SubtleNotice.Level.WARN,
+                    "<b>External MCP with no allowed origins.</b> CORS will accept requests from any origin.",
+                )
+        }
+        if (items.isEmpty()) {
+            mcpNotice.hideNotice()
+            return
+        }
+        val highest =
+            if (items.any { it.level == com.six2dez.burp.aiagent.ui.components.SubtleNotice.Level.RISK }) {
+                com.six2dez.burp.aiagent.ui.components.SubtleNotice.Level.RISK
+            } else {
+                com.six2dez.burp.aiagent.ui.components.SubtleNotice.Level.WARN
             }
-        privacyRiskWarning.text = privacyMessage ?: "Privacy risk checks passed."
-        privacyRiskWarning.background =
-            when {
-                privacyMessage == null -> UiTheme.Colors.statusRunning
-                privacyMessage.startsWith("High risk") -> UiTheme.Colors.statusCrashed
-                else -> UiTheme.Colors.statusTerminal
-            }
-        privacyRiskWarning.isVisible = privacyMessage != null
+        val body = items.joinToString("<br>") { "• ${it.html}" }
+        mcpNotice.setMessage(highest, body)
     }
 
     private fun updateSaveFeedback(
@@ -2417,10 +2452,12 @@ class SettingsPanel(
             if (mcpKeystorePassword.isEnabled) UiTheme.Colors.inputForeground else UiTheme.Colors.onSurfaceVariant
     }
 
+    /**
+     * Legacy entry point — kept so existing listeners (Allowed Origins document changes) still
+     * compile. Routes into the consolidated MCP notice.
+     */
     private fun updateMcpCorsWarning() {
-        val external = mcpExternal.isSelected
-        val hasAllowedOrigins = parseAllowedOriginsInput(mcpAllowedOrigins.text).isNotEmpty()
-        mcpCorsWarning.isVisible = external && !hasAllowedOrigins
+        refreshMcpNotice()
     }
 
     private fun collectMcpToolToggles(): Map<String, Boolean> = mcpToolCheckboxes.mapValues { it.value.isSelected }

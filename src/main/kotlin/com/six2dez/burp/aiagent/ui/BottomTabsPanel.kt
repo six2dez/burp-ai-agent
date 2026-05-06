@@ -50,6 +50,7 @@ class BottomTabsPanel(
         tabbedPane.addTab("MCP Server", settingsPanel.mcpTabComponent())
         tabbedPane.addTab("Burp Integration", settingsPanel.burpIntegrationTabComponent())
         tabbedPane.addTab("Prompt Templates", settingsPanel.promptsTabComponent())
+        tabbedPane.addTab("Custom Prompts", settingsPanel.customPromptsTabComponent())
         tabbedPane.addTab("Privacy & Logging", settingsPanel.privacyTabComponent())
         if (aiLoggerPanel != null) {
             tabbedPane.addTab("AI Logger", aiLoggerPanel.root)

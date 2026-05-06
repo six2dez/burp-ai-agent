@@ -6,6 +6,9 @@ import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import com.six2dez.burp.aiagent.config.CustomPromptDefinition
 import com.six2dez.burp.aiagent.config.CustomPromptTag
 import com.six2dez.burp.aiagent.ui.UiTheme
+import java.awt.CardLayout
+import javax.swing.SwingConstants
+import javax.swing.border.EmptyBorder as SwingEmptyBorder
 import java.awt.BorderLayout
 import java.awt.Dimension
 import java.awt.GridLayout
@@ -87,6 +90,14 @@ class CustomPromptLibraryEditor {
         refreshButtons()
     }
 
+    private val centerCards = JPanel(CardLayout())
+    private val emptyHint =
+        JLabel(
+            "<html><div style='text-align:center'><b>No custom prompts yet.</b><br>" +
+                "Click <i>Add</i> to create one, or <i>Import…</i> to load a JSON library.</div></html>",
+            SwingConstants.CENTER,
+        )
+
     fun component(): JComponent {
         val root = JPanel(BorderLayout(8, 4))
 
@@ -95,9 +106,20 @@ class CustomPromptLibraryEditor {
         searchRow.add(searchField, BorderLayout.CENTER)
         root.add(searchRow, BorderLayout.NORTH)
 
+        emptyHint.foreground = UiTheme.Colors.onSurfaceVariant
+        emptyHint.font = UiTheme.Typography.body
+        emptyHint.border = SwingEmptyBorder(24, 24, 24, 24)
+        emptyHint.verticalAlignment = SwingConstants.CENTER
+
         val scroll = JScrollPane(list)
         scroll.preferredSize = Dimension(520, 180)
-        root.add(scroll, BorderLayout.CENTER)
+
+        // CardLayout swaps between the empty-state hint and the populated list/scroll. Keeps the
+        // tab from looking blank on first install before the user has saved any custom prompts.
+        centerCards.preferredSize = Dimension(520, 180)
+        centerCards.add(emptyHint, CARD_EMPTY)
+        centerCards.add(scroll, CARD_LIST)
+        root.add(centerCards, BorderLayout.CENTER)
 
         val buttons = JPanel()
         buttons.layout = BoxLayout(buttons, BoxLayout.Y_AXIS)
@@ -119,6 +141,12 @@ class CustomPromptLibraryEditor {
             buttons.add(Box.createVerticalStrut(4))
         }
         root.add(buttons, BorderLayout.EAST)
+
+        // refreshList() runs from `load(...)` during SettingsPanel construction, BEFORE this
+        // factory has added the cards to `centerCards` — that earlier `CardLayout.show(...)` is a
+        // silent no-op against an empty container. Call refreshList() once more here so the
+        // correct card is visible on first render for users who already have saved prompts.
+        refreshList()
         return root
     }
 
@@ -139,6 +167,11 @@ class CustomPromptLibraryEditor {
         val filtered = CustomPromptDefinition.searchFilter(sorted, searchField.text)
         listModel.clear()
         filtered.forEach { listModel.addElement(it) }
+        // Show the empty hint only when the master is empty (i.e. no prompts saved at all). When
+        // the user has prompts but the search query filters them all out, keep the list visible
+        // so the search field clearly indicates an active filter.
+        val cards = centerCards.layout as CardLayout
+        cards.show(centerCards, if (master.isEmpty()) CARD_EMPTY else CARD_LIST)
         refreshButtons()
     }
 
@@ -370,6 +403,8 @@ class CustomPromptLibraryEditor {
             ObjectMapper()
                 .registerKotlinModule()
                 .enable(SerializationFeature.INDENT_OUTPUT)
+        private const val CARD_EMPTY = "empty"
+        private const val CARD_LIST = "list"
     }
 }
 

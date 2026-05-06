@@ -632,7 +632,7 @@ object UiActions {
 
         if (!settings.bountyPromptEnabled) {
             menu.isEnabled = false
-            menu.toolTipText = "Enable BountyPrompt integration in Settings → Prompt Templates."
+            menu.toolTipText = "Enable BountyPrompt integration in Settings → Custom Prompts."
             return menu
         }
 

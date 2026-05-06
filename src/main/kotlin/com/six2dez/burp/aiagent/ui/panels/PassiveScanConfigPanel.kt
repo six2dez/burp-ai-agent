@@ -157,11 +157,36 @@ class PassiveScanConfigPanel(
         val grid = formGrid()
         addRowFull(grid, "Enable scanner", passiveAiEnabled)
         addSpacerRow(grid, 4)
-        addRowFull(grid, "In-scope only", passiveAiScopeOnly)
+        // Pair the two binary toggles so they read as a single row instead of two full-width
+        // checkbox lines. Persistent cache toggle is followed immediately by its TTL/max detail
+        // pair below to keep the persistent-cache block visually grouped.
+        addRowPair(
+            grid,
+            "In-scope only",
+            passiveAiScopeOnly,
+            "Persistent cache",
+            passiveAiPersistentCacheEnabled,
+        )
+        addSpacerRow(grid, 4)
+        addRowPair(
+            grid,
+            "Persistent TTL (hrs)",
+            passiveAiPersistentCacheTtlSpinner,
+            "Persistent max (MB)",
+            passiveAiPersistentCacheMaxMbSpinner,
+        )
         addSpacerRow(grid, 4)
         addRowPair(grid, "Rate limit (sec)", passiveAiRateSpinner, "Max size (KB)", passiveAiMaxSizeSpinner)
         addSpacerRow(grid, 4)
-        addRowFull(grid, "Min severity", passiveAiMinSeverityCombo)
+        // Min severity + Batch size are both compact fields with no obvious right-side companion;
+        // pair them so the row is symmetric instead of leaving each as a full-width singleton.
+        addRowPair(
+            grid,
+            "Min severity",
+            passiveAiMinSeverityCombo,
+            "Batch size (1=off)",
+            passiveAiBatchSizeSpinner,
+        )
         addSpacerRow(grid, 4)
         addRowPair(
             grid,
@@ -205,18 +230,6 @@ class PassiveScanConfigPanel(
         addSpacerRow(grid, 4)
         addRowFull(grid, "Excluded extensions", passiveAiExcludedExtensionsField)
         addSpacerRow(grid, 4)
-        addRowFull(grid, "Batch size (1=off)", passiveAiBatchSizeSpinner)
-        addSpacerRow(grid, 4)
-        addRowFull(grid, "Persistent cache", passiveAiPersistentCacheEnabled)
-        addSpacerRow(grid, 4)
-        addRowPair(
-            grid,
-            "Persistent TTL (hrs)",
-            passiveAiPersistentCacheTtlSpinner,
-            "Persistent max (MB)",
-            passiveAiPersistentCacheMaxMbSpinner,
-        )
-        addSpacerRow(grid, 4)
         addRowPair(
             grid,
             "Req body chars (manual)",
@@ -227,18 +240,29 @@ class PassiveScanConfigPanel(
         addSpacerRow(grid, 4)
         addRowFull(grid, "Manual context JSON", contextCompactJson)
         addSpacerRow(grid, 8)
-        addRowFull(grid, "Status", passiveAiStatusLabel)
-        addSpacerRow(grid, 4)
 
-        val actionsPanel = JPanel()
-        actionsPanel.layout = BoxLayout(actionsPanel, BoxLayout.X_AXIS)
-        actionsPanel.background = UiTheme.Colors.surface
-        actionsPanel.add(passiveAiViewFindings)
-        actionsPanel.add(Box.createRigidArea(java.awt.Dimension(8, 0)))
-        actionsPanel.add(scannerTriageButton)
-        actionsPanel.add(Box.createRigidArea(java.awt.Dimension(8, 0)))
-        actionsPanel.add(passiveAiResetStats)
-        addRowFull(grid, "Actions", actionsPanel)
+        // Combine the previous "Status" + "Actions" rows into one. The status label sits in the
+        // BorderLayout CENTER region so it absorbs all leftover horizontal space and grows to fit
+        // long operational messages ("Scanning 5 of 12, last: GET /api/users/123") without
+        // clipping. The action buttons live in the EAST region with a fixed preferred width, so
+        // they stay pinned to the right edge regardless of how much space the label needs.
+        val actionsCluster =
+            JPanel().apply {
+                layout = BoxLayout(this, BoxLayout.X_AXIS)
+                background = UiTheme.Colors.surface
+                add(passiveAiViewFindings)
+                add(Box.createRigidArea(java.awt.Dimension(8, 0)))
+                add(scannerTriageButton)
+                add(Box.createRigidArea(java.awt.Dimension(8, 0)))
+                add(passiveAiResetStats)
+            }
+        val statusBar =
+            JPanel(BorderLayout(8, 0)).apply {
+                background = UiTheme.Colors.surface
+                add(passiveAiStatusLabel, BorderLayout.CENTER)
+                add(actionsCluster, BorderLayout.EAST)
+            }
+        addRowFull(grid, "Status", statusBar)
 
         body.add(grid, BorderLayout.CENTER)
         return sectionPanel(
