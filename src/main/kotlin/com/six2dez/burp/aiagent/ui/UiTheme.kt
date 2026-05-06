@@ -39,6 +39,13 @@ object UiTheme {
         val warningBannerBg: Color get() = if (isDarkTheme) Color(0x3E2723) else Color(0xFFF3CD)
         val warningBannerFg: Color get() = if (isDarkTheme) Color(0xFFCC80) else onSurface
 
+        // Subtle notice palette — softer than `warningBannerBg` for in-panel advisories. The accent
+        // colors below are reused as the left-border accent strip on `SubtleNotice`.
+        val subtleWarning: Color get() = if (isDarkTheme) Color(0x3E2723) else Color(0xFFF8E1)
+        val subtleDanger: Color get() = if (isDarkTheme) Color(0x3D1F1F) else Color(0xFDECEA)
+        val accentWarn: Color get() = statusTerminal
+        val accentDanger: Color get() = statusCrashed
+
         // Code blocks
         val codeBlockBg: Color get() = if (isDarkTheme) Color(0x2D2D2D) else Color(0xF0F0F0)
         val inlineCodeBg: Color get() = if (isDarkTheme) Color(0x3C3C3C) else Color(0xE0E0E0)

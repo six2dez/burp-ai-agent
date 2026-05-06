@@ -55,7 +55,7 @@ class MainTab(
     private val mcpStatusLabel = JLabel("MCP: -")
     private val backendStatusLabel = JLabel("AI: ?")
     private val activeScanStatsLabel = JLabel("Scans: 0 | Vulns: 0")
-    private val safetySummaryLabel = JLabel("Safety: -")
+    private val safetyIndicator = com.six2dez.burp.aiagent.ui.components.SafetyIndicator()
 
     private val statusLabel = JLabel("Idle")
     private val sessionLabel = JLabel("Session: -")
@@ -236,6 +236,8 @@ class MainTab(
         clientGroup.add(backendStatusLabel)
         clientGroup.add(javax.swing.Box.createRigidArea(Dimension(10, 0)))
         clientGroup.add(sessionLabel)
+        clientGroup.add(javax.swing.Box.createHorizontalGlue())
+        clientGroup.add(safetyIndicator)
 
         actions.add(mcpGroup)
         actions.add(scannerGroup)
@@ -266,12 +268,6 @@ class MainTab(
 
         top.add(titleBox, BorderLayout.CENTER)
         top.add(actions, BorderLayout.EAST)
-        styleStatusLabel(safetySummaryLabel)
-        val safetyRow = JPanel(java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 0, 0))
-        safetyRow.isOpaque = false
-        safetyRow.border = EmptyBorder(8, 0, 0, 0)
-        safetyRow.add(safetySummaryLabel)
-        top.add(safetyRow, BorderLayout.SOUTH)
 
         val north = JPanel(BorderLayout())
         north.background = UiTheme.Colors.surface
@@ -596,18 +592,30 @@ class MainTab(
         val unsafe = if (settings.mcpSettings.unsafeEnabled) "Unsafe on" else "Unsafe off"
         val scanners = "Passive ${if (settings.passiveAiEnabled) "on" else "off"} / Active ${if (settings.activeAiEnabled) "on" else "off"}"
 
-        safetySummaryLabel.text = "Safety: $privacy | $mcpExposure | $unsafe | $scanners"
-        safetySummaryLabel.background =
+        val level =
             when {
                 settings.mcpSettings.enabled &&
                     settings.mcpSettings.externalEnabled &&
-                    settings.mcpSettings.unsafeEnabled -> UiTheme.Colors.statusCrashed
-                settings.privacyMode == PrivacyMode.OFF && settings.mcpSettings.enabled -> UiTheme.Colors.statusCrashed
+                    settings.mcpSettings.unsafeEnabled ->
+                    com.six2dez.burp.aiagent.ui.components.SafetyIndicator.Level.RISK
+                settings.privacyMode == PrivacyMode.OFF && settings.mcpSettings.enabled ->
+                    com.six2dez.burp.aiagent.ui.components.SafetyIndicator.Level.RISK
                 settings.privacyMode == PrivacyMode.OFF ||
                     settings.mcpSettings.externalEnabled ||
-                    settings.mcpSettings.unsafeEnabled -> UiTheme.Colors.statusTerminal
-                else -> UiTheme.Colors.statusRunning
+                    settings.mcpSettings.unsafeEnabled ->
+                    com.six2dez.burp.aiagent.ui.components.SafetyIndicator.Level.WARN
+                else -> com.six2dez.burp.aiagent.ui.components.SafetyIndicator.Level.OK
             }
+        // HTML tooltip so the four flags wrap onto separate lines instead of one long string.
+        val tooltip =
+            "<html><b>Safety</b><br>" +
+                "Privacy: $privacy<br>" +
+                "MCP: $mcpExposure<br>" +
+                unsafe +
+                "<br>" +
+                scanners +
+                "</html>"
+        safetyIndicator.setSummary(level, tooltip)
     }
 
     private fun updateBackendBadge() {
