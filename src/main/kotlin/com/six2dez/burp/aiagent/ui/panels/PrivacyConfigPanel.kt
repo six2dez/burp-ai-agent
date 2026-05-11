@@ -2,6 +2,7 @@ package com.six2dez.burp.aiagent.ui.panels
 
 import java.awt.BorderLayout
 import javax.swing.BorderFactory
+import javax.swing.BoxLayout
 import javax.swing.JComponent
 import javax.swing.JPanel
 
@@ -44,20 +45,29 @@ class PrivacyConfigPanel(
         addSpacerRow(grid, 4)
         addRowFull(grid, "Save feedback", saveFeedback)
 
-        // The privacy advisory lives outside the form grid so it can collapse cleanly when there
-        // is nothing to report (no dangling "Advisory:" label remains visible). Padded above so
-        // it visually separates from the form rows.
+        // Stack the form grid + advisory vertically and pin everything to the top of the panel.
+        // The advisory lives outside the grid so it collapses cleanly when there is nothing to
+        // report (no dangling "Advisory:" label). It must NOT be placed in BorderLayout.CENTER
+        // because CENTER stretches its child to fill leftover space, which makes the advisory
+        // banner balloon to half the panel height — instead, both children sit in NORTH via a
+        // BoxLayout Y_AXIS stack so each takes its preferred height only.
         val noticeWrapper =
             JPanel(BorderLayout()).apply {
                 isOpaque = false
                 border = BorderFactory.createEmptyBorder(8, 0, 0, 0)
-                add(privacyNotice, BorderLayout.CENTER)
+                add(privacyNotice, BorderLayout.NORTH)
+            }
+        val northStack =
+            JPanel().apply {
+                isOpaque = false
+                layout = BoxLayout(this, BoxLayout.Y_AXIS)
+                add(grid)
+                add(noticeWrapper)
             }
         val body =
             JPanel(BorderLayout()).apply {
                 isOpaque = false
-                add(grid, BorderLayout.NORTH)
-                add(noticeWrapper, BorderLayout.CENTER)
+                add(northStack, BorderLayout.NORTH)
             }
         return sectionPanel(
             "Privacy & Logging",
