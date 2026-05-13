@@ -33,7 +33,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   5. Running a real prompt through the Perplexity backend with a valid API key returns a streamed chat completion end-to-end (manual or integration-test confirmation).
 **Plans**: 1 plan
 Plans:
-- [ ] 01-01-PLAN.md — Add MockWebServer dep + write 2 new wire-level test classes (Perplexity + OpenAI defaults) + extend AgentSettingsMigrationTest with PPLX-05 + record D-06 manual smoke and D-08 wording-gap handoffs in 01-VERIFICATION.md
+- [x] 01-01-PLAN.md — Add MockWebServer dep + write 2 new wire-level test classes (Perplexity + OpenAI defaults) + extend AgentSettingsMigrationTest with PPLX-05 + record D-06 manual smoke and D-08 wording-gap handoffs in 01-VERIFICATION.md
 
 ### Phase 2: Insertion-Point Scan Audit
 **Goal**: The right-click "AI Scan on Selected Insertion Point" action correctly resolves the selection across all Burp parameter shapes, queues active scan targets at the right priority, and hides itself when there is no valid candidate.
