@@ -119,6 +119,27 @@ class ActiveScannerQueueModelTest {
         assertTrue(scanner.getQueueItems(limit = 10).isEmpty())
     }
 
+    /**
+     * Locks the PASSIVE_ONLY_VULN_CLASSES filter on the manual-insertion-point path. Per
+     * RESEARCH.md Pitfall #6: CORS_MISCONFIGURATION is the stable passive-only canary
+     * (ActiveScanModels.kt:112) and SQLI is the stable active-eligible canary (used by every
+     * other queue test). Filter chain: ActiveAiScanner.kt:220-223.
+     */
+    @Test
+    fun manualScanInsertionPointFiltersPassiveOnlyVulnClasses() {
+        val scanner = newScannerForQueueTests()
+        val rr = requestResponse("http://example.com/?id=1", "id", "1")
+        val point = InjectionPoint(InjectionType.URL_PARAM, "id", "1")
+        val vulnClasses = listOf(VulnClass.CORS_MISCONFIGURATION, VulnClass.SQLI)
+
+        val count = scanner.manualScanInsertionPoint(rr, point, vulnClasses)
+
+        assertEquals(1, count)
+        val items = scanner.getQueueItems(limit = 10)
+        assertEquals(1, items.size)
+        assertEquals("SQLI", items.single().vulnClass)
+    }
+
     private fun newScannerForQueueTests(): ActiveAiScanner {
         val api = mock<MontoyaApi>(defaultAnswer = Answers.RETURNS_DEEP_STUBS)
         return ActiveAiScanner(
