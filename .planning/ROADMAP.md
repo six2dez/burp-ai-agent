@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [ ] **Phase 1: Perplexity Backend Audit** - Verify shipped Perplexity backend meets SPEC, lock behaviour with tests
 - [x] **Phase 2: Insertion-Point Scan Audit** - Verify right-click insertion-point scanning + selection resolution, lock with tests (completed 2026-05-13)
-- [ ] **Phase 3: Prompt Library UX Audit** - Verify search / favorites / import-export / ordering, lock with tests
+- [x] **Phase 3: Prompt Library UX Audit** - Verify search / favorites / import-export / ordering, lock with tests (completed 2026-05-13)
 - [ ] **Phase 4: Release-Gating Bug Fixes** - Close #62 (release pipeline publishes stale code) and #66 (openai-compatible usage error)
 - [ ] **Phase 5: Documentation Refresh** - README, `burp-ai-agent.six2dez.com`, and `SPEC.md` reflect the three Unreleased features
 - [ ] **Phase 6: v0.7.0 Release Cut** - Promote CHANGELOG, bump version, build, tag, publish JAR + SBOM + SHA-256, CI green on matrix
@@ -65,7 +65,7 @@ Plans:
 Plans:
 - [x] 03-01-PLAN.md — Add filterForMenuPreservesExternalFavoritesFirstOrder @Test to CustomPromptFilterTest.kt — locks PROM-06 favorites-first ordering invariant (Wave 1)
 - [x] 03-02-PLAN.md — Extract parseLibraryJson + mergeById + applyMove into CustomPromptDefinition.Companion, wire handleImport/handleExport/handleMove as thin shells, add 10 @Test methods in new CustomPromptLibraryJsonTest.kt — locks PROM-03/04/05 + fixes distinctBy → associateBy behaviour (Wave 1)
-- [ ] 03-03-PLAN.md — Create 03-HUMAN-UAT.md with 4 maintainer-fillable scenarios — locks PROM-01/02/03/04/05 Swing-layer verification (Wave 2)
+- [x] 03-03-PLAN.md — Create 03-HUMAN-UAT.md with 4 maintainer-fillable scenarios — locks PROM-01/02/03/04/05 Swing-layer verification (Wave 2)
 **UI hint**: yes
 
 ### Phase 4: Release-Gating Bug Fixes
@@ -109,7 +109,7 @@ Phases 1, 2, 3, and 4 are parallel-safe and can be planned/executed concurrently
 |-------|----------------|--------|-----------|
 | 1. Perplexity Backend Audit | 0/1 | Not started | - |
 | 2. Insertion-Point Scan Audit | 3/3 | Complete   | 2026-05-13 |
-| 3. Prompt Library UX Audit | 2/3 | In Progress|  |
+| 3. Prompt Library UX Audit | 3/3 | Complete   | 2026-05-13 |
 | 4. Release-Gating Bug Fixes | 0/TBD | Not started | - |
 | 5. Documentation Refresh | 0/TBD | Not started | - |
 | 6. v0.7.0 Release Cut | 0/TBD | Not started | - |
