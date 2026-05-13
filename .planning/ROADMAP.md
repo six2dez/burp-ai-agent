@@ -13,7 +13,7 @@ Stabilization milestone for the three `Unreleased` features (Perplexity backend,
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [ ] **Phase 1: Perplexity Backend Audit** - Verify shipped Perplexity backend meets SPEC, lock behaviour with tests
-- [ ] **Phase 2: Insertion-Point Scan Audit** - Verify right-click insertion-point scanning + selection resolution, lock with tests
+- [x] **Phase 2: Insertion-Point Scan Audit** - Verify right-click insertion-point scanning + selection resolution, lock with tests (completed 2026-05-13)
 - [ ] **Phase 3: Prompt Library UX Audit** - Verify search / favorites / import-export / ordering, lock with tests
 - [ ] **Phase 4: Release-Gating Bug Fixes** - Close #62 (release pipeline publishes stale code) and #66 (openai-compatible usage error)
 - [ ] **Phase 5: Documentation Refresh** - README, `burp-ai-agent.six2dez.com`, and `SPEC.md` reflect the three Unreleased features
@@ -48,7 +48,7 @@ Plans:
 Plans:
 - [x] 02-01-PLAN.md — Add 5 resolver sub-case @Test methods to InjectionPointExtractorTest.kt (BODY_PARAM, COOKIE, XML_ELEMENT, PATH_SEGMENT, non-empty headerAllowlist) — locks INSP-04 + INSP-02 boundary
 - [x] 02-02-PLAN.md — Add 4 queue-contract @Test methods to ActiveScannerQueueModelTest.kt (one-per-class + dedup-bypass, out-of-scope short-circuit, PASSIVE_ONLY filter, queue-full short count) — locks INSP-03 + threats T-2-01/T-2-02
-- [ ] 02-03-PLAN.md — Create 02-HUMAN-UAT.md scaffolding with 6 maintainer-fillable scenarios — locks INSP-01 + INSP-02 UI-builder branches per D-08/D-09
+- [x] 02-03-PLAN.md — Create 02-HUMAN-UAT.md scaffolding with 6 maintainer-fillable scenarios — locks INSP-01 + INSP-02 UI-builder branches per D-08/D-09
 **UI hint**: yes
 
 ### Phase 3: Prompt Library UX Audit
@@ -104,7 +104,7 @@ Phases 1, 2, 3, and 4 are parallel-safe and can be planned/executed concurrently
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Perplexity Backend Audit | 0/1 | Not started | - |
-| 2. Insertion-Point Scan Audit | 2/3 | In Progress|  |
+| 2. Insertion-Point Scan Audit | 3/3 | Complete   | 2026-05-13 |
 | 3. Prompt Library UX Audit | 0/TBD | Not started | - |
 | 4. Release-Gating Bug Fixes | 0/TBD | Not started | - |
 | 5. Documentation Refresh | 0/TBD | Not started | - |
