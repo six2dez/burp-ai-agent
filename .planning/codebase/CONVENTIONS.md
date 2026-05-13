@@ -9,6 +9,18 @@
 - Target: JVM 21 (`java.toolchain.languageVersion = 21`, compiler option `JVM_21`)
 - JSR-305 strict null checking: `-Xjsr305=strict` in `compilerOptions`
 
+## Build Tooling
+
+The Gradle wrapper is pinned to `8.12.1` (see `gradle/wrapper/gradle-wrapper.properties`), which only supports JDKs 8-23 as the launcher. Foojay toolchain auto-provisioning covers compile/test (JDK 21) but not the launcher itself, so `./gradlew` fails when the shell's default `java` is JDK ≥24 (e.g. Homebrew's `openjdk` is now 25).
+
+Invoke gradle with JDK 21 as the launcher:
+
+```bash
+JAVA_HOME=$(/usr/libexec/java_home -v 21) ./gradlew <task>
+```
+
+Or rely on `.tool-versions` (`java temurin-21.0.10`) via mise/asdf if its shell hook is active. Claude Code's Bash sessions get `JAVA_HOME` pre-set via `.claude/settings.local.json`'s `env` block (gitignored, per-machine).
+
 ## Naming Patterns
 
 **Files:**
