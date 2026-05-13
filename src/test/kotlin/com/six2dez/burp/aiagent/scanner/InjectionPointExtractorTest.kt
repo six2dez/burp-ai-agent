@@ -130,6 +130,85 @@ class InjectionPointExtractorTest {
     }
 
     @Test
+    fun matchInsertionPointPicksBodyParam() {
+        val raw =
+            "POST /api HTTP/1.1\r\n" +
+                "Host: example.com\r\n" +
+                "Content-Type: application/x-www-form-urlencoded\r\n" +
+                "\r\n" +
+                "username=alice&role=user"
+        val aliceStart = raw.indexOf("alice")
+        val aliceEnd = aliceStart + "alice".length
+
+        val aliceRange = rangeMock(aliceStart, aliceEnd)
+
+        val usernameParam = mock<ParsedHttpParameter>()
+        whenever(usernameParam.type()).thenReturn(HttpParameterType.BODY)
+        whenever(usernameParam.name()).thenReturn("username")
+        whenever(usernameParam.value()).thenReturn("alice")
+        whenever(usernameParam.valueOffsets()).thenReturn(aliceRange)
+
+        val rawBa = byteArrayMock(raw)
+        val request = mock<HttpRequest>()
+        whenever(request.parameters()).thenReturn(listOf(usernameParam))
+        whenever(request.headers()).thenReturn(emptyList())
+        whenever(request.toByteArray()).thenReturn(rawBa)
+        whenever(request.bodyOffset()).thenReturn(raw.length - "username=alice&role=user".length)
+        whenever(request.bodyToString()).thenReturn("username=alice&role=user")
+        whenever(request.headerValue("Content-Type")).thenReturn("application/x-www-form-urlencoded")
+        whenever(request.url()).thenReturn("http://example.com/api")
+
+        val match =
+            InjectionPointExtractor.matchInsertionPoint(
+                request = request,
+                selectionStart = aliceStart + 1,
+                selectionEnd = aliceEnd - 1,
+            )
+        assertTrue(match != null)
+        assertEquals(InjectionType.BODY_PARAM, match!!.type)
+        assertEquals("username", match.name)
+    }
+
+    @Test
+    fun matchInsertionPointPicksCookie() {
+        val raw =
+            "GET / HTTP/1.1\r\n" +
+                "Host: example.com\r\n" +
+                "Cookie: session=abc; tracker=xyz\r\n" +
+                "\r\n"
+        val abcStart = raw.indexOf("abc")
+        val abcEnd = abcStart + "abc".length
+
+        val abcRange = rangeMock(abcStart, abcEnd)
+
+        val sessionParam = mock<ParsedHttpParameter>()
+        whenever(sessionParam.type()).thenReturn(HttpParameterType.COOKIE)
+        whenever(sessionParam.name()).thenReturn("session")
+        whenever(sessionParam.value()).thenReturn("abc")
+        whenever(sessionParam.valueOffsets()).thenReturn(abcRange)
+
+        val rawBa = byteArrayMock(raw)
+        val request = mock<HttpRequest>()
+        whenever(request.parameters()).thenReturn(listOf(sessionParam))
+        whenever(request.headers()).thenReturn(emptyList())
+        whenever(request.toByteArray()).thenReturn(rawBa)
+        whenever(request.bodyOffset()).thenReturn(raw.length)
+        whenever(request.bodyToString()).thenReturn("")
+        whenever(request.headerValue("Content-Type")).thenReturn(null)
+        whenever(request.url()).thenReturn("http://example.com/")
+
+        val match =
+            InjectionPointExtractor.matchInsertionPoint(
+                request = request,
+                selectionStart = abcStart + 1,
+                selectionEnd = abcEnd - 1,
+            )
+        assertTrue(match != null)
+        assertEquals(InjectionType.COOKIE, match!!.type)
+        assertEquals("session", match.name)
+    }
+
+    @Test
     fun matchInsertionPointFallsBackToHeaderWhenSelectionHitsHeaderLine() {
         val raw =
             "GET / HTTP/1.1\r\n" +
@@ -161,6 +240,40 @@ class InjectionPointExtractorTest {
         assertTrue(match != null)
         assertEquals(InjectionType.HEADER, match!!.type)
         assertEquals("X-Forwarded-Host", match.name)
+    }
+
+    @Test
+    fun matchInsertionPointRespectsNonEmptyHeaderAllowlist() {
+        val raw =
+            "GET / HTTP/1.1\r\n" +
+                "Host: example.com\r\n" +
+                "X-Forwarded-Host: attacker.com\r\n" +
+                "\r\n"
+        val xfhStart = raw.indexOf("X-Forwarded-Host:")
+        val xfhEnd = xfhStart + "X-Forwarded-Host: attacker.com".length
+
+        val header = mock<HttpHeader>()
+        whenever(header.name()).thenReturn("X-Forwarded-Host")
+        whenever(header.value()).thenReturn("attacker.com")
+
+        val rawBa = byteArrayMock(raw)
+        val request = mock<HttpRequest>()
+        whenever(request.parameters()).thenReturn(emptyList())
+        whenever(request.headers()).thenReturn(listOf(header))
+        whenever(request.toByteArray()).thenReturn(rawBa)
+        whenever(request.bodyOffset()).thenReturn(raw.length)
+        whenever(request.bodyToString()).thenReturn("")
+        whenever(request.headerValue("Content-Type")).thenReturn(null)
+        whenever(request.url()).thenReturn("http://example.com/")
+
+        val match =
+            InjectionPointExtractor.matchInsertionPoint(
+                request = request,
+                selectionStart = xfhStart + 5,
+                selectionEnd = xfhEnd,
+                headerAllowlist = setOf("x-foo-only"),
+            )
+        assertNull(match)
     }
 
     @Test
@@ -229,5 +342,62 @@ class InjectionPointExtractorTest {
         assertTrue(match != null)
         assertEquals(InjectionType.JSON_FIELD, match!!.type)
         assertEquals("name", match.name)
+    }
+
+    @Test
+    fun matchInsertionPointPicksXmlElement() {
+        val headers = "POST /api HTTP/1.1\r\nHost: example.com\r\nContent-Type: application/xml\r\n\r\n"
+        val body = "<order><id>42</id></order>"
+        val raw = headers + body
+
+        val rawBa = byteArrayMock(raw)
+        val request = mock<HttpRequest>()
+        whenever(request.parameters()).thenReturn(emptyList())
+        whenever(request.headers()).thenReturn(emptyList())
+        whenever(request.toByteArray()).thenReturn(rawBa)
+        whenever(request.bodyOffset()).thenReturn(headers.length)
+        whenever(request.bodyToString()).thenReturn(body)
+        whenever(request.headerValue("Content-Type")).thenReturn("application/xml")
+        whenever(request.url()).thenReturn("http://example.com/api")
+
+        val fortyTwoStart = raw.indexOf("42")
+        val fortyTwoEnd = fortyTwoStart + "42".length
+        val match =
+            InjectionPointExtractor.matchInsertionPoint(
+                request = request,
+                selectionStart = fortyTwoStart,
+                selectionEnd = fortyTwoEnd,
+            )
+        assertTrue(match != null)
+        assertEquals(InjectionType.XML_ELEMENT, match!!.type)
+        assertEquals("id", match.name)
+        assertEquals("42", match.originalValue)
+    }
+
+    @Test
+    fun matchInsertionPointPicksPathSegment() {
+        val raw = "GET /api/users/12345 HTTP/1.1\r\nHost: example.com\r\n\r\n"
+        val idStart = raw.indexOf("12345")
+        val idEnd = idStart + "12345".length
+
+        val rawBa = byteArrayMock(raw)
+        val request = mock<HttpRequest>()
+        whenever(request.parameters()).thenReturn(emptyList())
+        whenever(request.headers()).thenReturn(emptyList())
+        whenever(request.toByteArray()).thenReturn(rawBa)
+        whenever(request.bodyOffset()).thenReturn(raw.length)
+        whenever(request.bodyToString()).thenReturn("")
+        whenever(request.headerValue("Content-Type")).thenReturn(null)
+        whenever(request.url()).thenReturn("http://example.com/api/users/12345")
+
+        val match =
+            InjectionPointExtractor.matchInsertionPoint(
+                request = request,
+                selectionStart = idStart,
+                selectionEnd = idEnd,
+            )
+        assertTrue(match != null)
+        assertEquals(InjectionType.PATH_SEGMENT, match!!.type)
+        assertEquals("12345", match.originalValue)
     }
 }
