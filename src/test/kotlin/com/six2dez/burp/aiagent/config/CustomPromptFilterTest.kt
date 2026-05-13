@@ -145,4 +145,15 @@ class CustomPromptFilterTest {
         val library = listOf(http, issue, dual).map { it.copy(isFavorite = true) }
         assertEquals(library, CustomPromptDefinition.sortFavoritesFirst(library))
     }
+
+    @Test
+    fun filterForMenuPreservesExternalFavoritesFirstOrder() {
+        val favHttp = http.copy(id = "1f", isFavorite = true)
+        val favDual = dual.copy(id = "3f", isFavorite = true)
+        // Library already sorted favorites-first (the shape snapshot() produces in the editor).
+        val library = listOf(favHttp, favDual, http, dual)
+        val result = CustomPromptDefinition.filterForMenu(library, CustomPromptTag.HTTP_SELECTION)
+        // filterForMenu is a pure filter — it does NOT re-sort. Order comes from the caller (PROM-06).
+        assertEquals(listOf(favHttp, favDual, http, dual), result)
+    }
 }
