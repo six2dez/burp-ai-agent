@@ -61,7 +61,11 @@ Plans:
   3. Export writes a pretty-printed `.json` file with favorites first; import merges by id (matching ids replace, new ids append) and de-duplicates duplicate ids in the input file defensively. A unit test feeds a hand-crafted JSON with duplicate ids and verifies the post-import library is well-formed.
   4. Move Up / Move Down cannot scramble the favorites / non-favorites boundary — a reorder attempt that would cross the boundary is rejected or clamped, locked by a unit test.
   5. Right-click submenus iterate entries in editor order (favorites first) with no re-sort at menu-build time — verified by a unit test on `filterForMenu`.
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 03-01-PLAN.md — Add filterForMenuPreservesExternalFavoritesFirstOrder @Test to CustomPromptFilterTest.kt — locks PROM-06 favorites-first ordering invariant (Wave 1)
+- [ ] 03-02-PLAN.md — Extract parseLibraryJson + mergeById + applyMove into CustomPromptDefinition.Companion, wire handleImport/handleExport/handleMove as thin shells, add 10 @Test methods in new CustomPromptLibraryJsonTest.kt — locks PROM-03/04/05 + fixes distinctBy → associateBy behaviour (Wave 1)
+- [ ] 03-03-PLAN.md — Create 03-HUMAN-UAT.md with 4 maintainer-fillable scenarios — locks PROM-01/02/03/04/05 Swing-layer verification (Wave 2)
 **UI hint**: yes
 
 ### Phase 4: Release-Gating Bug Fixes
@@ -105,7 +109,7 @@ Phases 1, 2, 3, and 4 are parallel-safe and can be planned/executed concurrently
 |-------|----------------|--------|-----------|
 | 1. Perplexity Backend Audit | 0/1 | Not started | - |
 | 2. Insertion-Point Scan Audit | 3/3 | Complete   | 2026-05-13 |
-| 3. Prompt Library UX Audit | 0/TBD | Not started | - |
+| 3. Prompt Library UX Audit | 0/3 | Planned | - |
 | 4. Release-Gating Bug Fixes | 0/TBD | Not started | - |
 | 5. Documentation Refresh | 0/TBD | Not started | - |
 | 6. v0.7.0 Release Cut | 0/TBD | Not started | - |
