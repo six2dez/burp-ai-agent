@@ -1,0 +1,93 @@
+# Requirements: Burp AI Agent — v0.7.0
+
+**Defined:** 2026-05-13
+**Core Value:** Bring modern AI to a real security workflow **without** leaking sensitive traffic to third-party providers.
+
+## v1 Requirements
+
+Scope = the next release cut, `v0.7.0`. Stabilizes the three `Unreleased` CHANGELOG features (Perplexity backend, AI-scan-on-insertion-point, custom-prompt-library UX), clears the two open bugs that gate a clean release, refreshes user-facing documentation, and ships.
+
+### Perplexity Backend
+
+- [ ] **PPLX-01**: User can pick **Perplexity** in Settings → Backend with URL / Model / API key / Headers / Timeout fields pre-populated to sane defaults
+- [ ] **PPLX-02**: User running a prompt via Perplexity gets a successful chat completion against `https://api.perplexity.ai/chat/completions` (no `/v1` prefix) using a Sonar-family model
+- [ ] **PPLX-03**: Perplexity backend silently skips the unsupported `response_format: json_object` field, even when callers (e.g. passive scanner) request JSON mode — JSON intent is preserved in the system prompt
+- [ ] **PPLX-04**: Existing backends (NVIDIA NIM, Generic OpenAI-compatible) still behave identically — `OpenAiCompatibleBackend` constructor defaults are backwards-compatible
+- [ ] **PPLX-05**: Saved settings from v0.6.x load unchanged — new `perplexity*` fields default safely; no `migrateIfNeeded` bump required
+
+### AI Scan on Insertion Point
+
+- [ ] **INSP-01**: Right-clicking a request with a text selection in the editor shows **AI Scan on Selected Insertion Point** in the context menu
+- [ ] **INSP-02**: The menu item is hidden when there is no selection or the selection overlaps no candidate parameter / header / JSON field
+- [ ] **INSP-03**: User selects one or more vuln classes via the existing vuln-class picker; the active scan queues one `ActiveScanTarget` per class at priority 60 (ahead of background passive queue)
+- [ ] **INSP-04**: Selection resolution covers URL params, body params, cookies, header lines, and JSON/XML body field substrings (via Montoya `ParsedHttpParameter.valueOffsets()` then fallbacks)
+
+### Custom Prompt Library UX
+
+- [ ] **PROM-01**: User filters the Prompt Templates editor with a live, case-insensitive search across title and prompt text
+- [ ] **PROM-02**: User toggles **★ Favorite** on entries; favorites pin to the top of the editor and the right-click submenus
+- [ ] **PROM-03**: User exports the library to a pretty-printed `.json` file with favorites first
+- [ ] **PROM-04**: User imports a `.json` library file; matching ids replace existing entries, new ids append, duplicate ids in the input are de-duplicated defensively
+- [ ] **PROM-05**: Move Up / Move Down respects the favorites grouping — reorders cannot scramble the favorites/non-favorites boundary
+- [ ] **PROM-06**: Right-click submenu order matches editor order (favorites first), without re-sorting at menu-build time
+
+### Bugs Gating Release
+
+- [ ] **BUG-01** (closes #62): Release pipeline publishes the **current tagged code**, not a stale revision — release JAR, SBOM, and SHA-256 match the source at the release commit
+- [ ] **BUG-02** (closes #66): Generic OpenAI-compatible backend handles the user-reported usage error cleanly — root cause identified, surfaced with an actionable error message, fix verified against the reporter's scenario
+
+### Release Engineering
+
+- [ ] **REL-01**: `CHANGELOG.md`'s `[Unreleased]` section is promoted to `[0.7.0] - <release date>` with upgrade notes preserved and any new fixes folded in
+- [ ] **REL-02**: Version is bumped consistently (`build.gradle.kts`, any version constants, JAR name `Custom-AI-Agent-0.7.0.jar`)
+- [ ] **REL-03**: `./gradlew clean shadowJar` produces a loadable JAR on macOS, Linux, and Windows (matches existing CI matrix)
+- [ ] **REL-04**: Git tag pushed; GitHub release pipeline uploads JAR + SHA-256 + CycloneDX SBOM with release notes extracted from the matching `CHANGELOG.md` section
+- [ ] **REL-05**: `ktlintCheck`, `jacocoTestReport`, and the full test suite pass on the release commit across the existing OS matrix
+
+### Documentation
+
+- [ ] **DOC-01**: `README.md` lists Perplexity in the backend table with setup notes (default URL, sample model)
+- [ ] **DOC-02**: User-facing documentation (`burp-ai-agent.six2dez.com`) covers Perplexity backend, insertion-point scanning, and the custom prompt library UX additions
+- [ ] **DOC-03**: `SPEC.md` `## 4 Core features` reflects the Unreleased additions (Perplexity in 4.4, insertion-point scanning in 4.2 or §5.2, prompt library UX in 4.2)
+
+## v2 Requirements
+
+Deferred to a post-`v0.7.0` cycle.
+
+### Custom MCP server (issue #41)
+
+- **MCP-V2-01**: Users can register an additional, user-defined MCP server alongside the built-in one (read-only initially, unsafe-mode gated where applicable)
+
+### Telemetry-free reliability signals
+
+- **REL-V2-01**: Optional local-only structured diagnostics endpoint that users can opt into for self-debugging without sending anything offline
+
+## Out of Scope
+
+Explicitly excluded for `v0.7.0`. Tracked here to prevent scope creep.
+
+| Feature | Reason |
+|---------|--------|
+| Hot-swapping backends at runtime | SPEC non-goal — stop + restart is acceptable; complexity does not pay back |
+| Replacing Burp's native scanner | SPEC non-goal — AI scanners are complementary, secondary to Burp evidence |
+| New AI backends beyond the existing 11 | v0.7.0 is a stabilization release, not a backend-expansion release |
+| Rewriting UI in JavaFX / Compose | ADR-2 locked Swing in for native Burp embedding |
+| Outbound telemetry / crash reporting | Violates the core privacy contract; users explicitly enable audit logging instead |
+| Mobile / standalone build | Plugin only runs inside Burp; out of remit |
+
+## Traceability
+
+Empty until roadmapper maps requirements to phases.
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| _Populated by `gsd-roadmapper` during Step 8._ | | |
+
+**Coverage:**
+- v1 requirements: 25 total
+- Mapped to phases: 0 (pending roadmap)
+- Unmapped: 25
+
+---
+*Requirements defined: 2026-05-13*
+*Last updated: 2026-05-13 after initial definition*
