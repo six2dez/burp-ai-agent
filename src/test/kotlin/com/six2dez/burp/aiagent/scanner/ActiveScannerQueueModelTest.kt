@@ -140,6 +140,26 @@ class ActiveScannerQueueModelTest {
         assertEquals("SQLI", items.single().vulnClass)
     }
 
+    /**
+     * Locks the queue-saturation short-count return. Threat model T-2-02 (queue-saturation DoS /
+     * denial of service) — mitigated by maxQueueSize-bounded offerIfQueueNotFull at
+     * ActiveAiScanner.kt:257-264. Test lives in the fast suite (PR gate), NOT in
+     * ScannerQueueBackpressureTest.kt (heavy suite, excluded by -PexcludeHeavyTests=true) per
+     * PATTERNS.md "Fast-suite placement".
+     */
+    @Test
+    fun manualScanInsertionPointReturnsShortCountWhenQueueFull() {
+        val scanner = newScannerForQueueTests().apply { maxQueueSize = 2 }
+        val rr = requestResponse("http://example.com/?id=1", "id", "1")
+        val point = InjectionPoint(InjectionType.URL_PARAM, "id", "1")
+        val vulnClasses = listOf(VulnClass.SQLI, VulnClass.XSS_REFLECTED, VulnClass.CMDI, VulnClass.SSTI, VulnClass.XXE)
+
+        val count = scanner.manualScanInsertionPoint(rr, point, vulnClasses)
+
+        assertEquals(2, count)
+        assertEquals(2, scanner.getQueueItems(limit = 10).size)
+    }
+
     private fun newScannerForQueueTests(): ActiveAiScanner {
         val api = mock<MontoyaApi>(defaultAnswer = Answers.RETURNS_DEEP_STUBS)
         return ActiveAiScanner(
