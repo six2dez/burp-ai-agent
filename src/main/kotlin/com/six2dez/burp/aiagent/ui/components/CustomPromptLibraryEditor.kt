@@ -271,14 +271,9 @@ class CustomPromptLibraryEditor {
         val entry = selectedEntry() ?: return
         val idx = masterIndexOf(entry)
         if (idx < 0) return
-        // Find the next neighbour with the same favorite status — preserves grouping after move.
-        var target = idx + delta
-        while (target in master.indices && master[target].isFavorite != entry.isFavorite) {
-            target += delta
-        }
-        if (target !in master.indices) return
-        val moved = master.removeAt(idx)
-        master.add(target, moved)
+        val result = CustomPromptDefinition.applyMove(master.toList(), idx, delta)
+        master.clear()
+        master.addAll(result)
         refreshList()
         selectById(entry.id)
     }
@@ -288,23 +283,23 @@ class CustomPromptLibraryEditor {
         chooser.fileFilter = FileNameExtensionFilter("JSON files", "json")
         if (chooser.showOpenDialog(list) != JFileChooser.APPROVE_OPTION) return
         val file = chooser.selectedFile ?: return
-        val imported =
+        val text =
             try {
-                JSON_MAPPER.readValue(file, Array<CustomPromptDefinition>::class.java).toList()
+                file.readText()
             } catch (e: Exception) {
                 JOptionPane.showMessageDialog(
                     list,
-                    "Failed to parse JSON: ${e.message}",
+                    "Failed to read file: ${e.message}",
                     "Import failed",
                     JOptionPane.ERROR_MESSAGE,
                 )
                 return
             }
-        // Drop invalid entries, then de-dup by id so a malformed import file with internal
-        // duplicates can't introduce ambiguous ids into `master` (later id-based lookups would
-        // become non-deterministic). Last occurrence wins via the LinkedHashMap of distinctBy.
-        val valid = imported.filter { it.isValid() }.distinctBy { it.id }
-        if (valid.isEmpty()) {
+        // parseLibraryJson validates, filters by isValid(), and handles malformed JSON.
+        // mergeById deduplicates by id using last-occurrence-wins (associateBy, per D-02),
+        // then replaces matching ids in-place and appends new ids.
+        val parsed = CustomPromptDefinition.parseLibraryJson(text)
+        if (parsed.isEmpty()) {
             JOptionPane.showMessageDialog(
                 list,
                 "No valid prompts found in the file.",
@@ -313,18 +308,13 @@ class CustomPromptLibraryEditor {
             )
             return
         }
-        // Merge by id: incoming entries replace existing ones, new entries are appended.
-        val existingIds = master.map { it.id }.toSet()
-        val (replacements, additions) = valid.partition { it.id in existingIds }
-        replacements.forEach { incoming ->
-            val idx = master.indexOfFirst { it.id == incoming.id }
-            if (idx >= 0) master[idx] = incoming
-        }
-        master.addAll(additions)
+        val merged = CustomPromptDefinition.mergeById(master.toList(), parsed)
+        master.clear()
+        master.addAll(merged)
         refreshList()
         JOptionPane.showMessageDialog(
             list,
-            "Imported ${replacements.size} updated and ${additions.size} new prompt(s).",
+            "Imported ${parsed.size} prompt(s) merged into library.",
             "Import complete",
             JOptionPane.INFORMATION_MESSAGE,
         )
