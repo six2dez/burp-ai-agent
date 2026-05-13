@@ -31,7 +31,9 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. A unit test asserts the existing NVIDIA NIM and Generic OpenAI-compatible backends retain their pre-Perplexity behaviour (constructor defaults are backwards-compatible: `chatCompletionsBasePath = "/v1/chat/completions"`, `supportsJsonObjectResponseFormat = true`).
   4. A unit test asserts `AgentSettings` saved by v0.6.1 deserialises in v0.7.0 with the five new `perplexity*` fields defaulting safely and **no** `migrateIfNeeded` schema bump.
   5. Running a real prompt through the Perplexity backend with a valid API key returns a streamed chat completion end-to-end (manual or integration-test confirmation).
-**Plans**: TBD
+**Plans**: 1 plan
+Plans:
+- [ ] 01-01-PLAN.md — Add MockWebServer dep + write 2 new wire-level test classes (Perplexity + OpenAI defaults) + extend AgentSettingsMigrationTest with PPLX-05 + record D-06 manual smoke and D-08 wording-gap handoffs in 01-VERIFICATION.md
 
 ### Phase 2: Insertion-Point Scan Audit
 **Goal**: The right-click "AI Scan on Selected Insertion Point" action correctly resolves the selection across all Burp parameter shapes, queues active scan targets at the right priority, and hides itself when there is no valid candidate.
@@ -97,7 +99,7 @@ Phases 1, 2, 3, and 4 are parallel-safe and can be planned/executed concurrently
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Perplexity Backend Audit | 0/TBD | Not started | - |
+| 1. Perplexity Backend Audit | 0/1 | Not started | - |
 | 2. Insertion-Point Scan Audit | 0/TBD | Not started | - |
 | 3. Prompt Library UX Audit | 0/TBD | Not started | - |
 | 4. Release-Gating Bug Fixes | 0/TBD | Not started | - |
