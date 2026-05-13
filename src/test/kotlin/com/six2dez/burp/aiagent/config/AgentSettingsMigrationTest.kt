@@ -51,6 +51,23 @@ class AgentSettingsMigrationTest {
         assertEquals(3, prefs.integers["settings.schema.version"])
     }
 
+    @Test
+    fun load_v06xPreferencesYieldSafePerplexityDefaultsAndSchemaStaysV3() {
+        val prefs = InMemoryPrefs()
+        // Simulate v0.6.x install: schema marker at the version that shipped before this phase, no perplexity.* keys.
+        prefs.integers["settings.schema.version"] = 3
+
+        val repo = AgentSettingsRepository(apiWith(prefs.mock))
+        val loaded = repo.load()
+
+        assertEquals("https://api.perplexity.ai", loaded.perplexityUrl)
+        assertEquals("", loaded.perplexityModel)
+        assertEquals("", loaded.perplexityApiKey)
+        assertEquals("", loaded.perplexityHeaders)
+        assertEquals(120, loaded.perplexityTimeoutSeconds)
+        assertEquals(3, prefs.integers["settings.schema.version"])
+    }
+
     private fun apiWith(preferences: Preferences): MontoyaApi {
         val api = mock<MontoyaApi>(defaultAnswer = Answers.RETURNS_DEEP_STUBS)
         whenever(api.persistence().preferences()).thenReturn(preferences)

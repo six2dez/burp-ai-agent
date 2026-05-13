@@ -4,8 +4,8 @@ milestone: v0.7.0
 milestone_name: Release Cut
 status: executing
 stopped_at: Phase 1 context gathered
-last_updated: "2026-05-13T08:38:55.192Z"
-last_activity: 2026-05-13 -- Phase 01 planning complete
+last_updated: "2026-05-13T09:02:15.365Z"
+last_activity: 2026-05-13 -- Phase 01 execution started
 progress:
   total_phases: 6
   completed_phases: 0
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-13)
 
 **Core value:** Bring modern AI to a real security workflow without leaking sensitive traffic to third-party providers — privacy controls and an audit trail are non-negotiable, AI capability is additive.
-**Current focus:** Phase 1 — Perplexity Backend Audit (BAA / v0.7.0 milestone)
+**Current focus:** Phase 01 — perplexity-backend-audit
 
 ## Current Position
 
-Phase: 1 of 6 (Perplexity Backend Audit)
-Plan: 0 of TBD in current phase
-Status: Ready to execute
-Last activity: 2026-05-13 -- Phase 01 planning complete
+Phase: 01 (perplexity-backend-audit) — EXECUTING
+Plan: 1 of 1
+Status: Executing Phase 01
+Last activity: 2026-05-13 -- Phase 01 execution started
 
 Progress: [░░░░░░░░░░] 0%
 

@@ -50,6 +50,7 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter:6.0.3")
     testImplementation("net.portswigger.burp.extensions:montoya-api:2026.2")
     testImplementation("org.mockito.kotlin:mockito-kotlin:5.4.0")
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
 }
 
 java {
