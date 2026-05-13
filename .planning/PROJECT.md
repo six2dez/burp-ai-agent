@@ -38,7 +38,7 @@ Bring modern AI to a real security workflow **without** leaking sensitive traffi
 
 <!-- Current scope: stabilize the Unreleased changelog block and ship v0.7.0. -->
 
-- [ ] **Audit and harden the three Unreleased features** (Perplexity backend, AI-scan-on-insertion-point, custom-prompt-library UX) — verify they meet the SPEC's acceptance bar, fill any test gaps, fix open issues that surfaced during the recent "Improvements 2 / Fixes AI blockers / UX settings" iteration
+- [ ] **Audit and harden the three Unreleased features** (Perplexity backend ✓ Phase 1, AI-scan-on-insertion-point, custom-prompt-library UX) — verify they meet the SPEC's acceptance bar, fill any test gaps, fix open issues that surfaced during the recent "Improvements 2 / Fixes AI blockers / UX settings" iteration. Phase 1 (Perplexity) locked PPLX-01..05 with wire-level MockWebServer tests + settings-migration test; one HUMAN-UAT smoke pending maintainer pass.
 - [ ] **Finalize v0.7.0 release** — version bump, CHANGELOG promotion from `[Unreleased]` to `[0.7.0]`, release notes, tag, JAR upload, SBOM, SHA-256 checksum (via existing release workflow)
 - [ ] **Documentation pass** — README, `docs/`, and `burp-ai-agent.six2dez.com` reflect Perplexity backend, insertion-point scanning, and prompt-library UX changes
 - [ ] **Open-issue sweep** — review and close / triage outstanding GitHub issues against the new release scope
@@ -98,4 +98,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-13 after initialization*
+*Last updated: 2026-05-13 — Phase 1 (Perplexity backend audit) complete*
