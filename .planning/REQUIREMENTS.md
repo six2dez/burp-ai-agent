@@ -77,17 +77,39 @@ Explicitly excluded for `v0.7.0`. Tracked here to prevent scope creep.
 
 ## Traceability
 
-Empty until roadmapper maps requirements to phases.
-
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| _Populated by `gsd-roadmapper` during Step 8._ | | |
+| PPLX-01 | Phase 1 — Perplexity Backend Audit | Pending |
+| PPLX-02 | Phase 1 — Perplexity Backend Audit | Pending |
+| PPLX-03 | Phase 1 — Perplexity Backend Audit | Pending |
+| PPLX-04 | Phase 1 — Perplexity Backend Audit | Pending |
+| PPLX-05 | Phase 1 — Perplexity Backend Audit | Pending |
+| INSP-01 | Phase 2 — Insertion-Point Scan Audit | Pending |
+| INSP-02 | Phase 2 — Insertion-Point Scan Audit | Pending |
+| INSP-03 | Phase 2 — Insertion-Point Scan Audit | Pending |
+| INSP-04 | Phase 2 — Insertion-Point Scan Audit | Pending |
+| PROM-01 | Phase 3 — Prompt Library UX Audit | Pending |
+| PROM-02 | Phase 3 — Prompt Library UX Audit | Pending |
+| PROM-03 | Phase 3 — Prompt Library UX Audit | Pending |
+| PROM-04 | Phase 3 — Prompt Library UX Audit | Pending |
+| PROM-05 | Phase 3 — Prompt Library UX Audit | Pending |
+| PROM-06 | Phase 3 — Prompt Library UX Audit | Pending |
+| BUG-01 | Phase 4 — Release-Gating Bug Fixes | Pending |
+| BUG-02 | Phase 4 — Release-Gating Bug Fixes | Pending |
+| DOC-01 | Phase 5 — Documentation Refresh | Pending |
+| DOC-02 | Phase 5 — Documentation Refresh | Pending |
+| DOC-03 | Phase 5 — Documentation Refresh | Pending |
+| REL-01 | Phase 6 — v0.7.0 Release Cut | Pending |
+| REL-02 | Phase 6 — v0.7.0 Release Cut | Pending |
+| REL-03 | Phase 6 — v0.7.0 Release Cut | Pending |
+| REL-04 | Phase 6 — v0.7.0 Release Cut | Pending |
+| REL-05 | Phase 6 — v0.7.0 Release Cut | Pending |
 
 **Coverage:**
 - v1 requirements: 25 total
-- Mapped to phases: 0 (pending roadmap)
-- Unmapped: 25
+- Mapped to phases: 25 (Phase 1: 5, Phase 2: 4, Phase 3: 6, Phase 4: 2, Phase 5: 3, Phase 6: 5)
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-05-13*
-*Last updated: 2026-05-13 after initial definition*
+*Last updated: 2026-05-13 after roadmap mapping (gsd-roadmapper)*
