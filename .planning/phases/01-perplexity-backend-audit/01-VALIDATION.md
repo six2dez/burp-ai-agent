@@ -1,9 +1,9 @@
 ---
 phase: 1
 slug: perplexity-backend-audit
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: green
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-05-13
 ---
 
@@ -40,11 +40,11 @@ Fast-suite filter excludes class-name suffixes `*IntegrationTest`, `*Concurrency
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 01-01-00 | 01 | 0 | Wave-0 dep (PPLX-02/03/04 compile prerequisite) | — | N/A — additive test dep | build wiring | `./gradlew dependencies --configuration testRuntimeClasspath \| grep -i mockwebserver` | ❌ W0 (added by this task) | ⬜ pending |
-| 01-01-01 | 01 | 1 | PPLX-02, PPLX-03 | — | Outbound prompt is redacted upstream (ADR-5); tests use `TestSettings.baselineSettings()` so STRICT mode is default — token contract is implicit, not bypassed | unit (wire-level via MockWebServer) | `./gradlew test -PexcludeHeavyTests=true --tests "*PerplexityBackendFactoryTest"` | ❌ W0 (new file) | ⬜ pending |
-| 01-01-02 | 01 | 1 | PPLX-04 | — | Existing NVIDIA NIM / Generic OpenAI-compatible defaults remain backwards-compatible (no silent regression in non-Perplexity flows) | unit (wire-level via MockWebServer) | `./gradlew test -PexcludeHeavyTests=true --tests "*OpenAiCompatibleBackendDefaultsTest"` | ❌ W0 (new file) | ⬜ pending |
-| 01-01-03 | 01 | 1 | PPLX-05 | — | v0.6.x saved preferences load with safe defaults; no `migrateIfNeeded` schema bump | unit (settings deserialisation, `InMemoryPrefs` pattern) | `./gradlew test -PexcludeHeavyTests=true --tests "*AgentSettingsMigrationTest"` | ✅ EXTEND existing | ⬜ pending |
-| 01-01-04 | 01 | 2 | PPLX-01 (indirect coverage via PPLX-05 defaults + existing `SettingsDefaultsPersistenceTest`) and full-phase verification | — | Full fast suite green; ktlintCheck green; manual smoke recorded | gate | `./gradlew test -PexcludeHeavyTests=true && ./gradlew ktlintCheck` | ✅ existing | ⬜ pending |
+| 01-01-00 | 01 | 0 | Wave-0 dep (PPLX-02/03/04 compile prerequisite) | — | N/A — additive test dep | build wiring | `./gradlew dependencies --configuration testRuntimeClasspath \| grep -i mockwebserver` | ✅ added | ✅ green |
+| 01-01-01 | 01 | 1 | PPLX-02, PPLX-03 | — | Outbound prompt is redacted upstream (ADR-5); tests use `TestSettings.baselineSettings()` so STRICT mode is default — token contract is implicit, not bypassed | unit (wire-level via MockWebServer) | `./gradlew test -PexcludeHeavyTests=true --tests "*PerplexityBackendFactoryTest"` | ✅ new file | ✅ green |
+| 01-01-02 | 01 | 1 | PPLX-04 | — | Existing NVIDIA NIM / Generic OpenAI-compatible defaults remain backwards-compatible (no silent regression in non-Perplexity flows) | unit (wire-level via MockWebServer) | `./gradlew test -PexcludeHeavyTests=true --tests "*OpenAiCompatibleBackendDefaultsTest"` | ✅ new file | ✅ green |
+| 01-01-03 | 01 | 1 | PPLX-05 | — | v0.6.x saved preferences load with safe defaults; no `migrateIfNeeded` schema bump | unit (settings deserialisation, `InMemoryPrefs` pattern) | `./gradlew test -PexcludeHeavyTests=true --tests "*AgentSettingsMigrationTest"` | ✅ EXTEND existing | ✅ green |
+| 01-01-04 | 01 | 2 | PPLX-01 (indirect coverage via PPLX-05 defaults + existing `SettingsDefaultsPersistenceTest`) and full-phase verification | — | Full fast suite green; ktlintCheck green; manual smoke recorded | gate | `./gradlew test -PexcludeHeavyTests=true && ./gradlew ktlintCheck` | ✅ existing | ✅ green |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -83,4 +83,4 @@ No new shared fixtures: `TestSettings.baselineSettings()` and the existing priva
 - [ ] Feedback latency < 60 s (full fast suite; per-task command <10 s)
 - [ ] `nyquist_compliant: true` set in frontmatter — flipped by `/gsd-validate-phase` after Wave 2 closes
 
-**Approval:** pending
+**Approval:** green
