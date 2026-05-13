@@ -810,17 +810,17 @@ fun load_v06xPreferencesYieldSafePerplexityDefaultsAndSchemaStaysV3() {
 
 **Note:** This is the only `[ASSUMED]` claim in this research. Every other claim was directly verified against the source files at `HEAD` of the working tree.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Should `OpenAiCompatibleBackendDefaultsTest` exercise NVIDIA NIM directly (via `NvidiaNimBackendFactory`) or only `OpenAiCompatibleBackend()` with default args?**
    - What we know: D-07 mentions "backwards-compat defaults for NVIDIA NIM and Generic OpenAI-compatible", suggesting both. NVIDIA's factory adds `payloadCustomizer`, `defaultHeaders`, `healthCheckProvider`, but **does NOT override** `chatCompletionsBasePath` or `supportsJsonObjectResponseFormat`. So testing the bare `OpenAiCompatibleBackend()` constructor covers NVIDIA's URL/JSON-mode behaviour too.
    - What's unclear: whether to also assert NVIDIA's `payloadCustomizer` side-effects (e.g. `max_tokens = 16384`) in the same test class — those are a separate concern.
-   - Recommendation: scope `OpenAiCompatibleBackendDefaultsTest` strictly to the two constructor knobs under audit. Leave NVIDIA-specific payload assertions for a future NVIDIA audit phase (if scheduled).
+   - RESOLVED: scope `OpenAiCompatibleBackendDefaultsTest` strictly to the two constructor knobs under audit. Leave NVIDIA-specific payload assertions for a future NVIDIA audit phase (if scheduled).
 
 2. **`passesBearerTokenAndStreamHeader` smoke — include or skip?**
    - What we know: Perplexity factory ships `defaultHeaders = mapOf("Accept" to "text/event-stream")`. The Bearer token comes from `BackendLaunchConfig.headers`. Both are observable on `RecordedRequest`.
    - What's unclear: whether locking these is in scope; they were not explicitly listed in CONTEXT.md `<specifics>`.
-   - Recommendation: include the smoke test in `PerplexityBackendFactoryTest` as a single `@Test` (5 lines), since it's cheap and locks a useful surface. Planner can drop it if budget is tight.
+   - RESOLVED: include the smoke test in `PerplexityBackendFactoryTest` as a single `@Test` (5 lines), since it's cheap and locks a useful surface. Planner can drop it if budget is tight.
 
 ## Recommended Plan Structure
 
