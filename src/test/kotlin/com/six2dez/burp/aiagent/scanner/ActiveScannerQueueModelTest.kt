@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.mockito.Answers
+import org.mockito.kotlin.any
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
 import kotlin.test.assertEquals
@@ -87,6 +88,35 @@ class ActiveScannerQueueModelTest {
         assertEquals(3, secondCount)
         val totalItems = scanner.getQueueItems(limit = 10)
         assertEquals(6, totalItems.size)
+    }
+
+    /**
+     * Locks the out-of-scope short-circuit at ActiveAiScanner.kt:225. Threat model T-2-01
+     * (out-of-scope target leakage / information disclosure) — mitigated by scopeOnly +
+     * api.scope().isInScope() gate.
+     */
+    @Test
+    fun manualScanInsertionPointReturnsZeroAndDoesNotQueueWhenOutOfScope() {
+        val api = mock<MontoyaApi>(defaultAnswer = Answers.RETURNS_DEEP_STUBS)
+        whenever(api.scope().isInScope(any<String>())).thenReturn(false)
+        val scanner =
+            ActiveAiScanner(
+                api = api,
+                supervisor = mock<AgentSupervisor>(),
+                audit = mock<AuditLogger>(),
+                getSettings = { baselineSettings() },
+            ).apply {
+                scopeOnly = true
+                maxQueueSize = 64
+                scanMode = ScanMode.FULL
+            }
+        val rr = requestResponse("http://out-of-scope.example.com/?id=1", "id", "1")
+        val point = InjectionPoint(InjectionType.URL_PARAM, "id", "1")
+
+        val count = scanner.manualScanInsertionPoint(rr, point, listOf(VulnClass.SQLI))
+
+        assertEquals(0, count)
+        assertTrue(scanner.getQueueItems(limit = 10).isEmpty())
     }
 
     private fun newScannerForQueueTests(): ActiveAiScanner {
