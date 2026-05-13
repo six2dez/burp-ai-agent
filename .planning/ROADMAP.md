@@ -44,7 +44,11 @@ Plans:
   2. The menu item is hidden when the selection is empty or overlaps no candidate parameter / header / JSON field (verified by both a unit test on the resolver and a manual smoke check).
   3. Selecting one or more vuln classes via the existing picker queues exactly one `ActiveScanTarget` per class at priority 60 — ahead of the background passive queue — verified by a unit test against the active-scanner queue.
   4. Selection resolution covers (a) URL parameters via `ParsedHttpParameter.valueOffsets()`, (b) body parameters, (c) cookies, (d) header lines, and (e) JSON/XML body field substring matches, each covered by a unit test.
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 02-01-PLAN.md — Add 5 resolver sub-case @Test methods to InjectionPointExtractorTest.kt (BODY_PARAM, COOKIE, XML_ELEMENT, PATH_SEGMENT, non-empty headerAllowlist) — locks INSP-04 + INSP-02 boundary
+- [ ] 02-02-PLAN.md — Add 4 queue-contract @Test methods to ActiveScannerQueueModelTest.kt (one-per-class + dedup-bypass, out-of-scope short-circuit, PASSIVE_ONLY filter, queue-full short count) — locks INSP-03 + threats T-2-01/T-2-02
+- [ ] 02-03-PLAN.md — Create 02-HUMAN-UAT.md scaffolding with 6 maintainer-fillable scenarios — locks INSP-01 + INSP-02 UI-builder branches per D-08/D-09
 **UI hint**: yes
 
 ### Phase 3: Prompt Library UX Audit
@@ -100,7 +104,7 @@ Phases 1, 2, 3, and 4 are parallel-safe and can be planned/executed concurrently
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Perplexity Backend Audit | 0/1 | Not started | - |
-| 2. Insertion-Point Scan Audit | 0/TBD | Not started | - |
+| 2. Insertion-Point Scan Audit | 0/3 | Not started | - |
 | 3. Prompt Library UX Audit | 0/TBD | Not started | - |
 | 4. Release-Gating Bug Fixes | 0/TBD | Not started | - |
 | 5. Documentation Refresh | 0/TBD | Not started | - |
