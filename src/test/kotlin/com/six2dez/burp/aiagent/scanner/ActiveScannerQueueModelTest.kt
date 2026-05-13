@@ -58,6 +58,37 @@ class ActiveScannerQueueModelTest {
         assertTrue(scanner.getQueueItems(limit = 10).isEmpty())
     }
 
+    /**
+     * Priority 60 is hardcoded at ActiveAiScanner.kt:235; ActiveScanQueueItem does not surface
+     * priority, so the queueing-success assertions below prove the per-class loop fired.
+     * Reflection into the private scanQueue is forbidden by D-04; adding a priority field to
+     * ActiveScanQueueItem is out of audit scope.
+     */
+    @Test
+    fun manualScanInsertionPointQueuesOnePerClassAtPriority60WithoutDedup() {
+        val scanner = newScannerForQueueTests()
+        val rr = requestResponse("http://example.com/?id=1", "id", "1")
+        val point = InjectionPoint(InjectionType.URL_PARAM, "id", "1")
+        val vulnClasses = listOf(VulnClass.SQLI, VulnClass.XSS_REFLECTED, VulnClass.CMDI)
+
+        // Invariant 1: queue size after first invocation
+        val firstCount = scanner.manualScanInsertionPoint(rr, point, vulnClasses)
+        assertEquals(3, firstCount)
+        val firstItems = scanner.getQueueItems(limit = 10)
+        assertEquals(3, firstItems.size)
+
+        // Invariant 2: per-item vuln-class set + injectionPoint stringification
+        assertEquals(setOf("SQLI", "XSS_REFLECTED", "CMDI"), firstItems.map { it.vulnClass }.toSet())
+        assertTrue(firstItems.all { it.injectionPoint == "URL_PARAM:id" })
+        assertTrue(firstItems.all { it.status == "QUEUED" })
+
+        // Invariant 3: dedup-bypass on re-invoke (D-12 folded per CONTEXT.md)
+        val secondCount = scanner.manualScanInsertionPoint(rr, point, vulnClasses)
+        assertEquals(3, secondCount)
+        val totalItems = scanner.getQueueItems(limit = 10)
+        assertEquals(6, totalItems.size)
+    }
+
     private fun newScannerForQueueTests(): ActiveAiScanner {
         val api = mock<MontoyaApi>(defaultAnswer = Answers.RETURNS_DEEP_STUBS)
         return ActiveAiScanner(
