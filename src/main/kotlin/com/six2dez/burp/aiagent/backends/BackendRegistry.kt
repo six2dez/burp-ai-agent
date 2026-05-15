@@ -12,6 +12,7 @@ import com.six2dez.burp.aiagent.backends.lmstudio.LmStudioBackendFactory
 import com.six2dez.burp.aiagent.backends.nvidia.NvidiaNimBackendFactory
 import com.six2dez.burp.aiagent.backends.ollama.OllamaBackendFactory
 import com.six2dez.burp.aiagent.backends.openai.OpenAiCompatibleBackendFactory
+import com.six2dez.burp.aiagent.backends.perplexity.PerplexityBackendFactory
 import com.six2dez.burp.aiagent.config.AgentSettings
 import java.io.File
 import java.net.URLClassLoader
@@ -36,8 +37,15 @@ class BackendRegistry(
         availabilityCache.clear()
         closeExternalClassLoader()
 
-        // Built-ins (same extension JAR)
-        val builtIns = ServiceLoader.load(AiBackendFactory::class.java).toList()
+        // Built-ins (same extension JAR). Pass the extension's classloader explicitly — Burp loads
+        // each extension under its own classloader, so the default `Thread.currentThread()
+        // .contextClassLoader` may not see this JAR's META-INF/services and ServiceLoader would
+        // silently return an empty list, falling back to the hardcoded list below. Using the class
+        // own loader resolves all registered factories reliably.
+        val builtIns =
+            ServiceLoader
+                .load(AiBackendFactory::class.java, AiBackendFactory::class.java.classLoader)
+                .toList()
         if (builtIns.isEmpty()) {
             api.logging().logToOutput("No AiBackendFactory found via ServiceLoader; falling back to built-ins.")
             listOf(
@@ -50,6 +58,7 @@ class BackendRegistry(
                 NvidiaNimBackendFactory(),
                 OpenAiCompatibleBackendFactory(),
                 CopilotCliBackendFactory(),
+                PerplexityBackendFactory(),
             ).forEach { f ->
                 val b = f.create()
                 backends[b.id] = b
