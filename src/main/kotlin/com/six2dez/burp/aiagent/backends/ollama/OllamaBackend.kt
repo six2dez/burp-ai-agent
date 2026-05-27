@@ -30,6 +30,20 @@ class OllamaBackend : AiBackend {
 
     private val mapper = ObjectMapper().registerKotlinModule()
 
+    /**
+     * Optional, supervisor-injected [MontoyaHttpTransport] used by [healthCheck]. Null only on the
+     * unit-test path (tests construct backends directly without a supervisor); production wiring
+     * lives in [com.six2dez.burp.aiagent.supervisor.AgentSupervisor]'s init block.
+     */
+    @Volatile
+    private var healthCheckTransport: MontoyaHttpTransport? = null
+
+    fun setHealthCheckTransport(transport: MontoyaHttpTransport) {
+        healthCheckTransport = transport
+    }
+
+    fun healthCheckTransport(): MontoyaHttpTransport? = healthCheckTransport
+
     companion object {
         private const val DEFAULT_CONTEXT_WINDOW = 8192
     }
@@ -75,10 +89,18 @@ class OllamaBackend : AiBackend {
                 settings.ollamaApiKey,
                 HeaderParser.parse(settings.ollamaHeaders),
             )
-        return HttpBackendSupport.healthCheckGet(
-            url = "${baseUrl.trimEnd('/')}/api/tags",
-            headers = headers,
-        )
+        val url = "${baseUrl.trimEnd('/')}/api/tags"
+        // BUG-69-01: prefer supervisor-injected MontoyaHttpTransport so health check honors Burp's
+        // upstream proxy / SOCKS / cert store. Fall through to OkHttp only on the unit-test path.
+        val transport = healthCheckTransport
+        return if (transport != null) {
+            transport.healthCheckGet(url, headers, timeoutMs = 3_000)
+        } else {
+            HttpBackendSupport.healthCheckGet(
+                url = url,
+                headers = headers,
+            )
+        }
     }
 
     private fun detectContextWindow(
