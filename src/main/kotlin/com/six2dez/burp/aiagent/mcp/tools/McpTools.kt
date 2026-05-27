@@ -1339,6 +1339,18 @@ object McpToolExecutor {
                                 "MCP HTTP/1.1 request: ${context.resolveHost(input.targetHostname)}:${input.targetPort}",
                             )
                             val fixedContent = normalizeHttpRequest(input.content)
+                            // 07-03 D-03: derive the URL from the parameters and reject BEFORE
+                            // constructing the HttpRequest, so out-of-scope calls never produce
+                            // outbound traffic. URL derivation is equivalent to request.url() for
+                            // scope-check purposes.
+                            val scopeUrl =
+                                McpScopeFilter.deriveScopeUrl(
+                                    context.resolveHost(input.targetHostname),
+                                    input.targetPort,
+                                    input.usesHttps,
+                                    fixedContent,
+                                )
+                            McpScopeFilter.rejectIfOutOfScope(scopeUrl, context)?.let { return@runTool it }
                             val request = HttpRequest.httpRequest(input.toMontoyaService(context::resolveHost), fixedContent)
                             val response = api.http().sendRequest(request, RequestOptions.requestOptions().withUpstreamTLSVerification())
                             response?.toString() ?: "<no response>"
@@ -1362,6 +1374,19 @@ object McpToolExecutor {
                                     }
                                 }
 
+                            // 07-03 D-03: derive the URL from pseudo-headers + target tuple BEFORE
+                            // constructing any Montoya factory objects, so the scope check runs
+                            // even when downstream factories are unavailable (and out-of-scope
+                            // calls never trigger header construction).
+                            val h2Path = fixedPseudoHeaders[":path"] ?: input.pseudoHeaders["path"] ?: "/"
+                            val scopeUrl =
+                                McpScopeFilter.deriveScopeUrl(
+                                    context.resolveHost(input.targetHostname),
+                                    input.targetPort,
+                                    input.usesHttps,
+                                    "GET $h2Path HTTP/2",
+                                )
+                            McpScopeFilter.rejectIfOutOfScope(scopeUrl, context)?.let { return@runTool it }
                             val headerList =
                                 (fixedPseudoHeaders + input.headers).map {
                                     HttpHeader.httpHeader(it.key.lowercase(), it.value)
@@ -1381,6 +1406,16 @@ object McpToolExecutor {
                         }
                         "repeater_tab" -> {
                             val input = decode<CreateRepeaterTab>(normalizedArgs)
+                            // 07-03 D-03: reject BEFORE constructing the HttpRequest so out-of-scope
+                            // URLs never produce any api.repeater() interaction.
+                            val scopeUrl =
+                                McpScopeFilter.deriveScopeUrl(
+                                    context.resolveHost(input.targetHostname),
+                                    input.targetPort,
+                                    input.usesHttps,
+                                    input.content,
+                                )
+                            McpScopeFilter.rejectIfOutOfScope(scopeUrl, context)?.let { return@runTool it }
                             val request = HttpRequest.httpRequest(input.toMontoyaService(context::resolveHost), input.content)
                             api.repeater().sendToRepeater(request, input.tabName)
                             "Repeater tab created"
@@ -1388,12 +1423,31 @@ object McpToolExecutor {
                         "repeater_tab_with_payload" -> {
                             val input = decode<RepeaterTabWithPayload>(normalizedArgs)
                             val rendered = applyReplacements(input.content, input.replacements)
+                            // 07-03 D-03: reject AFTER replacements (so the final URL is checked)
+                            // but BEFORE constructing the HttpRequest.
+                            val scopeUrl =
+                                McpScopeFilter.deriveScopeUrl(
+                                    context.resolveHost(input.targetHostname),
+                                    input.targetPort,
+                                    input.usesHttps,
+                                    rendered,
+                                )
+                            McpScopeFilter.rejectIfOutOfScope(scopeUrl, context)?.let { return@runTool it }
                             val request = HttpRequest.httpRequest(input.toMontoyaService(context::resolveHost), rendered)
                             api.repeater().sendToRepeater(request, input.tabName)
                             "Repeater tab created"
                         }
                         "intruder" -> {
                             val input = decode<SendToIntruder>(normalizedArgs)
+                            // 07-03 D-03: reject BEFORE constructing the HttpRequest.
+                            val scopeUrl =
+                                McpScopeFilter.deriveScopeUrl(
+                                    context.resolveHost(input.targetHostname),
+                                    input.targetPort,
+                                    input.usesHttps,
+                                    input.content,
+                                )
+                            McpScopeFilter.rejectIfOutOfScope(scopeUrl, context)?.let { return@runTool it }
                             val request = HttpRequest.httpRequest(input.toMontoyaService(context::resolveHost), input.content)
                             api.intruder().sendToIntruder(request, input.tabName)
                             "Sent to Intruder"
@@ -1401,6 +1455,16 @@ object McpToolExecutor {
                         "intruder_prepare" -> {
                             val input = decode<IntruderPrepare>(normalizedArgs)
                             val fixed = input.content.replace("\r", "").replace("\n", "\r\n")
+                            // 07-03 D-03: derive scope URL from the target tuple + raw content,
+                            // reject BEFORE constructing the byte template or calling api.intruder().
+                            val scopeUrl =
+                                McpScopeFilter.deriveScopeUrl(
+                                    context.resolveHost(input.targetHostname),
+                                    input.targetPort,
+                                    input.usesHttps,
+                                    fixed,
+                                )
+                            McpScopeFilter.rejectIfOutOfScope(scopeUrl, context)?.let { return@runTool it }
                             val byteArray =
                                 burp.api.montoya.core.ByteArray
                                     .byteArray(fixed)
@@ -1798,8 +1862,10 @@ object McpToolExecutor {
                                     preprocessProxyHistory = !includeRaw,
                                 )
                             val seq = orderedProxyHistory(items, context) { it.request()?.toString().orEmpty() }
+                            // 07-03 D-03: filter by Burp scope when mcpScopeOnly is on.
+                            val scoped = McpScopeFilter.filterInScope(seq, { it.request()?.url() }, context)
                             context.limitedJoin(
-                                seq
+                                scoped
                                     .drop(input.offset)
                                     .take(input.count)
                                     .map { toolJson.encodeToString(it.toSerializableForm(preprocess)) },
@@ -1816,8 +1882,10 @@ object McpToolExecutor {
                                     preprocessProxyHistory = !includeRaw,
                                 )
                             val seq = orderedProxyHistory(items, context) { it.request()?.toString().orEmpty() }
+                            // 07-03 D-03: filter by Burp scope when mcpScopeOnly is on.
+                            val scoped = McpScopeFilter.filterInScope(seq, { it.request()?.url() }, context)
                             context.limitedJoin(
-                                seq
+                                scoped
                                     .drop(input.offset)
                                     .take(input.count)
                                     .map { toolJson.encodeToString(it.toSerializableForm(preprocess)) },
@@ -1829,10 +1897,13 @@ object McpToolExecutor {
                             val items = api.proxy().history { it.contains(compiledRegex) }
                             val highlightColor = parseHighlightColor(input.highlight)
                             val limitValue = input.limit.coerceAtLeast(1).coerceAtMost(500)
+                            // 07-03 D-03: per-call scopeOnly retained as a backwards-compatible
+                            // override; OR'd with the global ctx.scopeOnly so either gate filters.
+                            val effectiveScopeOnly = input.scopeOnly || context.scopeOnly
                             val annotated = mutableListOf<String>()
                             for (item in items) {
                                 val url = item.request()?.url() ?: continue
-                                if (input.scopeOnly && !api.scope().isInScope(url)) continue
+                                if (effectiveScopeOnly && !api.scope().isInScope(url)) continue
                                 if (input.note.isNotBlank()) {
                                     item.annotations().setNotes(input.note)
                                 }
@@ -1854,10 +1925,12 @@ object McpToolExecutor {
                         "response_body_search" -> {
                             val input = decode<ResponseBodySearch>(normalizedArgs)
                             val compiledRegex = Pattern.compile(input.regex)
+                            // 07-03 D-03: per-call scopeOnly retained as override; OR'd with global.
+                            val effectiveScopeOnly = input.scopeOnly || context.scopeOnly
                             val matches = mutableListOf<String>()
                             api.proxy().history().forEach { item ->
                                 val url = item.request()?.url() ?: return@forEach
-                                if (input.scopeOnly && !api.scope().isInScope(url)) return@forEach
+                                if (effectiveScopeOnly && !api.scope().isInScope(url)) return@forEach
                                 val response = item.response()?.toString().orEmpty()
                                 if (response.isBlank()) return@forEach
                                 val body = response.substringAfter("\r\n\r\n", "")
@@ -1882,8 +1955,12 @@ object McpToolExecutor {
                                 } else {
                                     items.asSequence()
                                 }
+                            // 07-03 D-03: filter WebSocket frames by the upgrade-request URL when
+                            // mcpScopeOnly is on. ProxyWebSocketMessage.upgradeRequest() returns
+                            // a non-null HttpRequest (Montoya 2026.2) so .url() is always derivable.
+                            val scoped = McpScopeFilter.filterInScope(seq, { it.upgradeRequest()?.url() }, context)
                             context.limitedJoin(
-                                seq
+                                scoped
                                     .drop(input.offset)
                                     .take(input.count)
                                     .map { toolJson.encodeToString(it.toSerializableForm()) },
@@ -1899,8 +1976,10 @@ object McpToolExecutor {
                                 } else {
                                     items.asSequence()
                                 }
+                            // 07-03 D-03: same upgrade-URL scope filter as proxy_ws_history.
+                            val scoped = McpScopeFilter.filterInScope(seq, { it.upgradeRequest()?.url() }, context)
                             context.limitedJoin(
-                                seq
+                                scoped
                                     .drop(input.offset)
                                     .take(input.count)
                                     .map { toolJson.encodeToString(it.toSerializableForm()) },
@@ -1915,8 +1994,10 @@ object McpToolExecutor {
                                 } else {
                                     items.asSequence()
                                 }
+                            // 07-03 D-03: filter site-map entries by scope when mcpScopeOnly is on.
+                            val scoped = McpScopeFilter.filterInScope(seq, { it.request()?.url() }, context)
                             context.limitedJoin(
-                                seq
+                                scoped
                                     .drop(input.offset)
                                     .take(input.count)
                                     .map { toolJson.encodeToString(it.toSiteMapEntry()) },
@@ -1936,8 +2017,10 @@ object McpToolExecutor {
                                 } else {
                                     items.asSequence()
                                 }
+                            // 07-03 D-03: scope filter applied AFTER the user-supplied SiteMapFilter.
+                            val scoped = McpScopeFilter.filterInScope(seq, { it.request()?.url() }, context)
                             context.limitedJoin(
-                                seq
+                                scoped
                                     .drop(input.offset)
                                     .take(input.count)
                                     .map { toolJson.encodeToString(it.toSiteMapEntry()) },

@@ -72,4 +72,46 @@ internal object McpScopeFilter {
         if (ctx.api.scope().isInScope(url)) return null
         return "Refused: $url is out of scope (mcpScopeOnly=true). Use scope_include to add it."
     }
+
+    /**
+     * Derives an HTTPish URL from a Burp [HttpServiceParams]-style triple (hostname/port/https)
+     * and a raw HTTP request content. The path is extracted from the request line
+     * (`METHOD path HTTP/x.y`) if present; falls back to `/` when no path can be parsed.
+     *
+     * Used by write-style MCP tools to perform the scope check BEFORE constructing the
+     * Montoya `HttpRequest` (which requires Burp's static factory and so is unavailable in
+     * pure-JVM unit tests). The resulting URL is equivalent to what `HttpRequest.url()` would
+     * return at runtime, modulo any query rewriting Burp itself does — both flow into
+     * `api.scope().isInScope(...)` identically.
+     */
+    fun deriveScopeUrl(
+        hostname: String,
+        port: Int,
+        usesHttps: Boolean,
+        rawRequest: String,
+    ): String {
+        val scheme = if (usesHttps) "https" else "http"
+        val path =
+            rawRequest
+                .lineSequence()
+                .firstOrNull { it.isNotBlank() }
+                ?.let { line ->
+                    // Request-line format: METHOD SP request-target SP HTTP-version
+                    val parts = line.trim().split(' ', limit = 3)
+                    parts.getOrNull(1)?.takeIf { it.isNotBlank() }
+                }
+                ?: "/"
+        val portSuffix =
+            when {
+                usesHttps && port == 443 -> ""
+                !usesHttps && port == 80 -> ""
+                else -> ":$port"
+            }
+        // request-target may already be an absolute URI (CONNECT, OPTIONS *); pass it through.
+        return if (path.startsWith("http://") || path.startsWith("https://") || path == "*") {
+            path
+        } else {
+            "$scheme://$hostname$portSuffix$path"
+        }
+    }
 }
