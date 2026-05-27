@@ -4,14 +4,14 @@ milestone: v0.7.0
 milestone_name: Release Cut
 status: completed
 stopped_at: Phase 3 context gathered
-last_updated: "2026-05-13T12:40:13.975Z"
-last_activity: 2026-05-13 -- Phase 3 marked complete
+last_updated: "2026-05-27T11:27:42.627Z"
+last_activity: 2026-05-27 -- Phase 07 marked complete
 progress:
-  total_phases: 6
+  total_phases: 7
   completed_phases: 3
-  total_plans: 7
-  completed_plans: 7
-  percent: 50
+  total_plans: 11
+  completed_plans: 10
+  percent: 43
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-13)
 
 **Core value:** Bring modern AI to a real security workflow without leaking sensitive traffic to third-party providers — privacy controls and an audit trail are non-negotiable, AI capability is additive.
-**Current focus:** Phase 2 — Insertion-Point Scan Audit
+**Current focus:** Phase 07 — Proxy Transport + MCP Scope Hardening
 
 ## Current Position
 
-Phase: 3 — COMPLETE
+Phase: 07 — COMPLETE
 Plan: 1 of 3
-Status: Phase 3 complete
-Last activity: 2026-05-27 -- Completed quick task 260527-f7q: Fix bugs 66, 67, 68 (CLI tokenizer, Copilot CLI hang, OpenAI-compatible diagnostics)
+Status: Phase 07 complete
+Last activity: 2026-05-27 -- Phase 07 marked complete
 
 Progress: [░░░░░░░░░░] 0%
 

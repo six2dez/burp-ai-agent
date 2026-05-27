@@ -18,7 +18,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 4: Release-Gating Bug Fixes** - Close #62 (release pipeline publishes stale code) and #66 (openai-compatible usage error)
 - [ ] **Phase 5: Documentation Refresh** - README, `burp-ai-agent.six2dez.com`, and `SPEC.md` reflect the three Unreleased features
 - [ ] **Phase 6: v0.7.0 Release Cut** - Promote CHANGELOG, bump version, build, tag, publish JAR + SBOM + SHA-256, CI green on matrix
-- [ ] **Phase 7: Proxy Transport + MCP Scope Hardening** - Close #69: route all AI-backend HTTP via Montoya, small-model context defaults, MCP in-scope-only enforcement
+- [x] **Phase 7: Proxy Transport + MCP Scope Hardening** - Close #69: route all AI-backend HTTP via Montoya, small-model context defaults, MCP in-scope-only enforcement (completed 2026-05-27)
 
 ## Phase Details
 
@@ -103,9 +103,9 @@ Plans:
   7. Unit tests cover (a) `MontoyaHttpTransport.get()` is invoked for the health-check path, (b) small-model mode emits a 1500/750 ContextCapture, (c) every scope-aware MCP tool short-circuits when `mcpScopeOnly=true` and the target is out of scope.
 **Plans**: 3 plans
 Plans:
-- [ ] 07-01-PLAN.md — Transport unification: route healthCheck for OpenAi/LmStudio/Ollama/NvidiaNim through MontoyaHttpTransport, remove OkHttp send() fallback, fix misleading buildClient KDoc (Wave 1, BUG-69-01)
-- [ ] 07-02-PLAN.md — Small-model defaults: add `chat.smallModelMode` toggle that caps ContextCollector to 1500/750 chars + convert MCP body-cap UI from MB to KB (range 32-102400) + lower storage floor to 32 KB (Wave 1, BUG-69-02)
-- [ ] 07-03-PLAN.md — MCP scope enforcement: add `mcpScopeOnly` setting + checkbox + McpScopeFilter helper; filter every read-style MCP tool to in-scope hosts; reject out-of-scope URLs in write-style tools (Wave 2, BUG-69-03)
+- [x] 07-01-PLAN.md — Transport unification: route healthCheck for OpenAi/LmStudio/Ollama/NvidiaNim through MontoyaHttpTransport, remove OkHttp send() fallback, fix misleading buildClient KDoc (Wave 1, BUG-69-01)
+- [x] 07-02-PLAN.md — Small-model defaults: add `chat.smallModelMode` toggle that caps ContextCollector to 1500/750 chars + convert MCP body-cap UI from MB to KB (range 32-102400) + lower storage floor to 32 KB (Wave 1, BUG-69-02)
+- [x] 07-03-PLAN.md — MCP scope enforcement: add `mcpScopeOnly` setting + checkbox + McpScopeFilter helper; filter every read-style MCP tool to in-scope hosts; reject out-of-scope URLs in write-style tools (Wave 2, BUG-69-03)
 
 ### Phase 6: v0.7.0 Release Cut
 **Goal**: v0.7.0 is tagged, built, and published with a complete release artefact set (JAR + SHA-256 + SBOM + release notes) on a green CI matrix across macOS, Linux, and Windows.
@@ -132,4 +132,4 @@ Phases 1, 2, 3, and 4 are parallel-safe and can be planned/executed concurrently
 | 4. Release-Gating Bug Fixes | 0/TBD | Not started | - |
 | 5. Documentation Refresh | 0/TBD | Not started | - |
 | 6. v0.7.0 Release Cut | 0/TBD | Not started | - |
-| 7. Proxy Transport + MCP Scope Hardening | 0/3 | Not started | - |
+| 7. Proxy Transport + MCP Scope Hardening | 3/3 | Complete   | 2026-05-27 |
