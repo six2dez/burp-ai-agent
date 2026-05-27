@@ -30,6 +30,9 @@ data class McpToolContext(
     val preprocessFilterBinaryContent: Boolean = Defaults.PREPROCESS_FILTER_BINARY_CONTENT,
     val preprocessAllowedContentTypes: Set<String> = Defaults.PREPROCESS_ALLOWED_CONTENT_TYPES,
     val aiRequestLogger: AiRequestLogger? = null,
+    // 07-03 D-03: when true, McpScopeFilter restricts every scope-aware MCP tool to
+    // in-scope hosts. Default false preserves bytewise behaviour for legacy call sites.
+    val scopeOnly: Boolean = false,
 ) {
     fun isToolEnabled(name: String): Boolean = toolToggles[name] ?: false
 

@@ -257,6 +257,15 @@ class SettingsPanel(
             settings.mcpSettings.allowUnpreprocessedProxyHistory,
         )
     private val mcpUnsafe = JCheckBox("Unsafe mode (allow write/mutation tools)", settings.mcpSettings.unsafeEnabled)
+
+    // 07-03 D-03: global "Restrict MCP tools to in-scope hosts" toggle. Mirrors the JCheckBox
+    // pattern used by mcpExternal / mcpUnsafe / passiveAiScopeOnly / activeAiScopeOnly so it stays
+    // consistent with the rest of the MCP section. Closes GitHub issue #69 sub-concern 4.
+    private val mcpScopeOnly =
+        JCheckBox(
+            "Restrict MCP tools to in-scope hosts",
+            settings.mcpSettings.scopeOnly,
+        )
     private val preprocessProxyHistory = ToggleSwitch(settings.preprocessProxyHistory)
     private val preprocessMaxResponseSizeKb =
         JSpinner(
@@ -572,6 +581,11 @@ class SettingsPanel(
         mcpStdio.font = UiTheme.Typography.body
         mcpUnsafe.font = UiTheme.Typography.body
         mcpUnsafe.toolTipText = "Allows tools that modify Burp state, write files, or send active requests."
+        // 07-03 D-03: mirror the styling of mcpUnsafe so the new toggle blends into the section.
+        mcpScopeOnly.font = UiTheme.Typography.body
+        mcpScopeOnly.toolTipText =
+            "When enabled, MCP tools that return Burp HTTP data only include in-scope items, " +
+                "and send_request-style tools refuse out-of-scope URLs. Issue #69."
         preprocessProxyHistory.toolTipText =
             "Preprocess proxy history before MCP returns it, reducing context-window overflow from large or binary responses."
         preprocessMaxResponseSizeKb.toolTipText =
@@ -1000,6 +1014,8 @@ class SettingsPanel(
                 toolToggles = collectMcpToolToggles(),
                 enabledUnsafeTools = collectEnabledUnsafeTools(),
                 unsafeEnabled = mcpUnsafe.isSelected,
+                // 07-03 D-03: persist the global MCP scope toggle on the McpSettings sub-object.
+                scopeOnly = mcpScopeOnly.isSelected,
             )
         val backendState = backendConfigPanel.currentBackendSettings()
         val ollamaTimeoutSeconds =
@@ -1228,6 +1244,8 @@ class SettingsPanel(
             if (updated.mcpSettings.proxyHistoryNewestFirst) "Newest first" else "Oldest first"
         mcpAllowUnpreprocessedProxyHistory.isSelected = updated.mcpSettings.allowUnpreprocessedProxyHistory
         mcpUnsafe.isSelected = updated.mcpSettings.unsafeEnabled
+        // 07-03 D-03: keep the scope-only toggle in sync with persisted state.
+        mcpScopeOnly.isSelected = updated.mcpSettings.scopeOnly
         preprocessProxyHistory.isSelected = updated.preprocessProxyHistory
         preprocessMaxResponseSizeKb.value = updated.preprocessMaxResponseSizeKb
         preprocessFilterBinaryContent.isSelected = updated.preprocessFilterBinaryContent
@@ -2047,6 +2065,8 @@ class SettingsPanel(
             mcpPort = mcpPort,
             mcpExternal = mcpExternal,
             mcpStdio = mcpStdio,
+            // 07-03 D-03: pass the new scope-only checkbox into McpConfigPanel.
+            mcpScopeOnlyCheckbox = mcpScopeOnly,
             mcpTlsEnabled = mcpTlsEnabled,
             mcpTlsAuto = mcpTlsAuto,
             mcpKeystorePath = mcpKeystorePath,

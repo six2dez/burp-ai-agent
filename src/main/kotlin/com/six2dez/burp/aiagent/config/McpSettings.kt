@@ -27,6 +27,9 @@ data class McpSettings(
     val toolToggles: Map<String, Boolean>,
     val enabledUnsafeTools: Set<String>,
     val unsafeEnabled: Boolean,
+    // 07-03 D-03: restrict every scope-aware MCP tool to in-scope hosts when true.
+    // Default false so existing serialised preferences (no `mcp.scope.only` key) load unchanged.
+    val scopeOnly: Boolean = false,
 ) {
     companion object {
         private val mapper =

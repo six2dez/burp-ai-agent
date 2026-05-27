@@ -124,6 +124,45 @@ class AgentSettingsMigrationTest {
         assertEquals(100 * 1024 * 1024, loaded.mcpSettings.maxBodyBytes, "values > 100 MB must be clamped down")
     }
 
+    @Test
+    fun mcpScopeOnly_roundTripsThroughSaveLoad() {
+        // 07-03 D-03: round-trip the new mcpSettings.scopeOnly knob through Preferences.
+        // Save with scopeOnly = true.
+        run {
+            val prefs = InMemoryPrefs()
+            val writer = AgentSettingsRepository(apiWith(prefs.mock))
+            val defaults = writer.defaultSettings()
+            writer.save(defaults.copy(mcpSettings = defaults.mcpSettings.copy(scopeOnly = true)))
+
+            // Fresh repo + same prefs → load() actually re-reads from preferences.
+            val reader = AgentSettingsRepository(apiWith(prefs.mock))
+            val loaded = reader.load()
+
+            assertTrue(loaded.mcpSettings.scopeOnly, "scopeOnly should round-trip as true")
+        }
+
+        // Save with scopeOnly = false (the default).
+        run {
+            val prefs = InMemoryPrefs()
+            val writer = AgentSettingsRepository(apiWith(prefs.mock))
+            val defaults = writer.defaultSettings()
+            writer.save(defaults.copy(mcpSettings = defaults.mcpSettings.copy(scopeOnly = false)))
+
+            val reader = AgentSettingsRepository(apiWith(prefs.mock))
+            val loaded = reader.load()
+
+            assertEquals(false, loaded.mcpSettings.scopeOnly, "scopeOnly should round-trip as false")
+        }
+
+        // Absent preference → defaults to false on a fresh install with no migrations needed.
+        run {
+            val prefs = InMemoryPrefs()
+            val reader = AgentSettingsRepository(apiWith(prefs.mock))
+            val loaded = reader.load()
+            assertEquals(false, loaded.mcpSettings.scopeOnly, "absent preference must default to false")
+        }
+    }
+
     private fun apiWith(preferences: Preferences): MontoyaApi {
         val api = mock<MontoyaApi>(defaultAnswer = Answers.RETURNS_DEEP_STUBS)
         whenever(api.persistence().preferences()).thenReturn(preferences)

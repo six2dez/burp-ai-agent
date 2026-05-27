@@ -42,6 +42,8 @@ class McpRuntimeContextFactory(
             preprocessFilterBinaryContent = preprocessSettings.preprocessFilterBinaryContent,
             preprocessAllowedContentTypes = preprocessSettings.preprocessAllowedContentTypes,
             aiRequestLogger = aiRequestLogger,
+            // 07-03 D-03: pass the global MCP scope toggle to every tool handler via context.
+            scopeOnly = settings.scopeOnly,
         )
     }
 }
