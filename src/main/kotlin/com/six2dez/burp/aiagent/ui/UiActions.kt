@@ -980,15 +980,7 @@ $resolvedUserPrompt
         return decision == JOptionPane.YES_OPTION
     }
 
-    private fun contextOptionsFromSettings(settings: AgentSettings): ContextOptions =
-        ContextOptions(
-            privacyMode = settings.privacyMode,
-            deterministic = settings.determinismMode,
-            hostSalt = settings.hostAnonymizationSalt,
-            maxRequestBodyChars = settings.contextRequestBodyMaxChars,
-            maxResponseBodyChars = settings.contextResponseBodyMaxChars,
-            compactJson = settings.contextCompactJson,
-        )
+    private fun contextOptionsFromSettings(settings: AgentSettings): ContextOptions = buildContextOptionsFromSettings(settings)
 
     private fun ensureActiveScannerEnabled(
         tab: MainTab,
