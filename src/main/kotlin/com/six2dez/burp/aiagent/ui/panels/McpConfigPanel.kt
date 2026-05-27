@@ -19,6 +19,9 @@ class McpConfigPanel(
     private val mcpPort: JComponent,
     private val mcpExternal: JComponent,
     private val mcpStdio: JComponent,
+    // 07-03 D-03: scope-only toggle; renamed to *Checkbox to avoid clashing with the
+    // SettingsPanel field name `mcpScopeOnly` when both files are read together.
+    private val mcpScopeOnlyCheckbox: JComponent,
     private val mcpTlsEnabled: JComponent,
     private val mcpTlsAuto: JComponent,
     private val mcpKeystorePath: JComponent,
@@ -57,6 +60,10 @@ class McpConfigPanel(
         addRowPair(grid, "Host", mcpHost, "Port", mcpPort)
         addSpacerRow(grid, 4)
         addRowPair(grid, "External access", mcpExternal, "Stdio bridge", mcpStdio)
+        addSpacerRow(grid, 4)
+        // 07-03 D-03: scope-only toggle lives adjacent to the security-impact toggles so users
+        // see it next to External access / Stdio bridge when assessing MCP exposure.
+        addRowFull(grid, "Restrict to in-scope hosts", mcpScopeOnlyCheckbox)
         addSpacerRow(grid, 4)
         addRowPair(grid, "TLS enabled", mcpTlsEnabled, "Auto-generate TLS", mcpTlsAuto)
         addSpacerRow(grid, 4)

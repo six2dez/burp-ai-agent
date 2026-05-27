@@ -739,6 +739,10 @@ class AgentSettingsRepository(
         private const val KEY_MCP_TOOL_TOGGLES = "mcp.tools.toggles"
         private const val KEY_MCP_UNSAFE_TOOLS = "mcp.unsafe.tools"
         private const val KEY_MCP_UNSAFE = "mcp.unsafe.enabled"
+
+        // 07-03 D-03: global "Restrict MCP tools to in-scope hosts" toggle. Stored on the
+        // McpSettings sub-object via this key. Default false on absence.
+        private const val KEY_MCP_SCOPE_ONLY = "mcp.scope.only"
         private const val KEY_PREPROCESS_PROXY_HISTORY = "mcp.preprocess.proxy.history"
         private const val KEY_PREPROCESS_MAX_RESPONSE_SIZE_KB = "mcp.preprocess.max.response.size.kb"
         private const val KEY_PREPROCESS_FILTER_BINARY_CONTENT = "mcp.preprocess.filter.binary.content"
@@ -1144,6 +1148,8 @@ Response Language: English.
             toolToggles = toolToggles,
             enabledUnsafeTools = enabledUnsafeTools,
             unsafeEnabled = prefs.getBoolean(KEY_MCP_UNSAFE) ?: false,
+            // 07-03 D-03: absent → false preserves bytewise behaviour for legacy installs.
+            scopeOnly = prefs.getBoolean(KEY_MCP_SCOPE_ONLY) ?: false,
         )
     }
 
@@ -1175,5 +1181,7 @@ Response Language: English.
         prefs.setString(KEY_MCP_TOOL_TOGGLES, McpSettings.serializeToolToggles(settings.toolToggles))
         prefs.setString(KEY_MCP_UNSAFE_TOOLS, McpSettings.serializeUnsafeToolSet(settings.enabledUnsafeTools))
         prefs.setBoolean(KEY_MCP_UNSAFE, settings.unsafeEnabled)
+        // 07-03 D-03: persist the global MCP scope toggle.
+        prefs.setBoolean(KEY_MCP_SCOPE_ONLY, settings.scopeOnly)
     }
 }
