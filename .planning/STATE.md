@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-05-13)
 Phase: 3 — COMPLETE
 Plan: 1 of 3
 Status: Phase 3 complete
-Last activity: 2026-05-13 -- Phase 3 marked complete
+Last activity: 2026-05-27 -- Completed quick task 260527-f7q: Fix bugs 66, 67, 68 (CLI tokenizer, Copilot CLI hang, OpenAI-compatible diagnostics)
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -77,7 +77,12 @@ None yet.
 [Issues that affect future work]
 
 - GitHub issue #62 (release pipeline publishes stale code) gates the v0.7.0 release; Phase 4 must close before Phase 6 can ship.
-- GitHub issue #66 (openai-compatible usage error) is a reported regression that should be folded into the release notes once fixed.
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260527-f7q | Fix bugs 66, 67, 68: CLI tokenizer, Copilot CLI hang, OpenAI-compatible diagnostics | 2026-05-27 | 8a6af50 | [260527-f7q-fix-bugs-66-67-68-cli-tokenizer-copilot-](./quick/260527-f7q-fix-bugs-66-67-68-cli-tokenizer-copilot-/) |
 
 ## Deferred Items
 
