@@ -17,11 +17,6 @@ import com.six2dez.burp.aiagent.backends.http.HttpBackendSupport
 import com.six2dez.burp.aiagent.backends.http.MontoyaHttpTransport
 import com.six2dez.burp.aiagent.config.AgentSettings
 import com.six2dez.burp.aiagent.util.HeaderParser
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
-import java.io.BufferedReader
-import java.io.InputStreamReader
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
@@ -50,14 +45,28 @@ class OpenAiCompatibleBackend(
 
     private val mapper = ObjectMapper().registerKotlinModule()
 
+    /**
+     * Optional, supervisor-injected [MontoyaHttpTransport] used by [healthCheck] (and exposed to
+     * factory-specific health-check providers such as NVIDIA NIM). The injection happens once in
+     * [com.six2dez.burp.aiagent.supervisor.AgentSupervisor]'s init block so the [AiBackend.healthCheck]
+     * signature stays unchanged. Null only on the unit-test path (tests construct backends directly
+     * without a supervisor), where [HttpBackendSupport.healthCheckGet] is the OkHttp fallback.
+     */
+    @Volatile
+    private var healthCheckTransport: MontoyaHttpTransport? = null
+
+    fun setHealthCheckTransport(transport: MontoyaHttpTransport) {
+        healthCheckTransport = transport
+    }
+
+    fun healthCheckTransport(): MontoyaHttpTransport? = healthCheckTransport
+
     override fun launch(config: BackendLaunchConfig): AgentConnection {
         val baseUrl = effectiveBaseUrl(config.baseUrl)
         val model = config.model?.ifBlank { "" } ?: ""
         val timeoutSeconds = (config.requestTimeoutSeconds ?: 120L).coerceIn(30L, 3600L)
-        val client = HttpBackendSupport.sharedClient(baseUrl, timeoutSeconds)
         val mergedHeaders = mergeHeaders(defaultHeaders, config.headers)
         return OpenAiCompatibleConnection(
-            client = client,
             mapper = mapper,
             backendId = id,
             backendDisplayName = displayName,
@@ -91,15 +100,24 @@ class OpenAiCompatibleBackend(
                 apiKeySelector(settings),
                 HeaderParser.parse(headersSelector(settings)),
             )
-        return HttpBackendSupport.healthCheckGet(
-            url = buildModelsUrl(baseUrl),
-            headers = headers,
-            timeoutSeconds = timeoutSelector(settings).coerceIn(1, 30).toLong(),
-        )
+        val modelsUrl = buildModelsUrl(baseUrl)
+        val timeoutSeconds = timeoutSelector(settings).coerceIn(1, 30).toLong()
+        // BUG-69-01: prefer the supervisor-injected MontoyaHttpTransport so the health check
+        // honors Burp's upstream proxy / SOCKS / cert store. Fall through to OkHttp only on the
+        // unit-test path (no supervisor present → transport stays null).
+        val transport = healthCheckTransport
+        return if (transport != null) {
+            transport.healthCheckGet(modelsUrl, headers, timeoutMs = timeoutSeconds * 1000)
+        } else {
+            HttpBackendSupport.healthCheckGet(
+                url = modelsUrl,
+                headers = headers,
+                timeoutSeconds = timeoutSeconds,
+            )
+        }
     }
 
     private class OpenAiCompatibleConnection(
-        private val client: okhttp3.OkHttpClient,
         private val mapper: ObjectMapper,
         private val backendId: String,
         private val backendDisplayName: String,
@@ -169,6 +187,17 @@ class OpenAiCompatibleBackend(
                             return@submit
                         }
                         try {
+                            // BUG-69-01: AI HTTP backends MUST go through MontoyaHttpTransport in
+                            // production so Burp's upstream proxy / SOCKS / cert store participate.
+                            // Reaching this branch with transport == null means the supervisor's
+                            // wiring is broken — fail fast instead of silently bypassing Burp via
+                            // OkHttp. See HttpBackendSupport.buildClient KDoc for the test-only path.
+                            if (transport == null) {
+                                throw IllegalStateException(
+                                    "MontoyaHttpTransport unavailable; AI HTTP backends require Burp's HTTP stack " +
+                                        "(see HttpBackendSupport.buildClient KDoc for the test-only path)",
+                                )
+                            }
                             conversationHistory.addUser(text)
                             val messages = conversationHistory.snapshot()
                             val payload =
@@ -210,103 +239,52 @@ class OpenAiCompatibleBackend(
                                 }
                             debugLog("request -> POST $endpointUrl ($safeBodyPreview)")
 
-                            if (transport != null) {
-                                val resp = transport.post(endpointUrl, allHeaders, json, timeoutSeconds * 1000)
-                                if (!resp.isSuccessful) {
-                                    errorLog("HTTP ${resp.statusCode}: ${resp.body.take(500)}")
-                                    val message =
-                                        when (resp.statusCode) {
-                                            429 -> "$backendDisplayName rate limited (HTTP 429). Check quota/capacity or retry later."
-                                            // Bug #66: diagnosable 4xx — include the endpoint URL, a bounded
-                                            // body excerpt (T-quick-04: accepted up to 800 chars), and the
-                                            // standard remediation hint pointing at the three common causes.
-                                            else ->
-                                                buildString {
-                                                    append("$backendDisplayName HTTP ${resp.statusCode} from POST ").append(endpointUrl)
-                                                    append("\nResponse: ").append(resp.body.take(800))
-                                                    append(
-                                                        "\nHints: verify the URL ends in /v1 (or /chat/completions), " +
-                                                            "the model name matches the provider's catalog, " +
-                                                            "and the API key is valid for this endpoint.",
-                                                    )
-                                                }
-                                        }
-                                    onComplete(IllegalStateException(message))
-                                    return@submit
-                                }
-                                val body = resp.body
-                                if (body.isBlank()) {
-                                    onComplete(IllegalStateException("$backendDisplayName response body was empty"))
-                                    return@submit
-                                }
-                                val node = mapper.readTree(body)
-                                val content =
-                                    node
-                                        .path("choices")
-                                        .path(0)
-                                        .path("message")
-                                        .path("content")
-                                        .asText()
-                                extractUsage(node)?.let { lastTokenUsageRef.set(it) }
-                                if (content.isBlank()) {
-                                    onComplete(IllegalStateException("$backendDisplayName response content was empty"))
-                                    return@submit
-                                }
-                                debugLog("response <- ${content.take(200)}")
-                                conversationHistory.addAssistant(content)
-                                circuitBreaker.recordSuccess()
-                                onChunk(content)
-                                onComplete(null)
-                            } else {
-                                val req =
-                                    Request
-                                        .Builder()
-                                        .url(endpointUrl)
-                                        .post(json.toRequestBody("application/json".toMediaType()))
-                                        .apply {
-                                            allHeaders.forEach { (name, value) ->
-                                                header(name, value)
+                            val resp = transport.post(endpointUrl, allHeaders, json, timeoutSeconds * 1000)
+                            if (!resp.isSuccessful) {
+                                errorLog("HTTP ${resp.statusCode}: ${resp.body.take(500)}")
+                                val message =
+                                    when (resp.statusCode) {
+                                        429 -> "$backendDisplayName rate limited (HTTP 429). Check quota/capacity or retry later."
+                                        // Bug #66: diagnosable 4xx — include the endpoint URL, a bounded
+                                        // body excerpt (T-quick-04: accepted up to 800 chars), and the
+                                        // standard remediation hint pointing at the three common causes.
+                                        else ->
+                                            buildString {
+                                                append("$backendDisplayName HTTP ${resp.statusCode} from POST ").append(endpointUrl)
+                                                append("\nResponse: ").append(resp.body.take(800))
+                                                append(
+                                                    "\nHints: verify the URL ends in /v1 (or /chat/completions), " +
+                                                        "the model name matches the provider's catalog, " +
+                                                        "and the API key is valid for this endpoint.",
+                                                )
                                             }
-                                        }.build()
-                                client.newCall(req).execute().use { resp ->
-                                    if (!resp.isSuccessful) {
-                                        val bodyText = resp.body?.string().orEmpty()
-                                        errorLog("HTTP ${resp.code}: ${bodyText.take(500)}")
-                                        val retryAfter = resp.header("Retry-After")
-                                        val message =
-                                            when (resp.code) {
-                                                429 -> {
-                                                    val retryHint =
-                                                        retryAfter
-                                                            ?.takeIf { it.isNotBlank() }
-                                                            ?.let { " Retry after: $it." }
-                                                            .orEmpty()
-                                                    "$backendDisplayName rate limited (HTTP 429). Check quota/capacity or retry later.$retryHint"
-                                                }
-                                                // Bug #66: same diagnosable-4xx shape as the Montoya
-                                                // transport branch — keep both transports identical
-                                                // so the user sees consistent error messages.
-                                                else ->
-                                                    buildString {
-                                                        append("$backendDisplayName HTTP ${resp.code} from POST ").append(endpointUrl)
-                                                        append("\nResponse: ").append(bodyText.take(800))
-                                                        append(
-                                                            "\nHints: verify the URL ends in /v1 (or /chat/completions), " +
-                                                                "the model name matches the provider's catalog, " +
-                                                                "and the API key is valid for this endpoint.",
-                                                        )
-                                                    }
-                                            }
-                                        onComplete(IllegalStateException(message))
-                                        return@submit
                                     }
-                                    if (streaming) {
-                                        handleStreamingResponse(resp, onChunk, onComplete)
-                                    } else {
-                                        handleNonStreamingResponse(resp, onChunk, onComplete)
-                                    }
-                                }
+                                onComplete(IllegalStateException(message))
+                                return@submit
                             }
+                            val body = resp.body
+                            if (body.isBlank()) {
+                                onComplete(IllegalStateException("$backendDisplayName response body was empty"))
+                                return@submit
+                            }
+                            val node = mapper.readTree(body)
+                            val content =
+                                node
+                                    .path("choices")
+                                    .path(0)
+                                    .path("message")
+                                    .path("content")
+                                    .asText()
+                            extractUsage(node)?.let { lastTokenUsageRef.set(it) }
+                            if (content.isBlank()) {
+                                onComplete(IllegalStateException("$backendDisplayName response content was empty"))
+                                return@submit
+                            }
+                            debugLog("response <- ${content.take(200)}")
+                            conversationHistory.addAssistant(content)
+                            circuitBreaker.recordSuccess()
+                            onChunk(content)
+                            onComplete(null)
                             return@submit
                         } catch (e: Exception) {
                             lastError = e
@@ -341,87 +319,6 @@ class OpenAiCompatibleBackend(
                     }
                 }
             }
-        }
-
-        private fun handleNonStreamingResponse(
-            resp: okhttp3.Response,
-            onChunk: (String) -> Unit,
-            onComplete: (Throwable?) -> Unit,
-        ) {
-            val body = resp.body?.string().orEmpty()
-            if (body.isBlank()) {
-                onComplete(IllegalStateException("$backendDisplayName response body was empty"))
-                return
-            }
-            val node = mapper.readTree(body)
-            val content =
-                node
-                    .path("choices")
-                    .path(0)
-                    .path("message")
-                    .path("content")
-                    .asText()
-            extractUsage(node)?.let { lastTokenUsageRef.set(it) }
-            if (content.isBlank()) {
-                onComplete(IllegalStateException("$backendDisplayName response content was empty"))
-                return
-            }
-            debugLog("response <- ${content.take(200)}")
-            conversationHistory.addAssistant(content)
-            circuitBreaker.recordSuccess()
-            onChunk(content)
-            onComplete(null)
-        }
-
-        private fun handleStreamingResponse(
-            resp: okhttp3.Response,
-            onChunk: (String) -> Unit,
-            onComplete: (Throwable?) -> Unit,
-        ) {
-            val body =
-                resp.body ?: run {
-                    onComplete(IllegalStateException("$backendDisplayName response body was empty"))
-                    return
-                }
-            // Force UTF-8 on SSE chunks: OpenAI-compatible servers send `text/event-stream` without
-            // an explicit charset, so a default-charset reader can mojibake multibyte content.
-            val streamReader = BufferedReader(InputStreamReader(body.byteStream(), Charsets.UTF_8))
-            val fullContent = StringBuilder()
-            var emittedAny = false
-            var line: String?
-            while (isAlive()) {
-                line = streamReader.readLine() ?: break
-                val trimmed = line.trim()
-                if (trimmed.isEmpty() || !trimmed.startsWith("data:")) continue
-                val data = trimmed.removePrefix("data:").trim()
-                if (data == "[DONE]") break
-                val node = mapper.readTree(data)
-                extractUsage(node)?.let { lastTokenUsageRef.set(it) }
-                val chunkText = extractStreamingChunkText(node)
-                if (!chunkText.isNullOrEmpty()) {
-                    emittedAny = true
-                    fullContent.append(chunkText)
-                    onChunk(chunkText)
-                }
-            }
-
-            if (!emittedAny) {
-                onComplete(IllegalStateException("$backendDisplayName response content was empty"))
-                return
-            }
-            debugLog("response <- ${fullContent.toString().take(200)}")
-            conversationHistory.addAssistant(fullContent.toString())
-            circuitBreaker.recordSuccess()
-            onComplete(null)
-        }
-
-        private fun extractStreamingChunkText(node: JsonNode): String? {
-            val choice = node.path("choices").path(0)
-            val deltaContent = choice.path("delta").path("content").asText()
-            if (deltaContent.isNotBlank()) return deltaContent
-            val messageContent = choice.path("message").path("content").asText()
-            if (messageContent.isNotBlank()) return messageContent
-            return null
         }
 
         private fun extractUsage(node: JsonNode): TokenUsage? {

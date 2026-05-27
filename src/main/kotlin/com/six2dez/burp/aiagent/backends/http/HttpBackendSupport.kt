@@ -29,6 +29,17 @@ object HttpBackendSupport {
 
     private val sharedClients = ConcurrentHashMap<ClientKey, ClientEntry>()
 
+    /**
+     * OkHttp client for unit tests only; does NOT honor Burp's upstream proxy config.
+     *
+     * Production code MUST go through [MontoyaHttpTransport] (constructed by
+     * `AgentSupervisor.httpTransport` and injected via `BackendLaunchConfig.transport`).
+     * Tests construct backends with `transport = null`, which is the path that reaches this
+     * client. The `ProxySelector.getDefault()` line only reads JVM system properties — Burp's
+     * own upstream proxy lives in Burp state and is only honored by `MontoyaHttpTransport`,
+     * so reaching this client from a real Burp session would silently bypass the user's proxy
+     * chain (the exact bug closed by issue #69).
+     */
     fun buildClient(timeoutSeconds: Long): OkHttpClient =
         OkHttpClient
             .Builder()
@@ -36,7 +47,6 @@ object HttpBackendSupport {
             .writeTimeout(java.time.Duration.ofSeconds(30))
             .readTimeout(java.time.Duration.ofSeconds(timeoutSeconds))
             .callTimeout(java.time.Duration.ofSeconds(timeoutSeconds))
-            // Use system proxy settings (respects Burp/JVM proxy config)
             .proxySelector(ProxySelector.getDefault() ?: ProxySelector.of(null))
             .build()
 

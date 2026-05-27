@@ -16,9 +16,6 @@ import com.six2dez.burp.aiagent.backends.http.HttpBackendSupport
 import com.six2dez.burp.aiagent.backends.http.MontoyaHttpTransport
 import com.six2dez.burp.aiagent.config.AgentSettings
 import com.six2dez.burp.aiagent.util.HeaderParser
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
@@ -30,13 +27,25 @@ class LmStudioBackend : AiBackend {
 
     private val mapper = ObjectMapper().registerKotlinModule()
 
+    /**
+     * Optional, supervisor-injected [MontoyaHttpTransport] used by [healthCheck]. Null only on the
+     * unit-test path (tests construct backends directly without a supervisor); production wiring
+     * lives in [com.six2dez.burp.aiagent.supervisor.AgentSupervisor]'s init block.
+     */
+    @Volatile
+    private var healthCheckTransport: MontoyaHttpTransport? = null
+
+    fun setHealthCheckTransport(transport: MontoyaHttpTransport) {
+        healthCheckTransport = transport
+    }
+
+    fun healthCheckTransport(): MontoyaHttpTransport? = healthCheckTransport
+
     override fun launch(config: BackendLaunchConfig): AgentConnection {
         val baseUrl = config.baseUrl?.trimEnd('/') ?: "http://127.0.0.1:1234"
         val model = config.model?.ifBlank { "lmstudio" } ?: "lmstudio"
         val timeoutSeconds = (config.requestTimeoutSeconds ?: 120L).coerceIn(30L, 3600L)
-        val client = HttpBackendSupport.sharedClient(baseUrl, timeoutSeconds)
         return LmStudioConnection(
-            client,
             mapper,
             baseUrl,
             model,
@@ -61,14 +70,21 @@ class LmStudioBackend : AiBackend {
                 settings.lmStudioApiKey,
                 HeaderParser.parse(settings.lmStudioHeaders),
             )
-        return HttpBackendSupport.healthCheckGet(
-            url = "${baseUrl.trimEnd('/')}/v1/models",
-            headers = headers,
-        )
+        val url = "${baseUrl.trimEnd('/')}/v1/models"
+        // BUG-69-01: prefer supervisor-injected MontoyaHttpTransport so health check honors Burp's
+        // upstream proxy / SOCKS / cert store. Fall through to OkHttp only on the unit-test path.
+        val transport = healthCheckTransport
+        return if (transport != null) {
+            transport.healthCheckGet(url, headers, timeoutMs = 3_000)
+        } else {
+            HttpBackendSupport.healthCheckGet(
+                url = url,
+                headers = headers,
+            )
+        }
     }
 
     private class LmStudioConnection(
-        private val client: okhttp3.OkHttpClient,
         private val mapper: ObjectMapper,
         private val baseUrl: String,
         private val model: String,
@@ -132,6 +148,17 @@ class LmStudioBackend : AiBackend {
                             return@submit
                         }
                         try {
+                            // BUG-69-01: LM Studio MUST route through MontoyaHttpTransport in
+                            // production so Burp's upstream proxy / SOCKS / cert store participate.
+                            // Reaching this branch with transport == null means the supervisor's
+                            // wiring is broken — fail fast instead of silently bypassing Burp via
+                            // OkHttp. See HttpBackendSupport.buildClient KDoc for the test-only path.
+                            if (transport == null) {
+                                throw IllegalStateException(
+                                    "MontoyaHttpTransport unavailable; AI HTTP backends require Burp's HTTP stack " +
+                                        "(see HttpBackendSupport.buildClient KDoc for the test-only path)",
+                                )
+                            }
                             // Add user message to conversation history
                             conversationHistory.addUser(text)
                             val messages = conversationHistory.snapshot()
@@ -162,37 +189,13 @@ class LmStudioBackend : AiBackend {
 
                             debugLog("request -> $endpointUrl")
 
-                            val body: String
-                            if (transport != null) {
-                                val resp = transport.post(endpointUrl, allHeaders, json, timeoutSeconds * 1000)
-                                if (!resp.isSuccessful) {
-                                    errorLog("HTTP ${resp.statusCode}: ${resp.body.take(500)}")
-                                    onComplete(IllegalStateException("LM Studio HTTP ${resp.statusCode}: ${resp.body}"))
-                                    return@submit
-                                }
-                                body = resp.body
-                            } else {
-                                val req =
-                                    Request
-                                        .Builder()
-                                        .url(endpointUrl)
-                                        .post(json.toRequestBody("application/json".toMediaType()))
-                                        .apply {
-                                            allHeaders.forEach { (name, value) ->
-                                                header(name, value)
-                                            }
-                                        }.build()
-                                val okResp = client.newCall(req).execute()
-                                okResp.use { resp ->
-                                    if (!resp.isSuccessful) {
-                                        val bodyText = resp.body?.string().orEmpty()
-                                        errorLog("HTTP ${resp.code}: ${bodyText.take(500)}")
-                                        onComplete(IllegalStateException("LM Studio HTTP ${resp.code}: $bodyText"))
-                                        return@submit
-                                    }
-                                    body = resp.body?.string().orEmpty()
-                                }
+                            val resp = transport.post(endpointUrl, allHeaders, json, timeoutSeconds * 1000)
+                            if (!resp.isSuccessful) {
+                                errorLog("HTTP ${resp.statusCode}: ${resp.body.take(500)}")
+                                onComplete(IllegalStateException("LM Studio HTTP ${resp.statusCode}: ${resp.body}"))
+                                return@submit
                             }
+                            val body: String = resp.body
 
                             if (body.isBlank()) {
                                 onComplete(IllegalStateException("LM Studio response body was empty"))
