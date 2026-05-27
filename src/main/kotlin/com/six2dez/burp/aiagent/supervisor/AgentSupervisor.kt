@@ -976,52 +976,6 @@ class AgentSupervisor(
         }
     }
 
-    private fun tokenizeCommand(command: String): List<String> {
-        val tokens = mutableListOf<String>()
-        val currentToken = StringBuilder()
-        var inQuotes = false
-        var quoteChar = ' '
-
-        var i = 0
-        while (i < command.length) {
-            val c = command[i]
-            when {
-                c == '\\' && i + 1 < command.length -> {
-                    currentToken.append(command[i + 1])
-                    i++
-                }
-                (c == '"' || c == '\'') -> {
-                    if (inQuotes) {
-                        if (c == quoteChar) {
-                            inQuotes = false
-                        } else {
-                            currentToken.append(c)
-                        }
-                    } else {
-                        inQuotes = true
-                        quoteChar = c
-                    }
-                }
-                c.isWhitespace() -> {
-                    if (inQuotes) {
-                        currentToken.append(c)
-                    } else if (currentToken.isNotEmpty()) {
-                        tokens.add(currentToken.toString())
-                        currentToken.clear()
-                    }
-                }
-                else -> {
-                    currentToken.append(c)
-                }
-            }
-            i++
-        }
-        if (currentToken.isNotEmpty()) {
-            tokens.add(currentToken.toString())
-        }
-        return tokens
-    }
-
     private fun safeLogOutput(message: String) {
         try {
             api.logging().logToOutput(message)
@@ -1061,6 +1015,72 @@ class AgentSupervisor(
 
     companion object {
         private val cachedPathRef = AtomicReference<String?>(null)
+
+        /**
+         * Splits a user-typed command string into argv tokens with quote and backslash handling.
+         *
+         * Shared between [AgentSupervisor]'s service launch paths and [com.six2dez.burp.aiagent.backends.cli.CliBackend.isAvailable]
+         * so that the executable resolved by `isAvailable()` is the same as the one launched by `send()` (fixes bug #67).
+         *
+         * On Windows the backslash is the path separator and MUST NOT be interpreted as an escape
+         * character — otherwise paths like `C:\Users\u\bin\claude.exe` collapse to `C:Usersubinclaude.exe`.
+         * On Unix the historical POSIX-ish escape behavior is preserved, but only outside quoted
+         * strings (inside double or single quotes the backslash is taken literally).
+         *
+         * The `isWindows` flag is parametrized so the function is deterministically testable on any
+         * host; production callers rely on the runtime-OS default.
+         */
+        internal fun tokenizeCommand(
+            command: String,
+            isWindows: Boolean = System.getProperty("os.name").lowercase(java.util.Locale.ROOT).contains("win"),
+        ): List<String> {
+            val tokens = mutableListOf<String>()
+            val currentToken = StringBuilder()
+            var inQuotes = false
+            var quoteChar = ' '
+
+            var i = 0
+            while (i < command.length) {
+                val c = command[i]
+                when {
+                    // Skip the escape branch on Windows (backslash is the path separator) and when
+                    // inside quoted strings on Unix (POSIX double/single quotes take backslashes
+                    // literally outside of a few special cases we do not need to model here).
+                    c == '\\' && !isWindows && !inQuotes && i + 1 < command.length -> {
+                        currentToken.append(command[i + 1])
+                        i++
+                    }
+                    (c == '"' || c == '\'') -> {
+                        if (inQuotes) {
+                            if (c == quoteChar) {
+                                inQuotes = false
+                            } else {
+                                currentToken.append(c)
+                            }
+                        } else {
+                            inQuotes = true
+                            quoteChar = c
+                        }
+                    }
+                    c.isWhitespace() -> {
+                        if (inQuotes) {
+                            currentToken.append(c)
+                        } else if (currentToken.isNotEmpty()) {
+                            tokens.add(currentToken.toString())
+                            currentToken.clear()
+                        }
+                    }
+                    else -> {
+                        currentToken.append(c)
+                    }
+                }
+                i++
+            }
+            if (currentToken.isNotEmpty()) {
+                tokens.add(currentToken.toString())
+            }
+            return tokens
+        }
 
         fun buildCliPathStatic(): String {
             cachedPathRef.get()?.let { return it }

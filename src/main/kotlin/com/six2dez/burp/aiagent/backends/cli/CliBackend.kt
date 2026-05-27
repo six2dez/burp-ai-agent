@@ -48,7 +48,11 @@ class CliBackend(
                 else -> ""
             }
         if (command.isBlank()) return false
-        val cmdList = command.trim().split("\\s+".toRegex())
+        // Bug #67: share the tokenizer with the supervisor's launch path so isAvailable() and
+        // send() agree on argv[0] (Windows backslash-paths must not be split as escape sequences).
+        val cmdList =
+            com.six2dez.burp.aiagent.supervisor.AgentSupervisor
+                .tokenizeCommand(command.trim())
         val env =
             mapOf(
                 "PATH" to
