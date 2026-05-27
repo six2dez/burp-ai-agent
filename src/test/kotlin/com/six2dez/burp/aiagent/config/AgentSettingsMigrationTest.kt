@@ -68,6 +68,62 @@ class AgentSettingsMigrationTest {
         assertEquals(3, prefs.integers["settings.schema.version"])
     }
 
+    @Test
+    fun smallModelMode_roundTripsThroughSaveLoad() {
+        // Round-trip with smallModelMode = true.
+        run {
+            val prefs = InMemoryPrefs()
+            val writer = AgentSettingsRepository(apiWith(prefs.mock))
+            writer.save(writer.defaultSettings().copy(smallModelMode = true))
+
+            // Fresh repository on the same prefs so the cache is empty and load() actually
+            // re-reads from preferences.
+            val reader = AgentSettingsRepository(apiWith(prefs.mock))
+            val loaded = reader.load()
+
+            assertTrue(loaded.smallModelMode, "smallModelMode should round-trip as true")
+        }
+
+        // Round-trip with smallModelMode = false (the default).
+        run {
+            val prefs = InMemoryPrefs()
+            val writer = AgentSettingsRepository(apiWith(prefs.mock))
+            writer.save(writer.defaultSettings().copy(smallModelMode = false))
+
+            val reader = AgentSettingsRepository(apiWith(prefs.mock))
+            val loaded = reader.load()
+
+            assertEquals(false, loaded.smallModelMode, "smallModelMode should round-trip as false")
+        }
+    }
+
+    @Test
+    fun mcpBodyBytesBelow32KbIsClampedOnLoad() {
+        // Legacy v0.6.x stored value below the new 32 KB floor must clamp up to 32 KB on load.
+        val tooSmallPrefs = InMemoryPrefs()
+        tooSmallPrefs.integers["mcp.max.body.bytes"] = 16 * 1024 // 16 KB, below the new floor.
+        val tooSmallRepo = AgentSettingsRepository(apiWith(tooSmallPrefs.mock))
+        val clampedUp = tooSmallRepo.load()
+        assertEquals(32 * 1024, clampedUp.mcpSettings.maxBodyBytes, "values < 32 KB must be clamped up to 32 KB")
+
+        // A value above the new floor and below the ceiling must be preserved verbatim.
+        val safePrefs = InMemoryPrefs()
+        safePrefs.integers["mcp.max.body.bytes"] = 64 * 1024 // 64 KB, well above the 32 KB floor.
+        val safeRepo = AgentSettingsRepository(apiWith(safePrefs.mock))
+        val preserved = safeRepo.load()
+        assertEquals(64 * 1024, preserved.mcpSettings.maxBodyBytes, "values within range must be preserved")
+    }
+
+    @Test
+    fun mcpBodyBytesAbove100MbIsClampedOnLoad() {
+        // Existing ceiling behaviour: a stored value above 100 MB must clamp down to 100 MB.
+        val prefs = InMemoryPrefs()
+        prefs.integers["mcp.max.body.bytes"] = 200 * 1024 * 1024
+        val repo = AgentSettingsRepository(apiWith(prefs.mock))
+        val loaded = repo.load()
+        assertEquals(100 * 1024 * 1024, loaded.mcpSettings.maxBodyBytes, "values > 100 MB must be clamped down")
+    }
+
     private fun apiWith(preferences: Preferences): MontoyaApi {
         val api = mock<MontoyaApi>(defaultAnswer = Answers.RETURNS_DEEP_STUBS)
         whenever(api.persistence().preferences()).thenReturn(preferences)

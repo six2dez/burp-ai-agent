@@ -70,7 +70,8 @@ class McpConfigPanel(
         addSpacerRow(grid, 4)
         addRowFull(grid, "Quick actions", quickActionsFactory())
         addSpacerRow(grid, 4)
-        addRowPair(grid, "Max concurrent requests", mcpMaxConcurrent, "Max body size (MB)", mcpMaxBodyMb)
+        // 07-02 D-02: human label is now KB; constructor param name preserved to avoid churn.
+        addRowPair(grid, "Max concurrent requests", mcpMaxConcurrent, "Max body size (KB)", mcpMaxBodyMb)
         addSpacerRow(grid, 4)
         addRowPair(
             grid,

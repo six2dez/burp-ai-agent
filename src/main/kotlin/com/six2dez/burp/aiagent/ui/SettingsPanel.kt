@@ -144,6 +144,9 @@ class SettingsPanel(
     private val determinism = ToggleSwitch(settings.determinismMode)
     private val autoRestart = ToggleSwitch(settings.autoRestart)
     private val auditEnabled = ToggleSwitch(settings.auditEnabled)
+
+    // 07-02 D-02: caps chat context to 1500/750 chars when ON (BUG-69-02 / issue #69).
+    private val chatSmallModelMode = ToggleSwitch(settings.smallModelMode)
     private val rotateSaltBtn = JButton("Rotate anonymization salt")
     private val promptRequest = JTextArea(settings.requestPromptTemplate, 3, 20)
     private val promptSummary = JTextArea(settings.requestSummaryPrompt, 2, 20)
@@ -219,17 +222,21 @@ class SettingsPanel(
             preferredSize = java.awt.Dimension(70, preferredSize.height)
             maximumSize = java.awt.Dimension(70, preferredSize.height)
         }
-    private val mcpMaxBodyMb =
+
+    // 07-02 D-02: spinner is denominated in KB so users with 1278-token-class local models
+    // can configure tight MCP body caps below the previous 1 MB minimum. Range 32 KB – 100 MB,
+    // step 32 KB. Legacy stored values below 32 KB are clamped up by AgentSettings.loadMcpSettings.
+    private val mcpMaxBodyKb =
         JSpinner(
             SpinnerNumberModel(
-                (settings.mcpSettings.maxBodyBytes / (1024 * 1024)).coerceAtLeast(1),
-                1,
-                100,
-                1,
+                (settings.mcpSettings.maxBodyBytes / 1024).coerceAtLeast(32),
+                32,
+                102_400,
+                32,
             ),
         ).apply {
-            preferredSize = java.awt.Dimension(70, preferredSize.height)
-            maximumSize = java.awt.Dimension(70, preferredSize.height)
+            preferredSize = java.awt.Dimension(90, preferredSize.height)
+            maximumSize = java.awt.Dimension(90, preferredSize.height)
         }
     private val mcpProxyHistoryMaxItems =
         JSpinner(
@@ -495,6 +502,11 @@ class SettingsPanel(
         auditEnabled.background = UiTheme.Colors.surface
         auditEnabled.foreground = UiTheme.Colors.onSurface
         auditEnabled.toolTipText = "Tamper-evident logs (JSONL + SHA-256 hashes). Logs saved to ~/.burp-ai-agent/audit.jsonl"
+        chatSmallModelMode.font = UiTheme.Typography.body
+        chatSmallModelMode.background = UiTheme.Colors.surface
+        chatSmallModelMode.foreground = UiTheme.Colors.onSurface
+        chatSmallModelMode.toolTipText =
+            "Caps chat context to 1500/750 chars per request/response for 1278-token-class local models (issue #69)."
         rotateSaltBtn.font = UiTheme.Typography.label
         rotateSaltBtn.background = UiTheme.Colors.surface
         rotateSaltBtn.foreground = UiTheme.Colors.primary
@@ -518,7 +530,7 @@ class SettingsPanel(
         mcpKeystorePath.toolTipText = "Path to the TLS keystore (PKCS12)."
         mcpKeystorePassword.toolTipText = "Password for the TLS keystore."
         mcpMaxConcurrent.toolTipText = "Maximum number of concurrent MCP tool requests."
-        mcpMaxBodyMb.toolTipText = "Max tool output size in MB."
+        mcpMaxBodyKb.toolTipText = "Max tool output size in KB. Range 32 KB – 102400 KB (100 MB)."
         mcpProxyHistoryMaxItems.toolTipText =
             "Maximum number of proxy HTTP history items AI can request in one call."
         mcpProxyHistorySortOrder.toolTipText =
@@ -551,8 +563,8 @@ class SettingsPanel(
         aiLoggerEnabled.toolTipText = "Enable the AI request logger to record all AI interactions for observability."
         aiLoggerMaxEntries.toolTipText = "Maximum number of log entries to keep in memory (10-5000)."
         mcpMaxConcurrent.font = UiTheme.Typography.body
-        mcpMaxBodyMb.font = UiTheme.Typography.body
-        mcpMaxBodyMb.toolTipText = "Maximum MCP response body size per item (MB)."
+        mcpMaxBodyKb.font = UiTheme.Typography.body
+        mcpMaxBodyKb.toolTipText = "Maximum MCP response body size per item (KB)."
         mcpTlsEnabled.font = UiTheme.Typography.body
         mcpTlsAuto.font = UiTheme.Typography.body
         mcpExternal.font = UiTheme.Typography.body
@@ -599,6 +611,9 @@ class SettingsPanel(
                 addRowFull(profileGrid, "Agent profile", profileRow)
                 addSpacerRow(profileGrid, 4)
                 addRowFull(profileGrid, "Profile warnings", profileWarningLabel)
+                addSpacerRow(profileGrid, 4)
+                // 07-02 D-02: small-model-mode toggle (BUG-69-02 / issue #69).
+                addRowFull(profileGrid, "Small model mode", chatSmallModelMode)
                 backendBody.add(profileGrid, BorderLayout.NORTH)
             }
         val privacySection = privacySection()
@@ -972,7 +987,9 @@ class SettingsPanel(
                 scanTaskTtlMinutes = settings.mcpSettings.scanTaskTtlMinutes,
                 collaboratorClientTtlMinutes = settings.mcpSettings.collaboratorClientTtlMinutes,
                 maxConcurrentRequests = (mcpMaxConcurrent.value as? Int) ?: 4,
-                maxBodyBytes = ((mcpMaxBodyMb.value as? Int) ?: 2).coerceAtLeast(1) * 1024 * 1024,
+                // 07-02 D-02: spinner is denominated in KB; convert to bytes for persistence.
+                // Floor of 32 KB matches AgentSettings.loadMcpSettings coerceIn lower bound.
+                maxBodyBytes = ((mcpMaxBodyKb.value as? Int) ?: 2048).coerceAtLeast(32) * 1024,
                 proxyHistoryMaxItemsPerRequest =
                     (mcpProxyHistoryMaxItems.value as? Int)
                         ?.coerceIn(1, 500)
@@ -1120,6 +1137,9 @@ class SettingsPanel(
             aiRequestLoggerEnabled = aiLoggerEnabled.isSelected,
             aiRequestLoggerMaxEntries = (aiLoggerMaxEntries.value as? Int) ?: 500,
             customPromptLibrary = customPromptLibraryEditor.snapshot(),
+            // 07-02 D-02: ToggleSwitch.isSelected is inherited from JToggleButton and returns
+            // kotlin.Boolean — verified at compile time by this AgentSettings constructor call.
+            smallModelMode = chatSmallModelMode.isSelected,
         )
     }
 
@@ -1169,6 +1189,8 @@ class SettingsPanel(
         determinism.isSelected = updated.determinismMode
         autoRestart.isSelected = updated.autoRestart
         auditEnabled.isSelected = updated.auditEnabled
+        // 07-02 D-02: keep the small-model-mode toggle in sync with persisted state.
+        chatSmallModelMode.isSelected = updated.smallModelMode
         promptRequest.text = updated.requestPromptTemplate
         promptIssueFull.text = updated.issuePromptTemplate
         promptIssueAnalyze.text = updated.issueAnalyzePrompt
@@ -1199,7 +1221,8 @@ class SettingsPanel(
         mcpKeystorePath.text = updated.mcpSettings.tlsKeystorePath
         mcpKeystorePassword.text = updated.mcpSettings.tlsKeystorePassword
         mcpMaxConcurrent.value = updated.mcpSettings.maxConcurrentRequests
-        mcpMaxBodyMb.value = (updated.mcpSettings.maxBodyBytes / (1024 * 1024)).coerceAtLeast(1)
+        // 07-02 D-02: spinner is denominated in KB; clamp to the 32 KB floor on refresh too.
+        mcpMaxBodyKb.value = (updated.mcpSettings.maxBodyBytes / 1024).coerceAtLeast(32)
         mcpProxyHistoryMaxItems.value = updated.mcpSettings.proxyHistoryMaxItemsPerRequest
         mcpProxyHistorySortOrder.selectedItem =
             if (updated.mcpSettings.proxyHistoryNewestFirst) "Newest first" else "Oldest first"
@@ -2036,7 +2059,9 @@ class SettingsPanel(
                 },
             mcpNotice = mcpNotice,
             mcpMaxConcurrent = mcpMaxConcurrent,
-            mcpMaxBodyMb = mcpMaxBodyMb,
+            // 07-02 D-02: McpConfigPanel constructor param name is preserved to minimise the
+            // refactor; only the bound variable changes to the KB-denominated spinner.
+            mcpMaxBodyMb = mcpMaxBodyKb,
             mcpProxyHistoryMaxItems = mcpProxyHistoryMaxItems,
             mcpProxyHistorySortOrder = mcpProxyHistorySortOrder,
             mcpAllowUnpreprocessedProxyHistory = mcpAllowUnpreprocessedProxyHistory,

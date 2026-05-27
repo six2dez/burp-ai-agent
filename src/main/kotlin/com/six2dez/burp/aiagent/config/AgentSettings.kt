@@ -128,6 +128,10 @@ data class AgentSettings(
     val aiRequestLoggerMaxEntries: Int = 500,
     // Custom prompt library (saved user prompts exposed in right-click menus)
     val customPromptLibrary: List<CustomPromptDefinition> = emptyList(),
+    // 07-02 D-02: caps chat context to 1500/750 chars per request/response when ON, so
+    // 1278-token-class local models do not blow their context window. Defaults to false
+    // so legacy serialised preferences load without crashing (no schema bump needed).
+    val smallModelMode: Boolean = false,
 )
 
 fun AgentSettings.toPreprocessorSettings() =
@@ -371,6 +375,8 @@ class AgentSettingsRepository(
                 parseCustomPromptLibrary(prefs.getString(KEY_CUSTOM_PROMPT_LIBRARY)) { msg ->
                     api.logging().logToError(msg)
                 },
+            // 07-02 D-02: absent key defaults to false so legacy v3 prefs load safely.
+            smallModelMode = prefs.getBoolean(KEY_CHAT_SMALL_MODEL_MODE) ?: false,
         ).also { cachedSettings.set(it) }
     }
 
@@ -469,6 +475,7 @@ class AgentSettingsRepository(
             aiRequestLoggerEnabled = true,
             aiRequestLoggerMaxEntries = 500,
             customPromptLibrary = emptyList(),
+            smallModelMode = false,
         )
 
     fun save(settings: AgentSettings) {
@@ -618,6 +625,8 @@ class AgentSettingsRepository(
         prefs.setBoolean(KEY_AI_LOGGER_ENABLED, settings.aiRequestLoggerEnabled)
         prefs.setInteger(KEY_AI_LOGGER_MAX_ENTRIES, settings.aiRequestLoggerMaxEntries.coerceIn(50, 5_000))
         prefs.setString(KEY_CUSTOM_PROMPT_LIBRARY, serializeCustomPromptLibrary(settings.customPromptLibrary))
+        // 07-02 D-02: persist small-model mode alongside the other chat-context settings.
+        prefs.setBoolean(KEY_CHAT_SMALL_MODEL_MODE, settings.smallModelMode)
         prefs.setInteger(KEY_SETTINGS_SCHEMA_VERSION, CURRENT_SETTINGS_SCHEMA_VERSION)
     }
 
@@ -757,6 +766,9 @@ class AgentSettingsRepository(
         private const val KEY_CONTEXT_REQUEST_BODY_MAX_CHARS = "context.request.body.max.chars"
         private const val KEY_CONTEXT_RESPONSE_BODY_MAX_CHARS = "context.response.body.max.chars"
         private const val KEY_CONTEXT_COMPACT_JSON = "context.compact.json"
+
+        // 07-02 D-02: chat-context cap toggle for small (1278-token-class) local models.
+        private const val KEY_CHAT_SMALL_MODEL_MODE = "chat.small.model.mode"
         private const val KEY_ACTIVE_AI_ENABLED = "active.ai.enabled"
         private const val KEY_ACTIVE_AI_MAX_CONCURRENT = "active.ai.max.concurrent"
         private const val KEY_ACTIVE_AI_MAX_PAYLOADS = "active.ai.max.payloads"
@@ -1113,9 +1125,12 @@ Response Language: English.
                 (prefs.getInteger(KEY_MCP_COLLABORATOR_TTL_MINUTES) ?: 60)
                     .coerceIn(5, 24 * 60),
             maxConcurrentRequests = (prefs.getInteger(KEY_MCP_MAX_CONCURRENT) ?: 4).coerceIn(1, 64),
+            // 07-02 D-02: lowered floor from 256 KB → 32 KB so users with 1278-token-class
+            // models can configure tight MCP body caps. Existing stored values below 32 KB
+            // are clamped up; values above 100 MB are still clamped down.
             maxBodyBytes =
                 (prefs.getInteger(KEY_MCP_MAX_BODY_BYTES) ?: 2 * 1024 * 1024)
-                    .coerceIn(256 * 1024, 100 * 1024 * 1024),
+                    .coerceIn(32 * 1024, 100 * 1024 * 1024),
             proxyHistoryMaxItemsPerRequest =
                 (
                     prefs.getInteger(KEY_MCP_PROXY_HISTORY_MAX_ITEMS)
