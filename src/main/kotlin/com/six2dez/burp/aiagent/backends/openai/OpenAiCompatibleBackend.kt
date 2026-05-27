@@ -197,7 +197,18 @@ class OpenAiCompatibleBackend(
                                     }
                                 }
 
-                            debugLog("request -> $endpointUrl")
+                            // Bug #66: pre-flight log shows the body SHAPE only — never the JSON itself
+                            // and never the message content. This preserves the privacy guarantee
+                            // (STRIDE T-quick-03) while giving operators enough to debug a 4xx.
+                            val safeBodyPreview =
+                                buildString {
+                                    append("model=").append(model)
+                                    append(" messages=").append(messages.size)
+                                    append(" json_bytes=").append(json.length)
+                                    if (jsonMode) append(" json_mode=true")
+                                    if (maxOutputTokens != null) append(" max_tokens=").append(maxOutputTokens)
+                                }
+                            debugLog("request -> POST $endpointUrl ($safeBodyPreview)")
 
                             if (transport != null) {
                                 val resp = transport.post(endpointUrl, allHeaders, json, timeoutSeconds * 1000)
@@ -206,7 +217,19 @@ class OpenAiCompatibleBackend(
                                     val message =
                                         when (resp.statusCode) {
                                             429 -> "$backendDisplayName rate limited (HTTP 429). Check quota/capacity or retry later."
-                                            else -> "$backendDisplayName HTTP ${resp.statusCode}: ${resp.body}"
+                                            // Bug #66: diagnosable 4xx — include the endpoint URL, a bounded
+                                            // body excerpt (T-quick-04: accepted up to 800 chars), and the
+                                            // standard remediation hint pointing at the three common causes.
+                                            else ->
+                                                buildString {
+                                                    append("$backendDisplayName HTTP ${resp.statusCode} from POST ").append(endpointUrl)
+                                                    append("\nResponse: ").append(resp.body.take(800))
+                                                    append(
+                                                        "\nHints: verify the URL ends in /v1 (or /chat/completions), " +
+                                                            "the model name matches the provider's catalog, " +
+                                                            "and the API key is valid for this endpoint.",
+                                                    )
+                                                }
                                         }
                                     onComplete(IllegalStateException(message))
                                     return@submit
@@ -260,7 +283,19 @@ class OpenAiCompatibleBackend(
                                                             .orEmpty()
                                                     "$backendDisplayName rate limited (HTTP 429). Check quota/capacity or retry later.$retryHint"
                                                 }
-                                                else -> "$backendDisplayName HTTP ${resp.code}: $bodyText"
+                                                // Bug #66: same diagnosable-4xx shape as the Montoya
+                                                // transport branch — keep both transports identical
+                                                // so the user sees consistent error messages.
+                                                else ->
+                                                    buildString {
+                                                        append("$backendDisplayName HTTP ${resp.code} from POST ").append(endpointUrl)
+                                                        append("\nResponse: ").append(bodyText.take(800))
+                                                        append(
+                                                            "\nHints: verify the URL ends in /v1 (or /chat/completions), " +
+                                                                "the model name matches the provider's catalog, " +
+                                                                "and the API key is valid for this endpoint.",
+                                                        )
+                                                    }
                                             }
                                         onComplete(IllegalStateException(message))
                                         return@submit

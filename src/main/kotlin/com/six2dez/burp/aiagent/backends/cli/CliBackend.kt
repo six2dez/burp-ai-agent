@@ -154,10 +154,27 @@ class CliBackend(
                             onComplete(IllegalStateException("CLI executable not found for $backendId"))
                             return@submit
                         }
+                        // Bug #68: explicitly redirect stdin so EVERY CLI backend gets an immediate
+                        // EOF when no stdin payload is supplied. Without this, Copilot (and any
+                        // other interactive CLI) blocks on its first read for 60s until the
+                        // wall-clock timeout fires.
+                        val isWin =
+                            System
+                                .getProperty("os.name")
+                                .lowercase(java.util.Locale.ROOT)
+                                .contains("win")
+                        val nullDevice = java.io.File(if (isWin) "NUL" else "/dev/null")
                         process =
                             ProcessBuilder(normalizeWindowsCommand(resolvedCmd))
                                 .apply { environment().putAll(env) }
                                 .redirectErrorStream(true)
+                                .redirectInput(
+                                    if (stdinText.isNullOrBlank()) {
+                                        ProcessBuilder.Redirect.from(nullDevice)
+                                    } else {
+                                        ProcessBuilder.Redirect.PIPE
+                                    },
+                                )
                                 .directory(java.io.File(System.getProperty("user.home")))
                                 .start()
 
@@ -167,6 +184,8 @@ class CliBackend(
                                 writer.newLine()
                             }
                         } else {
+                            // redirectInput(NUL|/dev/null) already provided EOF, but closing the
+                            // (unused) PIPE handle is harmless and matches the pre-fix semantics.
                             process.outputStream.close()
                         }
 
@@ -304,8 +323,11 @@ class CliBackend(
                     cmd to prompt
                 }
                 "copilot-cli" -> {
-                    val cmd = buildCopilotCommand(baseCommand)
-                    cmd to prompt
+                    // Bug #68: pass the prompt as a positional value for `-p` so Copilot runs
+                    // non-interactively (no menu, no 60s wall-clock hang). stdin is left
+                    // unconnected — the explicit redirectInput(NUL|/dev/null) below provides EOF.
+                    val cmd = buildCopilotCommand(baseCommand, prompt)
+                    cmd to null
                 }
                 else -> baseCommand to prompt
             }
@@ -526,21 +548,6 @@ class CliBackend(
                 .filter { it.isNotBlank() && !inputLines.contains(it) }
                 .joinToString("\n")
                 .trim()
-        }
-
-        private fun buildCopilotCommand(cmd: List<String>): List<String> {
-            val base = cmd.firstOrNull() ?: "copilot"
-            val extras = cmd.drop(1)
-            val args = mutableListOf<String>()
-            args.add(base)
-            args.addAll(extras)
-            if (!args.contains("-p") && !args.contains("--prompt")) {
-                args.add("-p")
-            }
-            if (!args.contains("--quiet")) {
-                args.add("--quiet")
-            }
-            return args
         }
 
         private fun readCopilotOutput(
@@ -797,6 +804,39 @@ class CliBackend(
             return os.contains("mac") || os.contains("nix") || os.contains("nux")
         }
     }
+}
+
+/**
+ * Bug #68 — Build the argv for the `copilot-cli` backend so the CLI runs non-interactively.
+ *
+ * Guarantees:
+ *  - argv[0] is `base` (the user-supplied executable, defaults to `copilot`).
+ *  - `--no-color` and `--quiet` appear BEFORE any auto-injected `-p <prompt>`.
+ *  - The prompt is appended as `-p <prompt>` only when the user did not already supply `-p` or
+ *    `--prompt` in their `extras`; in that case the helper does NOT add a second prompt flag.
+ *  - User-supplied `--no-color` and `--quiet` are NOT duplicated (each appears at most once).
+ *  - User-supplied extras flow through in their original relative order, after the auto-injected
+ *    flags and before the auto-injected `-p` value.
+ *
+ * Visibility: `internal` (module-scoped) so the test in `src/test/kotlin/.../cli/CopilotCommandBuilderTest.kt`
+ * can call it directly without reflection. Not part of the backend's public surface.
+ */
+internal fun buildCopilotCommand(
+    cmd: List<String>,
+    prompt: String,
+): List<String> {
+    val base = cmd.firstOrNull() ?: "copilot"
+    val extras = cmd.drop(1)
+    val args = mutableListOf<String>()
+    args.add(base)
+    if (!extras.contains("--no-color")) args.add("--no-color")
+    if (!extras.contains("--quiet")) args.add("--quiet")
+    args.addAll(extras)
+    if (!extras.contains("-p") && !extras.contains("--prompt")) {
+        args.add("-p")
+        args.add(prompt)
+    }
+    return args
 }
 
 private fun normalizeWindowsCommand(cmd: List<String>): List<String> {
