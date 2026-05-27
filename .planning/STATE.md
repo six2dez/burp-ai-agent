@@ -66,6 +66,10 @@ Recent decisions affecting current work:
 - Init: Domain research skipped — maintainer is the domain expert.
 - Roadmap: Three feature audits (Perplexity, insertion-point, prompt library) split into independent parallel-safe phases; release cut isolated as Phase 6 choke point.
 
+### Roadmap Evolution
+
+- 2026-05-27: Phase 7 added — Proxy Transport + MCP Scope Hardening (closes GitHub issue #69; parallel-safe with Phases 1, 4, 5; must merge before Phase 6).
+
 ### Pending Todos
 
 [From .planning/todos/pending/ — ideas captured during sessions]

@@ -18,6 +18,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 4: Release-Gating Bug Fixes** - Close #62 (release pipeline publishes stale code) and #66 (openai-compatible usage error)
 - [ ] **Phase 5: Documentation Refresh** - README, `burp-ai-agent.six2dez.com`, and `SPEC.md` reflect the three Unreleased features
 - [ ] **Phase 6: v0.7.0 Release Cut** - Promote CHANGELOG, bump version, build, tag, publish JAR + SBOM + SHA-256, CI green on matrix
+- [ ] **Phase 7: Proxy Transport + MCP Scope Hardening** - Close #69: route all AI-backend HTTP via Montoya, small-model context defaults, MCP in-scope-only enforcement
 
 ## Phase Details
 
@@ -88,6 +89,24 @@ Plans:
   3. `SPEC.md` section 4 (Core features) is updated: 4.4 lists Perplexity as a supported HTTP backend; 5.2 (or 4.2) documents the insertion-point scanning entry point; 4.2 documents the prompt library UX additions. No other SPEC sections drift.
 **Plans**: TBD
 
+### Phase 7: Proxy Transport + MCP Scope Hardening
+**Goal**: GitHub issue #69 closed. All AI-backend HTTP traffic (health-check + chat) is routed through `MontoyaHttpTransport` so Burp's upstream proxy / SOCKS / cert store is honored; the chat-context builder respects a small-model defaults profile that fits 1278-token-class models; and the MCP server enforces an in-scope-only restriction across every tool that returns Burp HTTP data.
+**Depends on**: Nothing (parallel-safe with Phase 1, 4, 5)
+**Requirements**: BUG-69-01 (transport unification), BUG-69-02 (small-model defaults), BUG-69-03 (MCP scope enforcement)
+**Success Criteria** (what must be TRUE):
+  1. `healthCheck()` for every HTTP-based backend (OpenAI-compatible, Perplexity, NVIDIA, LM Studio, Ollama HTTP) goes through `MontoyaHttpTransport` when a `BurpExtensionApi` instance is available; the OkHttp fallback path is removed from production code paths so Burp's upstream proxy and SOCKS config are always honored.
+  2. The chat code path in `OpenAiCompatibleBackend.send()` and `LmStudioBackend.send()` no longer contains an OkHttp fallback branch; if `transport == null` at runtime in a real Burp session, the call fails fast with a clear error rather than silently bypassing Burp's network stack.
+  3. A unit test asserts the OkHttp fallback (still kept for non-Burp test environments) is never reached when a non-null `MontoyaHttpTransport` is passed; another asserts the fallback's documentation comment is corrected to reflect that it does NOT honor Burp's upstream proxy.
+  4. The MCP "Max body size" UI spinner accepts values from 32 KB to 100 MB (today: 1 MB minimum), denominated in KB so users with small-context models can configure tight caps without UI gymnastics.
+  5. A "Small-model mode" toggle (or per-backend max-context awareness) caps `ContextCollector` request/response chars to 1500/750 (today: 4000/8000) when enabled or when the active backend declares a context window ≤ 4k tokens.
+  6. A new `mcpScopeOnly: Boolean` setting plus checkbox in the MCP section of `SettingsPanel` controls the scope filter. When enabled, every MCP tool that returns Burp HTTP data (`site_map`, `proxy_history`, `target_tree`, repeater/intercept history, etc.) filters results to `api.scope().isInScope(url)`, and the `send_request` tool rejects calls targeting out-of-scope URLs.
+  7. Unit tests cover (a) `MontoyaHttpTransport.get()` is invoked for the health-check path, (b) small-model mode emits a 1500/750 ContextCapture, (c) every scope-aware MCP tool short-circuits when `mcpScopeOnly=true` and the target is out of scope.
+**Plans**: 3 plans
+Plans:
+- [ ] 07-01-PLAN.md — Transport unification: route healthCheck for OpenAi/LmStudio/Ollama/NvidiaNim through MontoyaHttpTransport, remove OkHttp send() fallback, fix misleading buildClient KDoc (Wave 1, BUG-69-01)
+- [ ] 07-02-PLAN.md — Small-model defaults: add `chat.smallModelMode` toggle that caps ContextCollector to 1500/750 chars + convert MCP body-cap UI from MB to KB (range 32-102400) + lower storage floor to 32 KB (Wave 1, BUG-69-02)
+- [ ] 07-03-PLAN.md — MCP scope enforcement: add `mcpScopeOnly` setting + checkbox + McpScopeFilter helper; filter every read-style MCP tool to in-scope hosts; reject out-of-scope URLs in write-style tools (Wave 2, BUG-69-03)
+
 ### Phase 6: v0.7.0 Release Cut
 **Goal**: v0.7.0 is tagged, built, and published with a complete release artefact set (JAR + SHA-256 + SBOM + release notes) on a green CI matrix across macOS, Linux, and Windows.
 **Depends on**: Phases 1, 2, 3, 4, 5 (every feature audit + both bug fixes + docs must be merged first)
@@ -113,3 +132,4 @@ Phases 1, 2, 3, and 4 are parallel-safe and can be planned/executed concurrently
 | 4. Release-Gating Bug Fixes | 0/TBD | Not started | - |
 | 5. Documentation Refresh | 0/TBD | Not started | - |
 | 6. v0.7.0 Release Cut | 0/TBD | Not started | - |
+| 7. Proxy Transport + MCP Scope Hardening | 0/3 | Not started | - |
