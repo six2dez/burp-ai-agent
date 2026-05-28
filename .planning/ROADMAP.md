@@ -19,6 +19,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 5: Documentation Refresh** - README, `burp-ai-agent.six2dez.com`, and `SPEC.md` reflect the three Unreleased features
 - [ ] **Phase 6: v0.7.0 Release Cut** - Promote CHANGELOG, bump version, build, tag, publish JAR + SBOM + SHA-256, CI green on matrix
 - [x] **Phase 7: Proxy Transport + MCP Scope Hardening** - Close #69: route all AI-backend HTTP via Montoya, small-model context defaults, MCP in-scope-only enforcement (completed 2026-05-27)
+- [ ] **Phase 8: BApp Store resubmission — MCP pivot + compliance** - Close #231 review: store-build MCP exposes only extension-native AI tools (generic Montoya tools gated to a GitHub full build), gate all AI calls on `ai.isEnabled()`, migrate passive scan to `ScanCheck.passiveAudit()`, confirm name
 
 ## Phase Details
 
@@ -133,3 +134,13 @@ Phases 1, 2, 3, and 4 are parallel-safe and can be planned/executed concurrently
 | 5. Documentation Refresh | 0/TBD | Not started | - |
 | 6. v0.7.0 Release Cut | 0/TBD | Not started | - |
 | 7. Proxy Transport + MCP Scope Hardening | 3/3 | Complete   | 2026-05-27 |
+
+### Phase 8: BApp Store resubmission — MCP pivot to extension-native tools + compliance fixes
+
+**Goal:** Get the extension accepted on the PortSwigger BApp Store (issue #231) by resolving all four review feedback points without discarding the MCP work: (1) pivot the store build's MCP server to expose only extension-native AI tools while gating the 57 generic Montoya wrappers out of the store JAR (kept in a GitHub "full" build); (2) gate every AI backend call on `ai.isEnabled()`; (3) migrate passive scanning from `ProxyResponseHandler` to `ScanCheck.passiveAudit()`; (4) confirm the name "Custom AI Agent".
+**Requirements**: BApp Store AI extension best practices (enhancedCapabilities + ai.isEnabled gating, Montoya networking + TLS verification, Burp AI as default provider); no generic-Montoya MCP duplication of the official server; preserve privacy redaction + audit trail; keep Burp Community support (verify the AI gate does not break non-Burp-AI backends there).
+**Depends on:** Phase 7
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 8 to break down)
