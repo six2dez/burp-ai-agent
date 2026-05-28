@@ -668,27 +668,31 @@ api.scanner().registerPassiveScanCheck(new MyPassiveScanCheck(), ScanCheckType.P
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **`McpToolContext` context injection for AI tools**
    - What we know: `McpToolContext` currently has `api`, `aiRequestLogger` but not `supervisor`, `passiveScanner`, `backendRegistry`.
    - What's unclear: best injection pattern without over-loading `McpToolContext`.
    - Recommendation: Add nullable fields `supervisor: AgentSupervisor? = null`, `passiveScanner: PassiveAiScanner? = null` to `McpToolContext`; populate in `McpRuntimeContextFactory.create()` (which already has access to these via `App`). This matches the existing `aiRequestLogger` field pattern.
+   - RESOLVED: Plan 02 Task 1 — adds supervisor, passiveScanner, backendRegistry as nullable fields to McpToolContext and McpRuntimeContextFactory; McpSupervisor.setAiToolDependencies() wires them from App.kt.
 
 2. **Synchronous blocking pattern for `ai_analyze` MCP tool**
    - What we know: `AgentSupervisor.send()` is callback-based (async); MCP tool handlers must return synchronously.
    - What's unclear: whether `CountDownLatch` blocking in an MCP handler thread is safe or could deadlock.
    - Recommendation: Use `CompletableFuture` with a timeout (e.g., 120 seconds); if the AI call exceeds the timeout, return a partial/error result. This is the same approach used in existing blocking AI invocations elsewhere.
+   - RESOLVED: Plan 02 Task 2 — ai_analyze branch uses CountDownLatch(1) pattern (same as PassiveAiScanner.kt:891-928); awaits 120,000ms; returns timeout error if latch not reached.
 
 3. **Community `isEnabled()` — whether to escalate to PortSwigger or not**
    - What we know: returning `false` on Community; third-party backends must not be blocked.
    - What's unclear: whether PortSwigger will accept the extension if AI-calling MCP tools fail on Community.
    - Recommendation: Gate only MCP AI tools (not backend start/stop); in the `/reopen` reply note "Community edition: AI tools require a supported edition; non-AI backends remain fully functional."
+   - RESOLVED: Plan 04 Task 2 checkpoint — manual Community verification performed; escalation path recorded in 08-REOPEN-REPLY.md developer notes (narrow gate kept; broadening and source-set exclusion documented as fallbacks if reviewer rejects).
 
 4. **`ai_passive_scan` — how to pass requests**
    - What we know: `manualScan()` takes `List<HttpRequestResponse>`.
    - What's unclear: how an MCP client would supply Burp `HttpRequestResponse` objects.
    - Recommendation: Accept proxy history indices or site-map URL filters; resolve via `api.proxy().history()` or `api.siteMap().contents()`; filter and pass to `manualScan()`. Return a count of queued items, not findings (those come via `ai_findings_recent`).
+   - RESOLVED: Plan 02 Task 2 — ai_passive_scan branch accepts AiPassiveScanInput with proxyHistoryIndices/siteMapUrl/maxRequests; resolves requests via context.api.proxy().history() and passes to scanner.manualScan(); returns queued count.
 
 ---
 
