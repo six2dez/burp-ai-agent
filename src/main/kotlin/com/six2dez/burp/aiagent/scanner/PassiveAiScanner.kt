@@ -2,10 +2,6 @@ package com.six2dez.burp.aiagent.scanner
 
 import burp.api.montoya.MontoyaApi
 import burp.api.montoya.http.message.HttpRequestResponse
-import burp.api.montoya.proxy.http.InterceptedResponse
-import burp.api.montoya.proxy.http.ProxyResponseHandler
-import burp.api.montoya.proxy.http.ProxyResponseReceivedAction
-import burp.api.montoya.proxy.http.ProxyResponseToBeSentAction
 import burp.api.montoya.scanner.audit.issues.AuditIssue
 import burp.api.montoya.scanner.audit.issues.AuditIssueConfidence
 import burp.api.montoya.scanner.audit.issues.AuditIssueSeverity
@@ -75,7 +71,6 @@ class PassiveAiScanner(
             Thread(r, "PassiveAiScanner").apply { isDaemon = true }
         }
     private val findings = ArrayDeque<PassiveAiFinding>(Defaults.FINDINGS_BUFFER_SIZE)
-    private val registered = AtomicBoolean(false)
     private val jsonMapper = ObjectMapper().registerKotlinModule()
 
     // Reference to active scanner for auto-queueing
@@ -295,78 +290,42 @@ class PassiveAiScanner(
     private val batchQueue = BatchAnalysisQueue()
     private var persistentCache: com.six2dez.burp.aiagent.cache.PersistentPromptCache? = null
 
-    private val handler =
-        object : ProxyResponseHandler {
-            override fun handleResponseReceived(response: InterceptedResponse): ProxyResponseReceivedAction {
-                if (!enabled.get() || supervisor.isBlockedByBurpAiGate()) {
-                    return ProxyResponseReceivedAction.continueWith(response)
-                }
-
-                // Check scope
-                if (scopeOnly && !api.scope().isInScope(response.initiatingRequest().url())) {
-                    return ProxyResponseReceivedAction.continueWith(response)
-                }
-
-                // Check size
-                val responseBytes = response.toByteArray().length()
-                if (responseBytes > maxSizeKb * 1024) {
-                    return ProxyResponseReceivedAction.continueWith(response)
-                }
-
-                // Check MIME type
-                val mime = response.statedMimeType().name.lowercase()
-                val inferredMime = response.inferredMimeType().name.lowercase()
-                if (mime !in allowedMimeTypes && inferredMime !in allowedMimeTypes) {
-                    return ProxyResponseReceivedAction.continueWith(response)
-                }
-
-                // Check excluded file extensions
-                if (hasExcludedExtension(response.initiatingRequest().url())) {
-                    return ProxyResponseReceivedAction.continueWith(response)
-                }
-
-                // Skip streaming/upgrade endpoints that are noisy and frequently time out.
-                if (isStreamingOrRealtimeEndpoint(response)) {
-                    return ProxyResponseReceivedAction.continueWith(response)
-                }
-
-                // Rate limiting - skip if too recent
-                val now = System.currentTimeMillis()
-                if (now - lastRequestTime.get() < rateLimitSeconds * 1000) {
-                    return ProxyResponseReceivedAction.continueWith(response)
-                }
-
-                lastRequestTime.set(now)
-
-                // Queue for analysis
-                val requestResponse =
-                    HttpRequestResponse.httpRequestResponse(
-                        response.initiatingRequest(),
-                        response,
-                    )
-
-                executor.submit {
-                    analyzeInBackground(requestResponse)
-                }
-
-                return ProxyResponseReceivedAction.continueWith(response)
-            }
-
-            override fun handleResponseToBeSent(response: InterceptedResponse): ProxyResponseToBeSentAction =
-                ProxyResponseToBeSentAction.continueWith(response)
-        }
-
     fun setEnabled(on: Boolean) {
         val wasEnabled = enabled.getAndSet(on)
-        if (on && registered.compareAndSet(false, true)) {
-            api.proxy().registerResponseHandler(handler)
-            api.logging().logToOutput("[PassiveAiScanner] Enabled - analyzing proxy traffic")
-        } else if (!on && wasEnabled) {
+        if (on) {
+            api.logging().logToOutput("[PassiveAiScanner] Enabled - Burp Scanner passive check active (Pro only)")
+        } else if (wasEnabled) {
             // Clear accumulated knowledge to prevent cross-scope contamination
             ScanKnowledgeBase.clear()
             api.logging().logToOutput("[PassiveAiScanner] Disabled — knowledge base cleared")
         }
     }
+
+    /**
+     * Enqueues a request/response for asynchronous AI deep-analysis.
+     * Called by AiPassiveScanCheck.doCheck() after local heuristics run synchronously.
+     * Returns immediately — AI findings surface later via api.siteMap().add().
+     */
+    fun enqueueForScanCheck(requestResponse: HttpRequestResponse) {
+        if (!enabled.get()) return
+        if (supervisor.isBlockedByBurpAiGate()) return
+        executor.submit { analyzeManually(requestResponse) }
+    }
+
+    /**
+     * Package-internal wrapper for the private runLocalChecks() method.
+     * Called by AiPassiveScanCheck.doCheck() synchronously to get fast heuristic findings.
+     */
+    internal fun localChecks(
+        request: burp.api.montoya.http.message.requests.HttpRequest,
+        response: burp.api.montoya.http.message.responses.HttpResponse?,
+    ): List<LocalFinding> =
+        runLocalChecks(
+            request,
+            response,
+            request.bodyToString().take(REQUEST_BODY_LOCAL_CHECK_MAX_CHARS),
+            response?.bodyToString().orEmpty().take(RESPONSE_BODY_LOCAL_CHECK_MAX_CHARS),
+        )
 
     fun isEnabled(): Boolean = enabled.get()
 
@@ -2009,7 +1968,7 @@ $batchMetadata
             else -> 0
         }
 
-    private data class LocalFinding(
+    internal data class LocalFinding(
         val title: String,
         val severity: String,
         val detail: String,
@@ -2411,31 +2370,6 @@ $batchMetadata
         val lastSegment = path.substringAfterLast('/')
         val ext = lastSegment.substringAfterLast('.', "").lowercase()
         return ext.isNotEmpty() && ext in excludedExtensions
-    }
-
-    private fun isStreamingOrRealtimeEndpoint(response: InterceptedResponse): Boolean {
-        val request = response.initiatingRequest()
-        val reqAccept = request.headerValue("Accept").orEmpty().lowercase()
-        if (reqAccept.contains("text/event-stream")) return true
-
-        val reqUpgrade = request.headerValue("Upgrade").orEmpty().lowercase()
-        if (reqUpgrade.contains("websocket")) return true
-
-        val respContentType = response.headerValue("Content-Type").orEmpty().lowercase()
-        if (respContentType.contains("text/event-stream")) return true
-
-        val respUpgrade = response.headerValue("Upgrade").orEmpty().lowercase()
-        if (respUpgrade.contains("websocket")) return true
-
-        val path =
-            try {
-                URI(request.url()).path.orEmpty().lowercase()
-            } catch (_: Exception) {
-                ""
-            }
-        if (path.contains("/_ws/") || path.startsWith("/ws") || path.contains("/socket")) return true
-
-        return false
     }
 
     private fun isGeminiCapacityError(error: String): Boolean {
