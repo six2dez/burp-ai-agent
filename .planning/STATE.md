@@ -4,8 +4,8 @@ milestone: v0.7.0
 milestone_name: Release Cut
 status: executing
 stopped_at: Phase 3 context gathered
-last_updated: "2026-05-28T22:04:50.690Z"
-last_activity: 2026-05-28 -- Phase 08 planning complete
+last_updated: "2026-05-28T22:18:04.757Z"
+last_activity: 2026-05-28 -- Phase 08 execution started
 progress:
   total_phases: 8
   completed_phases: 4
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-13)
 
 **Core value:** Bring modern AI to a real security workflow without leaking sensitive traffic to third-party providers — privacy controls and an audit trail are non-negotiable, AI capability is additive.
-**Current focus:** Phase 07 — Proxy Transport + MCP Scope Hardening
+**Current focus:** Phase 08 — BApp Store resubmission — MCP pivot to extension-native tools + compliance fixes
 
 ## Current Position
 
-Phase: 07 — COMPLETE
-Plan: 1 of 3
-Status: Ready to execute
-Last activity: 2026-05-28 -- Phase 08 planning complete
+Phase: 08 (BApp Store resubmission — MCP pivot to extension-native tools + compliance fixes) — EXECUTING
+Plan: 1 of 4
+Status: Executing Phase 08
+Last activity: 2026-05-28 -- Phase 08 execution started
 
 Progress: [░░░░░░░░░░] 0%
 
