@@ -1,5 +1,7 @@
 package com.six2dez.burp.aiagent.mcp
 
+import com.six2dez.burp.aiagent.BuildFlags
+
 data class McpToolDescriptor(
     val id: String,
     val title: String,
@@ -8,6 +10,7 @@ data class McpToolDescriptor(
     val defaultEnabled: Boolean,
     val proOnly: Boolean = false,
     val unsafeOnly: Boolean = false,
+    val nativeTool: Boolean = false, // true = extension-native; present in the BApp Store build
 )
 
 object McpToolCatalog {
@@ -19,6 +22,7 @@ object McpToolCatalog {
                 description = "Returns basic extension and Burp version status.",
                 category = "Extension",
                 defaultEnabled = true,
+                nativeTool = true,
             ),
             McpToolDescriptor(
                 id = "url_encode",
@@ -412,10 +416,14 @@ object McpToolCatalog {
                 description = "Creates a custom audit issue in Burp's issue list for AI-discovered findings.",
                 category = "Issues",
                 defaultEnabled = true,
+                nativeTool = true,
             ),
         )
 
     fun all(): List<McpToolDescriptor> = tools
+
+    fun available(storeBuild: Boolean = BuildFlags.STORE_BUILD): List<McpToolDescriptor> =
+        if (storeBuild) tools.filter { it.nativeTool } else tools
 
     fun defaults(): Map<String, Boolean> = tools.associate { it.id to it.defaultEnabled }
 
