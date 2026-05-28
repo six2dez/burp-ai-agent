@@ -3,12 +3,15 @@ package com.six2dez.burp.aiagent.mcp
 import burp.api.montoya.MontoyaApi
 import burp.api.montoya.core.BurpSuiteEdition
 import com.six2dez.burp.aiagent.audit.AiRequestLogger
+import com.six2dez.burp.aiagent.backends.BackendRegistry
 import com.six2dez.burp.aiagent.config.Defaults
 import com.six2dez.burp.aiagent.mcp.tools.LimitedStringBuilder
 import com.six2dez.burp.aiagent.mcp.tools.ResponsePreprocessorSettings
 import com.six2dez.burp.aiagent.redact.PrivacyMode
 import com.six2dez.burp.aiagent.redact.Redaction
 import com.six2dez.burp.aiagent.redact.RedactionPolicy
+import com.six2dez.burp.aiagent.scanner.PassiveAiScanner
+import com.six2dez.burp.aiagent.supervisor.AgentSupervisor
 
 data class McpToolContext(
     val api: MontoyaApi,
@@ -30,6 +33,9 @@ data class McpToolContext(
     val preprocessFilterBinaryContent: Boolean = Defaults.PREPROCESS_FILTER_BINARY_CONTENT,
     val preprocessAllowedContentTypes: Set<String> = Defaults.PREPROCESS_ALLOWED_CONTENT_TYPES,
     val aiRequestLogger: AiRequestLogger? = null,
+    val supervisor: AgentSupervisor? = null,
+    val passiveScanner: PassiveAiScanner? = null,
+    val backendRegistry: BackendRegistry? = null,
     // 07-03 D-03: when true, McpScopeFilter restricts every scope-aware MCP tool to
     // in-scope hosts. Default false preserves bytewise behaviour for legacy call sites.
     val scopeOnly: Boolean = false,

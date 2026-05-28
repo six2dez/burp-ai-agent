@@ -162,6 +162,12 @@ class McpSupervisorRestartPolicyTest {
 
         override fun setAiRequestLogger(logger: AiRequestLogger) = Unit
 
+        override fun setAiToolDependencies(
+            supervisor: com.six2dez.burp.aiagent.supervisor.AgentSupervisor,
+            passiveScanner: com.six2dez.burp.aiagent.scanner.PassiveAiScanner,
+            backendRegistry: com.six2dez.burp.aiagent.backends.BackendRegistry,
+        ) = Unit
+
         override fun start(
             settings: McpSettings,
             privacyMode: PrivacyMode,

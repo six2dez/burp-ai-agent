@@ -2,10 +2,13 @@ package com.six2dez.burp.aiagent.mcp
 
 import burp.api.montoya.MontoyaApi
 import com.six2dez.burp.aiagent.audit.AiRequestLogger
+import com.six2dez.burp.aiagent.backends.BackendRegistry
 import com.six2dez.burp.aiagent.config.McpSettings
 import com.six2dez.burp.aiagent.mcp.tools.ResponsePreprocessorSettings
 import com.six2dez.burp.aiagent.mcp.tools.registerTools
 import com.six2dez.burp.aiagent.redact.PrivacyMode
+import com.six2dez.burp.aiagent.scanner.PassiveAiScanner
+import com.six2dez.burp.aiagent.supervisor.AgentSupervisor
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.*
@@ -42,6 +45,16 @@ class KtorMcpServerManager(
 
     override fun setAiRequestLogger(logger: AiRequestLogger) {
         contextFactory.aiRequestLogger = logger
+    }
+
+    override fun setAiToolDependencies(
+        supervisor: AgentSupervisor,
+        passiveScanner: PassiveAiScanner,
+        backendRegistry: BackendRegistry,
+    ) {
+        contextFactory.supervisor = supervisor
+        contextFactory.passiveScanner = passiveScanner
+        contextFactory.backendRegistry = backendRegistry
     }
 
     override fun start(

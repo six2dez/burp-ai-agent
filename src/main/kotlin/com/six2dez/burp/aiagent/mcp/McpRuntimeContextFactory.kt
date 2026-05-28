@@ -2,14 +2,20 @@ package com.six2dez.burp.aiagent.mcp
 
 import burp.api.montoya.MontoyaApi
 import com.six2dez.burp.aiagent.audit.AiRequestLogger
+import com.six2dez.burp.aiagent.backends.BackendRegistry
 import com.six2dez.burp.aiagent.config.McpSettings
 import com.six2dez.burp.aiagent.mcp.tools.ResponsePreprocessorSettings
 import com.six2dez.burp.aiagent.redact.PrivacyMode
+import com.six2dez.burp.aiagent.scanner.PassiveAiScanner
+import com.six2dez.burp.aiagent.supervisor.AgentSupervisor
 
 class McpRuntimeContextFactory(
     private val api: MontoyaApi,
 ) {
     var aiRequestLogger: AiRequestLogger? = null
+    var supervisor: AgentSupervisor? = null
+    var passiveScanner: PassiveAiScanner? = null
+    var backendRegistry: BackendRegistry? = null
 
     fun create(
         settings: McpSettings,
@@ -42,6 +48,9 @@ class McpRuntimeContextFactory(
             preprocessFilterBinaryContent = preprocessSettings.preprocessFilterBinaryContent,
             preprocessAllowedContentTypes = preprocessSettings.preprocessAllowedContentTypes,
             aiRequestLogger = aiRequestLogger,
+            supervisor = supervisor,
+            passiveScanner = passiveScanner,
+            backendRegistry = backendRegistry,
             // 07-03 D-03: pass the global MCP scope toggle to every tool handler via context.
             scopeOnly = settings.scopeOnly,
         )
