@@ -91,5 +91,6 @@ class AiGateMcpToolTest {
             limiter = McpRequestLimiter(4),
             edition = BurpSuiteEdition.PROFESSIONAL,
             maxBodyBytes = 1024,
+            supervisor = supervisor,
         )
 }

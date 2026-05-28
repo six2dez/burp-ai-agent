@@ -23,6 +23,7 @@ import com.six2dez.burp.aiagent.mcp.McpToolContext
 import com.six2dez.burp.aiagent.mcp.schema.asInputSchema
 import com.six2dez.burp.aiagent.mcp.schema.toSerializableForm
 import com.six2dez.burp.aiagent.mcp.schema.toSiteMapEntry
+import com.six2dez.burp.aiagent.redact.PrivacyMode
 import com.six2dez.burp.aiagent.redact.Redaction
 import com.six2dez.burp.aiagent.redact.RedactionPolicy
 import com.six2dez.burp.aiagent.util.IssueText
@@ -42,6 +43,9 @@ import java.awt.KeyboardFocusManager
 import java.net.URI
 import java.security.MessageDigest
 import java.util.Base64
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 import java.util.regex.Pattern
 import javax.swing.JTextArea
 
@@ -61,6 +65,7 @@ fun Server.registerTools(
     registerEditorTools(context)
     registerCollaboratorTools(context)
     registerIssueTools(context)
+    registerAiTools(context)
 }
 
 @Suppress("unused")
@@ -2062,6 +2067,100 @@ object McpToolExecutor {
                             val input = decode<CreateAuditIssue>(normalizedArgs)
                             executeIssueCreate(input, api, context)
                         }
+                        "ai_analyze" -> {
+                            val input = decode<AiAnalyzeInput>(normalizedArgs)
+                            val supervisor = context.supervisor
+                                ?: return@runTool "AI tools not initialized."
+                            if (!supervisor.isAiEnabled()) {
+                                return@runTool "AI features unavailable: check that your Burp edition supports AI " +
+                                    "and the 'Use AI' toggle is enabled. Non-AI backends remain usable via the chat panel."
+                            }
+                            val responseBuffer = StringBuilder()
+                            val completionLatch = CountDownLatch(1)
+                            val errorRef = AtomicReference<String?>(null)
+                            supervisor.send(
+                                text = input.text,
+                                history = emptyList(),
+                                contextJson = null,
+                                privacyMode = context.privacyMode,
+                                determinismMode = context.determinismMode,
+                                onChunk = { chunk -> responseBuffer.append(chunk) },
+                                onComplete = { err ->
+                                    errorRef.set(err?.message)
+                                    completionLatch.countDown()
+                                },
+                                jsonMode = input.jsonMode,
+                                maxOutputTokens = input.maxOutputTokens,
+                            )
+                            val completed = completionLatch.await(120_000L, TimeUnit.MILLISECONDS)
+                            if (!completed) return@runTool "AI request timed out after 120 seconds."
+                            val error = errorRef.get()
+                            if (error != null) return@runTool "AI error: $error"
+                            responseBuffer.toString().trim()
+                        }
+                        "ai_passive_scan" -> {
+                            val input = decode<AiPassiveScanInput>(normalizedArgs)
+                            val supervisor = context.supervisor
+                            // B2 fix: check AI gate BEFORE passiveScanner null check
+                            if (supervisor == null || !supervisor.isAiEnabled()) {
+                                return@runTool "AI features unavailable: check that your Burp edition supports AI " +
+                                    "and the 'Use AI' toggle is enabled. Non-AI backends remain usable via the chat panel."
+                            }
+                            val scanner = context.passiveScanner
+                                ?: return@runTool "Passive scanner not available."
+                            @Suppress("UNCHECKED_CAST")
+                            val allHistory: List<burp.api.montoya.http.message.HttpRequestResponse> =
+                                api.proxy().history() as List<burp.api.montoya.http.message.HttpRequestResponse>
+                            val filtered = if (input.siteMapUrl != null) {
+                                allHistory.filter { reqRes ->
+                                    runCatching { reqRes.request().url().contains(input.siteMapUrl) }.getOrDefault(false)
+                                }
+                            } else {
+                                allHistory
+                            }
+                            val requests = filtered.take(input.maxRequests)
+                            if (requests.isEmpty()) return@runTool "No matching requests found."
+                            val count = scanner.manualScan(requests)
+                            "Queued $count requests for AI passive scan."
+                        }
+                        "ai_findings_recent" -> {
+                            val input = decode<AiFindingsRecentInput>(normalizedArgs)
+                            val scanner = context.passiveScanner
+                                ?: return@runTool "Passive scanner not available."
+                            val findings = scanner.getLastFindings(input.n)
+                            if (findings.isEmpty()) return@runTool "No findings recorded yet."
+                            findings.joinToString("\n\n") { f ->
+                                "[${f.timestamp}] ${f.title} (${f.severity}) - ${f.url}: ${f.detail.take(500)}"
+                            }
+                        }
+                        "redact_preview" -> {
+                            val input = decode<RedactPreviewInput>(normalizedArgs)
+                            val mode = PrivacyMode.valueOf(input.mode.uppercase())
+                            val policy = RedactionPolicy.fromMode(mode)
+                            Redaction.apply(input.text, policy, stableHostSalt = context.hostSalt)
+                        }
+                        "ai_audit_query" -> {
+                            val input = decode<AiAuditQueryInput>(normalizedArgs)
+                            val logger = context.aiRequestLogger
+                                ?: return@runTool "Audit logging not configured."
+                            val entries = logger.entries().takeLast(input.n)
+                            if (entries.isEmpty()) return@runTool "No audit entries recorded."
+                            entries.joinToString("\n") { e ->
+                                "id:${e.id} type:${e.type} source:${e.source} backend:${e.backendId} detail:${e.detail}"
+                            }
+                        }
+                        "ai_backends_list" -> {
+                            val registry = context.backendRegistry
+                            val supervisor = context.supervisor
+                            if (registry == null || supervisor == null) return@runTool "Registry not available."
+                            val ids = registry.listAllBackendIds()
+                            val status = supervisor.status()
+                            buildString {
+                                appendLine("Available backends: ${ids.joinToString(", ")}")
+                                appendLine("Current backend: ${status.backendId ?: "none"}")
+                                append("State: ${status.state}")
+                            }
+                        }
                         else -> "Unknown tool: $name"
                     }
                 context.redactIfNeeded(output)
@@ -2245,6 +2344,12 @@ object McpToolExecutor {
             "proxy_intercept" -> SetProxyInterceptState::class.asInputSchema()
             "editor_set" -> SetActiveEditorContents::class.asInputSchema()
             "issue_create" -> CreateAuditIssue::class.asInputSchema()
+            "ai_analyze" -> AiAnalyzeInput::class.asInputSchema()
+            "ai_passive_scan" -> AiPassiveScanInput::class.asInputSchema()
+            "ai_findings_recent" -> AiFindingsRecentInput::class.asInputSchema()
+            "redact_preview" -> RedactPreviewInput::class.asInputSchema()
+            "ai_audit_query" -> AiAuditQueryInput::class.asInputSchema()
+            "ai_backends_list" -> Tool.Input()
             else -> Tool.Input()
         }
     }

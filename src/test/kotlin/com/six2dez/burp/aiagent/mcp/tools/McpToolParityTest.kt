@@ -29,6 +29,7 @@ class McpToolParityTest {
                 "editor_get",
                 "project_options_get",
                 "user_options_get",
+                "ai_backends_list",
             )
         McpToolCatalog.all().forEach { descriptor ->
             val schema = McpToolExecutor.inputSchema(descriptor.id)

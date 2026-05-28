@@ -97,14 +97,24 @@ internal object McpToolRegistrations {
             "issue_create",
         )
 
-    fun allIds(): Set<String> = (utility + history + siteMap + request + scanner + config + editor + collaborator + issue).toSet()
+    val native =
+        listOf(
+            "ai_analyze",
+            "ai_passive_scan",
+            "ai_findings_recent",
+            "redact_preview",
+            "ai_audit_query",
+            "ai_backends_list",
+        )
+
+    fun allIds(): Set<String> = (utility + history + siteMap + request + scanner + config + editor + collaborator + issue + native).toSet()
 }
 
 internal fun Server.registerToolHandler(
     toolId: String,
     context: McpToolContext,
 ) {
-    val descriptor = McpToolCatalog.all().firstOrNull { it.id == toolId } ?: return
+    val descriptor = McpToolCatalog.available().firstOrNull { it.id == toolId } ?: return
     if (descriptor.proOnly && context.edition != burp.api.montoya.core.BurpSuiteEdition.PROFESSIONAL) {
         return
     }
