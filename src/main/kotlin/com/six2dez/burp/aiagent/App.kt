@@ -17,7 +17,9 @@ import com.six2dez.burp.aiagent.config.toPreprocessorSettings
 import com.six2dez.burp.aiagent.context.ContextCollector
 import com.six2dez.burp.aiagent.mcp.McpSupervisor
 import com.six2dez.burp.aiagent.redact.Redaction
+import burp.api.montoya.scanner.scancheck.ScanCheckType
 import com.six2dez.burp.aiagent.scanner.ActiveAiScanner
+import com.six2dez.burp.aiagent.scanner.AiPassiveScanCheck
 import com.six2dez.burp.aiagent.scanner.AiScanCheck
 import com.six2dez.burp.aiagent.scanner.PassiveAiScanner
 import com.six2dez.burp.aiagent.supervisor.AgentSupervisor
@@ -158,6 +160,18 @@ object App {
         } catch (e: Exception) {
             // Expected to fail on Community edition
             api.logging().logToOutput("AI ScanCheck not registered (Burp Pro required): ${e.message}")
+        }
+
+        // Register AI PassiveScanCheck with Burp Scanner (Burp Pro only)
+        // Uses the modern PassiveScanCheck interface (BApp Store requirement)
+        // Community edition: registerPassiveScanCheck throws → caught → extension continues normally
+        try {
+            val aiPassiveScanCheck = AiPassiveScanCheck(api, passiveAiScanner) { settingsRepo.load() }
+            api.scanner().registerPassiveScanCheck(aiPassiveScanCheck, ScanCheckType.PER_REQUEST)
+            api.logging().logToOutput("AI PassiveScanCheck registered with Burp Scanner (Pro feature)")
+        } catch (e: Exception) {
+            // Expected to fail on Community edition
+            api.logging().logToOutput("AI PassiveScanCheck not registered (Burp Pro required): ${e.message}")
         }
 
         api.logging().logToOutput(
