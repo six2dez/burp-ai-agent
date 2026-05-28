@@ -59,7 +59,47 @@ java {
     }
 }
 
+// -PstoreBuild=true produces the BApp Store artifact (native tools only).
+// Default (false) produces the full GitHub release artifact.
+val storeBuild = providers.gradleProperty("storeBuild").orNull == "true"
+
+val generatedSrcDir = layout.buildDirectory.dir("generated/buildflags")
+
+abstract class GenerateBuildFlagsTask : DefaultTask() {
+    @get:Input
+    abstract val storeBuildFlag: Property<Boolean>
+
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    @TaskAction
+    fun generate() {
+        val pkgDir = outputDir.get().asFile.resolve("com/six2dez/burp/aiagent").also { it.mkdirs() }
+        pkgDir.resolve("BuildFlags.kt").writeText(
+            """
+package com.six2dez.burp.aiagent
+
+object BuildFlags {
+    const val STORE_BUILD = ${storeBuildFlag.get()}
+}
+            """.trimIndent(),
+        )
+    }
+}
+
+val generateBuildFlags by tasks.registering(GenerateBuildFlagsTask::class) {
+    group = "build"
+    description = "Generates BuildFlags.kt with a compile-time store-build flag"
+    storeBuildFlag.set(storeBuild)
+    outputDir.set(generatedSrcDir)
+}
+
+sourceSets.main {
+    kotlin.srcDir(generatedSrcDir)
+}
+
 tasks.withType<KotlinCompile> {
+    dependsOn(generateBuildFlags)
     compilerOptions {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
         freeCompilerArgs.addAll(listOf("-Xjsr305=strict"))
@@ -71,7 +111,11 @@ tasks.jar {
 }
 
 tasks.shadowJar {
-    archiveBaseName.set("Custom-AI-Agent")
+    if (storeBuild) {
+        archiveBaseName.set("Custom-AI-Agent")
+    } else {
+        archiveBaseName.set("Custom-AI-Agent-full")
+    }
     archiveClassifier.set("")
     mergeServiceFiles()
     isZip64 = true
