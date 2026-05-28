@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-05-13)
 ## Current Position
 
 Phase: 08 (BApp Store resubmission — MCP pivot to extension-native tools + compliance fixes) — EXECUTING
-Plan: 1 of 4
-Status: Executing Phase 08
-Last activity: 2026-05-28 -- Phase 08 execution started
+Plan: 2 of 4
+Status: Executing Phase 08 (08-01 complete)
+Last activity: 2026-05-29 -- Phase 08 plan 01 completed
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█░░░░░░░░░] 25%
 
 ## Performance Metrics
 
@@ -65,6 +65,9 @@ Recent decisions affecting current work:
 - Init: Codebase mapping skipped — `SPEC.md`, `DECISIONS.md`, `AGENTS.md`, `CHANGELOG.md` already capture architecture.
 - Init: Domain research skipped — maintainer is the domain expert.
 - Roadmap: Three feature audits (Perplexity, insertion-point, prompt library) split into independent parallel-safe phases; release cut isolated as Phase 6 choke point.
+- 08-01: Hand-rolled GenerateBuildFlagsTask (abstract class with @Input/@OutputDirectory) required for Gradle configuration-cache compatibility instead of doFirst lambda.
+- 08-01: BuildFlags.kt generated into build/generated/buildflags/ (ktlint excluded via **/build/**); nativeTool: Boolean = false default preserves all 53 existing descriptors.
+- 08-01: available(storeBuild: Boolean = BuildFlags.STORE_BUILD) default-arg overload enables unit testing without config-cache mocking.
 
 ### Roadmap Evolution
 
@@ -100,6 +103,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-05-13T11:49:37.931Z
-Stopped at: Phase 3 context gathered
-Resume file: .planning/phases/03-prompt-library-ux-audit/03-CONTEXT.md
+Last session: 2026-05-28T22:24:53Z
+Stopped at: Phase 08 Plan 01 completed
+Resume file: .planning/phases/08-bapp-store-resubmission-mcp-pivot-to-extension-native-tools-/08-01-SUMMARY.md

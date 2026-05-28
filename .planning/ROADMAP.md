@@ -143,7 +143,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 08-01-PLAN.md — Wave 1: -PstoreBuild Gradle gate + BuildFlags.kt generate task + two-artifact naming + nativeTool field + McpToolCatalog.available() + Wave-0 test stubs (Wave 1)
+- [x] 08-01-PLAN.md — Wave 1: -PstoreBuild Gradle gate + BuildFlags.kt generate task + two-artifact naming + nativeTool field + McpToolCatalog.available() + Wave-0 test stubs (Wave 1, completed 2026-05-29)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -183,4 +183,4 @@ Phases 1, 2, 3, and 4 are parallel-safe and can be planned/executed concurrently
 | 5. Documentation Refresh | 0/TBD | Not started | - |
 | 6. v0.7.0 Release Cut | 0/TBD | Not started | - |
 | 7. Proxy Transport + MCP Scope Hardening | 3/3 | Complete   | 2026-05-27 |
-| 8. BApp Store resubmission — MCP pivot + compliance | 0/4 | Not started | - |
+| 8. BApp Store resubmission — MCP pivot + compliance | 1/4 | In progress | - |
