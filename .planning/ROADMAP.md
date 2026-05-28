@@ -19,7 +19,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 5: Documentation Refresh** - README, `burp-ai-agent.six2dez.com`, and `SPEC.md` reflect the three Unreleased features
 - [ ] **Phase 6: v0.7.0 Release Cut** - Promote CHANGELOG, bump version, build, tag, publish JAR + SBOM + SHA-256, CI green on matrix
 - [x] **Phase 7: Proxy Transport + MCP Scope Hardening** - Close #69: route all AI-backend HTTP via Montoya, small-model context defaults, MCP in-scope-only enforcement (completed 2026-05-27)
-- [ ] **Phase 8: BApp Store resubmission — MCP pivot + compliance** - Close #231 review: store-build MCP exposes only extension-native AI tools (generic Montoya tools gated to a GitHub full build), gate all AI calls on `ai.isEnabled()`, migrate passive scan to `ScanCheck.passiveAudit()`, confirm name
+- [ ] **Phase 8: BApp Store resubmission — MCP pivot + compliance** - Close #231 review: store-build MCP exposes only extension-native AI tools (generic Montoya tools gated to a GitHub full build), gate all AI calls on `ai.isEnabled()`, migrate passive scan to `PassiveScanCheck.doCheck()`, confirm name
 
 ## Phase Details
 
@@ -108,6 +108,19 @@ Plans:
 - [x] 07-02-PLAN.md — Small-model defaults: add `chat.smallModelMode` toggle that caps ContextCollector to 1500/750 chars + convert MCP body-cap UI from MB to KB (range 32-102400) + lower storage floor to 32 KB (Wave 1, BUG-69-02)
 - [x] 07-03-PLAN.md — MCP scope enforcement: add `mcpScopeOnly` setting + checkbox + McpScopeFilter helper; filter every read-style MCP tool to in-scope hosts; reject out-of-scope URLs in write-style tools (Wave 2, BUG-69-03)
 
+### Phase 8: BApp Store resubmission — MCP pivot to extension-native tools + compliance fixes
+
+**Goal:** Get the extension accepted on the PortSwigger BApp Store (issue #231) by resolving all four review feedback points without discarding the MCP work: (1) pivot the store build's MCP server to expose only extension-native AI tools while gating the 51 generic Montoya wrappers out of the store JAR (kept in a GitHub "full" build); (2) gate AI-calling MCP tools on `api.ai().isEnabled()`; (3) migrate passive scanning from `ProxyResponseHandler` to `PassiveScanCheck.doCheck()` (modern Montoya 2026.2 interface); (4) confirm the name "Custom AI Agent".
+**Requirements**: BApp Store AI extension best practices (enhancedCapabilities + ai.isEnabled gating, Montoya networking + TLS verification, Burp AI as default provider); no generic-Montoya MCP duplication of the official server; preserve privacy redaction + audit trail; keep Burp Community support (verify the AI gate does not break non-Burp-AI backends there).
+**Depends on:** Phase 7
+**Plans:** 4 plans
+
+Plans:
+- [ ] 08-01-PLAN.md — Wave 1: -PstoreBuild Gradle gate + BuildFlags.kt generate task + two-artifact naming + nativeTool field + McpToolCatalog.available() + Wave-0 test stubs (Wave 1)
+- [ ] 08-02-PLAN.md — Wave 2: 6 new native MCP tools (ai_analyze, ai_passive_scan, ai_findings_recent, redact_preview, ai_audit_query, ai_backends_list) + context injection + available() routing in registration + SettingsPanel UI (Wave 2, depends on 08-01)
+- [ ] 08-03-PLAN.md — Wave 3: AiPassiveScanCheck implementing PassiveScanCheck.doCheck() + remove ProxyResponseHandler from PassiveAiScanner + App.kt registration (Wave 3, depends on 08-01)
+- [ ] 08-04-PLAN.md — Wave 4: artifact inspection + Community/Pro AI-gate manual verification (checkpoint) + /reopen reply draft (Wave 4, depends on 08-02 + 08-03)
+
 ### Phase 6: v0.7.0 Release Cut
 **Goal**: v0.7.0 is tagged, built, and published with a complete release artefact set (JAR + SHA-256 + SBOM + release notes) on a green CI matrix across macOS, Linux, and Windows.
 **Depends on**: Phases 1, 2, 3, 4, 5 (every feature audit + both bug fixes + docs must be merged first)
@@ -134,13 +147,4 @@ Phases 1, 2, 3, and 4 are parallel-safe and can be planned/executed concurrently
 | 5. Documentation Refresh | 0/TBD | Not started | - |
 | 6. v0.7.0 Release Cut | 0/TBD | Not started | - |
 | 7. Proxy Transport + MCP Scope Hardening | 3/3 | Complete   | 2026-05-27 |
-
-### Phase 8: BApp Store resubmission — MCP pivot to extension-native tools + compliance fixes
-
-**Goal:** Get the extension accepted on the PortSwigger BApp Store (issue #231) by resolving all four review feedback points without discarding the MCP work: (1) pivot the store build's MCP server to expose only extension-native AI tools while gating the 57 generic Montoya wrappers out of the store JAR (kept in a GitHub "full" build); (2) gate every AI backend call on `ai.isEnabled()`; (3) migrate passive scanning from `ProxyResponseHandler` to `ScanCheck.passiveAudit()`; (4) confirm the name "Custom AI Agent".
-**Requirements**: BApp Store AI extension best practices (enhancedCapabilities + ai.isEnabled gating, Montoya networking + TLS verification, Burp AI as default provider); no generic-Montoya MCP duplication of the official server; preserve privacy redaction + audit trail; keep Burp Community support (verify the AI gate does not break non-Burp-AI backends there).
-**Depends on:** Phase 7
-**Plans:** 0 plans
-
-Plans:
-- [ ] TBD (run /gsd-plan-phase 8 to break down)
+| 8. BApp Store resubmission — MCP pivot + compliance | 0/4 | Not started | - |
