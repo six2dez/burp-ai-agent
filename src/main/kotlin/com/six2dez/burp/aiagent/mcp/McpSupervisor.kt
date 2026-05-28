@@ -2,11 +2,14 @@ package com.six2dez.burp.aiagent.mcp
 
 import burp.api.montoya.MontoyaApi
 import com.six2dez.burp.aiagent.audit.AiRequestLogger
+import com.six2dez.burp.aiagent.backends.BackendRegistry
 import com.six2dez.burp.aiagent.config.McpSettings
 import com.six2dez.burp.aiagent.mcp.tools.CollaboratorRegistry
 import com.six2dez.burp.aiagent.mcp.tools.ResponsePreprocessorSettings
 import com.six2dez.burp.aiagent.mcp.tools.ScannerTaskRegistry
 import com.six2dez.burp.aiagent.redact.PrivacyMode
+import com.six2dez.burp.aiagent.scanner.PassiveAiScanner
+import com.six2dez.burp.aiagent.supervisor.AgentSupervisor
 import java.net.BindException
 import java.net.HttpURLConnection
 import java.net.URI
@@ -63,6 +66,14 @@ class McpSupervisor(
     fun setAiRequestLogger(logger: AiRequestLogger) {
         serverManager.setAiRequestLogger(logger)
         stdioBridge.setAiRequestLogger(logger)
+    }
+
+    fun setAiToolDependencies(
+        supervisor: AgentSupervisor,
+        passiveScanner: PassiveAiScanner,
+        backendRegistry: BackendRegistry,
+    ) {
+        serverManager.setAiToolDependencies(supervisor, passiveScanner, backendRegistry)
     }
 
     fun applySettings(

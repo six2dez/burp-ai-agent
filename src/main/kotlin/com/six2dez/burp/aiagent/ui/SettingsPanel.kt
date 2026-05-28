@@ -2191,7 +2191,7 @@ class SettingsPanel(
         val unsafeEnabled = mcpUnsafe.isSelected
         val unsafeAllowlist = settings.mcpSettings.enabledUnsafeTools
 
-        McpToolCatalog.all().groupBy { it.category }.forEach { (category, tools) ->
+        McpToolCatalog.available().groupBy { it.category }.forEach { (category, tools) ->
             val label = JLabel(category)
             label.font = UiTheme.Typography.label
             label.foreground = UiTheme.Colors.onSurface
@@ -2232,7 +2232,7 @@ class SettingsPanel(
 
         val unsafeTools =
             McpToolCatalog
-                .all()
+                .available()
                 .filter { it.unsafeOnly }
                 .sortedBy { it.title }
         if (unsafeTools.isNotEmpty()) {
@@ -2545,7 +2545,7 @@ class SettingsPanel(
         val effectiveToggles = McpToolCatalog.mergeWithDefaults(collectMcpToolToggles())
         val available = mutableSetOf<String>()
         val reasons = mutableMapOf<String, String>()
-        for (tool in McpToolCatalog.all()) {
+        for (tool in McpToolCatalog.available()) {
             val id = tool.id.lowercase()
             when {
                 tool.proOnly && edition != BurpSuiteEdition.PROFESSIONAL ->

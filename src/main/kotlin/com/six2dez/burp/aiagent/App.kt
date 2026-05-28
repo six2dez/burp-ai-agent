@@ -74,6 +74,7 @@ object App {
         passiveAiScanner = PassiveAiScanner(api, supervisor, auditLogger) { settingsRepo.load() }
         passiveAiScanner.aiRequestLogger = aiRequestLogger
         activeAiScanner = ActiveAiScanner(api, supervisor, auditLogger) { settingsRepo.load() }
+        mcpSupervisor.setAiToolDependencies(supervisor, passiveAiScanner, backendRegistry)
 
         AgentProfileLoader.ensureBundledProfilesInstalled()
         val settings = settingsRepo.load()
