@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.7.0
 milestone_name: Release Cut
 status: executing
-stopped_at: Phase 3 context gathered
-last_updated: "2026-05-28T22:18:04.757Z"
-last_activity: 2026-05-28 -- Phase 08 execution started
+stopped_at: Completed 08-02-PLAN.md
+last_updated: "2026-05-28T22:40:57.169Z"
+last_activity: 2026-05-28
 progress:
   total_phases: 8
   completed_phases: 4
   total_plans: 14
-  completed_plans: 10
+  completed_plans: 12
   percent: 50
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-05-13)
 ## Current Position
 
 Phase: 08 (BApp Store resubmission — MCP pivot to extension-native tools + compliance fixes) — EXECUTING
-Plan: 2 of 4
-Status: Executing Phase 08 (08-01 complete)
-Last activity: 2026-05-29 -- Phase 08 plan 01 completed
+Plan: 3 of 4
+Status: Ready to execute
+Last activity: 2026-05-28
 
-Progress: [█░░░░░░░░░] 25%
+Progress: [█████████░] 86%
 
 ## Performance Metrics
 
@@ -53,6 +53,7 @@ Progress: [█░░░░░░░░░] 25%
 - Trend: —
 
 *Updated after each plan completion*
+| Phase 08-bapp-store-resubmission-mcp-pivot-to-extension-native-tools- P02 | 27 | 3 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -68,6 +69,9 @@ Recent decisions affecting current work:
 - 08-01: Hand-rolled GenerateBuildFlagsTask (abstract class with @Input/@OutputDirectory) required for Gradle configuration-cache compatibility instead of doFirst lambda.
 - 08-01: BuildFlags.kt generated into build/generated/buildflags/ (ktlint excluded via **/build/**); nativeTool: Boolean = false default preserves all 53 existing descriptors.
 - 08-01: available(storeBuild: Boolean = BuildFlags.STORE_BUILD) default-arg overload enables unit testing without config-cache mocking.
+- [Phase ?]: B1 fix: registerToolHandler() uses available() so STORE_BUILD=true silently skips generic tool IDs
+- [Phase ?]: B2 fix: ai_passive_scan checks supervisor.isAiEnabled() BEFORE passiveScanner null check
+- [Phase ?]: setAiToolDependencies() added to McpServerManager interface so typed reference can call it
 
 ### Roadmap Evolution
 
@@ -103,6 +107,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-05-28T22:24:53Z
-Stopped at: Phase 08 Plan 01 completed
-Resume file: .planning/phases/08-bapp-store-resubmission-mcp-pivot-to-extension-native-tools-/08-01-SUMMARY.md
+Last session: 2026-05-28T22:40:57.162Z
+Stopped at: Completed 08-02-PLAN.md
+Resume file: None

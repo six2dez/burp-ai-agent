@@ -138,7 +138,7 @@ Plans:
 **Goal:** Get the extension accepted on the PortSwigger BApp Store (issue #231) by resolving all four review feedback points without discarding the MCP work: (1) pivot the store build's MCP server to expose only extension-native AI tools while gating the 51 generic Montoya wrappers out of the store JAR (kept in a GitHub "full" build); (2) gate AI-calling MCP tools on `api.ai().isEnabled()`; (3) migrate passive scanning from `ProxyResponseHandler` to `PassiveScanCheck.doCheck()` (modern Montoya 2026.2 interface); (4) confirm the name "Custom AI Agent".
 **Requirements**: BApp Store AI extension best practices (enhancedCapabilities + ai.isEnabled gating, Montoya networking + TLS verification, Burp AI as default provider); no generic-Montoya MCP duplication of the official server; preserve privacy redaction + audit trail; keep Burp Community support (verify the AI gate does not break non-Burp-AI backends there).
 **Depends on:** Phase 7
-**Plans:** 4 plans
+**Plans:** 2/4 plans executed
 
 Plans:
 **Wave 1**
@@ -147,7 +147,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 08-02-PLAN.md — Wave 2: 6 new native MCP tools (ai_analyze, ai_passive_scan, ai_findings_recent, redact_preview, ai_audit_query, ai_backends_list) + context injection + available() routing in registration + SettingsPanel UI (Wave 2, depends on 08-01)
+- [x] 08-02-PLAN.md — Wave 2: 6 new native MCP tools (ai_analyze, ai_passive_scan, ai_findings_recent, redact_preview, ai_audit_query, ai_backends_list) + context injection + available() routing in registration + SettingsPanel UI (Wave 2, depends on 08-01)
 - [ ] 08-03-PLAN.md — Wave 3: AiPassiveScanCheck implementing PassiveScanCheck.doCheck() + remove ProxyResponseHandler from PassiveAiScanner + App.kt registration (Wave 3, depends on 08-01)
 
 **Wave 4** *(blocked on Wave 2 completion)*
@@ -183,4 +183,4 @@ Phases 1, 2, 3, and 4 are parallel-safe and can be planned/executed concurrently
 | 5. Documentation Refresh | 0/TBD | Not started | - |
 | 6. v0.7.0 Release Cut | 0/TBD | Not started | - |
 | 7. Proxy Transport + MCP Scope Hardening | 3/3 | Complete   | 2026-05-27 |
-| 8. BApp Store resubmission — MCP pivot + compliance | 1/4 | In progress | - |
+| 8. BApp Store resubmission — MCP pivot + compliance | 2/4 | In Progress|  |
