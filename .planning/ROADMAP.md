@@ -1,8 +1,10 @@
-# Roadmap: Burp AI Agent — v0.7.0
+# Roadmap: Burp AI Agent — v0.7.0 (carryover) + v0.8.0 (active)
 
 ## Overview
 
 Stabilization milestone for the three `Unreleased` features (Perplexity backend, AI scan on selected insertion point, custom prompt library UX), the two open bugs gating release (#62 release pipeline, #66 openai-compatible usage error), the user-facing documentation refresh, and the v0.7.0 release cut itself. The three feature-audit phases (1, 2, 3) are independent and parallel-safe. The release phase (6) is a choke point that depends on every earlier phase being green.
+
+**v0.8.0 phases (9-11)** begin after the carryover milestone. They redesign the extension's Swing UI on a shared design-system foundation, applied across the MCP tools tab and all Settings tabs, with light/dark theme consistency via tokens.
 
 ## Phases
 
@@ -21,6 +23,9 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 6: v0.7.0 Release Cut** - Promote CHANGELOG, bump version, build, tag, publish JAR + SBOM + SHA-256, CI green on matrix
 - [x] **Phase 7: Proxy Transport + MCP Scope Hardening** - Close #69: route all AI-backend HTTP via Montoya, small-model context defaults, MCP in-scope-only enforcement (completed 2026-05-27)
 - [ ] **Phase 8: BApp Store resubmission — MCP pivot + compliance** - Close #231 review: store-build MCP exposes only extension-native AI tools (generic Montoya tools gated to a GitHub full build), gate all AI calls on `ai.isEnabled()`, migrate passive scan to `PassiveScanCheck.doCheck()`, confirm name
+- [ ] **Phase 9: Design System Foundation** - Shared spacing/typography/color tokens + reusable Swing components as the single styling source for all settings panels
+- [ ] **Phase 10: MCP Tools Tab Redesign** - Group tools into native (AI) vs generic (Montoya) sections, show store/full-build indicators, add live search/filter + per-group bulk toggle
+- [ ] **Phase 11: Settings Tabs + Theme Rollout** - Rebuild every Settings tab on the design system with scannable navigation, collapsible sections, and light/dark theme token support
 
 ## Phase Details
 
@@ -169,10 +174,64 @@ Plans:
 
 **Plans**: TBD
 
+---
+
+## v0.8.0 Phase Details
+
+### Phase 9: Design System Foundation
+
+**Goal**: A shared Swing design-system module (spacing, typography, color tokens + reusable components) exists in `ui/` and is the single styling source that all settings panels can adopt — no panel depends on ad-hoc literals after this phase.
+**Depends on**: Nothing (new module; no existing panel is migrated yet)
+**Requirements**: UI-01
+**Success Criteria** (what must be TRUE):
+
+  1. A `DesignTokens` object (or equivalent) in `ui/design/` exposes spacing constants, font descriptors, and color roles (primary, surface, muted, border) that resolve correctly against `UIManager` in both Burp light and dark themes — no hardcoded hex values in the token layer.
+  2. At least four reusable Swing component builders exist — section header label, labeled field row (label + control + optional help text), inline help/description label, and primary/secondary action button — each applying tokens so visual consistency is guaranteed by construction.
+  3. A unit or visual-verification test (or a developer-run harness) confirms token values load without throwing in a headless JVM context, exercising both "light" and "dark" UIManager overrides.
+  4. No existing panel behaviour or settings-persistence changes: the new module is additive only; all tests remain green after the addition (`./gradlew test` passes).
+
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 10: MCP Tools Tab Redesign
+
+**Goal**: The MCP tools tab (`McpConfigPanel`) is reorganized into two clearly labelled sections — extension-native AI tools and generic Montoya tools — with store-build / full-build badges per row, a live search/filter field, and per-group bulk enable/disable toggles, built on the Phase 9 design system.
+**Depends on**: Phase 9 (design-system tokens + components); Phase 8 (nativeTool field + McpToolCatalog.available() already in place)
+**Requirements**: UI-03, UI-04, UI-05, UI-07
+**Success Criteria** (what must be TRUE):
+
+  1. Opening the MCP tab shows two visually distinct sections — "AI Tools (extension-native)" and "Montoya Tools (generic)" — each rendered with the Phase 9 section-header component; tools appear in the correct section based on `McpToolDescriptor.nativeTool`.
+  2. Each tool row displays a "store" or "full" badge (or equivalent visual indicator) derived from the tool's build availability, so users can immediately see which tools ship in the BApp Store build without consulting external docs.
+  3. Typing in the search/filter field narrows both sections in real time (case-insensitive match on tool name and description); clearing the field restores all tools.
+  4. A "Enable all / Disable all" control per group performs a bulk toggle that applies to all tools currently visible in that group (respects active search filter); the resulting per-tool enabled states persist through settings save/reload.
+  5. All existing per-tool enable/disable toggles, the master unsafe-mode switch, and MCP server start/stop remain fully functional — no behavior or persistence regression; the full test suite passes.
+
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 11: Settings Tabs + Theme Rollout
+
+**Goal**: Every Settings tab is rebuilt on the Phase 9 design system, giving the entire Settings area a consistent layout (labeled fields, section headers, one-line descriptions, collapsible sections for long tabs) and full light/dark theme fidelity via tokens — no hardcoded colors remain anywhere in settings panels.
+**Depends on**: Phase 9 (design-system tokens + components); Phase 10 recommended (MCP tab done first as the highest-priority panel)
+**Requirements**: UI-02, UI-06, UI-08, UI-07
+**Success Criteria** (what must be TRUE):
+
+  1. Every Settings tab (`SettingsPanel`, `MainTab`, and all panels under `ui/panels/`) uses Phase 9 labeled-field rows and section headers exclusively — no ad-hoc `JLabel` + `JTextField` pairs remain that bypass the design system.
+  2. Each tab and each collapsible section within a tab has a visible title and a one-line description (≤ 80 chars) so a user scanning the settings can understand the purpose of each group without opening it.
+  3. Long tabs (MCP, Scanner, Backend) use collapsible sections; collapsed state is preserved between extension restarts via `AgentSettings` (or equivalent persistence key).
+  4. With Burp's theme set to dark, all settings panels render using dark-appropriate token values — no visible white/light backgrounds or black text against dark surfaces; verified by a developer smoke-check in Burp Pro dark mode.
+  5. All existing settings values (backend selection, privacy mode, audit toggle, MCP config, scanner thresholds, prompt library) load and save correctly after the redesign — a regression test pass (`./gradlew test`) and a manual settings-persistence smoke-check confirm no regressions.
+
+**Plans**: TBD
+**UI hint**: yes
+
 ## Progress
 
-**Execution Order:**
+**Execution Order (v0.7.0 carryover):**
 Phases 1, 2, 3, and 4 are parallel-safe and can be planned/executed concurrently. Phase 5 (docs) depends on Phases 1-3 being merged. Phase 6 (release cut) depends on every other phase being complete.
+
+**Execution Order (v0.8.0):**
+Phase 9 must complete first (design-system foundation). Phase 10 (MCP tab) and Phase 11 (settings rollout) both depend on Phase 9; Phase 10 is recommended before Phase 11 since it is the highest-priority panel.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -184,3 +243,6 @@ Phases 1, 2, 3, and 4 are parallel-safe and can be planned/executed concurrently
 | 6. v0.7.0 Release Cut | 0/TBD | Not started | - |
 | 7. Proxy Transport + MCP Scope Hardening | 3/3 | Complete   | 2026-05-27 |
 | 8. BApp Store resubmission — MCP pivot + compliance | 3/4 | In Progress|  |
+| 9. Design System Foundation | 0/TBD | Not started | - |
+| 10. MCP Tools Tab Redesign | 0/TBD | Not started | - |
+| 11. Settings Tabs + Theme Rollout | 0/TBD | Not started | - |

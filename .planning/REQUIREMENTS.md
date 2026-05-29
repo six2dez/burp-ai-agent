@@ -123,12 +123,22 @@ Explicitly excluded for `v0.7.0`. Tracked here to prevent scope creep.
 | REL-03 | Phase 6 — v0.7.0 Release Cut | Pending |
 | REL-04 | Phase 6 — v0.7.0 Release Cut | Pending |
 | REL-05 | Phase 6 — v0.7.0 Release Cut | Pending |
+| UI-01 | Phase 9 — Design System Foundation | Pending |
+| UI-03 | Phase 10 — MCP Tools Tab Redesign | Pending |
+| UI-04 | Phase 10 — MCP Tools Tab Redesign | Pending |
+| UI-05 | Phase 10 — MCP Tools Tab Redesign | Pending |
+| UI-07 | Phase 10 — MCP Tools Tab Redesign (cross-cutting SC) | Pending |
+| UI-02 | Phase 11 — Settings Tabs + Theme Rollout | Pending |
+| UI-06 | Phase 11 — Settings Tabs + Theme Rollout | Pending |
+| UI-08 | Phase 11 — Settings Tabs + Theme Rollout | Pending |
 
 **Coverage:**
-- v1 requirements: 25 total
+- v0.7.0 (v1) requirements: 25 total
 - Mapped to phases: 25 (Phase 1: 5, Phase 2: 4, Phase 3: 6, Phase 4: 2, Phase 5: 3, Phase 6: 5)
+- v0.8.0 requirements: 8 total (UI-01..UI-08)
+- Mapped to phases: 8 (Phase 9: 1, Phase 10: 4 incl. UI-07 cross-cutting, Phase 11: 3+UI-07 cross-cutting)
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-05-13*
-*Last updated: 2026-05-13 after roadmap mapping (gsd-roadmapper)*
+*Last updated: 2026-05-29 — v0.8.0 UI-01..UI-08 mapped to Phases 9-11 (gsd-roadmapper)*

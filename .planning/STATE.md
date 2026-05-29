@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v0.8.0
 milestone_name: UI/UX Overhaul
 status: planning
-last_updated: "2026-05-29T08:48:50.885Z"
+last_updated: "2026-05-29T00:00:00.000Z"
 last_activity: 2026-05-29
 progress:
-  total_phases: 0
+  total_phases: 3
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -17,17 +17,17 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-05-13)
+See: .planning/PROJECT.md (updated 2026-05-29)
 
 **Core value:** Bring modern AI to a real security workflow without leaking sensitive traffic to third-party providers — privacy controls and an audit trail are non-negotiable, AI capability is additive.
-**Current focus:** Phase 08 — BApp Store resubmission — MCP pivot to extension-native tools + compliance fixes
+**Current focus:** Phase 09 — Design System Foundation (v0.8.0 UI/UX Overhaul; roadmap defined, ready for planning)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 9 — Design System Foundation
 Plan: —
-Status: Defining requirements
-Last activity: 2026-05-29 — Milestone v0.8.0 started
+Status: Roadmap defined; ready for `/gsd-plan-phase 9`
+Last activity: 2026-05-29 — v0.8.0 roadmap mapped (Phases 9-11)
 
 ## Performance Metrics
 
@@ -70,11 +70,14 @@ Recent decisions affecting current work:
 - [Phase ?]: B1 fix: registerToolHandler() uses available() so STORE_BUILD=true silently skips generic tool IDs
 - [Phase ?]: B2 fix: ai_passive_scan checks supervisor.isAiEnabled() BEFORE passiveScanner null check
 - [Phase ?]: setAiToolDependencies() added to McpServerManager interface so typed reference can call it
+- v0.8.0 Roadmap: UI-07 (no regressions) is cross-cutting — echoed as a success criterion in both Phase 10 and Phase 11 rather than assigned its own phase, since regression-safety is a property of phases that modify existing UI, not a deliverable on its own.
+- v0.8.0 Roadmap: Phase 9 (design system) is additive only (new module, no panel migration); Phases 10 and 11 consume it. Phase 10 (MCP tab) prioritized over Phase 11 (settings rollout) because the MCP tab is the highest user pain point and benefits from Phase 8's nativeTool classification already in place.
 
 ### Roadmap Evolution
 
 - 2026-05-27: Phase 7 added — Proxy Transport + MCP Scope Hardening (closes GitHub issue #69; parallel-safe with Phases 1, 4, 5; must merge before Phase 6).
 - 2026-05-28: Phase 8 added — BApp Store resubmission (MCP pivot to extension-native tools + `-PstoreBuild` gate, gate all AI calls on `ai.isEnabled()`, migrate passive scanning to `ScanCheck.passiveAudit()`, confirm name). Addresses PortSwigger review feedback on issue #231; follows Phase 07. Approved plan seed: ~/.claude/plans/drifting-hatching-sphinx.md.
+- 2026-05-29: Phases 9-11 added — v0.8.0 UI/UX Overhaul milestone. Phase 9: Design System Foundation (UI-01). Phase 10: MCP Tools Tab Redesign (UI-03, UI-04, UI-05, UI-07). Phase 11: Settings Tabs + Theme Rollout (UI-02, UI-06, UI-08, UI-07). All 8 UI-* requirements mapped; 100% coverage.
 
 ### Pending Todos
 
@@ -87,6 +90,7 @@ None yet.
 [Issues that affect future work]
 
 - GitHub issue #62 (release pipeline publishes stale code) gates the v0.7.0 release; Phase 4 must close before Phase 6 can ship.
+- Phase 8 Wave 4 (08-04-PLAN.md) remains in-progress — manual smoke + /reopen reply needed before Phase 8 completes.
 
 ### Quick Tasks Completed
 
@@ -105,6 +109,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-05-28T22:52:29.418Z
-Stopped at: Completed 08-02-PLAN.md
+Last session: 2026-05-29T00:00:00.000Z
+Stopped at: v0.8.0 roadmap mapped — Phases 9-11 appended to ROADMAP.md
 Resume file: None
