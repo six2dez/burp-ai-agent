@@ -11,11 +11,11 @@ Scope = redesign the extension's Swing UI on a small shared design system, appli
 
 - [x] **UI-01**: A shared design-system module (spacing / typography / color tokens + reusable Swing components — section headers, labeled fields, help text, buttons) is the single styling source for settings panels
 - [ ] **UI-02**: Every Settings tab is rebuilt on the design system — consistent layout, spacing, grouping, labels, and one-line descriptions
-- [ ] **UI-03**: The MCP tools tab groups tools into extension-native (AI) vs generic (Montoya) sections with clear visual hierarchy, replacing the current flat/disordered list
-- [ ] **UI-04**: Each MCP tool row shows whether it ships in the store build (native) or only the full build (generic)
-- [ ] **UI-05**: The MCP tools list has a live search/filter (name + description) and per-group bulk enable/disable
+- [x] **UI-03**: The MCP tools tab groups tools into extension-native (AI) vs generic (Montoya) sections with clear visual hierarchy, replacing the current flat/disordered list
+- [x] **UI-04**: Each MCP tool row shows whether it ships in the store build (native) or only the full build (generic)
+- [x] **UI-05**: The MCP tools list has a live search/filter (name + description) and per-group bulk enable/disable
 - [ ] **UI-06**: Settings navigation is scannable — each tab/section has a title + short description; long tabs use collapsible sections
-- [ ] **UI-07**: The redesign preserves all existing functionality and settings persistence — no behaviour or config regressions (values still load/save; tests green)
+- [x] **UI-07**: The redesign preserves all existing functionality and settings persistence — no behaviour or config regressions (values still load/save; tests green)
 - [ ] **UI-08**: The UI honours Burp's light/dark theme via tokens — no hardcoded colors that break in dark mode
 
 ---
@@ -124,10 +124,10 @@ Explicitly excluded for `v0.7.0`. Tracked here to prevent scope creep.
 | REL-04 | Phase 6 — v0.7.0 Release Cut | Pending |
 | REL-05 | Phase 6 — v0.7.0 Release Cut | Pending |
 | UI-01 | Phase 9 — Design System Foundation | Complete |
-| UI-03 | Phase 10 — MCP Tools Tab Redesign | Pending |
-| UI-04 | Phase 10 — MCP Tools Tab Redesign | Pending |
-| UI-05 | Phase 10 — MCP Tools Tab Redesign | Pending |
-| UI-07 | Phase 10 — MCP Tools Tab Redesign (cross-cutting SC) | Pending |
+| UI-03 | Phase 10 — MCP Tools Tab Redesign | Complete |
+| UI-04 | Phase 10 — MCP Tools Tab Redesign | Complete |
+| UI-05 | Phase 10 — MCP Tools Tab Redesign | Complete |
+| UI-07 | Phase 10 — MCP Tools Tab Redesign (cross-cutting SC) | Complete |
 | UI-02 | Phase 11 — Settings Tabs + Theme Rollout | Pending |
 | UI-06 | Phase 11 — Settings Tabs + Theme Rollout | Pending |
 | UI-08 | Phase 11 — Settings Tabs + Theme Rollout | Pending |

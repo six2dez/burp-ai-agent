@@ -221,7 +221,7 @@ Plans:
 
 **Wave 1**
 
-- [ ] 10-01-PLAN.md — Extract McpToolTabModel (pure grouping/badge/filter/bulk-toggle helpers) + McpToolTabModelTest (>= 14 unit tests, no Swing)
+- [x] 10-01-PLAN.md — Extract McpToolTabModel (pure grouping/badge/filter/bulk-toggle helpers) + McpToolTabModelTest (>= 14 unit tests, no Swing)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -264,5 +264,5 @@ Phase 9 must complete first (design-system foundation). Phase 10 (MCP tab) and P
 | 7. Proxy Transport + MCP Scope Hardening | 3/3 | Complete   | 2026-05-27 |
 | 8. BApp Store resubmission — MCP pivot + compliance | 3/4 | In Progress|  |
 | 9. Design System Foundation | 2/2 | Complete   | 2026-05-29 |
-| 10. MCP Tools Tab Redesign | 0/TBD | Not started | - |
+| 10. MCP Tools Tab Redesign | 1/2 | In Progress|  |
 | 11. Settings Tabs + Theme Rollout | 0/TBD | Not started | - |
