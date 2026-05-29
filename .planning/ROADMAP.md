@@ -23,7 +23,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 6: v0.7.0 Release Cut** - Promote CHANGELOG, bump version, build, tag, publish JAR + SBOM + SHA-256, CI green on matrix
 - [x] **Phase 7: Proxy Transport + MCP Scope Hardening** - Close #69: route all AI-backend HTTP via Montoya, small-model context defaults, MCP in-scope-only enforcement (completed 2026-05-27)
 - [ ] **Phase 8: BApp Store resubmission — MCP pivot + compliance** - Close #231 review: store-build MCP exposes only extension-native AI tools (generic Montoya tools gated to a GitHub full build), gate all AI calls on `ai.isEnabled()`, migrate passive scan to `PassiveScanCheck.doCheck()`, confirm name
-- [ ] **Phase 9: Design System Foundation** - Shared spacing/typography/color tokens + reusable Swing components as the single styling source for all settings panels
+- [x] **Phase 9: Design System Foundation** - Shared spacing/typography/color tokens + reusable Swing components as the single styling source for all settings panels (completed 2026-05-29)
 - [ ] **Phase 10: MCP Tools Tab Redesign** - Group tools into native (AI) vs generic (Montoya) sections, show store/full-build indicators, add live search/filter + per-group bulk toggle
 - [ ] **Phase 11: Settings Tabs + Theme Rollout** - Rebuild every Settings tab on the design system with scannable navigation, collapsible sections, and light/dark theme token support
 
@@ -199,7 +199,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 09-02-PLAN.md — Create Components.kt (11 builder functions + BadgeStyle + applyFieldStyle/applyAreaStyle) + DesignComponentsTest.kt (15 builder construction tests) + full suite regression check
+- [x] 09-02-PLAN.md — Create Components.kt (11 builder functions + BadgeStyle + applyFieldStyle/applyAreaStyle) + DesignComponentsTest.kt (15 builder construction tests) + full suite regression check
 
 **UI hint**: yes
 
@@ -253,6 +253,6 @@ Phase 9 must complete first (design-system foundation). Phase 10 (MCP tab) and P
 | 6. v0.7.0 Release Cut | 0/TBD | Not started | - |
 | 7. Proxy Transport + MCP Scope Hardening | 3/3 | Complete   | 2026-05-27 |
 | 8. BApp Store resubmission — MCP pivot + compliance | 3/4 | In Progress|  |
-| 9. Design System Foundation | 1/2 | In Progress|  |
+| 9. Design System Foundation | 2/2 | Complete   | 2026-05-29 |
 | 10. MCP Tools Tab Redesign | 0/TBD | Not started | - |
 | 11. Settings Tabs + Theme Rollout | 0/TBD | Not started | - |
