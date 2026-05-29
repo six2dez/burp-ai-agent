@@ -190,7 +190,11 @@ Plans:
   3. A unit or visual-verification test (or a developer-run harness) confirms token values load without throwing in a headless JVM context, exercising both "light" and "dark" UIManager overrides.
   4. No existing panel behaviour or settings-persistence changes: the new module is additive only; all tests remain green after the addition (`./gradlew test` passes).
 
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+
+- [ ] 09-01-PLAN.md — Create DesignTokens.kt (Spacing / Typography / Colors objects) + DesignTokensTest.kt (7 headless tests: spacing multiples-of-4, light/dark UIManager flip, color roles non-null, typography derivation)
+- [ ] 09-02-PLAN.md — Create Components.kt (11 builder functions + BadgeStyle + applyFieldStyle/applyAreaStyle) + DesignComponentsTest.kt (15 builder construction tests) + full suite regression check
 **UI hint**: yes
 
 ### Phase 10: MCP Tools Tab Redesign
