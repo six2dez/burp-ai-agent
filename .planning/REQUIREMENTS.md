@@ -9,7 +9,7 @@ Scope = redesign the extension's Swing UI on a small shared design system, appli
 
 ### UI / UX
 
-- [ ] **UI-01**: A shared design-system module (spacing / typography / color tokens + reusable Swing components — section headers, labeled fields, help text, buttons) is the single styling source for settings panels
+- [x] **UI-01**: A shared design-system module (spacing / typography / color tokens + reusable Swing components — section headers, labeled fields, help text, buttons) is the single styling source for settings panels
 - [ ] **UI-02**: Every Settings tab is rebuilt on the design system — consistent layout, spacing, grouping, labels, and one-line descriptions
 - [ ] **UI-03**: The MCP tools tab groups tools into extension-native (AI) vs generic (Montoya) sections with clear visual hierarchy, replacing the current flat/disordered list
 - [ ] **UI-04**: Each MCP tool row shows whether it ships in the store build (native) or only the full build (generic)
@@ -123,7 +123,7 @@ Explicitly excluded for `v0.7.0`. Tracked here to prevent scope creep.
 | REL-03 | Phase 6 — v0.7.0 Release Cut | Pending |
 | REL-04 | Phase 6 — v0.7.0 Release Cut | Pending |
 | REL-05 | Phase 6 — v0.7.0 Release Cut | Pending |
-| UI-01 | Phase 9 — Design System Foundation | Pending |
+| UI-01 | Phase 9 — Design System Foundation | Complete |
 | UI-03 | Phase 10 — MCP Tools Tab Redesign | Pending |
 | UI-04 | Phase 10 — MCP Tools Tab Redesign | Pending |
 | UI-05 | Phase 10 — MCP Tools Tab Redesign | Pending |
