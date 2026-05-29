@@ -19,8 +19,16 @@ import com.six2dez.burp.aiagent.redact.PrivacyMode
 import com.six2dez.burp.aiagent.scanner.PayloadRisk
 import com.six2dez.burp.aiagent.scanner.ScanMode
 import com.six2dez.burp.aiagent.supervisor.AgentSupervisor
+import com.six2dez.burp.aiagent.ui.McpToolTabModel
+import com.six2dez.burp.aiagent.ui.components.AccordionPanel
 import com.six2dez.burp.aiagent.ui.components.CustomPromptLibraryEditor
 import com.six2dez.burp.aiagent.ui.components.ToggleSwitch
+import com.six2dez.burp.aiagent.ui.design.BadgeStyle
+import com.six2dez.burp.aiagent.ui.design.DesignTokens
+import com.six2dez.burp.aiagent.ui.design.helpLabel
+import com.six2dez.burp.aiagent.ui.design.secondaryButton
+import com.six2dez.burp.aiagent.ui.design.toolBadge
+import com.six2dez.burp.aiagent.ui.design.buildTabPanel as buildDesignTabPanel
 import com.six2dez.burp.aiagent.ui.panels.ActiveScanConfigPanel
 import com.six2dez.burp.aiagent.ui.panels.ActiveScanQueuePanel
 import com.six2dez.burp.aiagent.ui.panels.BackendConfigPanel
@@ -2163,140 +2171,296 @@ class SettingsPanel(
         clipboard.setContents(StringSelection(text), null)
     }
 
-    private fun buildMcpToolsPanel(): JPanel {
-        val toolsPanel = JPanel()
-        toolsPanel.layout = BoxLayout(toolsPanel, BoxLayout.Y_AXIS)
-        toolsPanel.background = UiTheme.Colors.surface
-        toolsPanel.border = EmptyBorder(6, 8, 8, 8)
-
-        val selectAll =
-            JButton("Select all").apply {
-                font = UiTheme.Typography.label
-                background = UiTheme.Colors.surface
-                foreground = UiTheme.Colors.primary
-                border = LineBorder(UiTheme.Colors.outline, 1, true)
-                isFocusPainted = false
-            }
-        val deselectAll =
-            JButton("Deselect all").apply {
-                font = UiTheme.Typography.label
-                background = UiTheme.Colors.surface
-                foreground = UiTheme.Colors.primary
-                border = LineBorder(UiTheme.Colors.outline, 1, true)
-                isFocusPainted = false
-            }
-
+    @Suppress("LongMethod")
+    private fun buildMcpToolsPanel(): JScrollPane {
+        // STEP 1 — Shared state (UI-07: unchanged from original)
         val effectiveToggles = McpToolCatalog.mergeWithDefaults(settings.mcpSettings.toolToggles)
         val edition = api.burpSuite().version().edition()
         val unsafeEnabled = mcpUnsafe.isSelected
         val unsafeAllowlist = settings.mcpSettings.enabledUnsafeTools
+        val grouping = McpToolTabModel.groupTools(McpToolCatalog.available())
 
-        McpToolCatalog.available().groupBy { it.category }.forEach { (category, tools) ->
-            val label = JLabel(category)
-            label.font = UiTheme.Typography.label
-            label.foreground = UiTheme.Colors.onSurface
-            toolsPanel.add(label)
+        // STEP 2 — Search bar panel (full-width, above both sections)
+        val searchField = JTextField()
+        applyFieldStyle(searchField)
+        searchField.toolTipText = "Search tools by name or description…"
+        searchField.maximumSize = java.awt.Dimension(Int.MAX_VALUE, searchField.preferredSize.height)
+        val totalTools = McpToolCatalog.available().size
+        val resultCountLabel = helpLabel("$totalTools tools")
+        val searchBarPanel = JPanel().apply {
+            layout = BoxLayout(this, BoxLayout.X_AXIS)
+            background = DesignTokens.Colors.surface
+            border = EmptyBorder(0, 0, DesignTokens.Spacing.lg, 0)
+            add(searchField)
+            add(Box.createRigidArea(java.awt.Dimension(DesignTokens.Spacing.sm, 0)))
+            add(resultCountLabel)
+        }
 
-            val grid = JPanel(java.awt.GridLayout(0, 4, 16, 4))
-            grid.background = UiTheme.Colors.surface
-            tools.sortedBy { it.title }.forEach { tool ->
-                val title = if (tool.unsafeOnly) "${tool.title} (unsafe)" else tool.title
-                val checkbox = JCheckBox(title, effectiveToggles[tool.id] ?: false)
-                checkbox.font = UiTheme.Typography.body
-                checkbox.background = UiTheme.Colors.surface
-                checkbox.foreground = UiTheme.Colors.onSurface
-                checkbox.putClientProperty("unsafeOnly", tool.unsafeOnly)
-                checkbox.putClientProperty("description", tool.description)
-                checkbox.toolTipText =
-                    when {
-                        !tool.unsafeOnly -> tool.description
-                        unsafeEnabled -> "${tool.description} Allowed by global unsafe mode."
-                        unsafeAllowlist.contains(tool.id) -> "${tool.description} Allowed by per-tool unsafe approval."
-                        else -> "${tool.description} Blocked until unsafe mode is enabled globally or approved in allowlist."
+        // STEP 3 — Tool-row builder (local helper)
+        fun buildToolRow(tool: com.six2dez.burp.aiagent.mcp.McpToolDescriptor): JPanel {
+            val checkbox = JCheckBox(tool.title, effectiveToggles[tool.id] ?: false)
+            checkbox.putClientProperty("unsafeOnly", tool.unsafeOnly)
+            checkbox.putClientProperty("description", tool.description)
+            // Tooltip logic: preserved verbatim from original (UI-07)
+            checkbox.toolTipText =
+                when {
+                    !tool.unsafeOnly -> tool.description
+                    unsafeEnabled -> "${tool.description} Allowed by global unsafe mode."
+                    unsafeAllowlist.contains(tool.id) -> "${tool.description} Allowed by per-tool unsafe approval."
+                    else -> "${tool.description} Blocked until unsafe mode is enabled globally or approved in allowlist."
+                }
+            // isEnabled logic: preserved verbatim (UI-07 — only proOnly tools disabled at build time)
+            if (tool.proOnly && edition != BurpSuiteEdition.PROFESSIONAL) {
+                checkbox.isEnabled = false
+                checkbox.putClientProperty("proDisabled", true)
+                checkbox.toolTipText = "${tool.description} (Pro only)"
+            } else {
+                checkbox.putClientProperty("proDisabled", false)
+                // NOTE: unsafe checkbox gating (unsafeOnly + unsafe OFF + not allowlisted → disabled)
+                // is intentionally DEFERRED to Phase 11. Checkboxes start enabled here per UI-07.
+            }
+            mcpToolCheckboxes[tool.id] = checkbox
+
+            // North sub-row: checkbox + gap + badge + glue + optional indicator
+            val badge = toolBadge(
+                if (tool.nativeTool) "Store + Full" else "Full only",
+                McpToolTabModel.badgeStyle(tool),
+            )
+            val northRow = JPanel().apply {
+                layout = BoxLayout(this, BoxLayout.X_AXIS)
+                isOpaque = false
+                add(checkbox)
+                add(Box.createRigidArea(java.awt.Dimension(DesignTokens.Spacing.sm, 0)))
+                add(badge)
+                add(Box.createHorizontalGlue())
+            }
+            // Optional indicator label (right-aligned, visual only — does NOT affect isEnabled)
+            val indicator: JLabel? = when {
+                tool.proOnly && edition != BurpSuiteEdition.PROFESSIONAL ->
+                    JLabel("Pro only").apply {
+                        font = DesignTokens.Typography.caption
+                        foreground = DesignTokens.Colors.onSurfaceVariant
                     }
-                if (tool.proOnly && edition != BurpSuiteEdition.PROFESSIONAL) {
-                    checkbox.isEnabled = false
-                    checkbox.putClientProperty("proDisabled", true)
-                    checkbox.toolTipText = "${tool.description} (Pro only)"
-                } else {
-                    checkbox.putClientProperty("proDisabled", false)
-                    checkbox.isEnabled = true
-                }
-                mcpToolCheckboxes[tool.id] = checkbox
-                grid.add(checkbox)
-            }
-
-            toolsPanel.add(grid)
-            toolsPanel.add(Box.createRigidArea(java.awt.Dimension(0, 8)))
-        }
-
-        val unsafeTools =
-            McpToolCatalog
-                .available()
-                .filter { it.unsafeOnly }
-                .sortedBy { it.title }
-        if (unsafeTools.isNotEmpty()) {
-            val allowlistHeader = JLabel("Unsafe Allowlist (applies when global unsafe mode is OFF)")
-            allowlistHeader.font = UiTheme.Typography.label
-            allowlistHeader.foreground = UiTheme.Colors.onSurface
-            toolsPanel.add(allowlistHeader)
-
-            val allowlistGrid = JPanel(java.awt.GridLayout(0, 3, 16, 4))
-            allowlistGrid.background = UiTheme.Colors.surface
-            unsafeTools.forEach { tool ->
-                val approved = unsafeAllowlist.contains(tool.id)
-                val approval =
-                    JCheckBox(tool.title, approved).apply {
-                        font = UiTheme.Typography.body
-                        background = UiTheme.Colors.surface
-                        foreground = UiTheme.Colors.onSurface
-                        toolTipText = tool.description
-                        putClientProperty("proOnly", tool.proOnly)
-                        putClientProperty("toolId", tool.id)
+                tool.unsafeOnly && !unsafeEnabled && unsafeAllowlist.contains(tool.id) ->
+                    JLabel("allowlisted").apply {
+                        font = DesignTokens.Typography.caption
+                        foreground = DesignTokens.Colors.statusWarning
                     }
-                val proDisabled = tool.proOnly && edition != BurpSuiteEdition.PROFESSIONAL
-                if (proDisabled) {
-                    approval.isEnabled = false
-                    approval.toolTipText = "${tool.description} (Pro only)"
-                } else {
-                    approval.isEnabled = !unsafeEnabled
-                }
-                approval.addActionListener {
-                    updateUnsafeToolStates()
-                }
-                mcpUnsafeApprovalCheckboxes[tool.id] = approval
-                allowlistGrid.add(approval)
+                tool.unsafeOnly && !unsafeEnabled ->
+                    JLabel("unsafe").apply {
+                        font = DesignTokens.Typography.caption
+                        foreground = DesignTokens.Colors.statusError
+                    }
+                else -> null
             }
-            toolsPanel.add(allowlistGrid)
-            toolsPanel.add(Box.createRigidArea(java.awt.Dimension(0, 8)))
-        }
+            if (indicator != null) northRow.add(indicator)
 
-        selectAll.addActionListener {
-            mcpToolCheckboxes.values.forEach { checkbox ->
-                if (checkbox.isEnabled) checkbox.isSelected = true
-            }
-        }
-        deselectAll.addActionListener {
-            mcpToolCheckboxes.values.forEach { checkbox ->
-                if (checkbox.isEnabled) checkbox.isSelected = false
+            // South sub-row: description help label
+            val descLabel = helpLabel(tool.description)
+            descLabel.border = EmptyBorder(0, DesignTokens.Spacing.md, 0, 0)
+
+            return JPanel(BorderLayout()).apply {
+                isOpaque = false
+                border = EmptyBorder(
+                    DesignTokens.Spacing.xs,
+                    DesignTokens.Spacing.md,
+                    DesignTokens.Spacing.xs,
+                    DesignTokens.Spacing.md,
+                )
+                add(northRow, BorderLayout.NORTH)
+                add(descLabel, BorderLayout.SOUTH)
             }
         }
 
-        val scroll = JScrollPane(toolsPanel)
-        scroll.border = LineBorder(UiTheme.Colors.outline, 1, true)
-        scroll.maximumSize = java.awt.Dimension(Int.MAX_VALUE, 220)
-        scroll.preferredSize = java.awt.Dimension(1, 220)
-        return JPanel(BorderLayout()).apply {
-            background = UiTheme.Colors.surface
-            val actions = JPanel()
-            actions.layout = BoxLayout(actions, BoxLayout.X_AXIS)
-            actions.background = UiTheme.Colors.surface
-            actions.add(selectAll)
-            actions.add(Box.createRigidArea(java.awt.Dimension(8, 0)))
-            actions.add(deselectAll)
-            add(actions, BorderLayout.NORTH)
-            add(scroll, BorderLayout.CENTER)
+        // Helper: compute set of disabled checkbox tool IDs at call time
+        val disabledCheckboxIds: () -> Set<String> = {
+            mcpToolCheckboxes.entries.filter { !it.value.isEnabled }.map { it.key }.toSet()
         }
+
+        // STEP 4 — AI Tools section
+        val aiToolRows = mutableListOf<Pair<com.six2dez.burp.aiagent.mcp.McpToolDescriptor, JPanel>>()
+        val aiEnableAll = secondaryButton("Enable all")
+        val aiDisableAll = secondaryButton("Disable all")
+        val aiBulkBar = JPanel().apply {
+            layout = BoxLayout(this, BoxLayout.X_AXIS)
+            isOpaque = false
+            border = EmptyBorder(0, 0, DesignTokens.Spacing.sm, 0)
+            add(aiEnableAll)
+            add(Box.createRigidArea(java.awt.Dimension(DesignTokens.Spacing.sm, 0)))
+            add(aiDisableAll)
+            add(Box.createHorizontalGlue())
+        }
+        val aiEmptyLabel = helpLabel("No tools match your search.").also { it.isVisible = false }
+        val aiListPanel = JPanel().apply {
+            layout = BoxLayout(this, BoxLayout.Y_AXIS)
+            isOpaque = false
+            add(aiBulkBar)
+        }
+        for (tool in grouping.native) {
+            val row = buildToolRow(tool)
+            aiToolRows.add(tool to row)
+            aiListPanel.add(row)
+        }
+        aiListPanel.add(aiEmptyLabel)
+
+        aiEnableAll.addActionListener {
+            val targets = McpToolTabModel.bulkToggleTargets(grouping.native, searchField.text, disabledCheckboxIds())
+            for (target in targets) mcpToolCheckboxes[target.id]?.isSelected = true
+        }
+        aiDisableAll.addActionListener {
+            val targets = McpToolTabModel.bulkToggleTargets(grouping.native, searchField.text, disabledCheckboxIds())
+            for (target in targets) mcpToolCheckboxes[target.id]?.isSelected = false
+        }
+
+        val aiSection = sectionPanel(
+            "AI Tools (extension-native)",
+            "Extension-native tools — available in both the BApp Store and the full build.",
+            aiListPanel,
+        )
+
+        // STEP 5 — Montoya Tools section
+        val montoyaToolRows = mutableListOf<Pair<com.six2dez.burp.aiagent.mcp.McpToolDescriptor, JPanel>>()
+        val montoyaCategoryHeaders = mutableListOf<Pair<String, JLabel>>()
+        val montoyaEnableAll = secondaryButton("Enable all")
+        val montoyaDisableAll = secondaryButton("Disable all")
+        val montoyaBulkBar = JPanel().apply {
+            layout = BoxLayout(this, BoxLayout.X_AXIS)
+            isOpaque = false
+            border = EmptyBorder(0, 0, DesignTokens.Spacing.sm, 0)
+            add(montoyaEnableAll)
+            add(Box.createRigidArea(java.awt.Dimension(DesignTokens.Spacing.sm, 0)))
+            add(montoyaDisableAll)
+            add(Box.createHorizontalGlue())
+        }
+        val montoyaEmptyLabel = helpLabel("No tools match your search.").also { it.isVisible = false }
+        val montoyaListPanel = JPanel().apply {
+            layout = BoxLayout(this, BoxLayout.Y_AXIS)
+            isOpaque = false
+        }
+
+        val categoryMap = McpToolTabModel.categoryGroups(grouping.generic)
+        if (grouping.generic.isEmpty()) {
+            montoyaBulkBar.isVisible = false
+            montoyaListPanel.add(helpLabel("No Montoya tools available in this build."))
+        } else {
+            montoyaListPanel.add(montoyaBulkBar)
+            for ((category, tools) in categoryMap) {
+                val catHeader = JLabel(category).apply {
+                    font = DesignTokens.Typography.label
+                    foreground = DesignTokens.Colors.onSurfaceVariant
+                    border = EmptyBorder(DesignTokens.Spacing.sm, 0, DesignTokens.Spacing.xs, 0)
+                }
+                montoyaCategoryHeaders.add(category to catHeader)
+                montoyaListPanel.add(catHeader)
+                for (tool in tools) {
+                    val row = buildToolRow(tool)
+                    montoyaToolRows.add(tool to row)
+                    montoyaListPanel.add(row)
+                }
+            }
+        }
+        montoyaListPanel.add(montoyaEmptyLabel)
+
+        montoyaEnableAll.addActionListener {
+            val targets = McpToolTabModel.bulkToggleTargets(grouping.generic, searchField.text, disabledCheckboxIds())
+            for (target in targets) mcpToolCheckboxes[target.id]?.isSelected = true
+        }
+        montoyaDisableAll.addActionListener {
+            val targets = McpToolTabModel.bulkToggleTargets(grouping.generic, searchField.text, disabledCheckboxIds())
+            for (target in targets) mcpToolCheckboxes[target.id]?.isSelected = false
+        }
+
+        // STEP 6 — Unsafe Allowlist AccordionPanel (bottom of Montoya section)
+        val allowlistContentPanel = JPanel().apply {
+            layout = BoxLayout(this, BoxLayout.Y_AXIS)
+            isOpaque = false
+        }
+        val unsafeTools = McpToolCatalog.available().filter { it.unsafeOnly }.sortedBy { it.title }
+        for (tool in unsafeTools) {
+            val approved = unsafeAllowlist.contains(tool.id)
+            val approval = JCheckBox(tool.title, approved).apply {
+                toolTipText = tool.description
+                putClientProperty("proOnly", tool.proOnly)
+                putClientProperty("toolId", tool.id)
+            }
+            val proDisabled = tool.proOnly && edition != BurpSuiteEdition.PROFESSIONAL
+            if (proDisabled) {
+                approval.isEnabled = false
+                approval.toolTipText = "${tool.description} (Pro only)"
+            } else {
+                approval.isEnabled = !unsafeEnabled
+            }
+            approval.addActionListener { updateUnsafeToolStates() }
+            mcpUnsafeApprovalCheckboxes[tool.id] = approval
+            val row = JPanel().apply {
+                layout = BoxLayout(this, BoxLayout.X_AXIS)
+                isOpaque = false
+                border = EmptyBorder(DesignTokens.Spacing.xs, DesignTokens.Spacing.md, DesignTokens.Spacing.xs, DesignTokens.Spacing.md)
+                add(approval)
+                add(Box.createHorizontalGlue())
+            }
+            allowlistContentPanel.add(row)
+        }
+        val allowlistAccordion = AccordionPanel(
+            "Unsafe tool allowlist",
+            "Approve individual unsafe tools without enabling global unsafe mode.",
+            allowlistContentPanel,
+            initiallyExpanded = false,
+        )
+        montoyaListPanel.add(Box.createRigidArea(java.awt.Dimension(0, DesignTokens.Spacing.sm)))
+        montoyaListPanel.add(allowlistAccordion)
+
+        val montoyaSection = sectionPanel(
+            "Montoya Tools (generic)",
+            "Generic Montoya API wrappers — available in the full build only.",
+            montoyaListPanel,
+        )
+
+        // STEP 7 — Section separator (Spacing.xl gap between AI and Montoya sections)
+        val sectionSeparator = JPanel().apply {
+            isOpaque = false
+            preferredSize = java.awt.Dimension(0, DesignTokens.Spacing.xl)
+            maximumSize = java.awt.Dimension(Int.MAX_VALUE, DesignTokens.Spacing.xl)
+        }
+
+        // STEP 8 — DocumentListener for live filter (Option B — show/hide rows)
+        fun applyFilter(query: String) {
+            var visibleAiCount = 0
+            for ((tool, row) in aiToolRows) {
+                val visible = McpToolTabModel.filterPredicate(query, tool)
+                row.isVisible = visible
+                if (visible) visibleAiCount++
+            }
+            var visibleMontoyaCount = 0
+            for ((tool, row) in montoyaToolRows) {
+                val visible = McpToolTabModel.filterPredicate(query, tool)
+                row.isVisible = visible
+                if (visible) visibleMontoyaCount++
+            }
+            for ((category, header) in montoyaCategoryHeaders) {
+                val hasVisible = categoryMap[category]?.any { McpToolTabModel.filterPredicate(query, it) } == true
+                header.isVisible = hasVisible
+            }
+            aiEmptyLabel.isVisible = visibleAiCount == 0 && query.isNotBlank()
+            aiBulkBar.isVisible = visibleAiCount > 0
+            montoyaEmptyLabel.isVisible = visibleMontoyaCount == 0 && query.isNotBlank() && grouping.generic.isNotEmpty()
+            montoyaBulkBar.isVisible = visibleMontoyaCount > 0 && grouping.generic.isNotEmpty()
+            val totalVisible = visibleAiCount + visibleMontoyaCount
+            resultCountLabel.text = if (query.isBlank()) "$totalTools tools" else "$totalVisible of $totalTools tools"
+            aiListPanel.revalidate()
+            aiListPanel.repaint()
+            montoyaListPanel.revalidate()
+            montoyaListPanel.repaint()
+        }
+
+        searchField.document.addDocumentListener(object : DocumentListener {
+            override fun insertUpdate(e: DocumentEvent) = applyFilter(searchField.text)
+            override fun removeUpdate(e: DocumentEvent) = applyFilter(searchField.text)
+            override fun changedUpdate(e: DocumentEvent) = applyFilter(searchField.text)
+        })
+
+        // STEP 9 — Return via buildDesignTabPanel (Phase 9 buildTabPanel)
+        return buildDesignTabPanel(listOf(searchBarPanel, aiSection, sectionSeparator, montoyaSection))
     }
 
     private fun updateUnsafeToolStates() {

@@ -413,9 +413,24 @@ fun toolBadge(label: String, style: BadgeStyle): JLabel {
         override fun paintComponent(g: Graphics) {
             val g2d = g as Graphics2D
             g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
-            g2d.color = bgColor
+            // Re-read the current theme color at paint time so the background always reflects the
+            // active Burp theme, even if the panel was created under a different theme (FLAG-10-01).
+            g2d.color = when (style) {
+                BadgeStyle.NATIVE -> DesignTokens.Colors.badgeNative
+                BadgeStyle.FULL -> DesignTokens.Colors.badgeFull
+            }
             g2d.fillRoundRect(0, 0, width, height, 6, 6)
             super.paintComponent(g)
+        }
+
+        // FLAG-10-01: reapply foreground from current DesignTokens on theme switch.
+        // The background is already resolved at paint time in paintComponent above.
+        override fun updateUI() {
+            super.updateUI()
+            foreground = when (style) {
+                BadgeStyle.NATIVE -> DesignTokens.Colors.statusSuccess
+                BadgeStyle.FULL -> DesignTokens.Colors.onSurfaceVariant
+            }
         }
     }.apply {
         isOpaque = false
