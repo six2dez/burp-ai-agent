@@ -193,8 +193,14 @@ Plans:
 **Plans**: 2 plans
 Plans:
 
+**Wave 1**
+
 - [ ] 09-01-PLAN.md — Create DesignTokens.kt (Spacing / Typography / Colors objects) + DesignTokensTest.kt (7 headless tests: spacing multiples-of-4, light/dark UIManager flip, color roles non-null, typography derivation)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 09-02-PLAN.md — Create Components.kt (11 builder functions + BadgeStyle + applyFieldStyle/applyAreaStyle) + DesignComponentsTest.kt (15 builder construction tests) + full suite regression check
+
 **UI hint**: yes
 
 ### Phase 10: MCP Tools Tab Redesign
