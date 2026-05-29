@@ -1,10 +1,11 @@
 ---
 phase: 10
 slug: mcp-tools-tab-redesign
-status: draft
+status: approved
 shadcn_initialized: false
 preset: none
 created: 2026-05-29
+reviewed_at: 2026-05-29
 ---
 
 # Phase 10 — UI Design Contract: MCP Tools Tab Redesign
