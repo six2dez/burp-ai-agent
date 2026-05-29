@@ -4,13 +4,13 @@ milestone: v0.8.0
 milestone_name: UI/UX Overhaul
 status: executing
 stopped_at: Phase 9 UI-SPEC approved
-last_updated: "2026-05-29T11:31:29.503Z"
-last_activity: 2026-05-29 -- Phase 09 execution started
+last_updated: "2026-05-29T11:37:17.735Z"
+last_activity: 2026-05-29
 progress:
   total_phases: 11
   completed_phases: 4
   total_plans: 16
-  completed_plans: 13
+  completed_plans: 14
   percent: 36
 ---
 
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-05-29)
 ## Current Position
 
 Phase: 09 (Design System Foundation) — EXECUTING
-Plan: 1 of 2
-Status: Executing Phase 09
-Last activity: 2026-05-29 -- Phase 09 execution started
+Plan: 2 of 2
+Status: Ready to execute
+Last activity: 2026-05-29
 
 ## Performance Metrics
 
@@ -53,6 +53,7 @@ Last activity: 2026-05-29 -- Phase 09 execution started
 *Updated after each plan completion*
 | Phase 08-bapp-store-resubmission-mcp-pivot-to-extension-native-tools- P02 | 27 | 3 tasks | 13 files |
 | Phase 08 P03 | 20 | 2 tasks | 4 files |
+| Phase 09 P01 | 3 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -73,6 +74,8 @@ Recent decisions affecting current work:
 - [Phase ?]: setAiToolDependencies() added to McpServerManager interface so typed reference can call it
 - v0.8.0 Roadmap: UI-07 (no regressions) is cross-cutting — echoed as a success criterion in both Phase 10 and Phase 11 rather than assigned its own phase, since regression-safety is a property of phases that modify existing UI, not a deliverable on its own.
 - v0.8.0 Roadmap: Phase 9 (design system) is additive only (new module, no panel migration); Phases 10 and 11 consume it. Phase 10 (MCP tab) prioritized over Phase 11 (settings rollout) because the MCP tab is the highest user pain point and benefits from Phase 8's nativeTool classification already in place.
+- [Phase ?]: UiTheme.kt retained as legacy shim (KDoc-only change): Phase 11 will align naming (outline→border, statusRunning→statusSuccess) once all call sites migrated
+- [Phase ?]: SC5 (formGrid non-null) deferred to DesignComponentsTest in Plan 02: formGrid() lives in Components.kt not DesignTokens.kt
 
 ### Roadmap Evolution
 
@@ -110,6 +113,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-05-29T10:40:12.371Z
+Last session: 2026-05-29T11:37:17.730Z
 Stopped at: Phase 9 UI-SPEC approved
-Resume file: .planning/phases/09-design-system-foundation/09-UI-SPEC.md
+Resume file: None

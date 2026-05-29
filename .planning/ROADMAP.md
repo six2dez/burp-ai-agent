@@ -195,7 +195,7 @@ Plans:
 
 **Wave 1**
 
-- [ ] 09-01-PLAN.md — Create DesignTokens.kt (Spacing / Typography / Colors objects) + DesignTokensTest.kt (7 headless tests: spacing multiples-of-4, light/dark UIManager flip, color roles non-null, typography derivation)
+- [x] 09-01-PLAN.md — Create DesignTokens.kt (Spacing / Typography / Colors objects) + DesignTokensTest.kt (7 headless tests: spacing multiples-of-4, light/dark UIManager flip, color roles non-null, typography derivation)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -253,6 +253,6 @@ Phase 9 must complete first (design-system foundation). Phase 10 (MCP tab) and P
 | 6. v0.7.0 Release Cut | 0/TBD | Not started | - |
 | 7. Proxy Transport + MCP Scope Hardening | 3/3 | Complete   | 2026-05-27 |
 | 8. BApp Store resubmission — MCP pivot + compliance | 3/4 | In Progress|  |
-| 9. Design System Foundation | 0/TBD | Not started | - |
+| 9. Design System Foundation | 1/2 | In Progress|  |
 | 10. MCP Tools Tab Redesign | 0/TBD | Not started | - |
 | 11. Settings Tabs + Theme Rollout | 0/TBD | Not started | - |
