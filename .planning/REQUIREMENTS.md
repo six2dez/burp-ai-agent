@@ -1,7 +1,26 @@
-# Requirements: Burp AI Agent — v0.7.0
+# Requirements: Burp AI Agent — v0.8.0 (active) + v0.7.0 (carryover)
 
 **Defined:** 2026-05-13
 **Core Value:** Bring modern AI to a real security workflow **without** leaking sensitive traffic to third-party providers.
+
+## v0.8.0 Requirements — UI/UX Overhaul (ACTIVE milestone)
+
+Scope = redesign the extension's Swing UI on a small shared design system, applied across the Settings area and all its tabs, with special focus on the MCP tools tab. New roadmap phases continue numbering from the previous milestone (Phase 9+).
+
+### UI / UX
+
+- [ ] **UI-01**: A shared design-system module (spacing / typography / color tokens + reusable Swing components — section headers, labeled fields, help text, buttons) is the single styling source for settings panels
+- [ ] **UI-02**: Every Settings tab is rebuilt on the design system — consistent layout, spacing, grouping, labels, and one-line descriptions
+- [ ] **UI-03**: The MCP tools tab groups tools into extension-native (AI) vs generic (Montoya) sections with clear visual hierarchy, replacing the current flat/disordered list
+- [ ] **UI-04**: Each MCP tool row shows whether it ships in the store build (native) or only the full build (generic)
+- [ ] **UI-05**: The MCP tools list has a live search/filter (name + description) and per-group bulk enable/disable
+- [ ] **UI-06**: Settings navigation is scannable — each tab/section has a title + short description; long tabs use collapsible sections
+- [ ] **UI-07**: The redesign preserves all existing functionality and settings persistence — no behaviour or config regressions (values still load/save; tests green)
+- [ ] **UI-08**: The UI honours Burp's light/dark theme via tokens — no hardcoded colors that break in dark mode
+
+---
+
+> The **v0.7.0** (v1) and **v2** sections below are **carryover** from the previous milestone — kept open, not archived. New roadmap phases (9+) map only to the v0.8.0 UI-* requirements above.
 
 ## v1 Requirements
 
