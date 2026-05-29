@@ -8,6 +8,18 @@ A production-grade Burp Suite extension (Kotlin + Montoya API) that embeds an AI
 
 Bring modern AI to a real security workflow **without** leaking sensitive traffic to third-party providers — privacy controls and an audit trail are non-negotiable, AI capability is additive.
 
+## Current Milestone: v0.8.0 — UI/UX Overhaul
+
+**Goal:** Redesign the extension's Swing UI on a small reusable design system, applied across the Settings area and all its tabs — with special focus on the MCP tools tab (group extension-native vs generic tools, mark store-build vs full-build, fix the current clutter).
+
+**Target features:**
+- Shared design-system module (spacing / typography / color tokens + reusable Swing components — section headers, labeled fields, help text, buttons) as the single styling source for settings panels
+- Every Settings tab rebuilt on the design system — consistent layout, spacing, grouping, labels, descriptions
+- MCP tools tab reorganized: grouped by extension-native (AI) vs generic (Montoya), with store-build / full-build indicators, search/filter, and per-group bulk toggle
+- Light/dark theme consistency via tokens; no behaviour or settings-persistence regressions
+
+**Carryover:** v0.7.0 (Release Cut) stays open — phases 1, 4, 5, 6 and phase 8 (BApp Store resubmission, pending manual smoke + `/reopen`) remain in the roadmap to finish later. Nothing archived.
+
 ## Requirements
 
 ### Validated
@@ -98,4 +110,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-13 — Phase 1 (Perplexity backend audit) complete*
+*Last updated: 2026-05-29 — Milestone v0.8.0 (UI/UX Overhaul) started; v0.7.0 carried over*

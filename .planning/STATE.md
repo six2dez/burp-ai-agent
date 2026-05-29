@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v0.7.0
-milestone_name: Release Cut
-status: executing
-stopped_at: Completed 08-02-PLAN.md
-last_updated: "2026-05-28T22:52:29.425Z"
-last_activity: 2026-05-28
+milestone: v0.8.0
+milestone_name: UI/UX Overhaul
+status: planning
+last_updated: "2026-05-29T08:48:50.885Z"
+last_activity: 2026-05-29
 progress:
-  total_phases: 8
-  completed_phases: 4
-  total_plans: 14
-  completed_plans: 13
-  percent: 50
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,12 +24,10 @@ See: .planning/PROJECT.md (updated 2026-05-13)
 
 ## Current Position
 
-Phase: 08 (BApp Store resubmission — MCP pivot to extension-native tools + compliance fixes) — EXECUTING
-Plan: 4 of 4
-Status: Ready to execute
-Last activity: 2026-05-28
-
-Progress: [█████████░] 93%
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-05-29 — Milestone v0.8.0 started
 
 ## Performance Metrics
 
