@@ -1,10 +1,11 @@
 ---
 phase: 9
 slug: design-system-foundation
-status: draft
+status: approved
 shadcn_initialized: false
 preset: none
 created: 2026-05-29
+reviewed_at: 2026-05-29
 ---
 
 # Phase 9 — UI Design Contract: Design System Foundation
@@ -43,6 +44,8 @@ This phase consolidates and extends it; it does NOT replace it from scratch.
 
 All values are multiples of 4. Exposed as `object DesignTokens.Spacing` (Int constants, pixels).
 
+> **Note on `md` (12):** 12 is an intentional, multiple-of-4 intermediate step (label→field horizontal gaps). It is not in the abbreviated 4/8/16/24 reference set but is a standard spacing step in mainstream systems (Tailwind `spacing-3`, Material 12dp). Kept deliberately rather than forced to 8 or 16 — accepted exception to the abbreviated set.
+
 | Token | Value | Usage |
 |-------|-------|-------|
 | `xs` | 4 | Icon-text gaps; accordion toggle padding; `addSpacerRow` minimum |
@@ -51,16 +54,16 @@ All values are multiples of 4. Exposed as `object DesignTokens.Spacing` (Int con
 | `lg` | 16 | Tab content outer padding (horizontal); section header bottom gap |
 | `xl` | 24 | Major section break between accordion panels |
 | `sectionPad` | 8 | `sectionPanel` outer border (matches current `EmptyBorder(6,8,8,8)` — round to 8) |
-| `formGridPad` | 6 | `formGrid` bottom border (matches current `EmptyBorder(2,0,6,0)`) |
+| `formGridPad` | 8 | `formGrid` bottom border (rounds current `EmptyBorder(2,0,6,0)` up to the 4px grid) |
 
 **Row inset constants (4-value Insets — top, left, bottom, right):**
 
 | Token | Value | Usage |
 |-------|-------|-------|
-| `rowInsets` | Insets(3, 8, 3, 8) | Label cell in `addRowFull` / `addRowPair` |
-| `fieldInsets` | Insets(3, 0, 3, 8) | Field cell in `addRowFull` |
-| `fieldPairInsets` | Insets(3, 0, 3, 12) | Left field cell in `addRowPair` |
-| `toggleRowInsets` | Insets(6, 0, 4, 0) | Toggle-switch field cell (extra top gap) |
+| `rowInsets` | Insets(4, 8, 4, 8) | Label cell in `addRowFull` / `addRowPair` (snapped from 3 → 4px grid) |
+| `fieldInsets` | Insets(4, 0, 4, 8) | Field cell in `addRowFull` (snapped from 3 → 4px grid) |
+| `fieldPairInsets` | Insets(4, 0, 4, 12) | Left field cell in `addRowPair` (snapped from 3 → 4px grid) |
+| `toggleRowInsets` | Insets(8, 0, 4, 0) | Toggle-switch field cell, extra top gap (snapped from 6 → 8) |
 
 Exceptions: `ToggleSwitch` fixed size is 44×22 px (existing; keep as-is — not a spacing token).
 
@@ -148,7 +151,7 @@ Phase 9 consolidates existing ad-hoc builders from `SettingsPanel` into a public
 
 ```
 object DesignTokens {
-    object Spacing { val xs=4; val sm=8; val md=12; val lg=16; val xl=24; val sectionPad=8; val formGridPad=6 }
+    object Spacing { val xs=4; val sm=8; val md=12; val lg=16; val xl=24; val sectionPad=8; val formGridPad=8 }
     object Typography { /* get properties as described above */ }
     object Colors { /* get properties as described above — delegates to UiTheme.Colors or replaces it */ }
 }
@@ -161,7 +164,7 @@ what already exists in `UiTheme.kt` without verifying the key exists in Burp's L
 ### 2. `formGrid(): JPanel`
 
 Returns a `JPanel(GridBagLayout)` with `background = Colors.surface` and
-`border = EmptyBorder(2, 0, Spacing.formGridPad, 0)`. Client property `"row"` starts at 0.
+`border = EmptyBorder(0, 0, Spacing.formGridPad, 0)`. Client property `"row"` starts at 0.
 
 Signature: `fun formGrid(): JPanel`
 
