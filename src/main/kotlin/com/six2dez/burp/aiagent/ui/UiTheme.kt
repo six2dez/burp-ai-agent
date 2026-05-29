@@ -4,6 +4,18 @@ import java.awt.Color
 import java.awt.Font
 import javax.swing.UIManager
 
+/**
+ * Legacy theme object retained as a call-site shim.
+ *
+ * Canonical design tokens are now defined in
+ * `com.six2dez.burp.aiagent.ui.design.DesignTokens` (added in Phase 9).
+ * This object is preserved so that existing callers in `SettingsPanel`, `BackendConfigPanel`,
+ * `AccordionPanel`, `SubtleNotice`, `ToggleSwitch`, `ActionCard`, and `ChatPanel` continue to
+ * compile and behave identically without any migration in this phase. Phase 11 will align
+ * the two name-spaces and remove this shim once all call sites are migrated.
+ *
+ * Do NOT add new color/typography roles here — add them to `DesignTokens` instead.
+ */
 object UiTheme {
     val isDarkTheme: Boolean
         get() {
@@ -13,6 +25,19 @@ object UiTheme {
             return luminance < 0.5
         }
 
+    /**
+     * Legacy color tokens. Canonical equivalents are in `DesignTokens.Colors`.
+     *
+     * Naming differences (legacy → canonical):
+     * - `outline` → `border`
+     * - `outlineVariant` → `borderSubtle`
+     * - `statusRunning` → `statusSuccess`
+     * - `statusCrashed` → `statusError`
+     * - `statusTerminal` → `statusWarning`
+     *
+     * Chat-specific and banner colors below have no canonical equivalent in `DesignTokens`
+     * (FLAG-01); they are preserved here for `ChatPanel` and banner components.
+     */
     object Colors {
         val primary: Color get() = UIManager.getColor("Burp.primaryButtonBackground") ?: Color(0xD86633)
         val onPrimary: Color get() = UIManager.getColor("Burp.primaryButtonForeground") ?: Color.WHITE
@@ -51,6 +76,15 @@ object UiTheme {
         val inlineCodeBg: Color get() = if (isDarkTheme) Color(0x3C3C3C) else Color(0xE0E0E0)
     }
 
+    /**
+     * Legacy typography roles. Canonical equivalents are in `DesignTokens.Typography`.
+     *
+     * Naming differences (legacy → canonical):
+     * - `title` → `sectionTitle` (in DesignTokens)
+     *
+     * Chat-specific roles (`chatBody`) and `headline` have no canonical equivalent in
+     * `DesignTokens`; they are preserved here for `ChatPanel` and other consumers.
+     */
     object Typography {
         private val baseFont: Font get() = UIManager.getFont("Label.font") ?: Font("SansSerif", Font.PLAIN, 14)
         private val baseSize: Int get() = baseFont.size
