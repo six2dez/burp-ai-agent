@@ -216,7 +216,17 @@ Plans:
   4. A "Enable all / Disable all" control per group performs a bulk toggle that applies to all tools currently visible in that group (respects active search filter); the resulting per-tool enabled states persist through settings save/reload.
   5. All existing per-tool enable/disable toggles, the master unsafe-mode switch, and MCP server start/stop remain fully functional — no behavior or persistence regression; the full test suite passes.
 
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+
+**Wave 1**
+
+- [ ] 10-01-PLAN.md — Extract McpToolTabModel (pure grouping/badge/filter/bulk-toggle helpers) + McpToolTabModelTest (>= 14 unit tests, no Swing)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 10-02-PLAN.md — Rebuild buildMcpToolsPanel() as thin Swing shell: two sectionPanel sections, toolBadge per row, search DocumentListener (Option B show/hide), per-group bulk toggles, AccordionPanel for unsafe allowlist, FLAG-10-01 updateUI() mitigation
+
 **UI hint**: yes
 
 ### Phase 11: Settings Tabs + Theme Rollout
