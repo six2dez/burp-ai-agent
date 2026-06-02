@@ -25,7 +25,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 8: BApp Store resubmission — MCP pivot + compliance** - Close #231 review: store-build MCP exposes only extension-native AI tools (generic Montoya tools gated to a GitHub full build), gate all AI calls on `ai.isEnabled()`, migrate passive scan to `PassiveScanCheck.doCheck()`, confirm name
 - [x] **Phase 9: Design System Foundation** - Shared spacing/typography/color tokens + reusable Swing components as the single styling source for all settings panels (completed 2026-05-29)
 - [x] **Phase 10: MCP Tools Tab Redesign** - Group tools into native (AI) vs generic (Montoya) sections, show store/full-build indicators, add live search/filter + per-group bulk toggle (completed 2026-05-29)
-- [ ] **Phase 11: Settings Tabs + Theme Rollout** - Rebuild every Settings tab on the design system with scannable navigation, collapsible sections, and light/dark theme token support
+- [x] **Phase 11: Settings Tabs + Theme Rollout** - Rebuild every Settings tab on the design system with scannable navigation, collapsible sections, and light/dark theme token support (completed 2026-06-02)
 
 ## Phase Details
 
@@ -253,7 +253,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 11-04-PLAN.md — Wave 2: SettingsPanel.kt final cleanup + human visual smoke-check (all tabs, light + dark) (UI-02, UI-06, UI-07, UI-08)
+- [x] 11-04-PLAN.md — Wave 2: SettingsPanel.kt final cleanup + human visual smoke-check (all tabs, light + dark) (UI-02, UI-06, UI-07, UI-08)
 
 **UI hint**: yes
 
@@ -277,4 +277,4 @@ Phase 9 must complete first (design-system foundation). Phase 10 (MCP tab) and P
 | 8. BApp Store resubmission — MCP pivot + compliance | 3/4 | In Progress|  |
 | 9. Design System Foundation | 2/2 | Complete   | 2026-05-29 |
 | 10. MCP Tools Tab Redesign | 2/2 | Complete   | 2026-05-29 |
-| 11. Settings Tabs + Theme Rollout | 3/4 | In Progress|  |
+| 11. Settings Tabs + Theme Rollout | 4/4 | Complete   | 2026-06-02 |
