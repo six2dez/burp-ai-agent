@@ -1,16 +1,17 @@
 package com.six2dez.burp.aiagent.ui.panels
 
+import com.six2dez.burp.aiagent.ui.design.DesignTokens
+import com.six2dez.burp.aiagent.ui.design.addRowFull
+import com.six2dez.burp.aiagent.ui.design.addSpacerRow
+import com.six2dez.burp.aiagent.ui.design.formGrid
+import com.six2dez.burp.aiagent.ui.design.sectionPanel
 import java.awt.BorderLayout
-import javax.swing.BorderFactory
 import javax.swing.BoxLayout
 import javax.swing.JComponent
 import javax.swing.JPanel
+import javax.swing.border.EmptyBorder
 
 class PrivacyConfigPanel(
-    private val sectionPanel: (String, String, JComponent) -> JPanel,
-    private val formGrid: () -> JPanel,
-    private val addRowFull: (JPanel, String, JComponent) -> Unit,
-    private val addSpacerRow: (JPanel, Int) -> Unit,
     private val privacyMode: JComponent,
     private val auditEnabled: JComponent,
     private val autoRestart: JComponent,
@@ -54,7 +55,7 @@ class PrivacyConfigPanel(
         val noticeWrapper =
             JPanel(BorderLayout()).apply {
                 isOpaque = false
-                border = BorderFactory.createEmptyBorder(8, 0, 0, 0)
+                border = EmptyBorder(DesignTokens.Spacing.sm, 0, 0, 0)
                 add(privacyNotice, BorderLayout.NORTH)
             }
         val northStack =
