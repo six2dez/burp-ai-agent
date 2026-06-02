@@ -1,7 +1,12 @@
 package com.six2dez.burp.aiagent.ui.panels
 
-import com.six2dez.burp.aiagent.ui.UiTheme
 import com.six2dez.burp.aiagent.ui.components.ToggleSwitch
+import com.six2dez.burp.aiagent.ui.design.DesignTokens
+import com.six2dez.burp.aiagent.ui.design.addRowFull
+import com.six2dez.burp.aiagent.ui.design.addSpacerRow
+import com.six2dez.burp.aiagent.ui.design.applyAreaStyle
+import com.six2dez.burp.aiagent.ui.design.applyFieldStyle
+import com.six2dez.burp.aiagent.ui.design.formGrid
 import java.awt.BorderLayout
 import java.awt.CardLayout
 import java.awt.GridBagConstraints
@@ -16,7 +21,6 @@ import javax.swing.JScrollPane
 import javax.swing.JTextArea
 import javax.swing.JTextField
 import javax.swing.border.EmptyBorder
-import javax.swing.border.LineBorder
 
 data class BackendConfigState(
     val codexCmd: String = "",
@@ -101,8 +105,8 @@ class BackendConfigPanel(
     private val copilotCmd = JTextField(initialState.copilotCmd)
 
     init {
-        background = UiTheme.Colors.surface
-        cards.background = UiTheme.Colors.surface
+        background = DesignTokens.Colors.surface
+        cards.background = DesignTokens.Colors.surface
 
         applyFieldStyle(codexCmd)
         applyFieldStyle(geminiCmd)
@@ -274,11 +278,10 @@ class BackendConfigPanel(
         labelText: String,
         field: JComponent,
     ): JPanel {
-        val panel = JPanel(GridBagLayout())
-        panel.background = UiTheme.Colors.surface
-        panel.border = EmptyBorder(4, 8, 0, 8)
-        addRow(panel, 0, labelText, field)
-        addVerticalFiller(panel, 1)
+        val panel = formGrid()
+        panel.border = EmptyBorder(DesignTokens.Spacing.sectionPad, DesignTokens.Spacing.sectionPad, 0, DesignTokens.Spacing.sectionPad)
+        addRowFull(panel, labelText, field)
+        addSpacerRow(panel, DesignTokens.Spacing.sm)
         return panel
     }
 
@@ -288,27 +291,24 @@ class BackendConfigPanel(
         backendId: String,
         commandProvider: () -> String,
     ): JPanel {
-        val panel = JPanel(GridBagLayout())
-        panel.background = UiTheme.Colors.surface
-        panel.border = EmptyBorder(4, 8, 0, 8)
-        addRow(panel, 0, labelText, field)
-        addButtonRow(
+        val panel = formGrid()
+        panel.border = EmptyBorder(DesignTokens.Spacing.sectionPad, DesignTokens.Spacing.sectionPad, 0, DesignTokens.Spacing.sectionPad)
+        addRowFull(panel, labelText, field)
+        addRowFull(
             panel,
-            1,
+            "",
             buildButtonRowPanel(
                 buildOpenCliButton(backendId, commandProvider),
                 buildTestConnectionButton(backendId),
             ),
         )
-        addVerticalFiller(panel, 2)
+        addSpacerRow(panel, DesignTokens.Spacing.sm)
         return panel
     }
 
     private fun buildBurpAiPanel(): JPanel {
-        val panel = JPanel(GridBagLayout())
-        panel.background = UiTheme.Colors.surface
-        panel.border = EmptyBorder(8, 8, 8, 8)
-        var row = 0
+        val panel = formGrid()
+        panel.border = EmptyBorder(DesignTokens.Spacing.sectionPad, DesignTokens.Spacing.sectionPad, DesignTokens.Spacing.sectionPad, DesignTokens.Spacing.sectionPad)
 
         val info =
             JTextArea(
@@ -320,55 +320,53 @@ class BackendConfigPanel(
                 isOpaque = false
                 lineWrap = true
                 wrapStyleWord = true
-                font = UiTheme.Typography.body
+                font = DesignTokens.Typography.body
                 border = null
             }
         val gbc =
             GridBagConstraints().apply {
                 gridx = 0
-                gridy = row++
-                gridwidth = 2
+                gridy = (panel.getClientProperty("row") as? Int) ?: 0
+                gridwidth = 4
                 fill = GridBagConstraints.HORIZONTAL
-                insets = Insets(4, 0, 4, 0)
+                insets = Insets(DesignTokens.Spacing.xs, 0, DesignTokens.Spacing.xs, 0)
                 weightx = 1.0
             }
+        panel.putClientProperty("row", (gbc.gridy + 1))
         panel.add(info, gbc)
-        addVerticalFiller(panel, row)
+        addSpacerRow(panel, DesignTokens.Spacing.sm)
         return panel
     }
 
     private fun buildOllamaPanel(): JPanel {
-        val panel = JPanel(GridBagLayout())
-        panel.background = UiTheme.Colors.surface
-        panel.border = EmptyBorder(8, 8, 8, 8)
-        var row = 0
-        addRow(panel, row++, "Ollama CLI command", ollamaCliCmd)
-        addButtonRow(
+        val panel = formGrid()
+        panel.border = EmptyBorder(DesignTokens.Spacing.sectionPad, DesignTokens.Spacing.sectionPad, DesignTokens.Spacing.sectionPad, DesignTokens.Spacing.sectionPad)
+        addRowFull(panel, "Ollama CLI command", ollamaCliCmd)
+        addRowFull(
             panel,
-            row++,
+            "",
             buildButtonRowPanel(
                 buildOpenCliButton("ollama", { ollamaCliCmd.text.trim() }),
                 buildTestConnectionButton("ollama"),
             ),
         )
-        addRow(panel, row++, "Ollama model", ollamaModel)
-        addRow(panel, row++, "Ollama base URL", ollamaUrl)
-        addRow(panel, row++, "Ollama API key (Bearer)", ollamaApiKey)
-        addRow(panel, row++, "Ollama extra headers", JScrollPane(ollamaHeaders))
-        addRow(panel, row++, "Ollama timeout (seconds)", ollamaTimeout)
-        addRow(panel, row++, "Ollama serve command", ollamaServeCmd)
-        addToggleRow(panel, row, "Auto-start Ollama server", ollamaAutoStart)
+        addRowFull(panel, "Ollama model", ollamaModel)
+        addRowFull(panel, "Ollama base URL", ollamaUrl)
+        addRowFull(panel, "Ollama API key (Bearer)", ollamaApiKey)
+        addRowFull(panel, "Ollama extra headers", JScrollPane(ollamaHeaders))
+        addRowFull(panel, "Ollama timeout (seconds)", ollamaTimeout)
+        addRowFull(panel, "Ollama serve command", ollamaServeCmd)
+        addRowFull(panel, "Auto-start Ollama server", ollamaAutoStart)
         return panel
     }
 
     private fun buildOpenCodePanel(): JPanel {
-        val panel = JPanel(GridBagLayout())
-        panel.background = UiTheme.Colors.surface
-        panel.border = EmptyBorder(8, 8, 8, 8)
-        addRow(panel, 0, "OpenCode CLI command", opencodeCmd)
-        addButtonRow(
+        val panel = formGrid()
+        panel.border = EmptyBorder(DesignTokens.Spacing.sectionPad, DesignTokens.Spacing.sectionPad, DesignTokens.Spacing.sectionPad, DesignTokens.Spacing.sectionPad)
+        addRowFull(panel, "OpenCode CLI command", opencodeCmd)
+        addRowFull(
             panel,
-            1,
+            "",
             buildButtonRowPanel(
                 buildOpenCliButton("opencode-cli", { opencodeCmd.text.trim() }),
                 buildTestConnectionButton("opencode-cli"),
@@ -378,172 +376,56 @@ class BackendConfigPanel(
     }
 
     private fun buildLmStudioPanel(): JPanel {
-        val panel = JPanel(GridBagLayout())
-        panel.background = UiTheme.Colors.surface
-        panel.border = EmptyBorder(8, 8, 8, 8)
-        addRow(panel, 0, "LM Studio base URL", lmStudioUrl)
-        addButtonRow(panel, 1, buildButtonRowPanel(buildTestConnectionButton("lmstudio")))
-        addRow(panel, 2, "LM Studio model", lmStudioModel)
-        addRow(panel, 3, "LM Studio timeout (seconds)", lmStudioTimeout)
-        addRow(panel, 4, "LM Studio serve command", lmStudioServeCmd)
-        addRow(panel, 5, "LM Studio API key (Bearer)", lmStudioApiKey)
-        addRow(panel, 6, "LM Studio extra headers", JScrollPane(lmStudioHeaders))
-        addToggleRow(panel, 7, "Auto-start LM Studio server", lmStudioAutoStart)
+        val panel = formGrid()
+        panel.border = EmptyBorder(DesignTokens.Spacing.sectionPad, DesignTokens.Spacing.sectionPad, DesignTokens.Spacing.sectionPad, DesignTokens.Spacing.sectionPad)
+        addRowFull(panel, "LM Studio base URL", lmStudioUrl)
+        addRowFull(panel, "", buildButtonRowPanel(buildTestConnectionButton("lmstudio")))
+        addRowFull(panel, "LM Studio model", lmStudioModel)
+        addRowFull(panel, "LM Studio timeout (seconds)", lmStudioTimeout)
+        addRowFull(panel, "LM Studio serve command", lmStudioServeCmd)
+        addRowFull(panel, "LM Studio API key (Bearer)", lmStudioApiKey)
+        addRowFull(panel, "LM Studio extra headers", JScrollPane(lmStudioHeaders))
+        addRowFull(panel, "Auto-start LM Studio server", lmStudioAutoStart)
         return panel
     }
 
     private fun buildOpenAiCompatPanel(): JPanel {
-        val panel = JPanel(GridBagLayout())
-        panel.background = UiTheme.Colors.surface
-        panel.border = EmptyBorder(8, 8, 8, 8)
-        addRow(panel, 0, "Base URL", openAiCompatUrl)
-        addButtonRow(panel, 1, buildButtonRowPanel(buildTestConnectionButton("openai-compatible")))
-        addRow(panel, 2, "Model", openAiCompatModel)
-        addRow(panel, 3, "API key (Bearer)", openAiCompatApiKey)
-        addRow(panel, 4, "Extra headers", JScrollPane(openAiCompatHeaders))
-        addRow(panel, 5, "Timeout (seconds)", openAiCompatTimeout)
-        addVerticalFiller(panel, 6)
+        val panel = formGrid()
+        panel.border = EmptyBorder(DesignTokens.Spacing.sectionPad, DesignTokens.Spacing.sectionPad, DesignTokens.Spacing.sectionPad, DesignTokens.Spacing.sectionPad)
+        addRowFull(panel, "Base URL", openAiCompatUrl)
+        addRowFull(panel, "", buildButtonRowPanel(buildTestConnectionButton("openai-compatible")))
+        addRowFull(panel, "Model", openAiCompatModel)
+        addRowFull(panel, "API key (Bearer)", openAiCompatApiKey)
+        addRowFull(panel, "Extra headers", JScrollPane(openAiCompatHeaders))
+        addRowFull(panel, "Timeout (seconds)", openAiCompatTimeout)
+        addSpacerRow(panel, DesignTokens.Spacing.sm)
         return panel
     }
 
     private fun buildNvidiaNimPanel(): JPanel {
-        val panel = JPanel(GridBagLayout())
-        panel.background = UiTheme.Colors.surface
-        panel.border = EmptyBorder(8, 8, 8, 8)
-        addRow(panel, 0, "Base URL", nvidiaNimUrl)
-        addButtonRow(panel, 1, buildButtonRowPanel(buildTestConnectionButton("nvidia-nim")))
-        addRow(panel, 2, "Model", nvidiaNimModel)
-        addRow(panel, 3, "API key (Bearer)", nvidiaNimApiKey)
-        addRow(panel, 4, "Extra headers", JScrollPane(nvidiaNimHeaders))
-        addRow(panel, 5, "Timeout (seconds)", nvidiaNimTimeout)
-        addVerticalFiller(panel, 6)
+        val panel = formGrid()
+        panel.border = EmptyBorder(DesignTokens.Spacing.sectionPad, DesignTokens.Spacing.sectionPad, DesignTokens.Spacing.sectionPad, DesignTokens.Spacing.sectionPad)
+        addRowFull(panel, "Base URL", nvidiaNimUrl)
+        addRowFull(panel, "", buildButtonRowPanel(buildTestConnectionButton("nvidia-nim")))
+        addRowFull(panel, "Model", nvidiaNimModel)
+        addRowFull(panel, "API key (Bearer)", nvidiaNimApiKey)
+        addRowFull(panel, "Extra headers", JScrollPane(nvidiaNimHeaders))
+        addRowFull(panel, "Timeout (seconds)", nvidiaNimTimeout)
+        addSpacerRow(panel, DesignTokens.Spacing.sm)
         return panel
     }
 
     private fun buildPerplexityPanel(): JPanel {
-        val panel = JPanel(GridBagLayout())
-        panel.background = UiTheme.Colors.surface
-        panel.border = EmptyBorder(8, 8, 8, 8)
-        addRow(panel, 0, "Base URL", perplexityUrl)
-        addButtonRow(panel, 1, buildButtonRowPanel(buildTestConnectionButton("perplexity")))
-        addRow(panel, 2, "Model", perplexityModel)
-        addRow(panel, 3, "API key (Bearer)", perplexityApiKey)
-        addRow(panel, 4, "Extra headers", JScrollPane(perplexityHeaders))
-        addRow(panel, 5, "Timeout (seconds)", perplexityTimeout)
-        addVerticalFiller(panel, 6)
+        val panel = formGrid()
+        panel.border = EmptyBorder(DesignTokens.Spacing.sectionPad, DesignTokens.Spacing.sectionPad, DesignTokens.Spacing.sectionPad, DesignTokens.Spacing.sectionPad)
+        addRowFull(panel, "Base URL", perplexityUrl)
+        addRowFull(panel, "", buildButtonRowPanel(buildTestConnectionButton("perplexity")))
+        addRowFull(panel, "Model", perplexityModel)
+        addRowFull(panel, "API key (Bearer)", perplexityApiKey)
+        addRowFull(panel, "Extra headers", JScrollPane(perplexityHeaders))
+        addRowFull(panel, "Timeout (seconds)", perplexityTimeout)
+        addSpacerRow(panel, DesignTokens.Spacing.sm)
         return panel
-    }
-
-    private fun addRow(
-        panel: JPanel,
-        row: Int,
-        labelText: String,
-        field: JComponent,
-    ) {
-        val label = JLabel(labelText)
-        label.font = UiTheme.Typography.body
-        label.foreground = UiTheme.Colors.onSurface
-
-        val labelConstraints =
-            GridBagConstraints().apply {
-                gridx = 0
-                gridy = row
-                anchor = GridBagConstraints.WEST
-                insets = Insets(4, 0, 4, 10)
-            }
-        val fieldConstraints =
-            GridBagConstraints().apply {
-                gridx = 1
-                gridy = row
-                weightx = 1.0
-                fill = GridBagConstraints.HORIZONTAL
-                insets = Insets(4, 0, 4, 0)
-            }
-        panel.add(label, labelConstraints)
-        panel.add(field, fieldConstraints)
-    }
-
-    private fun addButtonRow(
-        panel: JPanel,
-        row: Int,
-        component: JComponent,
-    ) {
-        val labelConstraints =
-            GridBagConstraints().apply {
-                gridx = 0
-                gridy = row
-                anchor = GridBagConstraints.WEST
-                insets = Insets(4, 0, 4, 10)
-            }
-        val buttonConstraints =
-            GridBagConstraints().apply {
-                gridx = 1
-                gridy = row
-                anchor = GridBagConstraints.WEST
-                insets = Insets(4, 0, 4, 0)
-            }
-        panel.add(JLabel(""), labelConstraints)
-        panel.add(component, buttonConstraints)
-    }
-
-    private fun addToggleRow(
-        panel: JPanel,
-        row: Int,
-        labelText: String,
-        toggle: ToggleSwitch,
-    ) {
-        val label = JLabel(labelText)
-        label.font = UiTheme.Typography.body
-        label.foreground = UiTheme.Colors.onSurface
-        val labelConstraints =
-            GridBagConstraints().apply {
-                gridx = 0
-                gridy = row
-                anchor = GridBagConstraints.WEST
-                insets = Insets(6, 0, 4, 10)
-            }
-        val toggleConstraints =
-            GridBagConstraints().apply {
-                gridx = 1
-                gridy = row
-                anchor = GridBagConstraints.WEST
-                insets = Insets(6, 0, 4, 0)
-            }
-        panel.add(label, labelConstraints)
-        panel.add(toggle, toggleConstraints)
-    }
-
-    private fun addVerticalFiller(
-        panel: JPanel,
-        row: Int,
-    ) {
-        val filler = JPanel()
-        filler.isOpaque = false
-        val constraints =
-            GridBagConstraints().apply {
-                gridx = 0
-                gridy = row
-                gridwidth = 2
-                weighty = 1.0
-                fill = GridBagConstraints.VERTICAL
-            }
-        panel.add(filler, constraints)
-    }
-
-    private fun applyFieldStyle(field: JTextField) {
-        field.font = UiTheme.Typography.mono
-        field.border = LineBorder(UiTheme.Colors.outline, 1, true)
-        field.background = UiTheme.Colors.inputBackground
-        field.foreground = UiTheme.Colors.inputForeground
-    }
-
-    private fun applyAreaStyle(area: JTextArea) {
-        area.font = UiTheme.Typography.mono
-        area.border = LineBorder(UiTheme.Colors.outline, 1, true)
-        area.background = UiTheme.Colors.inputBackground
-        area.foreground = UiTheme.Colors.inputForeground
-        area.lineWrap = true
-        area.wrapStyleWord = true
     }
 
     private fun buildOpenCliButton(
@@ -551,7 +433,7 @@ class BackendConfigPanel(
         commandProvider: () -> String,
     ): JButton =
         JButton("Open CLI").apply {
-            font = UiTheme.Typography.body
+            font = DesignTokens.Typography.body
             toolTipText = "Open a terminal with the configured command and MCP tools access."
             addActionListener {
                 onOpenCli?.invoke(backendId, commandProvider())
@@ -560,7 +442,7 @@ class BackendConfigPanel(
 
     private fun buildTestConnectionButton(backendId: String): JButton =
         JButton("Test connection").apply {
-            font = UiTheme.Typography.body
+            font = DesignTokens.Typography.body
             toolTipText = "Run backend health check with current settings."
             addActionListener {
                 onTestConnection?.invoke(backendId)
@@ -571,10 +453,11 @@ class BackendConfigPanel(
         JPanel().apply {
             layout = javax.swing.BoxLayout(this, javax.swing.BoxLayout.X_AXIS)
             isOpaque = false
+            background = DesignTokens.Colors.surface
             buttons.forEachIndexed { index, button ->
                 add(button)
                 if (index < buttons.lastIndex) {
-                    add(javax.swing.Box.createRigidArea(java.awt.Dimension(8, 0)))
+                    add(javax.swing.Box.createRigidArea(java.awt.Dimension(DesignTokens.Spacing.sm, 0)))
                 }
             }
         }
