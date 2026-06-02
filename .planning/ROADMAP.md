@@ -247,7 +247,7 @@ Plans:
 
 **Wave 1** *(plans 01–03 run in parallel)*
 
-- [ ] 11-01-PLAN.md — Wave 1: BackendConfigPanel + PrivacyConfigPanel → design-system builders (UI-02, UI-07, UI-08)
+- [x] 11-01-PLAN.md — Wave 1: BackendConfigPanel + PrivacyConfigPanel → design-system builders (UI-02, UI-07, UI-08)
 - [ ] 11-02-PLAN.md — Wave 1: PassiveScanConfigPanel (5 AccordionPanel sections) + ActiveScanConfigPanel + ActiveScanQueuePanel (UI-02, UI-06, UI-07, UI-08)
 - [ ] 11-03-PLAN.md — Wave 1: PromptConfigPanel + CustomPromptsConfigPanel + HelpConfigPanel + McpConfigPanel (UI-02, UI-07, UI-08)
 
@@ -277,4 +277,4 @@ Phase 9 must complete first (design-system foundation). Phase 10 (MCP tab) and P
 | 8. BApp Store resubmission — MCP pivot + compliance | 3/4 | In Progress|  |
 | 9. Design System Foundation | 2/2 | Complete   | 2026-05-29 |
 | 10. MCP Tools Tab Redesign | 2/2 | Complete   | 2026-05-29 |
-| 11. Settings Tabs + Theme Rollout | 0/TBD | Not started | - |
+| 11. Settings Tabs + Theme Rollout | 1/4 | In Progress|  |
