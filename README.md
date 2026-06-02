@@ -1,11 +1,13 @@
-# Burp AI Agent
+# Custom AI Agent
 
 **The bridge between Burp Suite and modern AI.**
 
-<!-- screenshot: main extension tab with chat and settings visible -->
-![Burp AI Agent Screenshot](screenshots/main-tab.png)
+> **A note on the name:** This extension is published as **Custom AI Agent** (formerly *Burp AI Agent*). It was renamed to comply with PortSwigger's BApp Store naming requirements and to avoid confusion with Burp Suite's built-in **Burp AI** provider. The GitHub repository (`github.com/six2dez/burp-ai-agent`), the documentation site (`burp-ai-agent.six2dez.com`), and the configuration directory (`~/.burp-ai-agent/`) keep the `burp-ai-agent` identifier for continuity.
 
-Burp AI Agent is an extension for Burp Suite that integrates AI into your security workflow. Use local models or cloud providers, connect external AI agents via MCP, and let passive/active scanners find vulnerabilities while you focus on manual testing.
+<!-- screenshot: main extension tab with chat and settings visible -->
+![Custom AI Agent Screenshot](screenshots/main-tab.png)
+
+Custom AI Agent is an extension for Burp Suite that integrates AI into your security workflow. Use local models or cloud providers, connect external AI agents via MCP, and let passive/active scanners find vulnerabilities while you focus on manual testing.
 
 ## Highlights
 
@@ -90,7 +92,7 @@ Leave extra headers empty unless your gateway requires them. The extension sends
 3. Select **Extensions > Custom AI Agent > Analyze this request**.
 4. A chat session opens with the AI analysis.
 
-<!-- screenshot: right-click context menu showing Burp AI Agent actions -->
+<!-- screenshot: right-click context menu showing Custom AI Agent actions -->
 ![Context Menu](screenshots/context-menu-request.png)
 
 ### 6. Connect Claude Desktop via MCP (Optional)
@@ -202,7 +204,7 @@ This project is licensed under the [MIT License](LICENSE).
 
 ## Disclaimer
 
-Usage of Burp AI Agent for attacking targets without prior consent is illegal. It is the user's responsibility to obey all applicable laws. The developers assume no liability for misuse or damage caused by this tool. Use responsibly.
+Usage of Custom AI Agent for attacking targets without prior consent is illegal. It is the user's responsibility to obey all applicable laws. The developers assume no liability for misuse or damage caused by this tool. Use responsibly.
 
 ## Contributing
 
