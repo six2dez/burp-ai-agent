@@ -1,7 +1,12 @@
 package com.six2dez.burp.aiagent.ui.panels
 
-import com.six2dez.burp.aiagent.ui.UiTheme
-import java.awt.BorderLayout
+import com.six2dez.burp.aiagent.ui.components.AccordionPanel
+import com.six2dez.burp.aiagent.ui.design.DesignTokens
+import com.six2dez.burp.aiagent.ui.design.addRowFull
+import com.six2dez.burp.aiagent.ui.design.addRowPair
+import com.six2dez.burp.aiagent.ui.design.addSpacerRow
+import com.six2dez.burp.aiagent.ui.design.formGrid
+import java.awt.Dimension
 import javax.swing.Box
 import javax.swing.BoxLayout
 import javax.swing.JButton
@@ -16,11 +21,6 @@ import javax.swing.border.EmptyBorder
 import javax.swing.border.LineBorder
 
 class PassiveScanConfigPanel(
-    private val sectionPanel: (String, String, JComponent) -> JPanel,
-    private val formGrid: () -> JPanel,
-    private val addRowFull: (JPanel, String, JComponent) -> Unit,
-    private val addRowPair: (JPanel, String, JComponent, String, JComponent) -> Unit,
-    private val addSpacerRow: (JPanel, Int) -> Unit,
     private val passiveAiEnabled: JComponent,
     private val passiveAiScopeOnly: JCheckBox,
     private val passiveAiRateSpinner: JSpinner,
@@ -50,225 +50,257 @@ class PassiveScanConfigPanel(
     private val passiveAiResetStats: JButton,
 ) : ConfigPanel {
     override fun build(): JPanel {
-        val body = JPanel(BorderLayout())
-        body.background = UiTheme.Colors.surface
-        body.border = EmptyBorder(6, 8, 8, 8)
-
-        passiveAiEnabled.font = UiTheme.Typography.body
-        passiveAiEnabled.background = UiTheme.Colors.surface
-        passiveAiEnabled.foreground = UiTheme.Colors.onSurface
+        passiveAiEnabled.font = DesignTokens.Typography.body
+        passiveAiEnabled.background = DesignTokens.Colors.surface
+        passiveAiEnabled.foreground = DesignTokens.Colors.onSurface
         passiveAiEnabled.toolTipText = "Automatically analyze proxy traffic using AI and create Burp issues for findings."
 
-        passiveAiScopeOnly.font = UiTheme.Typography.body
-        passiveAiScopeOnly.background = UiTheme.Colors.surface
-        passiveAiScopeOnly.foreground = UiTheme.Colors.onSurface
+        passiveAiScopeOnly.font = DesignTokens.Typography.body
+        passiveAiScopeOnly.background = DesignTokens.Colors.surface
+        passiveAiScopeOnly.foreground = DesignTokens.Colors.onSurface
         passiveAiScopeOnly.toolTipText = "Only analyze requests that are in the defined target scope."
 
-        passiveAiRateSpinner.font = UiTheme.Typography.body
-        passiveAiRateSpinner.toolTipText = "Minimum seconds between AI analyses (rate limiting)."
-
-        passiveAiMaxSizeSpinner.font = UiTheme.Typography.body
-        passiveAiMaxSizeSpinner.toolTipText = "Maximum response size in KB to analyze."
-
-        passiveAiMinSeverityCombo.font = UiTheme.Typography.body
-        passiveAiMinSeverityCombo.background = UiTheme.Colors.surface
+        passiveAiMinSeverityCombo.font = DesignTokens.Typography.body
+        passiveAiMinSeverityCombo.background = DesignTokens.Colors.surface
         passiveAiMinSeverityCombo.toolTipText = "Only report findings at or above this severity level."
 
-        passiveAiEndpointDedupSpinner.font = UiTheme.Typography.body
-        passiveAiEndpointDedupSpinner.toolTipText = "Skip repeated endpoint analysis within this number of minutes."
+        passiveAiStatusLabel.font = DesignTokens.Typography.body
+        passiveAiStatusLabel.foreground = DesignTokens.Colors.onSurfaceVariant
 
-        passiveAiFingerprintDedupSpinner.font = UiTheme.Typography.body
-        passiveAiFingerprintDedupSpinner.toolTipText = "Skip repeated response fingerprints within this number of minutes."
+        passiveAiViewFindings.font = DesignTokens.Typography.label
+        passiveAiViewFindings.background = DesignTokens.Colors.surface
+        passiveAiViewFindings.foreground = DesignTokens.Colors.primary
+        passiveAiViewFindings.border = LineBorder(DesignTokens.Colors.border, 1, true)
+        passiveAiViewFindings.isFocusPainted = false
 
-        passiveAiPromptCacheTtlSpinner.font = UiTheme.Typography.body
-        passiveAiPromptCacheTtlSpinner.toolTipText = "Reuse previous AI results for identical prompts within this time window."
+        scannerTriageButton.font = DesignTokens.Typography.label
+        scannerTriageButton.background = DesignTokens.Colors.surface
+        scannerTriageButton.foreground = DesignTokens.Colors.primary
+        scannerTriageButton.border = LineBorder(DesignTokens.Colors.border, 1, true)
+        scannerTriageButton.isFocusPainted = false
 
-        passiveAiEndpointCacheEntriesSpinner.font = UiTheme.Typography.body
-        passiveAiEndpointCacheEntriesSpinner.toolTipText = "Maximum endpoint dedup cache entries."
+        passiveAiResetStats.font = DesignTokens.Typography.label
+        passiveAiResetStats.background = DesignTokens.Colors.surface
+        passiveAiResetStats.foreground = DesignTokens.Colors.primary
+        passiveAiResetStats.border = LineBorder(DesignTokens.Colors.border, 1, true)
+        passiveAiResetStats.isFocusPainted = false
 
-        passiveAiFingerprintCacheEntriesSpinner.font = UiTheme.Typography.body
-        passiveAiFingerprintCacheEntriesSpinner.toolTipText = "Maximum response fingerprint cache entries."
+        passiveAiRateSpinner.font = DesignTokens.Typography.body
+        passiveAiRateSpinner.toolTipText = "Minimum seconds between AI analyses (rate limiting)."
 
-        passiveAiPromptCacheEntriesSpinner.font = UiTheme.Typography.body
-        passiveAiPromptCacheEntriesSpinner.toolTipText = "Maximum prompt-result cache entries."
+        passiveAiMaxSizeSpinner.font = DesignTokens.Typography.body
+        passiveAiMaxSizeSpinner.toolTipText = "Maximum response size in KB to analyze."
 
-        passiveAiRequestBodyMaxCharsSpinner.font = UiTheme.Typography.body
+        passiveAiRequestBodyMaxCharsSpinner.font = DesignTokens.Typography.body
         passiveAiRequestBodyMaxCharsSpinner.toolTipText = "Max request body characters sent to AI."
 
-        passiveAiResponseBodyMaxCharsSpinner.font = UiTheme.Typography.body
+        passiveAiResponseBodyMaxCharsSpinner.font = DesignTokens.Typography.body
         passiveAiResponseBodyMaxCharsSpinner.toolTipText = "Max response body characters sent to AI."
 
-        passiveAiHeaderMaxCountSpinner.font = UiTheme.Typography.body
+        passiveAiHeaderMaxCountSpinner.font = DesignTokens.Typography.body
         passiveAiHeaderMaxCountSpinner.toolTipText = "Max filtered headers included in prompt metadata."
 
-        passiveAiParamMaxCountSpinner.font = UiTheme.Typography.body
+        passiveAiParamMaxCountSpinner.font = DesignTokens.Typography.body
         passiveAiParamMaxCountSpinner.toolTipText = "Max parameters included in prompt metadata."
 
-        passiveAiExcludedExtensionsField.font = UiTheme.Typography.body
+        passiveAiExcludedExtensionsField.font = DesignTokens.Typography.body
         passiveAiExcludedExtensionsField.toolTipText =
             "Comma-separated file extensions to skip (e.g. css,js,png,woff,ico). Leave empty to disable."
 
-        passiveAiBatchSizeSpinner.font = UiTheme.Typography.body
+        passiveAiBatchSizeSpinner.font = DesignTokens.Typography.body
         passiveAiBatchSizeSpinner.toolTipText = "Group N requests per AI call (1 = disabled). Reduces API calls by 60-70%."
 
-        passiveAiPersistentCacheEnabled.font = UiTheme.Typography.body
-        passiveAiPersistentCacheEnabled.background = UiTheme.Colors.surface
-        passiveAiPersistentCacheEnabled.foreground = UiTheme.Colors.onSurface
+        passiveAiEndpointDedupSpinner.font = DesignTokens.Typography.body
+        passiveAiEndpointDedupSpinner.toolTipText = "Skip repeated endpoint analysis within this number of minutes."
+
+        passiveAiFingerprintDedupSpinner.font = DesignTokens.Typography.body
+        passiveAiFingerprintDedupSpinner.toolTipText = "Skip repeated response fingerprints within this number of minutes."
+
+        passiveAiPromptCacheTtlSpinner.font = DesignTokens.Typography.body
+        passiveAiPromptCacheTtlSpinner.toolTipText = "Reuse previous AI results for identical prompts within this time window."
+
+        passiveAiEndpointCacheEntriesSpinner.font = DesignTokens.Typography.body
+        passiveAiEndpointCacheEntriesSpinner.toolTipText = "Maximum endpoint dedup cache entries."
+
+        passiveAiFingerprintCacheEntriesSpinner.font = DesignTokens.Typography.body
+        passiveAiFingerprintCacheEntriesSpinner.toolTipText = "Maximum response fingerprint cache entries."
+
+        passiveAiPromptCacheEntriesSpinner.font = DesignTokens.Typography.body
+        passiveAiPromptCacheEntriesSpinner.toolTipText = "Maximum prompt-result cache entries."
+
+        passiveAiPersistentCacheEnabled.font = DesignTokens.Typography.body
+        passiveAiPersistentCacheEnabled.background = DesignTokens.Colors.surface
+        passiveAiPersistentCacheEnabled.foreground = DesignTokens.Colors.onSurface
         passiveAiPersistentCacheEnabled.toolTipText = "Cache AI results to disk for reuse across Burp sessions."
 
-        passiveAiPersistentCacheTtlSpinner.font = UiTheme.Typography.body
+        passiveAiPersistentCacheTtlSpinner.font = DesignTokens.Typography.body
         passiveAiPersistentCacheTtlSpinner.toolTipText = "Hours before persistent cache entries expire (1-168)."
 
-        passiveAiPersistentCacheMaxMbSpinner.font = UiTheme.Typography.body
+        passiveAiPersistentCacheMaxMbSpinner.font = DesignTokens.Typography.body
         passiveAiPersistentCacheMaxMbSpinner.toolTipText = "Maximum disk space for persistent cache in MB."
 
-        contextRequestBodyMaxCharsSpinner.font = UiTheme.Typography.body
+        contextRequestBodyMaxCharsSpinner.font = DesignTokens.Typography.body
         contextRequestBodyMaxCharsSpinner.toolTipText = "Max request body characters in manual context actions."
 
-        contextResponseBodyMaxCharsSpinner.font = UiTheme.Typography.body
+        contextResponseBodyMaxCharsSpinner.font = DesignTokens.Typography.body
         contextResponseBodyMaxCharsSpinner.toolTipText = "Max response body characters in manual context actions."
 
-        contextCompactJson.font = UiTheme.Typography.body
-        contextCompactJson.background = UiTheme.Colors.surface
-        contextCompactJson.foreground = UiTheme.Colors.onSurface
+        contextCompactJson.font = DesignTokens.Typography.body
+        contextCompactJson.background = DesignTokens.Colors.surface
+        contextCompactJson.foreground = DesignTokens.Colors.onSurface
         contextCompactJson.toolTipText = "Serialize manual context payloads as compact JSON to reduce tokens."
 
-        passiveAiStatusLabel.font = UiTheme.Typography.body
-        passiveAiStatusLabel.foreground = UiTheme.Colors.onSurfaceVariant
+        // --- Section A: Scanner control ---
+        val actionsCluster =
+            JPanel().apply {
+                layout = BoxLayout(this, BoxLayout.X_AXIS)
+                background = DesignTokens.Colors.surface
+                add(passiveAiViewFindings)
+                add(Box.createRigidArea(Dimension(DesignTokens.Spacing.sm, 0)))
+                add(scannerTriageButton)
+                add(Box.createRigidArea(Dimension(DesignTokens.Spacing.sm, 0)))
+                add(passiveAiResetStats)
+            }
+        val statusBar =
+            JPanel(java.awt.BorderLayout(DesignTokens.Spacing.sm, 0)).apply {
+                background = DesignTokens.Colors.surface
+                add(passiveAiStatusLabel, java.awt.BorderLayout.CENTER)
+                add(actionsCluster, java.awt.BorderLayout.EAST)
+            }
 
-        passiveAiViewFindings.font = UiTheme.Typography.label
-        passiveAiViewFindings.background = UiTheme.Colors.surface
-        passiveAiViewFindings.foreground = UiTheme.Colors.primary
-        passiveAiViewFindings.border = EmptyBorder(6, 10, 6, 10)
-        passiveAiViewFindings.isFocusPainted = false
+        val gridA = formGrid()
+        addRowFull(gridA, "Enable scanner", passiveAiEnabled)
+        addSpacerRow(gridA, DesignTokens.Spacing.xs)
+        addRowFull(gridA, "In-scope only", passiveAiScopeOnly)
+        addSpacerRow(gridA, DesignTokens.Spacing.xs)
+        addRowFull(gridA, "Min severity", passiveAiMinSeverityCombo)
+        addSpacerRow(gridA, DesignTokens.Spacing.xs)
+        addRowFull(gridA, "Status", statusBar)
+        addSpacerRow(gridA, DesignTokens.Spacing.xs)
+        addRowFull(gridA, "Batch size (1=off)", passiveAiBatchSizeSpinner)
+        val sectionA =
+            AccordionPanel(
+                "Scanner control",
+                "Enable passive AI scanning and scope settings",
+                gridA,
+                initiallyExpanded = true,
+            )
 
-        scannerTriageButton.font = UiTheme.Typography.label
-        scannerTriageButton.background = UiTheme.Colors.surface
-        scannerTriageButton.foreground = UiTheme.Colors.primary
-        scannerTriageButton.border = EmptyBorder(6, 10, 6, 10)
-        scannerTriageButton.isFocusPainted = false
-
-        passiveAiResetStats.font = UiTheme.Typography.label
-        passiveAiResetStats.background = UiTheme.Colors.surface
-        passiveAiResetStats.foreground = UiTheme.Colors.primary
-        passiveAiResetStats.border = LineBorder(UiTheme.Colors.outline, 1, true)
-        passiveAiResetStats.isFocusPainted = false
-
-        val grid = formGrid()
-        addRowFull(grid, "Enable scanner", passiveAiEnabled)
-        addSpacerRow(grid, 4)
-        // Pair the two binary toggles so they read as a single row instead of two full-width
-        // checkbox lines. Persistent cache toggle is followed immediately by its TTL/max detail
-        // pair below to keep the persistent-cache block visually grouped.
+        // --- Section B: Rate limiting & body caps ---
+        val gridB = formGrid()
+        addRowPair(gridB, "Rate limit (s)", passiveAiRateSpinner, "Max size (KB)", passiveAiMaxSizeSpinner)
+        addSpacerRow(gridB, DesignTokens.Spacing.xs)
         addRowPair(
-            grid,
-            "In-scope only",
-            passiveAiScopeOnly,
-            "Persistent cache",
-            passiveAiPersistentCacheEnabled,
-        )
-        addSpacerRow(grid, 4)
-        addRowPair(
-            grid,
-            "Persistent TTL (hrs)",
-            passiveAiPersistentCacheTtlSpinner,
-            "Persistent max (MB)",
-            passiveAiPersistentCacheMaxMbSpinner,
-        )
-        addSpacerRow(grid, 4)
-        addRowPair(grid, "Rate limit (sec)", passiveAiRateSpinner, "Max size (KB)", passiveAiMaxSizeSpinner)
-        addSpacerRow(grid, 4)
-        // Min severity + Batch size are both compact fields with no obvious right-side companion;
-        // pair them so the row is symmetric instead of leaving each as a full-width singleton.
-        addRowPair(
-            grid,
-            "Min severity",
-            passiveAiMinSeverityCombo,
-            "Batch size (1=off)",
-            passiveAiBatchSizeSpinner,
-        )
-        addSpacerRow(grid, 4)
-        addRowPair(
-            grid,
-            "Endpoint dedup (min)",
-            passiveAiEndpointDedupSpinner,
-            "Response dedup (min)",
-            passiveAiFingerprintDedupSpinner,
-        )
-        addSpacerRow(grid, 4)
-        addRowPair(
-            grid,
-            "Prompt cache TTL (min)",
-            passiveAiPromptCacheTtlSpinner,
-            "Prompt cache entries",
-            passiveAiPromptCacheEntriesSpinner,
-        )
-        addSpacerRow(grid, 4)
-        addRowPair(
-            grid,
-            "Endpoint cache entries",
-            passiveAiEndpointCacheEntriesSpinner,
-            "Fingerprint cache entries",
-            passiveAiFingerprintCacheEntriesSpinner,
-        )
-        addSpacerRow(grid, 4)
-        addRowPair(
-            grid,
+            gridB,
             "Req body chars (AI)",
             passiveAiRequestBodyMaxCharsSpinner,
             "Resp body chars (AI)",
             passiveAiResponseBodyMaxCharsSpinner,
         )
-        addSpacerRow(grid, 4)
+        addSpacerRow(gridB, DesignTokens.Spacing.xs)
         addRowPair(
-            grid,
+            gridB,
             "Max headers",
             passiveAiHeaderMaxCountSpinner,
             "Max params",
             passiveAiParamMaxCountSpinner,
         )
-        addSpacerRow(grid, 4)
-        addRowFull(grid, "Excluded extensions", passiveAiExcludedExtensionsField)
-        addSpacerRow(grid, 4)
+        addSpacerRow(gridB, DesignTokens.Spacing.xs)
+        addRowFull(gridB, "Excluded extensions", passiveAiExcludedExtensionsField)
+        val sectionB =
+            AccordionPanel(
+                "Rate limiting & body caps",
+                "Control scan frequency and context size sent to AI",
+                gridB,
+                initiallyExpanded = true,
+            )
+
+        // --- Section C: Dedup & prompt cache ---
+        val gridC = formGrid()
         addRowPair(
-            grid,
+            gridC,
+            "Endpoint dedup (min)",
+            passiveAiEndpointDedupSpinner,
+            "Response dedup (min)",
+            passiveAiFingerprintDedupSpinner,
+        )
+        addSpacerRow(gridC, DesignTokens.Spacing.xs)
+        addRowPair(
+            gridC,
+            "Prompt cache TTL (min)",
+            passiveAiPromptCacheTtlSpinner,
+            "Prompt cache entries",
+            passiveAiPromptCacheEntriesSpinner,
+        )
+        addSpacerRow(gridC, DesignTokens.Spacing.xs)
+        addRowPair(
+            gridC,
+            "Endpoint cache entries",
+            passiveAiEndpointCacheEntriesSpinner,
+            "Fingerprint cache entries",
+            passiveAiFingerprintCacheEntriesSpinner,
+        )
+        val sectionC =
+            AccordionPanel(
+                "Dedup & prompt cache",
+                "Avoid redundant analyses across endpoints and requests",
+                gridC,
+                initiallyExpanded = false,
+            )
+
+        // --- Section D: Persistent cache ---
+        val gridD = formGrid()
+        addRowFull(gridD, "Persistent cache", passiveAiPersistentCacheEnabled)
+        addSpacerRow(gridD, DesignTokens.Spacing.xs)
+        addRowPair(
+            gridD,
+            "Persistent TTL (hrs)",
+            passiveAiPersistentCacheTtlSpinner,
+            "Persistent max (MB)",
+            passiveAiPersistentCacheMaxMbSpinner,
+        )
+        val sectionD =
+            AccordionPanel(
+                "Persistent cache",
+                "Cache AI results to disk between Burp sessions",
+                gridD,
+                initiallyExpanded = false,
+            )
+
+        // --- Section E: Context builder ---
+        val gridContext = formGrid()
+        addRowPair(
+            gridContext,
             "Req body chars (manual)",
             contextRequestBodyMaxCharsSpinner,
             "Resp body chars (manual)",
             contextResponseBodyMaxCharsSpinner,
         )
-        addSpacerRow(grid, 4)
-        addRowFull(grid, "Manual context JSON", contextCompactJson)
-        addSpacerRow(grid, 8)
+        addSpacerRow(gridContext, DesignTokens.Spacing.xs)
+        addRowFull(gridContext, "Manual context JSON", contextCompactJson)
+        val sectionContext =
+            AccordionPanel(
+                "Context builder",
+                "Cap request/response chars and JSON compaction for prompts",
+                gridContext,
+                initiallyExpanded = false,
+            )
 
-        // Combine the previous "Status" + "Actions" rows into one. The status label sits in the
-        // BorderLayout CENTER region so it absorbs all leftover horizontal space and grows to fit
-        // long operational messages ("Scanning 5 of 12, last: GET /api/users/123") without
-        // clipping. The action buttons live in the EAST region with a fixed preferred width, so
-        // they stay pinned to the right edge regardless of how much space the label needs.
-        val actionsCluster =
+        val body =
             JPanel().apply {
-                layout = BoxLayout(this, BoxLayout.X_AXIS)
-                background = UiTheme.Colors.surface
-                add(passiveAiViewFindings)
-                add(Box.createRigidArea(java.awt.Dimension(8, 0)))
-                add(scannerTriageButton)
-                add(Box.createRigidArea(java.awt.Dimension(8, 0)))
-                add(passiveAiResetStats)
+                layout = BoxLayout(this, BoxLayout.Y_AXIS)
+                background = DesignTokens.Colors.surface
+                border = EmptyBorder(DesignTokens.Spacing.sectionPad, DesignTokens.Spacing.sectionPad, DesignTokens.Spacing.sectionPad, DesignTokens.Spacing.sectionPad)
+                add(sectionA)
+                add(Box.createRigidArea(Dimension(0, DesignTokens.Spacing.sm)))
+                add(sectionB)
+                add(Box.createRigidArea(Dimension(0, DesignTokens.Spacing.sm)))
+                add(sectionC)
+                add(Box.createRigidArea(Dimension(0, DesignTokens.Spacing.sm)))
+                add(sectionD)
+                add(Box.createRigidArea(Dimension(0, DesignTokens.Spacing.sm)))
+                add(sectionContext)
             }
-        val statusBar =
-            JPanel(BorderLayout(8, 0)).apply {
-                background = UiTheme.Colors.surface
-                add(passiveAiStatusLabel, BorderLayout.CENTER)
-                add(actionsCluster, BorderLayout.EAST)
-            }
-        addRowFull(grid, "Status", statusBar)
-
-        body.add(grid, BorderLayout.CENTER)
-        return sectionPanel(
-            "AI Passive Scanner",
-            "Automatically analyze proxy traffic for vulnerabilities (XSS, SQLi, IDOR, BOLA, BAC, etc.)",
-            body,
-        )
+        return body
     }
 }
