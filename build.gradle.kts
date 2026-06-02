@@ -11,7 +11,7 @@ plugins {
 }
 
 group = "com.six2dez.burp"
-version = "0.7.0"
+version = "0.8.0"
 
 repositories {
     mavenCentral()

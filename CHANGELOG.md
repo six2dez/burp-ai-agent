@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-06-02
+
+### Added
+
+- **Design-system module (UI/UX Overhaul)**: a small reusable styling foundation — `DesignTokens` (spacing, typography, and theme-aware color tokens sourced from Burp's look-and-feel) plus shared Swing builders in `Components.kt` (section panels, labeled field rows, help text, buttons, and a collapsible `AccordionPanel`). It is the single styling source for the settings UI and re-themes automatically when Burp switches between light and dark.
+- **Two-artifact build for BApp Store compliance (#231)**: `./gradlew shadowJar -PstoreBuild=true` produces the store artifact `Custom-AI-Agent-0.8.0.jar`; the default `./gradlew shadowJar` produces `Custom-AI-Agent-full-0.8.0.jar`. A generated `BuildFlags.STORE_BUILD` constant gates which MCP tools register at runtime.
+
+### Changed
+
+- **MCP tools in the BApp Store build expose only extension-native AI capabilities (#231)**: the store build no longer exposes generic Montoya-API tools over MCP (those are provided by PortSwigger's official MCP Server). The store artifact registers only the 8 extension-native AI tools (`status`, `issue_create`, `ai_analyze`, `ai_passive_scan`, `ai_findings_recent`, `redact_preview`, `ai_audit_query`, `ai_backends_list`); the full GitHub build keeps all tools for users who prefer the all-in-one setup.
+- **MCP Tools settings tab redesigned**: tools grouped extension-native (AI) vs generic (Montoya), each tagged with a store-build / full-build indicator, with search/filter and per-group bulk toggles — replacing the previous flat, cluttered list.
+- **All Settings tabs rebuilt on the design system**: Backend, Privacy & Logging, Passive/Active Scanner, Prompt Templates, Custom Prompts, MCP, Help, and Burp Integration share consistent layout, spacing, labels, and one-line descriptions; the dense scanner tabs use collapsible sections; every tab honours Burp's light/dark theme through tokens (no hardcoded colors). Settings keys and persistence are unchanged — saved configurations load as-is.
+- **AI MCP tools verify that AI is enabled (#231)**: the AI-calling MCP tools (`ai_analyze`, `ai_passive_scan`, …) check `ai.isEnabled()` before issuing a request, so the configured AI setting is respected. Independent third-party backends (Ollama, the CLI agents, OpenAI-compatible, …) remain usable when Burp's built-in AI is off.
+
+### Fixed
+
+- **Passive AI scanning now runs as a Montoya `PassiveScanCheck` (#231)**: AI passive analysis is registered via `api.scanner().registerPassiveScanCheck(...)` instead of a `ProxyResponseHandler`, so findings flow through the scanner with proper scoping and issue reporting. The old proxy-response handler was removed.
+
 ## [0.7.0] - 2026-05-15
 
 ### Added
