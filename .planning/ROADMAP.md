@@ -242,7 +242,19 @@ Plans:
   4. With Burp's theme set to dark, all settings panels render using dark-appropriate token values — no visible white/light backgrounds or black text against dark surfaces; verified by a developer smoke-check in Burp Pro dark mode.
   5. All existing settings values (backend selection, privacy mode, audit toggle, MCP config, scanner thresholds, prompt library) load and save correctly after the redesign — a regression test pass (`./gradlew test`) and a manual settings-persistence smoke-check confirm no regressions.
 
-**Plans**: TBD
+**Plans**: 4 plans
+Plans:
+
+**Wave 1** *(plans 01–03 run in parallel)*
+
+- [ ] 11-01-PLAN.md — Wave 1: BackendConfigPanel + PrivacyConfigPanel → design-system builders (UI-02, UI-07, UI-08)
+- [ ] 11-02-PLAN.md — Wave 1: PassiveScanConfigPanel (5 AccordionPanel sections) + ActiveScanConfigPanel + ActiveScanQueuePanel (UI-02, UI-06, UI-07, UI-08)
+- [ ] 11-03-PLAN.md — Wave 1: PromptConfigPanel + CustomPromptsConfigPanel + HelpConfigPanel + McpConfigPanel (UI-02, UI-07, UI-08)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 11-04-PLAN.md — Wave 2: SettingsPanel.kt final cleanup + human visual smoke-check (all tabs, light + dark) (UI-02, UI-06, UI-07, UI-08)
+
 **UI hint**: yes
 
 ## Progress
