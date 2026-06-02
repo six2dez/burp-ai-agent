@@ -609,7 +609,7 @@ class SettingsPanel(
         saveFeedbackLabel.font = DesignTokens.Typography.body
         saveFeedbackLabel.foreground = DesignTokens.Colors.onPrimary
         saveFeedbackLabel.background = DesignTokens.Colors.borderSubtle
-        saveFeedbackLabel.border = EmptyBorder(6, 8, 6, 8)
+        saveFeedbackLabel.border = EmptyBorder(DesignTokens.Spacing.xs, DesignTokens.Spacing.sm, DesignTokens.Spacing.xs, DesignTokens.Spacing.sm)
         saveFeedbackLabel.isOpaque = true
 
         val backendBody =
