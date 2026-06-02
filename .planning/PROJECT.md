@@ -10,6 +10,8 @@ Bring modern AI to a real security workflow **without** leaking sensitive traffi
 
 ## Current Milestone: v0.8.0 — UI/UX Overhaul
 
+**Status:** ✓ COMPLETE (2026-06-02) — all three phases delivered: Phase 9 (design-system foundation), Phase 10 (MCP tools tab redesign), Phase 11 (settings tabs + theme rollout). UI-01..UI-08 validated; Phase 11 verified PASS (12/12), human visual + persistence checkpoint approved. Ready for `/gsd-complete-milestone`.
+
 **Goal:** Redesign the extension's Swing UI on a small reusable design system, applied across the Settings area and all its tabs — with special focus on the MCP tools tab (group extension-native vs generic tools, mark store-build vs full-build, fix the current clutter).
 
 **Target features:**
@@ -45,6 +47,9 @@ Bring modern AI to a real security workflow **without** leaking sensitive traffi
 - ✓ **Burp Scan Skill** — Markdown skill for terminal AI assistants (Claude Code, Gemini CLI, etc.) to drive Burp via MCP — `v0.5.0`
 - ✓ **Determinism mode** — stable templates, stable context ordering, temperature clamped to 0 where supported — `v0.4.0`
 - ✓ **Build & CI** — shadowJar, ktlint gate, jacoco coverage, CycloneDX SBOM on release, multi-OS test matrix — `v0.6.0`
+- ✓ **Design-system module** — spacing / typography / color tokens + reusable Swing components (section headers, labeled field rows, help text, buttons, AccordionPanel) as the single styling source — `v0.8.0` (Phase 9)
+- ✓ **MCP tools tab redesign** — grouped extension-native (AI) vs generic (Montoya) tools, store-build / full-build indicators, search/filter, per-group bulk toggle — `v0.8.0` (Phase 10)
+- ✓ **All Settings tabs rebuilt on the design system** — consistent layout/grouping/labels, collapsible sections for long scanner tabs (UI-06), light/dark theme via tokens (UI-08), persistence preserved (UI-07) — `v0.8.0` (Phase 11)
 
 ### Active
 
@@ -110,4 +115,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-05-29 — Milestone v0.8.0 (UI/UX Overhaul) started; v0.7.0 carried over*
+*Last updated: 2026-06-02 — Milestone v0.8.0 (UI/UX Overhaul) COMPLETE (Phases 9–11 delivered; UI-01..UI-08 validated); v0.7.0 still carried over*
