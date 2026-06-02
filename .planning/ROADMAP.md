@@ -277,4 +277,4 @@ Phase 9 must complete first (design-system foundation). Phase 10 (MCP tab) and P
 | 8. BApp Store resubmission — MCP pivot + compliance | 3/4 | In Progress|  |
 | 9. Design System Foundation | 2/2 | Complete   | 2026-05-29 |
 | 10. MCP Tools Tab Redesign | 2/2 | Complete   | 2026-05-29 |
-| 11. Settings Tabs + Theme Rollout | 4/4 | Complete   | 2026-06-02 |
+| 11. Settings Tabs + Theme Rollout | 4/4 | Complete    | 2026-06-02 |
