@@ -1,7 +1,12 @@
 package com.six2dez.burp.aiagent.ui.panels
 
-import com.six2dez.burp.aiagent.ui.UiTheme
 import com.six2dez.burp.aiagent.ui.components.AccordionPanel
+import com.six2dez.burp.aiagent.ui.design.DesignTokens
+import com.six2dez.burp.aiagent.ui.design.addRowFull
+import com.six2dez.burp.aiagent.ui.design.addRowPair
+import com.six2dez.burp.aiagent.ui.design.addSpacerRow
+import com.six2dez.burp.aiagent.ui.design.formGrid
+import com.six2dez.burp.aiagent.ui.design.sectionPanel
 import java.awt.BorderLayout
 import javax.swing.BorderFactory
 import javax.swing.BoxLayout
@@ -9,11 +14,6 @@ import javax.swing.JComponent
 import javax.swing.JPanel
 
 class McpConfigPanel(
-    private val sectionPanel: (String, String, JComponent) -> JPanel,
-    private val formGrid: () -> JPanel,
-    private val addRowFull: (JPanel, String, JComponent) -> Unit,
-    private val addRowPair: (JPanel, String, JComponent, String, JComponent) -> Unit,
-    private val addSpacerRow: (JPanel, Int) -> Unit,
     private val mcpEnabled: JComponent,
     private val mcpHost: JComponent,
     private val mcpPort: JComponent,
@@ -45,7 +45,7 @@ class McpConfigPanel(
 ) : ConfigPanel {
     override fun build(): JPanel {
         val body = JPanel(BorderLayout())
-        body.background = UiTheme.Colors.surface
+        body.background = DesignTokens.Colors.surface
         val wrapper =
             sectionPanel(
                 "MCP Server",
@@ -56,30 +56,30 @@ class McpConfigPanel(
         // ── Core grid: everything except the proxy-history preprocessing knobs.
         val grid = formGrid()
         addRowPair(grid, "Enabled", mcpEnabled, "Unsafe mode", mcpUnsafe)
-        addSpacerRow(grid, 4)
+        addSpacerRow(grid, DesignTokens.Spacing.xs)
         addRowPair(grid, "Host", mcpHost, "Port", mcpPort)
-        addSpacerRow(grid, 4)
+        addSpacerRow(grid, DesignTokens.Spacing.xs)
         addRowPair(grid, "External access", mcpExternal, "Stdio bridge", mcpStdio)
-        addSpacerRow(grid, 4)
+        addSpacerRow(grid, DesignTokens.Spacing.xs)
         // 07-03 D-03: scope-only toggle lives adjacent to the security-impact toggles so users
         // see it next to External access / Stdio bridge when assessing MCP exposure.
         addRowFull(grid, "Restrict to in-scope hosts", mcpScopeOnlyCheckbox)
-        addSpacerRow(grid, 4)
+        addSpacerRow(grid, DesignTokens.Spacing.xs)
         addRowPair(grid, "TLS enabled", mcpTlsEnabled, "Auto-generate TLS", mcpTlsAuto)
-        addSpacerRow(grid, 4)
+        addSpacerRow(grid, DesignTokens.Spacing.xs)
         addRowFull(grid, "TLS keystore path", mcpKeystorePath)
-        addSpacerRow(grid, 4)
+        addSpacerRow(grid, DesignTokens.Spacing.xs)
         addRowFull(grid, "TLS keystore password", mcpKeystorePassword)
-        addSpacerRow(grid, 4)
+        addSpacerRow(grid, DesignTokens.Spacing.xs)
         addRowFull(grid, "Allowed origins (external mode)", mcpAllowedOrigins)
-        addSpacerRow(grid, 4)
+        addSpacerRow(grid, DesignTokens.Spacing.xs)
         addRowFull(grid, "Token", tokenPanelFactory())
-        addSpacerRow(grid, 4)
+        addSpacerRow(grid, DesignTokens.Spacing.xs)
         addRowFull(grid, "Quick actions", quickActionsFactory())
-        addSpacerRow(grid, 4)
+        addSpacerRow(grid, DesignTokens.Spacing.xs)
         // 07-02 D-02: human label is now KB; constructor param name preserved to avoid churn.
         addRowPair(grid, "Max concurrent requests", mcpMaxConcurrent, "Max body size (KB)", mcpMaxBodyMb)
-        addSpacerRow(grid, 4)
+        addSpacerRow(grid, DesignTokens.Spacing.xs)
         addRowPair(
             grid,
             "Proxy history max items",
@@ -94,7 +94,7 @@ class McpConfigPanel(
         val noticeWrapper =
             JPanel(BorderLayout()).apply {
                 isOpaque = false
-                border = BorderFactory.createEmptyBorder(8, 0, 0, 0)
+                border = BorderFactory.createEmptyBorder(DesignTokens.Spacing.sm, 0, 0, 0)
                 add(mcpNotice, BorderLayout.CENTER)
             }
 
@@ -102,13 +102,13 @@ class McpConfigPanel(
         // so collapsing the content panel does not leave an empty grid row gap.
         val preprocessingGrid = formGrid()
         addRowFull(preprocessingGrid, "Enabled", preprocessProxyHistory)
-        addSpacerRow(preprocessingGrid, 4)
+        addSpacerRow(preprocessingGrid, DesignTokens.Spacing.xs)
         addRowFull(preprocessingGrid, "Allow unpreprocessed proxy history", mcpAllowUnpreprocessedProxyHistory)
-        addSpacerRow(preprocessingGrid, 4)
+        addSpacerRow(preprocessingGrid, DesignTokens.Spacing.xs)
         addRowFull(preprocessingGrid, "Max response size (KB)", preprocessMaxResponseSizeKb)
-        addSpacerRow(preprocessingGrid, 4)
+        addSpacerRow(preprocessingGrid, DesignTokens.Spacing.xs)
         addRowFull(preprocessingGrid, "Filter binary content", preprocessFilterBinaryContent)
-        addSpacerRow(preprocessingGrid, 4)
+        addSpacerRow(preprocessingGrid, DesignTokens.Spacing.xs)
         addRowFull(preprocessingGrid, "Allowed content type prefixes", preprocessAllowedContentTypes)
 
         val preprocessingAccordion =
@@ -118,14 +118,14 @@ class McpConfigPanel(
                 content = preprocessingGrid,
                 initiallyExpanded = false,
             ).apply {
-                border = BorderFactory.createEmptyBorder(8, 0, 0, 0)
+                border = BorderFactory.createEmptyBorder(DesignTokens.Spacing.sm, 0, 0, 0)
             }
 
         // Stack: core grid + advisory + accordion, all top-aligned in a vertical box.
         val stack =
             JPanel().apply {
                 layout = BoxLayout(this, BoxLayout.Y_AXIS)
-                background = UiTheme.Colors.surface
+                background = DesignTokens.Colors.surface
                 add(grid)
                 add(noticeWrapper)
                 add(preprocessingAccordion)

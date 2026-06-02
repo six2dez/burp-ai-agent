@@ -25,10 +25,16 @@ import com.six2dez.burp.aiagent.ui.components.CustomPromptLibraryEditor
 import com.six2dez.burp.aiagent.ui.components.ToggleSwitch
 import com.six2dez.burp.aiagent.ui.design.BadgeStyle
 import com.six2dez.burp.aiagent.ui.design.DesignTokens
+import com.six2dez.burp.aiagent.ui.design.addRowFull
+import com.six2dez.burp.aiagent.ui.design.addSpacerRow
+import com.six2dez.burp.aiagent.ui.design.applyFieldStyle
+import com.six2dez.burp.aiagent.ui.design.applyAreaStyle
+import com.six2dez.burp.aiagent.ui.design.buildTabPanel
+import com.six2dez.burp.aiagent.ui.design.formGrid
 import com.six2dez.burp.aiagent.ui.design.helpLabel
+import com.six2dez.burp.aiagent.ui.design.sectionPanel
 import com.six2dez.burp.aiagent.ui.design.secondaryButton
 import com.six2dez.burp.aiagent.ui.design.toolBadge
-import com.six2dez.burp.aiagent.ui.design.buildTabPanel as buildDesignTabPanel
 import com.six2dez.burp.aiagent.ui.panels.ActiveScanConfigPanel
 import com.six2dez.burp.aiagent.ui.panels.ActiveScanQueuePanel
 import com.six2dez.burp.aiagent.ui.panels.BackendConfigPanel
@@ -40,9 +46,6 @@ import com.six2dez.burp.aiagent.ui.panels.PrivacyConfigPanel
 import com.six2dez.burp.aiagent.ui.panels.CustomPromptsConfigPanel
 import com.six2dez.burp.aiagent.ui.panels.PromptConfigPanel
 import java.awt.BorderLayout
-import java.awt.GridBagConstraints
-import java.awt.GridBagLayout
-import java.awt.Insets
 import java.awt.Toolkit
 import java.awt.datatransfer.StringSelection
 import java.time.Instant
@@ -479,7 +482,6 @@ class SettingsPanel(
 
     init {
         refreshProfileOptions()
-        val tabContentInsets = EmptyBorder(8, 12, 12, 12)
 
         applyFieldStyle(mcpHost)
         applyFieldStyle(mcpKeystorePath)
@@ -504,35 +506,35 @@ class SettingsPanel(
         preferredBackend.toolTipText = "Default backend used for new sessions and context actions."
         profilePicker.toolTipText = "Select the AGENTS profile used for system instructions."
         refreshProfilesBtn.toolTipText = "Reload AGENTS profiles from disk."
-        profileWarningLabel.font = UiTheme.Typography.body
-        profileWarningLabel.foreground = UiTheme.Colors.statusCrashed
+        profileWarningLabel.font = DesignTokens.Typography.body
+        profileWarningLabel.foreground = DesignTokens.Colors.statusError
         privacyMode.toolTipText = "Controls how traffic is redacted before sending to a model."
-        determinism.font = UiTheme.Typography.body
-        determinism.background = UiTheme.Colors.surface
-        determinism.foreground = UiTheme.Colors.onSurface
+        determinism.font = DesignTokens.Typography.body
+        determinism.background = DesignTokens.Colors.surface
+        determinism.foreground = DesignTokens.Colors.onSurface
         determinism.toolTipText = "Stable ordering for reproducible prompts. Advanced use only."
-        autoRestart.font = UiTheme.Typography.body
-        autoRestart.background = UiTheme.Colors.surface
-        autoRestart.foreground = UiTheme.Colors.onSurface
+        autoRestart.font = DesignTokens.Typography.body
+        autoRestart.background = DesignTokens.Colors.surface
+        autoRestart.foreground = DesignTokens.Colors.onSurface
         autoRestart.toolTipText = "Automatically restart a crashed agent session."
-        auditEnabled.font = UiTheme.Typography.body
-        auditEnabled.background = UiTheme.Colors.surface
-        auditEnabled.foreground = UiTheme.Colors.onSurface
+        auditEnabled.font = DesignTokens.Typography.body
+        auditEnabled.background = DesignTokens.Colors.surface
+        auditEnabled.foreground = DesignTokens.Colors.onSurface
         auditEnabled.toolTipText = "Tamper-evident logs (JSONL + SHA-256 hashes). Logs saved to ~/.burp-ai-agent/audit.jsonl"
-        chatSmallModelMode.font = UiTheme.Typography.body
-        chatSmallModelMode.background = UiTheme.Colors.surface
-        chatSmallModelMode.foreground = UiTheme.Colors.onSurface
+        chatSmallModelMode.font = DesignTokens.Typography.body
+        chatSmallModelMode.background = DesignTokens.Colors.surface
+        chatSmallModelMode.foreground = DesignTokens.Colors.onSurface
         chatSmallModelMode.toolTipText =
             "Caps chat context to 1500/750 chars per request/response for 1278-token-class local models (issue #69)."
-        rotateSaltBtn.font = UiTheme.Typography.label
-        rotateSaltBtn.background = UiTheme.Colors.surface
-        rotateSaltBtn.foreground = UiTheme.Colors.primary
-        rotateSaltBtn.border = LineBorder(UiTheme.Colors.outline, 1, true)
+        rotateSaltBtn.font = DesignTokens.Typography.label
+        rotateSaltBtn.background = DesignTokens.Colors.surface
+        rotateSaltBtn.foreground = DesignTokens.Colors.primary
+        rotateSaltBtn.border = LineBorder(DesignTokens.Colors.border, 1, true)
         rotateSaltBtn.isFocusPainted = false
         rotateSaltBtn.toolTipText =
             "Rotates the salt used for host anonymization (e.g. host-xxxxxx.local). Current: ${settings.hostAnonymizationSalt.take(8)}..."
         mcpToken.isEditable = true
-        mcpToken.font = UiTheme.Typography.mono
+        mcpToken.font = DesignTokens.Typography.mono
         mcpToken.toolTipText = "Required for external access. Use as: Authorization: Bearer <token>"
         mcpAllowedOrigins.toolTipText =
             "Allowed web origins for external mode (one per line, example: https://app.example.com). Leave empty to allow any origin."
@@ -555,12 +557,12 @@ class SettingsPanel(
         mcpAllowUnpreprocessedProxyHistory.toolTipText =
             "Allow or block AI access to unpreprocessed proxy history responses."
         mcpUnsafe.toolTipText = "Allow tools that modify Burp state or send active requests."
-        mcpTokenRegenerate.font = UiTheme.Typography.label
+        mcpTokenRegenerate.font = DesignTokens.Typography.label
         mcpTokenRegenerate.isFocusPainted = false
-        mcpKeystorePassword.font = UiTheme.Typography.mono
-        mcpKeystorePassword.border = LineBorder(UiTheme.Colors.outline, 1, true)
-        mcpKeystorePassword.background = UiTheme.Colors.inputBackground
-        mcpKeystorePassword.foreground = UiTheme.Colors.inputForeground
+        mcpKeystorePassword.font = DesignTokens.Typography.mono
+        mcpKeystorePassword.border = LineBorder(DesignTokens.Colors.border, 1, true)
+        mcpKeystorePassword.background = DesignTokens.Colors.inputBackground
+        mcpKeystorePassword.foreground = DesignTokens.Colors.inputForeground
 
         promptRequest.toolTipText = "Find vulnerabilities in the selected request/response."
         promptSummary.toolTipText = "Endpoint summary for analysis."
@@ -579,18 +581,18 @@ class SettingsPanel(
             "Comma-separated prompt IDs to expose. Leave empty to use curated defaults."
         aiLoggerEnabled.toolTipText = "Enable the AI request logger to record all AI interactions for observability."
         aiLoggerMaxEntries.toolTipText = "Maximum number of log entries to keep in memory (10-5000)."
-        mcpMaxConcurrent.font = UiTheme.Typography.body
-        mcpMaxBodyKb.font = UiTheme.Typography.body
+        mcpMaxConcurrent.font = DesignTokens.Typography.body
+        mcpMaxBodyKb.font = DesignTokens.Typography.body
         mcpMaxBodyKb.toolTipText = "Maximum MCP response body size per item (KB)."
-        mcpTlsEnabled.font = UiTheme.Typography.body
-        mcpTlsAuto.font = UiTheme.Typography.body
-        mcpExternal.font = UiTheme.Typography.body
-        mcpEnabled.font = UiTheme.Typography.body
-        mcpStdio.font = UiTheme.Typography.body
-        mcpUnsafe.font = UiTheme.Typography.body
+        mcpTlsEnabled.font = DesignTokens.Typography.body
+        mcpTlsAuto.font = DesignTokens.Typography.body
+        mcpExternal.font = DesignTokens.Typography.body
+        mcpEnabled.font = DesignTokens.Typography.body
+        mcpStdio.font = DesignTokens.Typography.body
+        mcpUnsafe.font = DesignTokens.Typography.body
         mcpUnsafe.toolTipText = "Allows tools that modify Burp state, write files, or send active requests."
         // 07-03 D-03: mirror the styling of mcpUnsafe so the new toggle blends into the section.
-        mcpScopeOnly.font = UiTheme.Typography.body
+        mcpScopeOnly.font = DesignTokens.Typography.body
         mcpScopeOnly.toolTipText =
             "When enabled, MCP tools that return Burp HTTP data only include in-scope items, " +
                 "and send_request-style tools refuse out-of-scope URLs. Issue #69."
@@ -604,15 +606,15 @@ class SettingsPanel(
             "Comma-separated allowed readable content-type prefixes (e.g. text/,application/json)."
         // mcpNotice styles itself via UiTheme; refreshMcpNotice() decides level + visibility.
         // privacyNotice styles itself via UiTheme; just seed the message with the current settings.
-        saveFeedbackLabel.font = UiTheme.Typography.body
-        saveFeedbackLabel.foreground = UiTheme.Colors.onPrimary
-        saveFeedbackLabel.background = UiTheme.Colors.outlineVariant
+        saveFeedbackLabel.font = DesignTokens.Typography.body
+        saveFeedbackLabel.foreground = DesignTokens.Colors.onPrimary
+        saveFeedbackLabel.background = DesignTokens.Colors.borderSubtle
         saveFeedbackLabel.border = EmptyBorder(6, 8, 6, 8)
         saveFeedbackLabel.isOpaque = true
 
         val backendBody =
             JPanel(BorderLayout()).apply {
-                background = UiTheme.Colors.surface
+                background = DesignTokens.Colors.surface
             }
         val backendSection =
             sectionPanel(
@@ -625,15 +627,15 @@ class SettingsPanel(
                 val profileRow =
                     JPanel().apply {
                         layout = BoxLayout(this, BoxLayout.X_AXIS)
-                        background = UiTheme.Colors.surface
+                        background = DesignTokens.Colors.surface
                         add(profilePicker)
                         add(Box.createRigidArea(java.awt.Dimension(6, 0)))
                         add(refreshProfilesBtn)
                     }
                 addRowFull(profileGrid, "Agent profile", profileRow)
-                addSpacerRow(profileGrid, 4)
+                addSpacerRow(profileGrid, DesignTokens.Spacing.xs)
                 addRowFull(profileGrid, "Profile warnings", profileWarningLabel)
-                addSpacerRow(profileGrid, 4)
+                addSpacerRow(profileGrid, DesignTokens.Spacing.xs)
                 // 07-02 D-02: small-model-mode toggle (BUG-69-02 / issue #69).
                 addRowFull(profileGrid, "Small model mode", chatSmallModelMode)
                 backendBody.add(profileGrid, BorderLayout.NORTH)
@@ -641,7 +643,7 @@ class SettingsPanel(
         val privacySection = privacySection()
         val burpIntegrationBody =
             JPanel(BorderLayout()).apply {
-                background = UiTheme.Colors.surface
+                background = DesignTokens.Colors.surface
             }
         burpIntegrationBody.add(buildMcpToolsPanel(), BorderLayout.CENTER)
         val burpIntegrationSection =
@@ -650,15 +652,15 @@ class SettingsPanel(
                 subtitle = "Controls how Burp MCP tools are exposed.",
                 content = burpIntegrationBody,
             )
-        generalTab = buildTabPanel(listOf(backendSection), tabContentInsets)
-        passiveScannerTab = buildTabPanel(listOf(passiveAiScannerSection()), tabContentInsets)
-        mcpTab = buildTabPanel(listOf(mcpSection()), tabContentInsets)
-        promptsTab = buildTabPanel(listOf(promptSection()), tabContentInsets)
-        customPromptsTab = buildTabPanel(listOf(customPromptsSection()), tabContentInsets)
-        privacyTab = buildTabPanel(listOf(privacySection), tabContentInsets)
-        activeScannerTab = buildTabPanel(listOf(activeAiScannerSection()), tabContentInsets)
-        burpIntegrationTab = buildTabPanel(listOf(burpIntegrationSection), tabContentInsets)
-        helpTab = buildTabPanel(listOf(helpSection()), tabContentInsets)
+        generalTab = buildTabPanel(listOf(backendSection))
+        passiveScannerTab = buildTabPanel(listOf(passiveAiScannerSection()))
+        mcpTab = buildTabPanel(listOf(mcpSection()))
+        promptsTab = buildTabPanel(listOf(promptSection()))
+        customPromptsTab = buildTabPanel(listOf(customPromptsSection()))
+        privacyTab = buildTabPanel(listOf(privacySection))
+        activeScannerTab = buildTabPanel(listOf(activeAiScannerSection()))
+        burpIntegrationTab = buildTabPanel(listOf(burpIntegrationSection))
+        helpTab = buildTabPanel(listOf(helpSection()))
 
         preferredBackend.addActionListener {
             backendConfigPanel.setBackend(preferredBackendId())
@@ -939,12 +941,12 @@ class SettingsPanel(
     }
 
     fun saveSettings() {
-        updateSaveFeedback("Saving settings...", UiTheme.Colors.statusTerminal)
+        updateSaveFeedback("Saving settings...", DesignTokens.Colors.statusWarning)
         try {
             applyAndSaveSettings(currentSettings())
-            updateSaveFeedback("Saved and applied.", UiTheme.Colors.statusRunning, resetMs = 3000)
+            updateSaveFeedback("Saved and applied.", DesignTokens.Colors.statusSuccess, resetMs = 3000)
         } catch (e: Exception) {
-            updateSaveFeedback("Save failed: ${e.message ?: "unknown error"}", UiTheme.Colors.statusCrashed, resetMs = 5000)
+            updateSaveFeedback("Save failed: ${e.message ?: "unknown error"}", DesignTokens.Colors.statusError, resetMs = 5000)
             api.logging().logToError("AI Agent settings save failed: ${e.message}")
             JOptionPane.showMessageDialog(
                 dialogParentComponent(),
@@ -967,7 +969,7 @@ class SettingsPanel(
         val defaults = settingsRepo.defaultSettings()
         applySettingsToUi(defaults)
         applyAndSaveSettings(defaults)
-        updateSaveFeedback("Defaults restored and applied.", UiTheme.Colors.statusRunning, resetMs = 3000)
+        updateSaveFeedback("Defaults restored and applied.", DesignTokens.Colors.statusSuccess, resetMs = 3000)
     }
 
     fun setPreferredBackend(value: String) {
@@ -1415,205 +1417,13 @@ class SettingsPanel(
 
     private fun dialogParentComponent(): JComponent? = dialogParent
 
-    private fun sectionPanel(
-        title: String,
-        subtitle: String,
-        content: JComponent,
-    ): JPanel {
-        val header = JPanel()
-        header.layout = BoxLayout(header, BoxLayout.Y_AXIS)
-        header.background = UiTheme.Colors.surface
-
-        val titleLabel = JLabel(title)
-        titleLabel.font = UiTheme.Typography.title
-        titleLabel.foreground = UiTheme.Colors.onSurface
-
-        val subtitleLabel = JLabel(subtitle)
-        subtitleLabel.font = UiTheme.Typography.body
-        subtitleLabel.foreground = UiTheme.Colors.onSurfaceVariant
-
-        header.add(titleLabel)
-        header.add(Box.createRigidArea(java.awt.Dimension(0, 4)))
-        header.add(subtitleLabel)
-
-        return JPanel(BorderLayout()).apply {
-            background = UiTheme.Colors.surface
-            border = EmptyBorder(6, 8, 8, 8)
-            add(header, BorderLayout.NORTH)
-            add(content, BorderLayout.CENTER)
-        }
-    }
-
-    private fun buildTabPanel(
-        sections: List<JComponent>,
-        border: EmptyBorder,
-    ): JComponent {
-        val content = JPanel()
-        content.layout = BoxLayout(content, BoxLayout.Y_AXIS)
-        content.background = UiTheme.Colors.surface
-        content.border = border
-        sections.forEachIndexed { index, section ->
-            content.add(section)
-            if (index < sections.lastIndex) {
-                content.add(Box.createRigidArea(java.awt.Dimension(0, 8)))
-            }
-        }
-        val scroll = JScrollPane(content)
-        scroll.border = EmptyBorder(0, 0, 0, 0)
-        scroll.viewport.background = UiTheme.Colors.surface
-        return scroll
-    }
-
-    private fun formGrid(): JPanel {
-        val grid = JPanel(GridBagLayout())
-        grid.background = UiTheme.Colors.surface
-        grid.border = EmptyBorder(2, 0, 6, 0)
-        return grid
-    }
-
-    private fun addRowFull(
-        grid: JPanel,
-        labelText: String,
-        field: JComponent,
-    ) {
-        val row = nextRow(grid)
-        val c = GridBagConstraints()
-        c.gridx = 0
-        c.gridy = row
-        c.anchor = GridBagConstraints.WEST
-        c.insets = Insets(3, 8, 3, 8)
-        val label = JLabel(labelText)
-        label.font = UiTheme.Typography.body
-        label.foreground = UiTheme.Colors.onSurface
-        grid.add(label, c)
-
-        val c2 = GridBagConstraints()
-        c2.gridx = 1
-        c2.gridy = row
-        c2.gridwidth = 3
-        c2.weightx = 1.0
-        c2.insets = Insets(3, 0, 3, 8)
-
-        // Don't expand small components (spinners, combos, small text fields)
-        val isSmallComponent =
-            field is JSpinner ||
-                field is JComboBox<*> ||
-                field is JCheckBox ||
-                field is ToggleSwitch ||
-                (field is JTextField && field.columns <= 20)
-
-        if (isSmallComponent) {
-            c2.anchor = GridBagConstraints.WEST
-            c2.fill = GridBagConstraints.NONE
-        } else {
-            c2.fill = GridBagConstraints.HORIZONTAL
-        }
-        grid.add(field, c2)
-    }
-
-    private fun addRowPair(
-        grid: JPanel,
-        leftLabel: String,
-        leftField: JComponent,
-        rightLabel: String,
-        rightField: JComponent,
-    ) {
-        val row = nextRow(grid)
-
-        val c1 = GridBagConstraints()
-        c1.gridx = 0
-        c1.gridy = row
-        c1.anchor = GridBagConstraints.WEST
-        c1.insets = Insets(3, 8, 3, 8)
-        val left = JLabel(leftLabel)
-        left.font = UiTheme.Typography.body
-        left.foreground = UiTheme.Colors.onSurface
-        grid.add(left, c1)
-
-        val c2 = GridBagConstraints()
-        c2.gridx = 1
-        c2.gridy = row
-        c2.weightx = 0.5
-        c2.insets = Insets(3, 0, 3, 12)
-
-        val isLeftSmall =
-            leftField is JSpinner ||
-                leftField is JComboBox<*> ||
-                leftField is JCheckBox ||
-                leftField is ToggleSwitch ||
-                (leftField is JTextField && leftField.columns <= 20)
-        if (isLeftSmall) {
-            c2.anchor = GridBagConstraints.WEST
-            c2.fill = GridBagConstraints.NONE
-        } else {
-            c2.fill = GridBagConstraints.HORIZONTAL
-        }
-        grid.add(leftField, c2)
-
-        val c3 = GridBagConstraints()
-        c3.gridx = 2
-        c3.gridy = row
-        c3.anchor = GridBagConstraints.WEST
-        c3.insets = Insets(3, 8, 3, 8)
-        val right = JLabel(rightLabel)
-        right.font = UiTheme.Typography.body
-        right.foreground = UiTheme.Colors.onSurface
-        grid.add(right, c3)
-
-        val c4 = GridBagConstraints()
-        c4.gridx = 3
-        c4.gridy = row
-        c4.weightx = 0.5
-        c4.insets = Insets(3, 0, 3, 8)
-
-        val isRightSmall =
-            rightField is JSpinner ||
-                rightField is JComboBox<*> ||
-                rightField is JCheckBox ||
-                rightField is ToggleSwitch ||
-                (rightField is JTextField && rightField.columns <= 20)
-        if (isRightSmall) {
-            c4.anchor = GridBagConstraints.WEST
-            c4.fill = GridBagConstraints.NONE
-        } else {
-            c4.fill = GridBagConstraints.HORIZONTAL
-        }
-        grid.add(rightField, c4)
-    }
-
-    private fun nextRow(grid: JPanel): Int {
-        val row = (grid.getClientProperty("row") as? Int) ?: 0
-        grid.putClientProperty("row", row + 1)
-        return row
-    }
-
-    private fun addSpacerRow(
-        grid: JPanel,
-        height: Int,
-    ) {
-        val row = nextRow(grid)
-        val c = GridBagConstraints()
-        c.gridx = 0
-        c.gridy = row
-        c.gridwidth = 4
-        c.weightx = 1.0
-        c.fill = GridBagConstraints.HORIZONTAL
-        c.insets = Insets(0, 0, 0, 0)
-        grid.add(Box.createRigidArea(java.awt.Dimension(0, height)), c)
-    }
-
     private fun helpSection(): JPanel =
         HelpConfigPanel(
-            sectionPanel = ::sectionPanel,
             dialogParentProvider = ::dialogParentComponent,
         ).build()
 
     private fun privacySection(): JPanel =
         PrivacyConfigPanel(
-            sectionPanel = ::sectionPanel,
-            formGrid = ::formGrid,
-            addRowFull = ::addRowFull,
-            addSpacerRow = ::addSpacerRow,
             privacyMode = privacyMode,
             auditEnabled = auditEnabled,
             autoRestart = autoRestart,
@@ -1627,11 +1437,6 @@ class SettingsPanel(
 
     private fun passiveAiScannerSection(): JPanel =
         PassiveScanConfigPanel(
-            sectionPanel = ::sectionPanel,
-            formGrid = ::formGrid,
-            addRowFull = ::addRowFull,
-            addRowPair = ::addRowPair,
-            addSpacerRow = ::addSpacerRow,
             passiveAiEnabled = passiveAiEnabled,
             passiveAiScopeOnly = passiveAiScopeOnly,
             passiveAiRateSpinner = passiveAiRateSpinner,
@@ -1749,7 +1554,7 @@ class SettingsPanel(
 
         val textArea = JTextArea(sb.toString())
         textArea.isEditable = false
-        textArea.font = UiTheme.Typography.mono
+        textArea.font = DesignTokens.Typography.mono
         textArea.rows = 20
         textArea.columns = 60
 
@@ -1792,7 +1597,7 @@ class SettingsPanel(
 
         val textArea = JTextArea(sb.toString())
         textArea.isEditable = false
-        textArea.font = UiTheme.Typography.mono
+        textArea.font = DesignTokens.Typography.mono
         textArea.rows = 20
         textArea.columns = 60
 
@@ -1934,7 +1739,7 @@ class SettingsPanel(
 
         val textArea = JTextArea(sb.toString())
         textArea.isEditable = false
-        textArea.font = UiTheme.Typography.mono
+        textArea.font = DesignTokens.Typography.mono
         textArea.rows = 24
         textArea.columns = 70
 
@@ -1957,11 +1762,6 @@ class SettingsPanel(
 
     private fun activeAiScannerSection(): JPanel =
         ActiveScanConfigPanel(
-            sectionPanel = ::sectionPanel,
-            formGrid = ::formGrid,
-            addRowFull = ::addRowFull,
-            addRowPair = ::addRowPair,
-            addSpacerRow = ::addSpacerRow,
             activeAiEnabled = activeAiEnabled,
             activeAiScopeOnly = activeAiScopeOnly,
             activeAiAutoFromPassive = activeAiAutoFromPassive,
@@ -2033,9 +1833,6 @@ class SettingsPanel(
 
     private fun promptSection(): JPanel =
         PromptConfigPanel(
-            sectionPanel = ::sectionPanel,
-            formGrid = ::formGrid,
-            addRowFull = ::addRowFull,
             promptRequest = promptRequest,
             promptSummary = promptSummary,
             promptJs = promptJs,
@@ -2049,10 +1846,6 @@ class SettingsPanel(
 
     private fun customPromptsSection(): JPanel =
         CustomPromptsConfigPanel(
-            sectionPanel = ::sectionPanel,
-            formGrid = ::formGrid,
-            addRowFull = ::addRowFull,
-            addRowPair = ::addRowPair,
             customPromptLibrarySection = customPromptLibraryEditor.component(),
             bountyPromptEnabled = bountyPromptEnabled,
             bountyPromptDir = bountyPromptDir,
@@ -2063,11 +1856,6 @@ class SettingsPanel(
 
     private fun mcpSection(): JPanel =
         McpConfigPanel(
-            sectionPanel = ::sectionPanel,
-            formGrid = ::formGrid,
-            addRowFull = ::addRowFull,
-            addRowPair = ::addRowPair,
-            addSpacerRow = ::addSpacerRow,
             mcpEnabled = mcpEnabled,
             mcpHost = mcpHost,
             mcpPort = mcpPort,
@@ -2081,7 +1869,7 @@ class SettingsPanel(
             mcpKeystorePassword = mcpKeystorePassword,
             mcpAllowedOrigins =
                 JScrollPane(mcpAllowedOrigins).apply {
-                    border = LineBorder(UiTheme.Colors.outline, 1, true)
+                    border = LineBorder(DesignTokens.Colors.border, 1, true)
                     verticalScrollBarPolicy = JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED
                     horizontalScrollBarPolicy = JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
                 },
@@ -2099,7 +1887,7 @@ class SettingsPanel(
             preprocessFilterBinaryContent = preprocessFilterBinaryContent,
             preprocessAllowedContentTypes =
                 JScrollPane(preprocessAllowedContentTypes).apply {
-                    border = LineBorder(UiTheme.Colors.outline, 1, true)
+                    border = LineBorder(DesignTokens.Colors.border, 1, true)
                     verticalScrollBarPolicy = JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED
                     horizontalScrollBarPolicy = JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
                 },
@@ -2110,7 +1898,7 @@ class SettingsPanel(
     private fun tokenPanel(): JPanel {
         val panel = JPanel()
         panel.layout = BoxLayout(panel, BoxLayout.X_AXIS)
-        panel.background = UiTheme.Colors.surface
+        panel.background = DesignTokens.Colors.surface
         panel.add(mcpToken)
         panel.add(Box.createRigidArea(java.awt.Dimension(8, 0)))
         panel.add(mcpTokenRegenerate)
@@ -2120,18 +1908,18 @@ class SettingsPanel(
     private fun mcpQuickActions(): JPanel {
         val panel = JPanel()
         panel.layout = BoxLayout(panel, BoxLayout.X_AXIS)
-        panel.background = UiTheme.Colors.surface
+        panel.background = DesignTokens.Colors.surface
 
         val copyUrl = JButton("Copy SSE URL")
         val copyToken = JButton("Copy Token")
         val copyCurl = JButton("Copy curl")
 
         listOf(copyUrl, copyToken, copyCurl).forEach { btn ->
-            btn.font = UiTheme.Typography.label
+            btn.font = DesignTokens.Typography.label
             btn.isFocusPainted = false
-            btn.background = UiTheme.Colors.surface
-            btn.foreground = UiTheme.Colors.primary
-            btn.border = LineBorder(UiTheme.Colors.outline, 1, true)
+            btn.background = DesignTokens.Colors.surface
+            btn.foreground = DesignTokens.Colors.primary
+            btn.border = LineBorder(DesignTokens.Colors.border, 1, true)
         }
 
         copyUrl.addActionListener { copyToClipboard(buildSseUrl()) }
@@ -2313,9 +2101,9 @@ class SettingsPanel(
         }
 
         val aiSection = sectionPanel(
-            "AI Tools (extension-native)",
-            "Extension-native tools — available in both the BApp Store and the full build.",
-            aiListPanel,
+            title = "AI Tools (extension-native)",
+            subtitle = "Extension-native tools — available in both the BApp Store and the full build.",
+            content = aiListPanel,
         )
 
         // STEP 5 — Montoya Tools section
@@ -2411,9 +2199,9 @@ class SettingsPanel(
         montoyaListPanel.add(allowlistAccordion)
 
         val montoyaSection = sectionPanel(
-            "Montoya Tools (generic)",
-            "Generic Montoya API wrappers — available in the full build only.",
-            montoyaListPanel,
+            title = "Montoya Tools (generic)",
+            subtitle = "Generic Montoya API wrappers — available in the full build only.",
+            content = montoyaListPanel,
         )
 
         // STEP 7 — Section separator (Spacing.xl gap between AI and Montoya sections)
@@ -2459,8 +2247,8 @@ class SettingsPanel(
             override fun changedUpdate(e: DocumentEvent) = applyFilter(searchField.text)
         })
 
-        // STEP 9 — Return via buildDesignTabPanel (Phase 9 buildTabPanel)
-        return buildDesignTabPanel(listOf(searchBarPanel, aiSection, sectionSeparator, montoyaSection))
+        // STEP 9 — Return via buildTabPanel from design module
+        return buildTabPanel(listOf(searchBarPanel, aiSection, sectionSeparator, montoyaSection))
     }
 
     private fun updateUnsafeToolStates() {
@@ -2634,13 +2422,13 @@ class SettingsPanel(
         saveFeedbackResetTimer = null
         saveFeedbackLabel.text = message
         saveFeedbackLabel.background = backgroundColor
-        saveFeedbackLabel.foreground = UiTheme.Colors.onPrimary
+        saveFeedbackLabel.foreground = DesignTokens.Colors.onPrimary
         if (resetMs != null && resetMs > 0) {
             saveFeedbackResetTimer =
                 javax.swing
                     .Timer(resetMs) {
                         saveFeedbackLabel.text = "No recent save activity."
-                        saveFeedbackLabel.background = UiTheme.Colors.outlineVariant
+                        saveFeedbackLabel.background = DesignTokens.Colors.borderSubtle
                     }.also { timer ->
                         timer.isRepeats = false
                         timer.start()
@@ -2658,7 +2446,7 @@ class SettingsPanel(
         mcpKeystorePassword.isEnabled = tlsEnabled
         updateFieldStyle(mcpKeystorePath)
         mcpKeystorePassword.foreground =
-            if (mcpKeystorePassword.isEnabled) UiTheme.Colors.inputForeground else UiTheme.Colors.onSurfaceVariant
+            if (mcpKeystorePassword.isEnabled) DesignTokens.Colors.inputForeground else DesignTokens.Colors.onSurfaceVariant
     }
 
     /**
@@ -2693,12 +2481,12 @@ class SettingsPanel(
         val warnings = AgentProfileLoader.validateProfile(profile, available, reasons)
         if (warnings.isEmpty()) {
             profileWarningLabel.text = "No profile tool conflicts detected."
-            profileWarningLabel.foreground = UiTheme.Colors.statusRunning
+            profileWarningLabel.foreground = DesignTokens.Colors.statusSuccess
             profileWarningLabel.isVisible = true
             return
         }
         profileWarningLabel.text = warnings.first()
-        profileWarningLabel.foreground = UiTheme.Colors.statusCrashed
+        profileWarningLabel.foreground = DesignTokens.Colors.statusError
         profileWarningLabel.isVisible = true
     }
 
@@ -2726,33 +2514,17 @@ class SettingsPanel(
 
     private fun availableMcpTools(): Set<String> = availableMcpToolsWithReasons().first
 
-    private fun applyFieldStyle(field: JTextField) {
-        field.font = UiTheme.Typography.mono
-        field.border = LineBorder(UiTheme.Colors.outline, 1, true)
-        field.background = UiTheme.Colors.inputBackground
-        field.foreground = UiTheme.Colors.inputForeground
-    }
-
     private fun updateFieldStyle(field: JTextField) {
-        val disabled = UiTheme.Colors.inputBackground.darker()
-        field.background = if (field.isEnabled) UiTheme.Colors.inputBackground else disabled
-        field.foreground = if (field.isEnabled) UiTheme.Colors.inputForeground else UiTheme.Colors.onSurfaceVariant
-    }
-
-    private fun applyAreaStyle(area: JTextArea) {
-        area.font = UiTheme.Typography.mono
-        area.foreground = UiTheme.Colors.inputForeground
-        area.background = UiTheme.Colors.inputBackground
-        area.border = LineBorder(UiTheme.Colors.outline, 1, true)
-        area.lineWrap = true
-        area.wrapStyleWord = true
+        val disabled = DesignTokens.Colors.inputBackground.darker()
+        field.background = if (field.isEnabled) DesignTokens.Colors.inputBackground else disabled
+        field.foreground = if (field.isEnabled) DesignTokens.Colors.inputForeground else DesignTokens.Colors.onSurfaceVariant
     }
 
     private fun styleCombo(combo: JComboBox<*>) {
-        combo.font = UiTheme.Typography.body
-        combo.background = UiTheme.Colors.comboBackground
-        combo.foreground = UiTheme.Colors.comboForeground
-        combo.border = LineBorder(UiTheme.Colors.outline, 1, true)
+        combo.font = DesignTokens.Typography.body
+        combo.background = DesignTokens.Colors.inputBackground
+        combo.foreground = DesignTokens.Colors.inputForeground
+        combo.border = LineBorder(DesignTokens.Colors.border, 1, true)
     }
 
     private fun openExternalCli(

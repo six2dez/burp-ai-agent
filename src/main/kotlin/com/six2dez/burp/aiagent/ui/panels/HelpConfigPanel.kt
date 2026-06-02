@@ -1,5 +1,7 @@
 package com.six2dez.burp.aiagent.ui.panels
 
+import com.six2dez.burp.aiagent.ui.design.DesignTokens
+import com.six2dez.burp.aiagent.ui.design.sectionPanel
 import java.awt.Desktop
 import javax.swing.JEditorPane
 import javax.swing.JOptionPane
@@ -7,7 +9,6 @@ import javax.swing.JPanel
 import javax.swing.border.EmptyBorder
 
 class HelpConfigPanel(
-    private val sectionPanel: (String, String, javax.swing.JComponent) -> JPanel,
     private val dialogParentProvider: () -> javax.swing.JComponent?,
 ) : ConfigPanel {
     override fun build(): JPanel {
@@ -29,7 +30,12 @@ class HelpConfigPanel(
         val helpPane = JEditorPane("text/html", helpHtml)
         helpPane.isEditable = false
         helpPane.isOpaque = false
-        helpPane.border = EmptyBorder(6, 8, 8, 8)
+        helpPane.border = EmptyBorder(
+            DesignTokens.Spacing.sectionPad,
+            DesignTokens.Spacing.sectionPad,
+            DesignTokens.Spacing.sectionPad,
+            DesignTokens.Spacing.sectionPad,
+        )
         helpPane.addHyperlinkListener { event ->
             if (event.eventType != javax.swing.event.HyperlinkEvent.EventType.ACTIVATED) return@addHyperlinkListener
             val urlText = event.url?.toString().orEmpty()
