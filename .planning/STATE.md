@@ -107,6 +107,7 @@ None yet.
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 260527-f7q | Fix bugs 66, 67, 68: CLI tokenizer, Copilot CLI hang, OpenAI-compatible diagnostics | 2026-05-27 | 8a6af50 | [260527-f7q-fix-bugs-66-67-68-cli-tokenizer-copilot-](./quick/260527-f7q-fix-bugs-66-67-68-cli-tokenizer-copilot-/) |
+| 260602-v08 | Bump version to 0.8.0 + promote CHANGELOG [Unreleased] → [0.8.0] | 2026-06-02 | 55f0b28 | — |
 
 ## Deferred Items
 
