@@ -659,7 +659,24 @@ class SettingsPanel(
         customPromptsTab = buildTabPanel(listOf(customPromptsSection()))
         privacyTab = buildTabPanel(listOf(privacySection))
         activeScannerTab = buildTabPanel(listOf(activeAiScannerSection()))
-        burpIntegrationTab = buildTabPanel(listOf(burpIntegrationSection))
+        // Burp Integration: the embedded MCP tools panel (buildMcpToolsPanel) already provides its
+        // own JScrollPane. Wrapping it again in buildTabPanel produced a nested scroll pane that
+        // swallowed wheel events, so the wheel only scrolled near the outer scrollbar (regression
+        // from 11-03). Use a non-scrolling BorderLayout container instead: the section header sits
+        // in NORTH and the inner JScrollPane fills CENTER, becoming the single scroll surface so
+        // the wheel scrolls anywhere over the content — consistent with the sibling tabs.
+        burpIntegrationTab =
+            JPanel(BorderLayout()).apply {
+                background = DesignTokens.Colors.surface
+                border =
+                    EmptyBorder(
+                        DesignTokens.Spacing.lg,
+                        DesignTokens.Spacing.lg,
+                        DesignTokens.Spacing.lg,
+                        DesignTokens.Spacing.lg,
+                    )
+                add(burpIntegrationSection, BorderLayout.CENTER)
+            }
         helpTab = buildTabPanel(listOf(helpSection()))
 
         preferredBackend.addActionListener {
@@ -2515,8 +2532,7 @@ class SettingsPanel(
     private fun availableMcpTools(): Set<String> = availableMcpToolsWithReasons().first
 
     private fun updateFieldStyle(field: JTextField) {
-        val disabled = DesignTokens.Colors.inputBackground.darker()
-        field.background = if (field.isEnabled) DesignTokens.Colors.inputBackground else disabled
+        field.background = DesignTokens.Colors.inputBackground
         field.foreground = if (field.isEnabled) DesignTokens.Colors.inputForeground else DesignTokens.Colors.onSurfaceVariant
     }
 
