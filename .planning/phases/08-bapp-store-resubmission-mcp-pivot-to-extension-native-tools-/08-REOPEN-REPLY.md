@@ -19,8 +19,8 @@
 ## 🔒 Developer notes — NOT for posting (internal)
 
 **Before posting, run the manual smoke test (Plan 08-04 Task 2):**
-- **Burp Pro** — load `Custom-AI-Agent-0.7.0.jar` (store build): open the MCP panel / `tools/list` → confirm **only the native AI tools** appear (no proxy history, repeater, scanner, scope, etc.). Toggle **Use AI off** → confirm `ai_analyze` is blocked with the "unavailable" message. Run a passive scan → confirm AI findings register via the scanner.
-- **Burp Community** — load `Custom-AI-Agent-full-0.7.0.jar`: does the **"Use AI"** checkbox appear, and do third-party backends (Claude CLI / Ollama / OpenAI-compatible) still start when AI is off? Record the answer — it decides the AI-gate breadth.
+- **Burp Pro** — load `Custom-AI-Agent-0.8.0.jar` (store build): open the MCP panel / `tools/list` → confirm **only the native AI tools** appear (no proxy history, repeater, scanner, scope, etc.). Toggle **Use AI off** → confirm `ai_analyze` is blocked with the "unavailable" message. Run a passive scan → confirm AI findings register via the scanner.
+- **Burp Community** — load `Custom-AI-Agent-full-0.8.0.jar`: does the **"Use AI"** checkbox appear, and do third-party backends (Claude CLI / Ollama / OpenAI-compatible) still start when AI is off? Record the answer — it decides the AI-gate breadth.
 
 **AI-gate decision (narrow, by design):** the gate is applied to the AI-calling **MCP tools** (and the existing `burp-ai` backend lifecycle), but **not** to `startOrAttach()` / `send()` for third-party backends, because `api.ai().isEnabled()` is `false` on Burp Community and gating all backend lifecycles would kill Claude CLI / Ollama / OpenAI there — violating the project's Community-support constraint (`AgentSupervisor.kt:107-141`).
 
@@ -29,7 +29,7 @@
 2. If broadening breaks Community non-AI backends → fall back to the source-set exclusion option recorded in `08-CONTEXT.md` Deferred Ideas (compile the generic tool code out of the store artifact entirely).
 
 **Artifacts produced:**
-- Store: `Custom-AI-Agent-0.7.0.jar` (`BuildFlags.STORE_BUILD = true` → native tools only)
-- Full: `Custom-AI-Agent-full-0.7.0.jar` (`BuildFlags.STORE_BUILD = false` → all tools, for GitHub releases)
+- Store: `Custom-AI-Agent-0.8.0.jar` (`BuildFlags.STORE_BUILD = true` → native tools only)
+- Full: `Custom-AI-Agent-full-0.8.0.jar` (`BuildFlags.STORE_BUILD = false` → all tools, for GitHub releases)
 
-**Status:** all autonomous code work for Phase 08 is complete and verified (263 tests green; both JARs build with the correct `STORE_BUILD` constant). Only the manual Burp smoke test + posting this comment remain.
+**Status:** all autonomous code work for Phase 08 is complete and verified (308 tests green; both JARs build with the correct `STORE_BUILD` constant). Only the manual Burp smoke test + posting this comment remain.
