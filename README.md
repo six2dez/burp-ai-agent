@@ -10,8 +10,10 @@ Burp AI Agent is an extension for Burp Suite that integrates AI into your securi
 ## Highlights
 
 - **11 AI Backends** — Burp AI (built-in), Ollama, LM Studio, NVIDIA NIM, Perplexity, Generic OpenAI-compatible, Gemini CLI, Claude CLI, Codex CLI, OpenCode CLI, Copilot CLI.
-- **53+ MCP Tools** — Let Claude Desktop (or any MCP client) drive Burp autonomously.
-- **62 Vulnerability Classes** — Passive and Active AI scanners across injection, auth, crypto, and more.
+- **59 MCP Tools** — Let Claude Desktop (or any MCP client) drive Burp autonomously (8 extension-native AI tools in the BApp Store build, all 59 in the full build).
+- **62 Vulnerability Classes** — Passive and Active AI scanners across injection, auth, crypto, and more. The passive scanner runs as a Burp `PassiveScanCheck` (Burp Pro).
+- **Available on the BApp Store** — Install **Custom AI Agent** directly from Burp's BApp Store, or grab the full build from Releases.
+- **Theme-Aware UI** — An internal design system styles the settings panel and re-themes automatically with Burp's light/dark switch.
 - **Burp Scan Skill** — Use your preferred AI coding assistant (Claude Code, Gemini CLI, Codex, etc.) as a scanner via MCP.
 - **3 Privacy Modes** — STRICT / BALANCED / OFF. Redact sensitive data before it leaves Burp.
 - **Custom Prompt Library** — Save free-form prompts per context (HTTP request or scanner issue); launch them from the right-click menu or type ad-hoc ones via `Custom…`.
@@ -21,12 +23,18 @@ Burp AI Agent is an extension for Burp Suite that integrates AI into your securi
 
 ### 1. Install
 
-Download the latest JAR from [Releases](https://github.com/six2dez/burp-ai-agent/releases), or build from source (Java 21):
+Install **Custom AI Agent** from Burp's **BApp Store**, download the latest JAR from [Releases](https://github.com/six2dez/burp-ai-agent/releases), or build from source (Java 21):
 
 ```bash
 git clone https://github.com/six2dez/burp-ai-agent.git
 cd burp-ai-agent
+
+# Full build (default, GitHub releases) — all 59 MCP tools
 JAVA_HOME=/path/to/jdk-21 ./gradlew clean shadowJar
+# Output: build/libs/Custom-AI-Agent-full-<version>.jar
+
+# Store build (BApp Store) — 8 extension-native AI MCP tools only
+JAVA_HOME=/path/to/jdk-21 ./gradlew clean shadowJar -PstoreBuild=true
 # Output: build/libs/Custom-AI-Agent-<version>.jar
 ```
 
@@ -35,6 +43,8 @@ JAVA_HOME=/path/to/jdk-21 ./gradlew clean shadowJar
 1. Open Burp Suite (Community or Professional).
 2. Go to **Extensions > Installed > Add**.
 3. Select **Java** as extension type and choose the `.jar` file.
+
+The extension registers in Burp as **Custom AI Agent** (the name in the Extensions list and the Suite tab) to distinguish it from Burp's built-in **Burp AI** provider.
 
 <!-- screenshot: Burp Extensions > Add dialog with the JAR loaded -->
 ![Load Extension](screenshots/burp-extensions-add.png)
@@ -77,7 +87,7 @@ Leave extra headers empty unless your gateway requires them. The extension sends
 
 1. Browse a target through Burp Proxy.
 2. Right-click any request in **Proxy > HTTP History**.
-3. Select **Extensions > Burp AI Agent > Analyze this request**.
+3. Select **Extensions > Custom AI Agent > Analyze this request**.
 4. A chat session opens with the AI analysis.
 
 <!-- screenshot: right-click context menu showing Burp AI Agent actions -->
@@ -114,7 +124,7 @@ The `burp-scan` skill lets you use any AI coding assistant (Claude Code, Gemini 
 
 ### What It Contains
 
-- 53+ MCP tool reference organized by scanning action
+- MCP tool reference (up to all 59 tools in the full build) organized by scanning action
 - Passive analysis protocol (traffic analysis without sending requests)
 - Active testing payload library (200+ payloads for 62 vuln classes with detection patterns)
 - End-to-end scanning workflow (scope -> passive -> active -> OOB -> report)
