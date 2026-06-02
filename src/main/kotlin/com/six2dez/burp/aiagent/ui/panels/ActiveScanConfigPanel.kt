@@ -1,7 +1,12 @@
 package com.six2dez.burp.aiagent.ui.panels
 
-import com.six2dez.burp.aiagent.ui.UiTheme
-import java.awt.BorderLayout
+import com.six2dez.burp.aiagent.ui.components.AccordionPanel
+import com.six2dez.burp.aiagent.ui.design.DesignTokens
+import com.six2dez.burp.aiagent.ui.design.addRowFull
+import com.six2dez.burp.aiagent.ui.design.addRowPair
+import com.six2dez.burp.aiagent.ui.design.addSpacerRow
+import com.six2dez.burp.aiagent.ui.design.formGrid
+import java.awt.Dimension
 import javax.swing.Box
 import javax.swing.BoxLayout
 import javax.swing.JButton
@@ -15,11 +20,6 @@ import javax.swing.border.EmptyBorder
 import javax.swing.border.LineBorder
 
 class ActiveScanConfigPanel(
-    private val sectionPanel: (String, String, JComponent) -> JPanel,
-    private val formGrid: () -> JPanel,
-    private val addRowFull: (JPanel, String, JComponent) -> Unit,
-    private val addRowPair: (JPanel, String, JComponent, String, JComponent) -> Unit,
-    private val addSpacerRow: (JPanel, Int) -> Unit,
     private val activeAiEnabled: JComponent,
     private val activeAiScopeOnly: JCheckBox,
     private val activeAiAutoFromPassive: JCheckBox,
@@ -39,124 +39,143 @@ class ActiveScanConfigPanel(
     private val activeAiResetStats: JButton,
 ) : ConfigPanel {
     override fun build(): JPanel {
-        val body = JPanel(BorderLayout())
-        body.background = UiTheme.Colors.surface
-        body.border = EmptyBorder(6, 8, 8, 8)
-
-        activeAiEnabled.font = UiTheme.Typography.body
-        activeAiEnabled.background = UiTheme.Colors.surface
-        activeAiEnabled.foreground = UiTheme.Colors.onSurface
+        activeAiEnabled.font = DesignTokens.Typography.body
+        activeAiEnabled.background = DesignTokens.Colors.surface
+        activeAiEnabled.foreground = DesignTokens.Colors.onSurface
         activeAiEnabled.toolTipText = "Enable active testing to confirm vulnerabilities detected by passive scanning."
 
-        activeAiScopeOnly.font = UiTheme.Typography.body
-        activeAiScopeOnly.background = UiTheme.Colors.surface
-        activeAiScopeOnly.foreground = UiTheme.Colors.onSurface
+        activeAiScopeOnly.font = DesignTokens.Typography.body
+        activeAiScopeOnly.background = DesignTokens.Colors.surface
+        activeAiScopeOnly.foreground = DesignTokens.Colors.onSurface
         activeAiScopeOnly.toolTipText = "Only test requests that are in the defined target scope."
 
-        activeAiAutoFromPassive.font = UiTheme.Typography.body
-        activeAiAutoFromPassive.background = UiTheme.Colors.surface
-        activeAiAutoFromPassive.foreground = UiTheme.Colors.onSurface
+        activeAiAutoFromPassive.font = DesignTokens.Typography.body
+        activeAiAutoFromPassive.background = DesignTokens.Colors.surface
+        activeAiAutoFromPassive.foreground = DesignTokens.Colors.onSurface
         activeAiAutoFromPassive.toolTipText = "Automatically queue passive scanner findings for active testing."
 
-        activeAiMaxConcurrentSpinner.font = UiTheme.Typography.body
-        activeAiMaxConcurrentSpinner.toolTipText = "Maximum number of concurrent active scans."
+        activeAiStatusLabel.font = DesignTokens.Typography.body
+        activeAiStatusLabel.foreground = DesignTokens.Colors.onSurfaceVariant
 
-        activeAiMaxPayloadsSpinner.font = UiTheme.Typography.body
-        activeAiMaxPayloadsSpinner.toolTipText = "Maximum payloads to test per injection point."
+        activeAiRiskDescription.font = DesignTokens.Typography.body
+        activeAiRiskDescription.foreground = DesignTokens.Colors.onSurfaceVariant
 
-        activeAiTimeoutSpinner.font = UiTheme.Typography.body
-        activeAiTimeoutSpinner.toolTipText = "Request timeout in seconds."
-
-        activeAiDelaySpinner.font = UiTheme.Typography.body
-        activeAiDelaySpinner.toolTipText = "Delay between requests in milliseconds (rate limiting)."
-
-        activeAiRiskLevelCombo.font = UiTheme.Typography.body
-        activeAiRiskLevelCombo.background = UiTheme.Colors.surface
-        activeAiRiskLevelCombo.toolTipText = "SAFE: read-only tests. MODERATE: may read data. DANGEROUS: may modify data."
-
-        activeAiRiskDescription.font = UiTheme.Typography.body
-        activeAiRiskDescription.foreground = UiTheme.Colors.onSurfaceVariant
-
-        activeAiScanModeCombo.font = UiTheme.Typography.body
-        activeAiScanModeCombo.background = UiTheme.Colors.surface
-        activeAiScanModeCombo.toolTipText = "BUG_BOUNTY: high-impact only. PENTEST: broad coverage. FULL: all classes."
-
-        activeAiUseCollaborator.font = UiTheme.Typography.body
-        activeAiUseCollaborator.background = UiTheme.Colors.surface
-        activeAiUseCollaborator.foreground = UiTheme.Colors.onSurface
-        activeAiUseCollaborator.toolTipText = "Use Burp Collaborator for SSRF confirmation (out-of-band)."
-
-        activeAiAdaptivePayloads.font = UiTheme.Typography.body
-        activeAiAdaptivePayloads.background = UiTheme.Colors.surface
-        activeAiAdaptivePayloads.foreground = UiTheme.Colors.onSurface
-        activeAiAdaptivePayloads.toolTipText = "Use AI to generate context-aware payloads based on detected tech stack and error patterns."
-
-        activeAiStatusLabel.font = UiTheme.Typography.body
-        activeAiStatusLabel.foreground = UiTheme.Colors.onSurfaceVariant
-
-        activeAiViewFindings.font = UiTheme.Typography.label
-        activeAiViewFindings.background = UiTheme.Colors.surface
-        activeAiViewFindings.foreground = UiTheme.Colors.primary
-        activeAiViewFindings.border = EmptyBorder(6, 10, 6, 10)
+        activeAiViewFindings.font = DesignTokens.Typography.label
+        activeAiViewFindings.background = DesignTokens.Colors.surface
+        activeAiViewFindings.foreground = DesignTokens.Colors.primary
         activeAiViewFindings.isFocusPainted = false
 
-        activeAiViewQueue.font = UiTheme.Typography.label
-        activeAiViewQueue.background = UiTheme.Colors.surface
-        activeAiViewQueue.foreground = UiTheme.Colors.primary
-        activeAiViewQueue.border = EmptyBorder(6, 10, 6, 10)
+        activeAiViewQueue.font = DesignTokens.Typography.label
+        activeAiViewQueue.background = DesignTokens.Colors.surface
+        activeAiViewQueue.foreground = DesignTokens.Colors.primary
         activeAiViewQueue.isFocusPainted = false
 
-        activeAiClearQueue.font = UiTheme.Typography.label
-        activeAiClearQueue.background = UiTheme.Colors.surface
-        activeAiClearQueue.foreground = UiTheme.Colors.primary
-        activeAiClearQueue.border = LineBorder(UiTheme.Colors.outline, 1, true)
+        activeAiClearQueue.font = DesignTokens.Typography.label
+        activeAiClearQueue.background = DesignTokens.Colors.surface
+        activeAiClearQueue.foreground = DesignTokens.Colors.primary
+        activeAiClearQueue.border = LineBorder(DesignTokens.Colors.border, 1, true)
         activeAiClearQueue.isFocusPainted = false
 
-        activeAiResetStats.font = UiTheme.Typography.label
-        activeAiResetStats.background = UiTheme.Colors.surface
-        activeAiResetStats.foreground = UiTheme.Colors.primary
-        activeAiResetStats.border = LineBorder(UiTheme.Colors.outline, 1, true)
+        activeAiResetStats.font = DesignTokens.Typography.label
+        activeAiResetStats.background = DesignTokens.Colors.surface
+        activeAiResetStats.foreground = DesignTokens.Colors.primary
+        activeAiResetStats.border = LineBorder(DesignTokens.Colors.border, 1, true)
         activeAiResetStats.isFocusPainted = false
 
-        val grid = formGrid()
-        addRowFull(grid, "Enable scanner", activeAiEnabled)
-        addSpacerRow(grid, 4)
-        addRowFull(grid, "In-scope only", activeAiScopeOnly)
-        addSpacerRow(grid, 4)
-        addRowFull(grid, "Auto-queue findings", activeAiAutoFromPassive)
-        addSpacerRow(grid, 4)
-        addRowPair(grid, "Concurrent scans", activeAiMaxConcurrentSpinner, "Max payloads", activeAiMaxPayloadsSpinner)
-        addSpacerRow(grid, 4)
-        addRowPair(grid, "Timeout (sec)", activeAiTimeoutSpinner, "Delay (ms)", activeAiDelaySpinner)
-        addSpacerRow(grid, 4)
-        addRowPair(grid, "Max risk level", activeAiRiskLevelCombo, "Scan mode", activeAiScanModeCombo)
-        addSpacerRow(grid, 4)
-        addRowFull(grid, "Risk level details", activeAiRiskDescription)
-        addSpacerRow(grid, 4)
-        addRowFull(grid, "SSRF OAST", activeAiUseCollaborator)
-        addSpacerRow(grid, 4)
-        addRowFull(grid, "Adaptive payloads", activeAiAdaptivePayloads)
-        addSpacerRow(grid, 8)
-        addRowFull(grid, "Status", activeAiStatusLabel)
-        addSpacerRow(grid, 4)
+        activeAiMaxConcurrentSpinner.font = DesignTokens.Typography.body
+        activeAiMaxConcurrentSpinner.toolTipText = "Maximum number of concurrent active scans."
 
-        val actionsPanel = JPanel()
-        actionsPanel.layout = BoxLayout(actionsPanel, BoxLayout.X_AXIS)
-        actionsPanel.background = UiTheme.Colors.surface
-        actionsPanel.add(activeAiViewFindings)
-        actionsPanel.add(Box.createRigidArea(java.awt.Dimension(8, 0)))
-        actionsPanel.add(activeAiViewQueue)
-        actionsPanel.add(Box.createRigidArea(java.awt.Dimension(8, 0)))
-        actionsPanel.add(activeAiClearQueue)
-        actionsPanel.add(Box.createRigidArea(java.awt.Dimension(8, 0)))
-        actionsPanel.add(activeAiResetStats)
-        addRowFull(grid, "Actions", actionsPanel)
+        activeAiMaxPayloadsSpinner.font = DesignTokens.Typography.body
+        activeAiMaxPayloadsSpinner.toolTipText = "Maximum payloads to test per injection point."
 
-        body.add(grid, BorderLayout.CENTER)
-        return sectionPanel(
-            "AI Active Scanner",
-            "Confirm vulnerabilities by sending test payloads (SQLi, XSS, LFI, CMDI, SSRF, etc.)",
-            body,
-        )
+        activeAiTimeoutSpinner.font = DesignTokens.Typography.body
+        activeAiTimeoutSpinner.toolTipText = "Request timeout in seconds."
+
+        activeAiDelaySpinner.font = DesignTokens.Typography.body
+        activeAiDelaySpinner.toolTipText = "Delay between requests in milliseconds (rate limiting)."
+
+        activeAiRiskLevelCombo.font = DesignTokens.Typography.body
+        activeAiRiskLevelCombo.background = DesignTokens.Colors.surface
+        activeAiRiskLevelCombo.toolTipText = "SAFE: read-only tests. MODERATE: may read data. DANGEROUS: may modify data."
+
+        activeAiScanModeCombo.font = DesignTokens.Typography.body
+        activeAiScanModeCombo.background = DesignTokens.Colors.surface
+        activeAiScanModeCombo.toolTipText = "BUG_BOUNTY: high-impact only. PENTEST: broad coverage. FULL: all classes."
+
+        activeAiUseCollaborator.font = DesignTokens.Typography.body
+        activeAiUseCollaborator.background = DesignTokens.Colors.surface
+        activeAiUseCollaborator.foreground = DesignTokens.Colors.onSurface
+        activeAiUseCollaborator.toolTipText = "Use Burp Collaborator for SSRF confirmation (out-of-band)."
+
+        activeAiAdaptivePayloads.font = DesignTokens.Typography.body
+        activeAiAdaptivePayloads.background = DesignTokens.Colors.surface
+        activeAiAdaptivePayloads.foreground = DesignTokens.Colors.onSurface
+        activeAiAdaptivePayloads.toolTipText = "Use AI to generate context-aware payloads based on detected tech stack and error patterns."
+
+        // --- Section A: Scanner control ---
+        val actionsPanel =
+            JPanel().apply {
+                layout = BoxLayout(this, BoxLayout.X_AXIS)
+                background = DesignTokens.Colors.surface
+                add(activeAiViewFindings)
+                add(Box.createRigidArea(Dimension(DesignTokens.Spacing.sm, 0)))
+                add(activeAiViewQueue)
+                add(Box.createRigidArea(Dimension(DesignTokens.Spacing.sm, 0)))
+                add(activeAiClearQueue)
+                add(Box.createRigidArea(Dimension(DesignTokens.Spacing.sm, 0)))
+                add(activeAiResetStats)
+            }
+
+        val gridA = formGrid()
+        addRowFull(gridA, "Enable scanner", activeAiEnabled)
+        addSpacerRow(gridA, DesignTokens.Spacing.xs)
+        addRowFull(gridA, "In-scope only", activeAiScopeOnly)
+        addSpacerRow(gridA, DesignTokens.Spacing.xs)
+        addRowFull(gridA, "Auto-queue findings", activeAiAutoFromPassive)
+        addSpacerRow(gridA, DesignTokens.Spacing.xs)
+        addRowFull(gridA, "Status", activeAiStatusLabel)
+        addSpacerRow(gridA, DesignTokens.Spacing.xs)
+        addRowFull(gridA, "Actions", actionsPanel)
+        val sectionA =
+            AccordionPanel(
+                "Scanner control",
+                "Enable active testing and define scope constraints",
+                gridA,
+                initiallyExpanded = true,
+            )
+
+        // --- Section B: Scan parameters ---
+        val gridB = formGrid()
+        addRowPair(gridB, "Max concurrent", activeAiMaxConcurrentSpinner, "Max payloads", activeAiMaxPayloadsSpinner)
+        addSpacerRow(gridB, DesignTokens.Spacing.xs)
+        addRowPair(gridB, "Timeout (s)", activeAiTimeoutSpinner, "Delay (ms)", activeAiDelaySpinner)
+        addSpacerRow(gridB, DesignTokens.Spacing.xs)
+        addRowFull(gridB, "Risk level", activeAiRiskLevelCombo)
+        addSpacerRow(gridB, DesignTokens.Spacing.xs)
+        addRowFull(gridB, "Risk level details", activeAiRiskDescription)
+        addSpacerRow(gridB, DesignTokens.Spacing.xs)
+        addRowFull(gridB, "Scan mode", activeAiScanModeCombo)
+        addSpacerRow(gridB, DesignTokens.Spacing.xs)
+        addRowFull(gridB, "Use Collaborator", activeAiUseCollaborator)
+        addSpacerRow(gridB, DesignTokens.Spacing.xs)
+        addRowFull(gridB, "Adaptive payloads", activeAiAdaptivePayloads)
+        val sectionB =
+            AccordionPanel(
+                "Scan parameters",
+                "Concurrency, payloads, timing, risk level and mode",
+                gridB,
+                initiallyExpanded = true,
+            )
+
+        val body =
+            JPanel().apply {
+                layout = BoxLayout(this, BoxLayout.Y_AXIS)
+                background = DesignTokens.Colors.surface
+                border = EmptyBorder(DesignTokens.Spacing.sectionPad, DesignTokens.Spacing.sectionPad, DesignTokens.Spacing.sectionPad, DesignTokens.Spacing.sectionPad)
+                add(sectionA)
+                add(Box.createRigidArea(Dimension(0, DesignTokens.Spacing.sm)))
+                add(sectionB)
+            }
+        return body
     }
 }

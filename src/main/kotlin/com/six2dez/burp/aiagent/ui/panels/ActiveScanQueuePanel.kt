@@ -2,7 +2,7 @@ package com.six2dez.burp.aiagent.ui.panels
 
 import com.six2dez.burp.aiagent.scanner.ActiveAiScanner
 import com.six2dez.burp.aiagent.scanner.ActiveScanQueueItem
-import com.six2dez.burp.aiagent.ui.UiTheme
+import com.six2dez.burp.aiagent.ui.design.DesignTokens
 import java.awt.BorderLayout
 import java.awt.Dialog
 import java.awt.Dimension
@@ -11,6 +11,7 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import javax.swing.*
+import javax.swing.border.EmptyBorder
 import javax.swing.table.AbstractTableModel
 
 object ActiveScanQueuePanel {
@@ -44,14 +45,19 @@ object ActiveScanQueuePanel {
         private val refreshTimer = javax.swing.Timer(2000) { refreshQueue() }
 
         init {
-            layout = BorderLayout(10, 10)
+            layout = BorderLayout(DesignTokens.Spacing.sm + 2, DesignTokens.Spacing.sm + 2)
             minimumSize = Dimension(900, 360)
             preferredSize = Dimension(1024, 460)
-            rootPane.border = BorderFactory.createEmptyBorder(12, 12, 12, 12)
+            rootPane.border = BorderFactory.createEmptyBorder(
+                DesignTokens.Spacing.md,
+                DesignTokens.Spacing.md,
+                DesignTokens.Spacing.md,
+                DesignTokens.Spacing.md,
+            )
 
             val infoLabel = JLabel("Queued active scanner targets (snapshot). Select rows to cancel specific items.")
-            infoLabel.font = UiTheme.Typography.body
-            infoLabel.foreground = UiTheme.Colors.onSurfaceVariant
+            infoLabel.font = DesignTokens.Typography.body
+            infoLabel.foreground = DesignTokens.Colors.onSurfaceVariant
             add(infoLabel, BorderLayout.NORTH)
 
             configureTable()
@@ -79,28 +85,28 @@ object ActiveScanQueuePanel {
         }
 
         private fun configureTable() {
-            table.font = UiTheme.Typography.body
+            table.font = DesignTokens.Typography.body
             table.rowHeight = 24
             table.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION)
             table.autoCreateRowSorter = true
             table.fillsViewportHeight = true
-            table.background = UiTheme.Colors.surface
-            table.foreground = UiTheme.Colors.onSurface
-            table.gridColor = UiTheme.Colors.outlineVariant
-            table.tableHeader.font = UiTheme.Typography.label
-            table.tableHeader.background = UiTheme.Colors.surface
-            table.tableHeader.foreground = UiTheme.Colors.onSurface
+            table.background = DesignTokens.Colors.surface
+            table.foreground = DesignTokens.Colors.onSurface
+            table.gridColor = DesignTokens.Colors.borderSubtle
+            table.tableHeader.font = DesignTokens.Typography.label
+            table.tableHeader.background = DesignTokens.Colors.surface
+            table.tableHeader.foreground = DesignTokens.Colors.onSurface
         }
 
         private fun buildFooter(): JPanel {
-            val footer = JPanel(BorderLayout(8, 8))
-            footer.background = UiTheme.Colors.surface
+            val footer = JPanel(BorderLayout(DesignTokens.Spacing.sm, DesignTokens.Spacing.sm))
+            footer.background = DesignTokens.Colors.surface
 
-            statusLabel.font = UiTheme.Typography.body
-            statusLabel.foreground = UiTheme.Colors.onSurfaceVariant
+            statusLabel.font = DesignTokens.Typography.body
+            statusLabel.foreground = DesignTokens.Colors.onSurfaceVariant
 
-            val buttons = JPanel(FlowLayout(FlowLayout.RIGHT, 8, 0))
-            buttons.background = UiTheme.Colors.surface
+            val buttons = JPanel(FlowLayout(FlowLayout.RIGHT, DesignTokens.Spacing.sm, 0))
+            buttons.background = DesignTokens.Colors.surface
             styleButton(refreshButton, outlined = true)
             styleButton(cancelSelectedButton, outlined = true)
             styleButton(clearQueueButton, outlined = true)
@@ -119,14 +125,14 @@ object ActiveScanQueuePanel {
             button: JButton,
             outlined: Boolean,
         ) {
-            button.font = UiTheme.Typography.label
-            button.background = UiTheme.Colors.surface
-            button.foreground = UiTheme.Colors.primary
+            button.font = DesignTokens.Typography.label
+            button.background = DesignTokens.Colors.surface
+            button.foreground = DesignTokens.Colors.primary
             button.isFocusPainted = false
             if (outlined) {
-                button.border = BorderFactory.createLineBorder(UiTheme.Colors.outline, 1, true)
+                button.border = BorderFactory.createLineBorder(DesignTokens.Colors.border, 1, true)
             } else {
-                button.border = BorderFactory.createEmptyBorder(6, 12, 6, 12)
+                button.border = EmptyBorder(DesignTokens.Spacing.sm - 2, DesignTokens.Spacing.md, DesignTokens.Spacing.sm - 2, DesignTokens.Spacing.md)
             }
         }
 
