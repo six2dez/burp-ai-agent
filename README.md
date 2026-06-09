@@ -13,6 +13,7 @@ Custom AI Agent is an extension for Burp Suite that integrates AI into your secu
 
 - **11 AI Backends** — Burp AI (built-in), Ollama, LM Studio, NVIDIA NIM, Perplexity, Generic OpenAI-compatible, Gemini CLI, Claude CLI, Codex CLI, OpenCode CLI, Copilot CLI.
 - **59 MCP Tools** — Let Claude Desktop (or any MCP client) drive Burp autonomously (8 extension-native AI tools in the BApp Store build, all 59 in the full build).
+- **Scoped MCP Access** — Optionally confine every MCP tool to your in-scope hosts, so external AI clients can't reach out-of-scope targets through Burp.
 - **62 Vulnerability Classes** — Passive and Active AI scanners across injection, auth, crypto, and more. The passive scanner runs as a Burp `PassiveScanCheck` (Burp Pro).
 - **Available on the BApp Store** — Install **Custom AI Agent** directly from Burp's BApp Store, or grab the full build from Releases.
 - **Theme-Aware UI** — An internal design system styles the settings panel and re-themes automatically with Burp's light/dark switch.
