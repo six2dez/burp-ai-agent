@@ -22,7 +22,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 5: Documentation Refresh** - README, `burp-ai-agent.six2dez.com`, and `SPEC.md` reflect the three Unreleased features
 - [ ] **Phase 6: v0.7.0 Release Cut** - Promote CHANGELOG, bump version, build, tag, publish JAR + SBOM + SHA-256, CI green on matrix
 - [x] **Phase 7: Proxy Transport + MCP Scope Hardening** - Close #69: route all AI-backend HTTP via Montoya, small-model context defaults, MCP in-scope-only enforcement (completed 2026-05-27)
-- [ ] **Phase 8: BApp Store resubmission — MCP pivot + compliance** - Close #231 review: store-build MCP exposes only extension-native AI tools (generic Montoya tools gated to a GitHub full build), gate all AI calls on `ai.isEnabled()`, migrate passive scan to `PassiveScanCheck.doCheck()`, confirm name
+- [x] **Phase 8: BApp Store resubmission — MCP pivot + compliance** - Close #231 review: store-build MCP exposes only extension-native AI tools (generic Montoya tools gated to a GitHub full build), gate all AI calls on `ai.isEnabled()`, migrate passive scan to `PassiveScanCheck.doCheck()`, confirm name (completed 2026-06-09)
 - [x] **Phase 9: Design System Foundation** - Shared spacing/typography/color tokens + reusable Swing components as the single styling source for all settings panels (completed 2026-05-29)
 - [x] **Phase 10: MCP Tools Tab Redesign** - Group tools into native (AI) vs generic (Montoya) sections, show store/full-build indicators, add live search/filter + per-group bulk toggle (completed 2026-05-29)
 - [x] **Phase 11: Settings Tabs + Theme Rollout** - Rebuild every Settings tab on the design system with scannable navigation, collapsible sections, and light/dark theme token support (completed 2026-06-02)
@@ -143,7 +143,7 @@ Plans:
 **Goal:** Get the extension accepted on the PortSwigger BApp Store (issue #231) by resolving all four review feedback points without discarding the MCP work: (1) pivot the store build's MCP server to expose only extension-native AI tools while gating the 51 generic Montoya wrappers out of the store JAR (kept in a GitHub "full" build); (2) gate AI-calling MCP tools on `api.ai().isEnabled()`; (3) migrate passive scanning from `ProxyResponseHandler` to `PassiveScanCheck.doCheck()` (modern Montoya 2026.2 interface); (4) confirm the name "Custom AI Agent".
 **Requirements**: BApp Store AI extension best practices (enhancedCapabilities + ai.isEnabled gating, Montoya networking + TLS verification, Burp AI as default provider); no generic-Montoya MCP duplication of the official server; preserve privacy redaction + audit trail; keep Burp Community support (verify the AI gate does not break non-Burp-AI backends there).
 **Depends on:** Phase 7
-**Plans:** 3/4 plans executed
+**Plans:** 4/4 plans complete
 
 Plans:
 **Wave 1**
@@ -157,7 +157,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 2 completion)*
 
-- [ ] 08-04-PLAN.md — Wave 4: artifact inspection + Community/Pro AI-gate manual verification (checkpoint) + /reopen reply draft (Wave 4, depends on 08-02 + 08-03)
+- [x] 08-04-PLAN.md — Wave 4: artifact inspection + Community/Pro AI-gate manual verification (checkpoint) + /reopen reply draft (Wave 4, depends on 08-02 + 08-03)
 
 ### Phase 6: v0.7.0 Release Cut
 
@@ -274,7 +274,7 @@ Phase 9 must complete first (design-system foundation). Phase 10 (MCP tab) and P
 | 5. Documentation Refresh | 0/TBD | Not started | - |
 | 6. v0.7.0 Release Cut | 0/TBD | Not started | - |
 | 7. Proxy Transport + MCP Scope Hardening | 3/3 | Complete   | 2026-05-27 |
-| 8. BApp Store resubmission — MCP pivot + compliance | 3/4 | In Progress|  |
+| 8. BApp Store resubmission — MCP pivot + compliance | 4/4 | Complete   | 2026-06-09 |
 | 9. Design System Foundation | 2/2 | Complete   | 2026-05-29 |
 | 10. MCP Tools Tab Redesign | 2/2 | Complete   | 2026-05-29 |
 | 11. Settings Tabs + Theme Rollout | 4/4 | Complete    | 2026-06-02 |

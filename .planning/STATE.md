@@ -4,8 +4,8 @@ milestone: v0.8.0
 milestone_name: UI/UX Overhaul
 status: milestone_complete
 stopped_at: Milestone complete (Phase 11 was final phase)
-last_updated: 2026-06-02T10:53:39.968Z
-last_activity: 2026-06-02
+last_updated: 2026-06-09T00:00:00Z
+last_activity: 2026-06-09
 progress:
   total_phases: 11
   completed_phases: 7
@@ -100,7 +100,7 @@ None yet.
 [Issues that affect future work]
 
 - GitHub issue #62 (release pipeline publishes stale code) gates the v0.7.0 release; Phase 4 must close before Phase 6 can ship.
-- Phase 8 Wave 4 (08-04-PLAN.md) remains in-progress — manual smoke + /reopen reply needed before Phase 8 completes.
+- Phase 8 code + resubmission artifacts complete and verified (v0.8.0, 308 tests green); maintainer is performing the manual Burp smoke test and posting /reopen on issue #231. 08-REOPEN-REPLY.md is ready to paste.
 
 ### Quick Tasks Completed
 
@@ -121,6 +121,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-02T10:32:07.715Z
-Stopped at: Phase 10 (MCP Tools Tab Redesign) complete — verified PASS; visual smoke approved
+Last session: 2026-06-09T00:00:00Z
+Stopped at: Phase 8 plan 04 SUMMARY + ROADMAP + STATE finalized; autonomous work complete; maintainer to post /reopen on issue #231
 Resume file: None
