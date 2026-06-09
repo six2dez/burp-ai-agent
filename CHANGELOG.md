@@ -12,6 +12,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 - **Design-system module (UI/UX Overhaul)**: a small reusable styling foundation — `DesignTokens` (spacing, typography, and theme-aware color tokens sourced from Burp's look-and-feel) plus shared Swing builders in `Components.kt` (section panels, labeled field rows, help text, buttons, and a collapsible `AccordionPanel`). It is the single styling source for the settings UI and re-themes automatically when Burp switches between light and dark.
 - **Two-artifact build for BApp Store compliance (#231)**: `./gradlew shadowJar -PstoreBuild=true` produces the store artifact `Custom-AI-Agent-0.8.0.jar`; the default `./gradlew shadowJar` produces `Custom-AI-Agent-full-0.8.0.jar`. A generated `BuildFlags.STORE_BUILD` constant gates which MCP tools register at runtime.
+- **MCP scope hardening (#69)**: a new **Restrict MCP tools to in-scope hosts** setting (`mcpScopeOnly`) backed by an `McpScopeFilter` (`filterInScope` / `rejectIfOutOfScope` / `deriveScopeUrl`) that is enforced on every scope-aware MCP tool, so an external MCP client can no longer reach out-of-scope targets through Burp.
+- **Small Model Mode (#69)**: a toggle (`smallModelMode`) that caps chat context to roughly 1500/750 characters per request/response so small local models are not overflowed, plus a KB-denominated MCP tool body-cap spinner (`mcpMaxBodyKb`) with a lower floor for tighter control over how much data MCP tools return.
 
 ### Changed
 
@@ -19,10 +21,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - **MCP Tools settings tab redesigned**: tools grouped extension-native (AI) vs generic (Montoya), each tagged with a store-build / full-build indicator, with search/filter and per-group bulk toggles — replacing the previous flat, cluttered list.
 - **All Settings tabs rebuilt on the design system**: Backend, Privacy & Logging, Passive/Active Scanner, Prompt Templates, Custom Prompts, MCP, Help, and Burp Integration share consistent layout, spacing, labels, and one-line descriptions; the dense scanner tabs use collapsible sections; every tab honours Burp's light/dark theme through tokens (no hardcoded colors). Settings keys and persistence are unchanged — saved configurations load as-is.
 - **AI MCP tools verify that AI is enabled (#231)**: the AI-calling MCP tools (`ai_analyze`, `ai_passive_scan`, …) check `ai.isEnabled()` before issuing a request, so the configured AI setting is respected. Independent third-party backends (Ollama, the CLI agents, OpenAI-compatible, …) remain usable when Burp's built-in AI is off.
+- **All AI HTTP backend traffic routes through Burp's network stack (#69)**: the HTTP backends (Ollama, LM Studio, NVIDIA NIM, Perplexity, OpenAI-compatible) now both send and health-check exclusively through Burp's Montoya HTTP transport. The silent direct-OkHttp fallback was removed and the send path now fails fast if no Burp transport is wired, so AI-backend traffic can no longer bypass Burp's upstream proxy, TLS, and logging. Transport is injected via new per-backend `setHealthCheckTransport(...)` setters, keeping the public `AiBackend` interface unchanged.
 
 ### Fixed
 
 - **Passive AI scanning now runs as a Montoya `PassiveScanCheck` (#231)**: AI passive analysis is registered via `api.scanner().registerPassiveScanCheck(...)` instead of a `ProxyResponseHandler`, so findings flow through the scanner with proper scoping and issue reporting. The old proxy-response handler was removed.
+- **OpenAI-compatible backend (#68)**: clearer diagnostics on HTTP 400 responses, and no longer sends an empty `Authorization: Bearer` header when no API key is configured.
+- **Copilot CLI backend (#67)**: the prompt is now passed as the `-p` value and stdin EOF is forced, fixing a hang where the CLI waited for input that never came.
+- **Windows CLI backends (#66)**: backslashes in CLI executable paths are preserved instead of being mangled during command tokenization.
 
 ## [0.7.0] - 2026-05-15
 
