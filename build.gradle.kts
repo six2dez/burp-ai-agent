@@ -106,6 +106,12 @@ tasks.withType<KotlinCompile> {
     }
 }
 
+// ktlint scans the generated BuildFlags.kt (added to sourceSets.main above), so its check/format
+// tasks must run after generateBuildFlags — otherwise Gradle's implicit-dependency validation fails the build.
+tasks.matching { it.name.startsWith("runKtlint") }.configureEach {
+    dependsOn(generateBuildFlags)
+}
+
 tasks.jar {
     enabled = false
 }
