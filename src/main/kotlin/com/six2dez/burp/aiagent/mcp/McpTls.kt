@@ -39,7 +39,10 @@ object McpTls {
         keystoreFile.parentFile?.mkdirs()
         val passStr = String(password)
 
-        // Use keytool from the running JDK - available in all JDK versions
+        // Use keytool from the running JDK - available in all JDK versions.
+        // SEC-02 / A3: pass the keystore password via the child-process environment (KS_PASS)
+        // using -storepass:env / -keypass:env instead of a literal argv token, so the password
+        // is never visible in a `ps aux` process listing.
         val keytoolPath = findKeytool()
         val process =
             ProcessBuilder(
@@ -57,15 +60,17 @@ object McpTls {
                 "PKCS12",
                 "-keystore",
                 keystoreFile.absolutePath,
-                "-storepass",
-                passStr,
-                "-keypass",
-                passStr,
+                "-storepass:env",
+                "KS_PASS",
+                "-keypass:env",
+                "KS_PASS",
                 "-dname",
                 "CN=burp-mcp",
                 "-sigalg",
                 "SHA256withRSA",
-            ).redirectErrorStream(true).start()
+            ).redirectErrorStream(true)
+                .also { it.environment()["KS_PASS"] = passStr }
+                .start()
 
         val output = process.inputStream.bufferedReader().readText()
         val exitCode = process.waitFor()
