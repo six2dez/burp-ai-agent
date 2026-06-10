@@ -95,14 +95,18 @@ object Redaction {
             "(?im)(^|[?&])($SENSITIVE_KEYS)=[^&\\s\"'<>]+",
         )
 
-    // (PRIV-02) JSON string values for known-sensitive key names.
+    // (PRIV-02) JSON values for known-sensitive key names.
     // Key-scoped: only a value following a matching key name is redacted; "name":"alice" is untouched.
+    // The value side (group 2) covers a quoted string OR an unquoted JSON scalar (boolean, null, or
+    // number) so numeric/boolean secrets such as {"token":12345,"pin":123456} are not missed (WR-03).
+    // Whatever the original value type, it is replaced with the quoted token "[REDACTED]", which keeps
+    // the output valid JSON.
     // Limitation: a value containing an escaped quote (e.g. "token":"ab\"cd") will be partially
     // matched (stops at the backslash). This is an accepted limitation — real API tokens are
     // [A-Za-z0-9._-] and do not contain embedded quotes; use a JSON parser if full coverage is needed.
     private val jsonSecretKeyRegex =
         Regex(
-            "(?i)(\"(?:$SENSITIVE_KEYS)\"\\s*:\\s*)\"[^\"]*\"",
+            "(?i)(\"(?:$SENSITIVE_KEYS)\"\\s*:\\s*)(\"[^\"]*\"|true|false|null|-?\\d+(?:\\.\\d+)?)",
         )
 
     // (PRIV-02) Custom user patterns compiled by setCustomPatterns. Volatile so writes from the

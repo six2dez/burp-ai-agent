@@ -221,6 +221,28 @@ class RedactionTest {
         }
     }
 
+    // WR-03: JSON values under a sensitive key that are numeric / boolean / null (not quoted
+    // strings) must also be redacted. The old "(key)":"[^"]*" pattern matched only quoted string
+    // values, silently leaking numeric secrets such as {"token":12345}. Every redacted value is
+    // normalized to the quoted token "[REDACTED]" so the output stays valid JSON.
+    @Test
+    fun bodyJsonUnquotedSecretValuesRedacted() {
+        // token / api_key / secret / sid are in SENSITIVE_KEYS; name / balance are not.
+        val body = """{"token":12345,"api_key":true,"secret":null,"sid":-42,"balance":99.5,"name":"alice"}"""
+
+        for (mode in listOf(PrivacyMode.STRICT, PrivacyMode.BALANCED)) {
+            val policy = RedactionPolicy.fromMode(mode)
+            val output = Redaction.apply(body, policy, stableHostSalt = "salt")
+            assertTrue(output.contains("\"token\":\"[REDACTED]\""), "$mode: numeric token value must be redacted")
+            assertTrue(output.contains("\"api_key\":\"[REDACTED]\""), "$mode: boolean api_key value must be redacted")
+            assertTrue(output.contains("\"secret\":\"[REDACTED]\""), "$mode: null secret value must be redacted")
+            assertTrue(output.contains("\"sid\":\"[REDACTED]\""), "$mode: negative-int sid value must be redacted")
+            assertTrue(output.contains("\"name\":\"alice\""), "$mode: non-sensitive name key must NOT be touched")
+            assertTrue(output.contains("\"balance\":99.5"), "$mode: non-sensitive numeric balance must NOT be touched")
+            assertFalse(output.contains("12345"), "$mode: original numeric token must not appear")
+        }
+    }
+
     // PRIV-02: OFF mode must leave bodies completely untouched — no form-body or JSON redaction.
     @Test
     fun offModePreservesBodies() {
