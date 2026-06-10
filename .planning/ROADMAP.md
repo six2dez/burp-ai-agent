@@ -88,7 +88,12 @@ Plans:
   3. A user can enter a custom regex pattern in Settings; the pattern is applied during redaction and the UI validates it against an adversarial ReDoS test string (50 ms timeout) before accepting it.
   4. The redaction preview dialog flags when a known secret shape (matching the same curated pattern set as the tripwire) passed through redaction, so the user can see what the pipeline missed before sending.
   5. Unit tests cover STRICT/BALANCED/OFF mode matrix for the new body-redaction paths and the custom-pattern ReDoS guard.
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 13-01-PLAN.md — HKDF host anonymization (PRIV-01) + SafeRegex ReDoS-guard foundation (redact core) [wave 1]
+- [ ] 13-02-PLAN.md — Body/form/JSON redaction + custom-pattern engine, persistence, and Privacy panel wiring (PRIV-02) [wave 2]
+- [ ] 13-03-PLAN.md — Shared SecretShapes curated set + survived-secret WARN banner in the preview dialog (PRIV-04) [wave 2]
 **UI hint**: yes
 
 ### Phase 14: Anthropic Backend + Token Budget + Listener Port
@@ -183,7 +188,7 @@ Phase 12 (SEC) must be first. Phase 13 (Privacy) and Phase 12 are sequential (av
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 12. Secrets at Rest & Transport Security | 4/4 | ✅ Complete | 2026-06-10 |
-| 13. Privacy & Redaction Hardening | 0/TBD | Not started | - |
+| 13. Privacy & Redaction Hardening | 0/3 | Not started | - |
 | 14. Anthropic Backend + Token Budget + Listener Port | 0/TBD | Not started | - |
 | 15. Pre-Send Secret Tripwire | 0/TBD | Not started | - |
 | 16. External MCP Client | 0/TBD | Not started | - |
