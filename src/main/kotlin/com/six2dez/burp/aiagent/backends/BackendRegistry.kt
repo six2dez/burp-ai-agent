@@ -12,6 +12,7 @@ import com.six2dez.burp.aiagent.backends.lmstudio.LmStudioBackendFactory
 import com.six2dez.burp.aiagent.backends.nvidia.NvidiaNimBackendFactory
 import com.six2dez.burp.aiagent.backends.ollama.OllamaBackendFactory
 import com.six2dez.burp.aiagent.backends.openai.OpenAiCompatibleBackendFactory
+import com.six2dez.burp.aiagent.backends.anthropic.AnthropicBackendFactory
 import com.six2dez.burp.aiagent.backends.perplexity.PerplexityBackendFactory
 import com.six2dez.burp.aiagent.config.AgentSettings
 import java.io.File
@@ -59,6 +60,7 @@ class BackendRegistry(
                 OpenAiCompatibleBackendFactory(),
                 CopilotCliBackendFactory(),
                 PerplexityBackendFactory(),
+                AnthropicBackendFactory(),
             ).forEach { f ->
                 val b = f.create()
                 backends[b.id] = b

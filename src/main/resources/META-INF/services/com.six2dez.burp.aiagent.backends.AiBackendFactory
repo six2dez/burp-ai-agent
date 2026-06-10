@@ -8,3 +8,4 @@ com.six2dez.burp.aiagent.backends.perplexity.PerplexityBackendFactory
 com.six2dez.burp.aiagent.backends.ollama.OllamaBackendFactory
 com.six2dez.burp.aiagent.backends.openai.OpenAiCompatibleBackendFactory
 com.six2dez.burp.aiagent.backends.cli.CopilotCliBackendFactory
+com.six2dez.burp.aiagent.backends.anthropic.AnthropicBackendFactory

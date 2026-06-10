@@ -852,6 +852,29 @@ class AgentSupervisor(
                     transport = httpTransport,
                 )
             }
+            "anthropic" -> {
+                // PATTERNS Planner Note 1: the supervisor must build x-api-key/anthropic-version
+                // headers here (NOT withBearerToken — Pitfall 2). Without this branch the backend
+                // receives empty headers and the API key is never sent.
+                val model = (settings?.anthropicModel ?: prefs.getString("anthropic.model") ?: "claude-sonnet-4-6").trim()
+                val apiKey = settings?.anthropicApiKey ?: prefs.getString("anthropic.apiKey").orEmpty()
+                val timeoutSeconds =
+                    prefs.getInteger("anthropic.timeoutSeconds") ?: Defaults.CLI_PROCESS_TIMEOUT_SECONDS
+                BackendLaunchConfig(
+                    backendId = backendId,
+                    displayName = "Anthropic",
+                    model = model,
+                    headers = mapOf("x-api-key" to apiKey, "anthropic-version" to "2023-06-01"),
+                    requestTimeoutSeconds = timeoutSeconds.toLong(),
+                    embeddedMode = embeddedMode,
+                    sessionId = sessionId,
+                    determinismMode = determinism,
+                    env = baseEnv,
+                    cliSessionId = cliSessionId,
+                    // BUG-69-01: route through Burp's HTTP stack so traffic appears in Proxy history (SC2).
+                    transport = httpTransport,
+                )
+            }
             "copilot-cli" -> {
                 val cmd = (settings?.copilotCmd ?: prefs.getString("copilot.cmd") ?: "copilot").trim()
                 val env = embeddedCliEnv(baseEnv, embeddedMode)
