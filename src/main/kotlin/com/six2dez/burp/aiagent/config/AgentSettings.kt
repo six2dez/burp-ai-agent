@@ -487,8 +487,10 @@ class AgentSettingsRepository(
         )
 
     fun save(settings: AgentSettings) {
-        // Atomically update the cached snapshot before persisting to disk
-        cachedSettings.set(settings)
+        // WR-03: all prefs writes first; update the cache only on full success so a
+        // SecretCipherException mid-save does not leave the cache holding never-persisted values.
+        // On exception, clear the cache so the next load() re-reads the (partial) prefs.
+        try {
         prefs.setString(KEY_CODEX_CMD, settings.codexCmd)
         prefs.setString(KEY_GEMINI_CMD, settings.geminiCmd)
         prefs.setString(KEY_OPENCODE_CMD, settings.opencodeCmd)
@@ -636,6 +638,14 @@ class AgentSettingsRepository(
         // 07-02 D-02: persist small-model mode alongside the other chat-context settings.
         prefs.setBoolean(KEY_CHAT_SMALL_MODEL_MODE, settings.smallModelMode)
         prefs.setInteger(KEY_SETTINGS_SCHEMA_VERSION, CURRENT_SETTINGS_SCHEMA_VERSION)
+        // All writes succeeded — now safe to cache.
+        cachedSettings.set(settings)
+        } catch (e: Exception) {
+            // WR-03: partial write — evict the cache so the next load() re-reads prefs and
+            // does not return settings that were never fully persisted.
+            cachedSettings.set(null)
+            throw e
+        }
     }
 
     private fun migrateIfNeeded() {

@@ -49,4 +49,17 @@ class SsrfGuardTest {
     fun malformedInput_isNotFlagged_noException() {
         assertFalse(SsrfGuard.isPrivateOrLinkLocal("not-a-url"))
     }
+
+    // WR-04: IPv6 Unique Local Addresses (fc00::/7) must be flagged.
+    // Java's isSiteLocalAddress() covers only the deprecated fec0::/10 range and misses these.
+
+    @Test
+    fun ipv6Ula_fc00_isFlagged() {
+        assertTrue(SsrfGuard.isPrivateOrLinkLocal("http://[fc00::1]"))
+    }
+
+    @Test
+    fun ipv6Ula_fd_isFlagged() {
+        assertTrue(SsrfGuard.isPrivateOrLinkLocal("http://[fd12:3456::1]"))
+    }
 }

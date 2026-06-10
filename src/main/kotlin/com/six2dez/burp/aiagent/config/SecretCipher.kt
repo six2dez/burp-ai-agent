@@ -91,7 +91,12 @@ class SecretCipher(
         }
         return try {
             val envelope = Base64.getDecoder().decode(ciphertext.substring(ENC_PREFIX.length))
-            // envelope[0] is the version byte; IV occupies [1..IV_LENGTH_BYTES].
+            // WR-02: validate the version byte before parsing the IV; fail-soft on mismatch so a
+            // future format change produces a clear diagnostic rather than a misleading GCM failure.
+            if (envelope.isEmpty() || envelope[0] != ENVELOPE_VERSION) {
+                LOGGER.warning("SecretCipher.decrypt: unrecognised envelope version for key: $prefKeyName")
+                return ""
+            }
             val iv = envelope.copyOfRange(1, 1 + IV_LENGTH_BYTES)
             val body = envelope.copyOfRange(1 + IV_LENGTH_BYTES, envelope.size)
             val cipher = Cipher.getInstance(TRANSFORMATION)
@@ -105,15 +110,24 @@ class SecretCipher(
     }
 
     private fun loadOrCreateMasterKey(): SecretKey {
-        val existing = prefs.getString(MASTER_KEY_PREF_KEY)
-        if (!existing.isNullOrBlank()) {
-            val bytes = Base64.getDecoder().decode(existing)
-            return SecretKeySpec(bytes, "AES")
+        // WR-01: double-checked locking on a companion-object lock guards across all SecretCipher
+        // instances that share the same Preferences namespace. On a fresh install, only one instance
+        // generates and writes the key; all others re-read the persisted value inside the lock so
+        // they converge on the same key rather than each keeping an independent in-memory key.
+        synchronized(BOOTSTRAP_LOCK) {
+            val existing = prefs.getString(MASTER_KEY_PREF_KEY)
+            if (!existing.isNullOrBlank()) {
+                val bytes = Base64.getDecoder().decode(existing)
+                return SecretKeySpec(bytes, "AES")
+            }
+            val keyBytes = ByteArray(KEY_LENGTH_BYTES)
+            secureRandom.nextBytes(keyBytes)
+            prefs.setString(MASTER_KEY_PREF_KEY, Base64.getEncoder().encodeToString(keyBytes))
+            // Re-read after write so all instances converge on the stored (authoritative) value.
+            val written = prefs.getString(MASTER_KEY_PREF_KEY)
+            val finalBytes = if (!written.isNullOrBlank()) Base64.getDecoder().decode(written) else keyBytes
+            return SecretKeySpec(finalBytes, "AES")
         }
-        val keyBytes = ByteArray(KEY_LENGTH_BYTES)
-        secureRandom.nextBytes(keyBytes)
-        prefs.setString(MASTER_KEY_PREF_KEY, Base64.getEncoder().encodeToString(keyBytes))
-        return SecretKeySpec(keyBytes, "AES")
     }
 
     /**
@@ -134,6 +148,14 @@ class SecretCipher(
     companion object {
         /** Burp Preferences key holding the Base64 per-install master key. Referenced by migration. */
         const val MASTER_KEY_PREF_KEY = "secret.master.key.v1"
+
+        /**
+         * WR-01: cross-instance lock protecting the master-key bootstrap. A single JVM may host
+         * multiple [SecretCipher] instances over the same Preferences namespace; this lock ensures
+         * only one instance generates a fresh key on a new install, while all others adopt the
+         * persisted key.
+         */
+        private val BOOTSTRAP_LOCK = Any()
 
         private const val ENC_PREFIX = "ENC1:"
         private const val TRANSFORMATION = "AES/GCM/NoPadding"

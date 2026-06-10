@@ -86,6 +86,40 @@ class SecretCipherTest {
         }
     }
 
+    /**
+     * WR-01 regression: two [SecretCipher] instances over the same [Preferences] store must
+     * converge on the same master key. Instance A encrypts; instance B (sharing prefs) must
+     * successfully decrypt the ciphertext. The cross-instance [BOOTSTRAP_LOCK] guard ensures this
+     * even on a fresh install where no key exists yet.
+     */
+    @Test
+    fun twoInstancesOverSamePrefs_secondAdoptsFirstKey_roundTripSucceeds() {
+        val prefs = InMemoryPrefs()
+        val instanceA = SecretCipher(prefs.mock)
+        val ciphertext = instanceA.encrypt("cross-instance-secret")
+        // Instance B is constructed after A has written the key to prefs.
+        val instanceB = SecretCipher(prefs.mock)
+        assertEquals(
+            "cross-instance-secret",
+            instanceB.decrypt(ciphertext),
+            "instance B must adopt the key stored by instance A — no divergent in-memory key",
+        )
+    }
+
+    /**
+     * WR-02 regression: an ENC1: envelope whose version byte does not match [ENVELOPE_VERSION]
+     * must fail-soft to "" rather than misparse the IV and attempt GCM decryption.
+     */
+    @Test
+    fun decrypt_unknownEnvelopeVersion_returnsEmptyStringFailSoft() {
+        val cipher = SecretCipher(InMemoryPrefs().mock)
+        // Build a well-formed Base64 payload but with version byte 0x02 (unknown future version).
+        val fakeEnvelope = ByteArray(1 + 12 + 32)
+        fakeEnvelope[0] = 0x02 // wrong version
+        val corrupted = "ENC1:" + java.util.Base64.getEncoder().encodeToString(fakeEnvelope)
+        assertEquals("", cipher.decrypt(corrupted), "unknown envelope version must fail soft to empty string")
+    }
+
     @Test
     fun decrypt_failure_logsOnlyPrefKeyName_neverRawValue() {
         val logger = Logger.getLogger(SecretCipher::class.java.name)

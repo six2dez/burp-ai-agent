@@ -314,6 +314,17 @@ class BackendConfigPanel(
         perplexityHeaders.text = state.perplexityHeaders
         perplexityTimeout.text = state.perplexityTimeoutSeconds
         copilotCmd.text = state.copilotCmd
+        // IN-03: show the SSRF advisory immediately on load so a previously-saved private-range
+        // URL is flagged without requiring the user to click Save first.
+        checkAndShowSsrfWarning(
+            listOf(
+                state.ollamaUrl,
+                state.lmStudioUrl,
+                state.openAiCompatUrl,
+                state.nvidiaNimUrl,
+                state.perplexityUrl,
+            ),
+        )
     }
 
     private fun buildSingleFieldPanel(

@@ -37,45 +37,56 @@ object McpTls {
         password: CharArray,
     ) {
         keystoreFile.parentFile?.mkdirs()
-        val passStr = String(password)
+        // IN-01: keep a local copy of the password array and zero it in a finally block.
+        // Do NOT zero the caller's array — resolve() still needs it to load the keystore after
+        // this function returns. The String materialisation (passStr) is unavoidable for
+        // ProcessBuilder.environment(), but its lifetime is bounded to this call frame.
+        val localPassword = password.copyOf()
+        val passStr = String(localPassword)
+        try {
+            // Use keytool from the running JDK - available in all JDK versions.
+            // SEC-02 / A3: pass the keystore password via the child-process environment (KS_PASS)
+            // using -storepass:env / -keypass:env instead of a literal argv token, so the password
+            // is never visible in a `ps aux` process listing.
+            val keytoolPath = findKeytool()
+            val process =
+                ProcessBuilder(
+                    keytoolPath,
+                    "-genkeypair",
+                    "-alias",
+                    "mcp",
+                    "-keyalg",
+                    "RSA",
+                    "-keysize",
+                    "2048",
+                    "-validity",
+                    "365",
+                    "-storetype",
+                    "PKCS12",
+                    "-keystore",
+                    keystoreFile.absolutePath,
+                    "-storepass:env",
+                    "KS_PASS",
+                    "-keypass:env",
+                    "KS_PASS",
+                    "-dname",
+                    "CN=burp-mcp",
+                    "-sigalg",
+                    "SHA256withRSA",
+                ).redirectErrorStream(true)
+                    .also { it.environment()["KS_PASS"] = passStr }
+                    .start()
 
-        // Use keytool from the running JDK - available in all JDK versions.
-        // SEC-02 / A3: pass the keystore password via the child-process environment (KS_PASS)
-        // using -storepass:env / -keypass:env instead of a literal argv token, so the password
-        // is never visible in a `ps aux` process listing.
-        val keytoolPath = findKeytool()
-        val process =
-            ProcessBuilder(
-                keytoolPath,
-                "-genkeypair",
-                "-alias",
-                "mcp",
-                "-keyalg",
-                "RSA",
-                "-keysize",
-                "2048",
-                "-validity",
-                "365",
-                "-storetype",
-                "PKCS12",
-                "-keystore",
-                keystoreFile.absolutePath,
-                "-storepass:env",
-                "KS_PASS",
-                "-keypass:env",
-                "KS_PASS",
-                "-dname",
-                "CN=burp-mcp",
-                "-sigalg",
-                "SHA256withRSA",
-            ).redirectErrorStream(true)
-                .also { it.environment()["KS_PASS"] = passStr }
-                .start()
-
-        val output = process.inputStream.bufferedReader().readText()
-        val exitCode = process.waitFor()
-        if (exitCode != 0) {
-            throw RuntimeException("keytool failed (exit $exitCode): $output")
+            val output = process.inputStream.bufferedReader().readText()
+            val exitCode = process.waitFor()
+            if (exitCode != 0) {
+                throw RuntimeException("keytool failed (exit $exitCode): $output")
+            }
+        } finally {
+            // Defense-in-depth: zero the local copy so it does not linger on the heap. The String
+            // copy (passStr) is immutable and cannot be zeroed, but its lifetime is bounded to
+            // this call frame and it will be eligible for GC as soon as this method returns.
+            localPassword.fill(' ')
         }
     }
 

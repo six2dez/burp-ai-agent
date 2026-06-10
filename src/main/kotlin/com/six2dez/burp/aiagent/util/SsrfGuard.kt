@@ -1,5 +1,6 @@
 package com.six2dez.burp.aiagent.util
 
+import java.net.Inet6Address
 import java.net.InetAddress
 import java.net.URI
 
@@ -55,8 +56,23 @@ object SsrfGuard {
             addr.isSiteLocalAddress -> true // RFC-1918: 10.x, 172.16-31.x, 192.168.x
             addr.isLinkLocalAddress -> true // 169.254.x.x and fe80::/10
             addr.hostAddress == "169.254.169.254" -> true // cloud metadata (also link-local; explicit)
+            // WR-04: IPv6 Unique Local Addresses (fc00::/7) — Java's isSiteLocalAddress() covers only
+            // the deprecated fec0::/10 site-local range and does not flag fc00::/7 (fc and fd prefixes).
+            addr is Inet6Address && isIpv6Ula(addr) -> true
             else -> false
         }
+    }
+
+    /**
+     * Returns true when [addr] falls within the IPv6 Unique Local Address range fc00::/7.
+     *
+     * The range covers all addresses whose first 7 bits are 1111110x, i.e. prefix bytes 0xFC and
+     * 0xFD. Masking the first byte with 0xFE and comparing to 0xFC detects both. This is a
+     * network-free, pure byte inspection.
+     */
+    private fun isIpv6Ula(addr: Inet6Address): Boolean {
+        val firstByte = addr.address[0].toInt() and 0xFF
+        return firstByte and 0xFE == 0xFC // matches fc00::/7 (fc and fd prefixes)
     }
 
     /**
