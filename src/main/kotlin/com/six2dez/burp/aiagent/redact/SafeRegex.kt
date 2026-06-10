@@ -99,10 +99,11 @@ object SafeRegex {
             false
         }
 
-    // Classic catastrophic-backtracking probe: 64 'a' characters followed by '!' so that
-    // patterns anchored near the end (e.g. (a+)+$) exhibit exponential backtracking.
-    // Length is short enough that even exponential blowup is detected well under 50 ms,
-    // while a benign pattern like \d+ finishes in microseconds.
-    private const val ADVERSARIAL_PROBE =
-        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa!"
+    // Catastrophic-backtracking probe for isPatternSafe.
+    // On JDK 21 the classic (a+)+$ pattern requires ~2 000+ characters before the timeout
+    // fires within the 50 ms budget (JDK 21 has improved its NFA engine for shorter inputs).
+    // Using 2 000 'a' characters followed by '!' reliably triggers the 50 ms deadline for
+    // truly pathological patterns while benign patterns (\d+, [A-Z]+, etc.) complete in
+    // microseconds on the same probe.
+    private val ADVERSARIAL_PROBE: String = "a".repeat(2_000) + "!"
 }

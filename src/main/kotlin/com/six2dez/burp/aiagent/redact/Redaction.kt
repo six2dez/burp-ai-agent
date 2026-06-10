@@ -1,8 +1,10 @@
 package com.six2dez.burp.aiagent.redact
 
+import java.io.ByteArrayOutputStream
 import java.nio.charset.StandardCharsets
-import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
+import javax.crypto.Mac
+import javax.crypto.spec.SecretKeySpec
 
 data class RedactionPolicy(
     val stripCookies: Boolean,
@@ -81,6 +83,68 @@ object Redaction {
     private val hostForwardMap = ConcurrentHashMap<String, ConcurrentHashMap<String, String>>()
     private val hostReverseMap = ConcurrentHashMap<String, ConcurrentHashMap<String, String>>()
 
+    // HKDF constants (RFC 5869, https://www.rfc-editor.org/rfc/rfc5869).
+    // App-specific context label binds the derivation to this use case (host anonymization).
+    // L = 6 bytes → 12 hex chars, preserving the exact host-<12hex>.local output format.
+    private const val HKDF_INFO = "burp-ai-agent:host"
+    private const val HKDF_OKM_LEN = 6
+
+    // RFC 5869 HMAC-SHA256 primitive.
+    // If [key] is empty a single zero byte is substituted — SecretKeySpec rejects a 0-length key
+    // (Pitfall 1: RFC 5869 allows an absent/all-zero salt but JCA requires >= 1 key byte).
+    private fun hmacSha256(
+        key: ByteArray,
+        data: ByteArray,
+    ): ByteArray {
+        val mac = Mac.getInstance("HmacSHA256")
+        val keySpec = SecretKeySpec(if (key.isEmpty()) ByteArray(1) else key, "HmacSHA256")
+        mac.init(keySpec)
+        return mac.doFinal(data)
+    }
+
+    // RFC 5869 HKDF-Extract: PRK = HMAC-Hash(salt, IKM).
+    private fun hkdfExtract(
+        salt: ByteArray,
+        ikm: ByteArray,
+    ): ByteArray = hmacSha256(salt, ikm)
+
+    // RFC 5869 HKDF-Expand: OKM = first [length] octets of T(1)|T(2)|...
+    // T(i) = HMAC(PRK, T(i-1) | info | counter_byte), T(0) = empty.
+    private fun hkdfExpand(
+        prk: ByteArray,
+        info: ByteArray,
+        length: Int,
+    ): ByteArray {
+        val out = ByteArrayOutputStream()
+        var t = ByteArray(0)
+        var counter = 1
+        while (out.size() < length) {
+            val mac = Mac.getInstance("HmacSHA256")
+            mac.init(SecretKeySpec(prk, "HmacSHA256"))
+            mac.update(t)
+            mac.update(info)
+            mac.update(counter.toByte())
+            t = mac.doFinal()
+            out.write(t)
+            counter++
+        }
+        return out.toByteArray().copyOf(length)
+    }
+
+    // Internal test seams — expose the HKDF helpers for RFC 5869 vector assertion in
+    // RedactionTest.hkdfMatchesRfc5869Vector. NOT part of the public API; only referenced
+    // from the test source set.
+    internal fun testHkdfExtract(
+        salt: ByteArray,
+        ikm: ByteArray,
+    ): ByteArray = hkdfExtract(salt, ikm)
+
+    internal fun testHkdfExpand(
+        prk: ByteArray,
+        info: ByteArray,
+        length: Int,
+    ): ByteArray = hkdfExpand(prk, info, length)
+
     fun apply(
         raw: String,
         policy: RedactionPolicy,
@@ -118,16 +182,25 @@ object Redaction {
         return out
     }
 
+    // Anonymizes [host] using RFC 5869 HKDF (HMAC-SHA256 extract-then-expand).
+    // Signature and output format (host-<12hex>.local) are preserved from the previous
+    // SHA-256 implementation so all ~10 call sites remain unchanged (Pitfall 6).
+    // salt → HKDF extract salt; host → IKM (input keying material).
     fun anonymizeHost(
         host: String,
         salt: String,
         recordMapping: Boolean = true,
     ): String {
-        val digest =
-            MessageDigest
-                .getInstance("SHA-256")
-                .digest((salt + ":" + host).toByteArray(StandardCharsets.UTF_8))
-        val short = digest.take(6).joinToString("") { "%02x".format(it) }
+        val prk = hkdfExtract(
+            salt.toByteArray(StandardCharsets.UTF_8),
+            host.toByteArray(StandardCharsets.UTF_8),
+        )
+        val okm = hkdfExpand(
+            prk,
+            HKDF_INFO.toByteArray(StandardCharsets.UTF_8),
+            HKDF_OKM_LEN,
+        )
+        val short = okm.joinToString("") { "%02x".format(it) }  // 6 bytes → 12 hex chars
         val anon = "host-$short.local"
         if (recordMapping) {
             hostForwardMap.computeIfAbsent(salt) { ConcurrentHashMap() }[host] = anon

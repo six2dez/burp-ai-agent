@@ -31,9 +31,10 @@ class SafeRegexTest {
     // input must return the original input unchanged (fail-open) and not hang.
     @Test
     fun catastrophicPatternTimesOutAndReturnsInput() {
-        // 64 'a' characters followed by '!' — the canonical catastrophic-backtracking input
-        // that maximises backtracking for patterns like (a+)+$ anchored at the end.
-        val input = "a".repeat(64) + "!"
+        // 2 000 'a' characters followed by '!' — on JDK 21 this reliably triggers the 50 ms
+        // deadline for pathological patterns like (a+)+$ anchored at the end. The shorter
+        // 64-char probe is handled by JDK 21's improved NFA engine without catastrophic blowup.
+        val input = "a".repeat(2_000) + "!"
         val pattern = Pattern.compile("(a+)+\$")
 
         val start = System.currentTimeMillis()
