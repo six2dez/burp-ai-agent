@@ -7,6 +7,7 @@ import com.six2dez.burp.aiagent.ui.design.addRowPair
 import com.six2dez.burp.aiagent.ui.design.addSpacerRow
 import com.six2dez.burp.aiagent.ui.design.applyFieldStyle
 import com.six2dez.burp.aiagent.ui.design.formGrid
+import com.six2dez.burp.aiagent.ui.design.helpLabel
 import java.awt.Dimension
 import javax.swing.Box
 import javax.swing.BoxLayout
@@ -311,10 +312,7 @@ class PassiveScanConfigPanel(
         addRowFull(
             gridF,
             "",
-            JLabel("Warn shows a chat banner. The hard cap pauses passive scanning; chat stays usable.").apply {
-                font = DesignTokens.Typography.caption
-                foreground = DesignTokens.Colors.onSurfaceVariant
-            },
+            helpLabel("Warn shows a chat banner. The hard cap pauses passive scanning; chat stays usable."),
         )
         val sectionF =
             AccordionPanel(
