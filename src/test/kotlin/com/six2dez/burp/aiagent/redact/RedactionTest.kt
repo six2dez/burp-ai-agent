@@ -257,6 +257,37 @@ class RedactionTest {
         assertEquals(input, offOutput, "OFF mode must not apply custom patterns")
     }
 
+    // PRIV-02 / CR-01: regression — custom patterns carried on a loaded settings object must
+    // become active when seeded into the engine (the App.initialize startup step), NOT only
+    // after a manual re-save. The previous bug was that App.initialize never called
+    // setCustomPatterns(settings.customRedactionPatterns), so on every Burp launch the live
+    // custom-pattern list silently reset to empty and configured secrets leaked to the backend.
+    // This exercises the load -> seed -> apply contract that App.kt now relies on, using a
+    // pattern sourced from a settings object rather than set directly inline.
+    @Test
+    fun customPatternsFromSettingsAreActiveAfterSeeding() {
+        // Stands in for AgentSettings.customRedactionPatterns as returned by
+        // AgentSettingsRepository.load() — the persisted, save-validated pattern list that
+        // App.initialize must push into the engine at startup.
+        val persistedPatterns = listOf("\\bINTERNAL-[A-Z0-9]{6}\\b")
+
+        // Sanity: the engine starts with NO custom patterns active (simulating a fresh launch
+        // before the seeding step). The pattern must NOT redact yet.
+        Redaction.setCustomPatterns(emptyList())
+        val input = "Leak check: INTERNAL-ABC123 must be stripped"
+        val strict = RedactionPolicy.fromMode(PrivacyMode.STRICT)
+        val beforeSeed = Redaction.apply(input, strict, stableHostSalt = "salt")
+        assertTrue(beforeSeed.contains("INTERNAL-ABC123"), "Pre-seed: custom pattern must be inactive")
+
+        // The App.initialize seeding step: push the loaded settings' patterns into the engine.
+        // This is exactly Redaction.setCustomPatterns(settings.customRedactionPatterns).
+        Redaction.setCustomPatterns(persistedPatterns)
+
+        val afterSeed = Redaction.apply(input, strict, stableHostSalt = "salt")
+        assertTrue(afterSeed.contains("[REDACTED]"), "Post-seed: loaded custom pattern must redact")
+        assertFalse(afterSeed.contains("INTERNAL-ABC123"), "Post-seed: original secret must not appear")
+    }
+
     // PRIV-02: A body larger than Defaults.MAX_REDACTION_BODY_CHARS must be short-circuited.
     // The body-stage redaction is skipped; the call must return promptly and not throw.
     // The over-cap secret may remain (documented size-cap behaviour).

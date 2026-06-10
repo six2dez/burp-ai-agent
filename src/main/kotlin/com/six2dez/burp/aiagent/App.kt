@@ -80,6 +80,13 @@ object App {
 
         AgentProfileLoader.ensureBundledProfilesInstalled()
         val settings = settingsRepo.load()
+        // PRIV-02 / CR-01: seed the redaction engine with persisted custom patterns so they are
+        // active immediately on launch — NOT only after the user re-saves Settings. Without this,
+        // compiledCustomPatterns resets to empty on every Burp restart and the secrets the user
+        // configured the tool to strip would be sent to the AI backend until the next manual Save.
+        // Safe to call unconditionally: persisted patterns were already validated by isPatternSafe
+        // on save, and setCustomPatterns silently drops any uncompilable entry.
+        Redaction.setCustomPatterns(settings.customRedactionPatterns)
         AgentProfileLoader.setActiveProfile(settings.agentProfile)
         aiRequestLogger.enabled = settings.aiRequestLoggerEnabled
         aiRequestLogger.maxEntries = settings.aiRequestLoggerMaxEntries
