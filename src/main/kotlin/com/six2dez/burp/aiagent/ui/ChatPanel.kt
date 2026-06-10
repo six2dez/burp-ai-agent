@@ -577,10 +577,11 @@ class ChatPanel(
                     // point (PassiveAiScanner.reconcileBudget) so chat and scanner use the SAME
                     // evaluation and the pause is released (not latched) once usage drops below the cap.
                     SwingUtilities.invokeLater {
-                        // WR-02: capture warn/cap/used from a SINGLE snapshot and feed the SAME
-                        // settings instance to the decision, so the banner renders the numbers that
-                        // drove the gate state (no second getSettings()/currentSessionTokens() read
-                        // that could skew the displayed cap/used away from the decision input).
+                        // WR-02: capture warn/cap from a SINGLE settings snapshot and feed the SAME
+                        // instance to the decision, so the banner's thresholds match the gate input.
+                        // `used` is a separate live read for display only; it can momentarily differ
+                        // from the gate's own internal read (a benign cosmetic staleness window — the
+                        // gate decision below is authoritative, not these displayed digits).
                         val s = getSettings()
                         val warn = s.tokenBudgetWarnThreshold
                         val cap = s.tokenBudgetHardCap
