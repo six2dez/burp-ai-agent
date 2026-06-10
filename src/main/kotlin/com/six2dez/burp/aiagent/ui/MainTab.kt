@@ -719,6 +719,15 @@ class MainTab(
                     else -> null
                 }
             }
+            "anthropic" -> {
+                // WR-04: validate the keyed Anthropic backend up front, like the other HTTP
+                // backends, instead of letting a blank key fall through to a raw 401 at HTTP time.
+                when {
+                    settings.anthropicApiKey.isBlank() -> "Anthropic API key is empty."
+                    settings.anthropicModel.isBlank() -> "Anthropic model is empty."
+                    else -> null
+                }
+            }
             "burp-ai" -> null
             else -> "Unsupported backend: ${settings.preferredBackendId}"
         }
