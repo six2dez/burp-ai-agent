@@ -67,6 +67,13 @@ object Redaction {
                 "x-session-token|session-token|x-csrf-token|csrf-token|x-xsrf-token" +
                 "):\\s*.+$",
         )
+    // The trailing =* captures base64/base64url padding on the token. The token char-class
+    // excludes '=', so =* greedily consumes ANY run of '=' immediately after the token — including
+    // '=' that merely follow the credential (WR-04). This is intentional and fail-safe: it
+    // over-redacts trailing '=' rather than risk leaking part of a padded token. The whole
+    // Authorization header is already replaced by authHeaderRegex; bearerRegex additionally covers
+    // bearer tokens embedded in bodies/JSON/free text, where a few trailing '=' being swallowed is
+    // a benign over-redaction, not a leak.
     private val bearerRegex = Regex("(?i)bearer\\s+[A-Za-z0-9\\-\\._~\\+\\/]+=*")
     private val basicAuthRegex = Regex("(?i)basic\\s+[A-Za-z0-9\\+\\/=]+")
     private val cookieHeaderRegex = Regex("(?im)^cookie:\\s*.+$")
