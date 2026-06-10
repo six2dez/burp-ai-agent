@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v0.8.0
-milestone_name: UI/UX Overhaul
-status: milestone_complete
-stopped_at: Milestone complete (Phase 11 was final phase)
-last_updated: 2026-06-09T00:00:00Z
-last_activity: 2026-06-09
+milestone: v0.9.0
+milestone_name: Hardening, Quality & New Capabilities
+status: planning
+last_updated: "2026-06-10T09:57:49.592Z"
+last_activity: 2026-06-10
 progress:
-  total_phases: 11
-  completed_phases: 7
-  total_plans: 22
-  completed_plans: 21
-  percent: 64
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-05-29)
 
 ## Current Position
 
-Phase: 11
-Plan: Not started
-Status: Milestone complete
-Last activity: 2026-06-02
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-06-10 — Milestone v0.9.0 started
 
 ## Performance Metrics
 

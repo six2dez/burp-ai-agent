@@ -8,19 +8,23 @@ A production-grade Burp Suite extension (Kotlin + Montoya API) that embeds an AI
 
 Bring modern AI to a real security workflow **without** leaking sensitive traffic to third-party providers — privacy controls and an audit trail are non-negotiable, AI capability is additive.
 
-## Current Milestone: v0.8.0 — UI/UX Overhaul
+## Current Milestone: v0.9.0 — Hardening, Quality & New Capabilities
 
-**Status:** ✓ COMPLETE (2026-06-02) — all three phases delivered: Phase 9 (design-system foundation), Phase 10 (MCP tools tab redesign), Phase 11 (settings tabs + theme rollout). UI-01..UI-08 validated; Phase 11 verified PASS (12/12), human visual + persistence checkpoint approved. Ready for `/gsd-complete-milestone`.
+**Status:** ▶ IN PROGRESS — started 2026-06-10. Derived from the approved project-review roadmap (`~/.claude/plans/haz-una-revision-completa-sleepy-puddle.md`); 18 items across 6 themes.
 
-**Goal:** Redesign the extension's Swing UI on a small reusable design system, applied across the Settings area and all its tabs — with special focus on the MCP tools tab (group extension-native vs generic tools, mark store-build vs full-build, fix the current clutter).
+**Goal:** Harden privacy/security, pay down quality and maintainability debt, and add new capabilities on the stable v0.8.0 base — without compromising the non-negotiable core value (privacy controls + audit trail).
 
-**Target features:**
-- Shared design-system module (spacing / typography / color tokens + reusable Swing components — section headers, labeled fields, help text, buttons) as the single styling source for settings panels
-- Every Settings tab rebuilt on the design system — consistent layout, spacing, grouping, labels, descriptions
-- MCP tools tab reorganized: grouped by extension-native (AI) vs generic (Montoya), with store-build / full-build indicators, search/filter, and per-group bulk toggle
-- Light/dark theme consistency via tokens; no behaviour or settings-persistence regressions
+**Target features (6 themes):**
+- **Privacy & redaction** — host-anonymization correctness (A1), broaden redaction pattern coverage + user-configurable patterns + tests (A2), pre-send secret tripwire (C4), redaction-coverage report in UI (C6)
+- **Secrets at rest & transport** — encrypt stored API keys / TLS keystore password (C2), remove keytool argv password exposure (A3), soft SSRF warning on user-set backend URLs (A6)
+- **Reliability & concurrency** — EDT-confinement audit of ChatPanel session maps (A4), resource hardening (CLI temp files, bounded MCP shutdown, anonymization-map cleanup) (A5), uniform HTTP timeouts + CircuitBreaker (B6), CLI timeout bug #71
+- **Quality & maintainability** — split the 3 mega-files (B1), raise scanner/CLI/cache test coverage (B2), add detekt + blocking ktlint (B3), exception-logging audit of 136 catch sites (B4), fix generateBuildFlags build wiring via sourceSets (B5)
+- **New capabilities** — native Anthropic Messages API backend (C1), external/custom MCP servers #41 (C3), proxy-history listener port #70 (C5), per-session token-budget guardrails (C7)
+- **Planning reconciliation** — sync `.planning/` with shipped releases v0.7.0/v0.8.0 and closed issues #62/#66/#67/#68/#69 (A7)
 
-**Carryover:** v0.7.0 (Release Cut) stays open — phases 1, 4, 5, 6 and phase 8 (BApp Store resubmission, pending manual smoke + `/reopen`) remain in the roadmap to finish later. Nothing archived.
+**Embedded decisions (resolved at each item's discuss/plan-phase):** A1 = implement real HKDF vs documentation-only fix; C2 = OS keychain vs portable passphrase-derived encryption.
+
+**Predecessor:** v0.8.0 (UI/UX Overhaul) shipped 2026-06-02 — all features moved to Validated below; v0.7.0 (Release Cut) shipped 2026-05-15. Both tagged and released.
 
 ## Requirements
 
@@ -53,12 +57,14 @@ Bring modern AI to a real security workflow **without** leaking sensitive traffi
 
 ### Active
 
-<!-- Current scope: stabilize the Unreleased changelog block and ship v0.7.0. -->
+<!-- Current scope: v0.9.0 — hardening, quality, and new capabilities. See REQUIREMENTS.md for REQ-IDs and ROADMAP.md for phases. -->
 
-- [ ] **Audit and harden the three Unreleased features** (Perplexity backend ✓ Phase 1, AI-scan-on-insertion-point, custom-prompt-library UX) — verify they meet the SPEC's acceptance bar, fill any test gaps, fix open issues that surfaced during the recent "Improvements 2 / Fixes AI blockers / UX settings" iteration. Phase 1 (Perplexity) locked PPLX-01..05 with wire-level MockWebServer tests + settings-migration test; one HUMAN-UAT smoke pending maintainer pass.
-- [ ] **Finalize v0.7.0 release** — version bump, CHANGELOG promotion from `[Unreleased]` to `[0.7.0]`, release notes, tag, JAR upload, SBOM, SHA-256 checksum (via existing release workflow)
-- [ ] **Documentation pass** — README, `docs/`, and `burp-ai-agent.six2dez.com` reflect Perplexity backend, insertion-point scanning, and prompt-library UX changes
-- [ ] **Open-issue sweep** — review and close / triage outstanding GitHub issues against the new release scope
+- [ ] **Privacy & redaction hardening** — host-anonymization correctness, broaden redaction coverage + user-configurable patterns, pre-send secret tripwire, redaction-coverage report
+- [ ] **Secrets at rest & transport security** — encrypt stored API keys / TLS keystore password, remove keytool argv exposure, SSRF warning on backend URLs
+- [ ] **Reliability & concurrency hardening** — ChatPanel EDT audit, resource cleanup, uniform HTTP timeouts/CircuitBreaker, CLI timeout bug #71
+- [ ] **Quality & maintainability** — split mega-files, raise test coverage, detekt + blocking ktlint, exception-logging audit, build-wiring fix
+- [ ] **New capabilities** — native Anthropic backend, external MCP servers (#41), proxy-history listener port (#70), token-budget guardrails
+- [ ] **Planning reconciliation** — sync `.planning/` with shipped v0.7.0/v0.8.0 and closed issues (A7)
 
 ### Out of Scope
 
@@ -115,4 +121,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-02 — Milestone v0.8.0 (UI/UX Overhaul) COMPLETE (Phases 9–11 delivered; UI-01..UI-08 validated); v0.7.0 still carried over*
+*Last updated: 2026-06-10 — Milestone v0.9.0 (Hardening, Quality & New Capabilities) started; v0.7.0 (2026-05-15) and v0.8.0 (2026-06-02) shipped and tagged*
