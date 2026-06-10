@@ -5,6 +5,7 @@ import com.six2dez.burp.aiagent.ui.design.DesignTokens
 import com.six2dez.burp.aiagent.ui.design.addRowFull
 import com.six2dez.burp.aiagent.ui.design.addRowPair
 import com.six2dez.burp.aiagent.ui.design.addSpacerRow
+import com.six2dez.burp.aiagent.ui.design.applyFieldStyle
 import com.six2dez.burp.aiagent.ui.design.formGrid
 import java.awt.Dimension
 import javax.swing.Box
@@ -48,6 +49,9 @@ class PassiveScanConfigPanel(
     private val passiveAiViewFindings: JButton,
     private val scannerTriageButton: JButton,
     private val passiveAiResetStats: JButton,
+    // CAP-04: token-budget threshold fields (0 = unlimited / off)
+    private val tokenBudgetWarnField: JTextField,
+    private val tokenBudgetHardCapField: JTextField,
 ) : ConfigPanel {
     override fun build(): JPanel {
         passiveAiEnabled.font = DesignTokens.Typography.body
@@ -286,6 +290,40 @@ class PassiveScanConfigPanel(
                 initiallyExpanded = false,
             )
 
+        // --- Section F: Token budget ---
+        applyFieldStyle(tokenBudgetWarnField)
+        applyFieldStyle(tokenBudgetHardCapField)
+        tokenBudgetWarnField.toolTipText = "Show a chat banner when session tokens exceed this value. 0 = unlimited (off)."
+        tokenBudgetHardCapField.toolTipText = "Pause passive scanning when session tokens exceed this value. 0 = unlimited (off)."
+        val gridF = formGrid()
+        addRowFull(
+            gridF,
+            "Warn threshold (tokens)",
+            tokenBudgetWarnField,
+        )
+        addSpacerRow(gridF, DesignTokens.Spacing.xs)
+        addRowFull(
+            gridF,
+            "Hard cap (tokens)",
+            tokenBudgetHardCapField,
+        )
+        addSpacerRow(gridF, DesignTokens.Spacing.xs)
+        addRowFull(
+            gridF,
+            "",
+            JLabel("Warn shows a chat banner. The hard cap pauses passive scanning; chat stays usable.").apply {
+                font = DesignTokens.Typography.caption
+                foreground = DesignTokens.Colors.onSurfaceVariant
+            },
+        )
+        val sectionF =
+            AccordionPanel(
+                "Token budget",
+                "Optional per-session limits. 0 means unlimited (off).",
+                gridF,
+                initiallyExpanded = false,
+            )
+
         val body =
             JPanel().apply {
                 layout = BoxLayout(this, BoxLayout.Y_AXIS)
@@ -300,6 +338,8 @@ class PassiveScanConfigPanel(
                 add(sectionD)
                 add(Box.createRigidArea(Dimension(0, DesignTokens.Spacing.sm)))
                 add(sectionContext)
+                add(Box.createRigidArea(Dimension(0, DesignTokens.Spacing.sm)))
+                add(sectionF)
             }
         return body
     }

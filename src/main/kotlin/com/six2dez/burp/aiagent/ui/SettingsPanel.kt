@@ -493,6 +493,18 @@ class SettingsPanel(
 
     private val scannerTriageButton = JButton("Open triage")
 
+    // CAP-04: token-budget threshold fields; displayed in PassiveScanConfigPanel Section F
+    private val tokenBudgetWarnField =
+        JTextField(
+            if (settings.tokenBudgetWarnThreshold > 0) settings.tokenBudgetWarnThreshold.toString() else "",
+            10,
+        )
+    private val tokenBudgetHardCapField =
+        JTextField(
+            if (settings.tokenBudgetHardCap > 0) settings.tokenBudgetHardCap.toString() else "",
+            10,
+        )
+
     init {
         refreshProfileOptions()
 
@@ -1122,6 +1134,8 @@ class SettingsPanel(
             perplexityTimeoutSeconds = perplexityTimeoutSeconds,
             anthropicModel = backendState.anthropicModel,
             anthropicApiKey = backendState.anthropicApiKey,
+            tokenBudgetWarnThreshold = tokenBudgetWarnField.text.trim().toIntOrNull()?.coerceAtLeast(0) ?: 0,
+            tokenBudgetHardCap = tokenBudgetHardCapField.text.trim().toIntOrNull()?.coerceAtLeast(0) ?: 0,
             copilotCmd = backendState.copilotCmd,
             requestPromptTemplate = promptRequest.text.trim(),
             issuePromptTemplate = promptIssueFull.text.trim(),
@@ -1386,6 +1400,9 @@ class SettingsPanel(
         contextRequestBodyMaxCharsSpinner.value = updated.contextRequestBodyMaxChars
         contextResponseBodyMaxCharsSpinner.value = updated.contextResponseBodyMaxChars
         contextCompactJson.isSelected = updated.contextCompactJson
+        // CAP-04: token-budget thresholds (show blank when 0 = off)
+        tokenBudgetWarnField.text = if (updated.tokenBudgetWarnThreshold > 0) updated.tokenBudgetWarnThreshold.toString() else ""
+        tokenBudgetHardCapField.text = if (updated.tokenBudgetHardCap > 0) updated.tokenBudgetHardCap.toString() else ""
         refreshPassiveAiStatus()
 
         // Active AI Scanner settings
@@ -1560,6 +1577,8 @@ class SettingsPanel(
             passiveAiViewFindings = passiveAiViewFindings,
             scannerTriageButton = scannerTriageButton,
             passiveAiResetStats = passiveAiResetStats,
+            tokenBudgetWarnField = tokenBudgetWarnField,
+            tokenBudgetHardCapField = tokenBudgetHardCapField,
         ).build()
 
     private fun refreshPassiveAiStatus() {

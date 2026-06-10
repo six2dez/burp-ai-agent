@@ -19,6 +19,9 @@ import com.six2dez.burp.aiagent.ui.components.ActionCard
 import com.six2dez.burp.aiagent.ui.components.ContextPreviewDialog
 import com.six2dez.burp.aiagent.ui.components.PrivacyPill
 import com.six2dez.burp.aiagent.ui.components.ToolInvocationDialog
+import com.six2dez.burp.aiagent.scanner.PassiveAiScanner
+import com.six2dez.burp.aiagent.ui.components.SubtleNotice
+import com.six2dez.burp.aiagent.util.BudgetGuard
 import com.six2dez.burp.aiagent.util.TokenTracker
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.contentOrNull
@@ -77,6 +80,8 @@ class ChatPanel(
     private val showError: (String) -> Unit,
     private val onStatusChanged: () -> Unit,
     private val onResponseReady: () -> Unit,
+    // CAP-04: injected to call setBudgetPaused(true) when hard cap is reached
+    private val passiveScanner: PassiveAiScanner? = null,
 ) {
     val root: JComponent = JPanel(BorderLayout())
     private val sessionsModel = DefaultListModel<ChatSession>()
@@ -106,6 +111,9 @@ class ChatPanel(
     private val globalTokenLabel = JLabel("")
     private val sessionTokenBar = TokenBar()
     private val globalTokenBar = TokenBar()
+
+    // CAP-04: single SubtleNotice instance for budget warnings; starts hidden
+    private val budgetNotice = SubtleNotice()
 
     init {
         root.background = UiTheme.Colors.surface
@@ -237,6 +245,7 @@ class ChatPanel(
 
         val chatContainer = JPanel(BorderLayout())
         chatContainer.background = UiTheme.Colors.surface
+        chatContainer.add(budgetNotice, BorderLayout.NORTH) // CAP-04: token budget banner (starts hidden)
         chatContainer.add(chatCards, BorderLayout.CENTER)
         chatContainer.add(inputPanel(), BorderLayout.SOUTH)
 
@@ -563,6 +572,26 @@ class ChatPanel(
                         inputTokensActual = usage?.inputTokens,
                         outputTokensActual = usage?.outputTokens,
                     )
+                    // CAP-04: evaluate token budget after each response and update banner / pause scanner
+                    SwingUtilities.invokeLater {
+                        val warn = getSettings().tokenBudgetWarnThreshold
+                        val cap = getSettings().tokenBudgetHardCap
+                        val used = BudgetGuard.currentSessionTokens()
+                        when (BudgetGuard.evaluate(used, warn, cap)) {
+                            BudgetGuard.State.CAP -> {
+                                budgetNotice.setMessage(
+                                    SubtleNotice.Level.RISK,
+                                    "Token budget reached (${formatChars(used)}/${formatChars(cap.toLong())}). Passive scanning paused; chat is still available.",
+                                )
+                                passiveScanner?.setBudgetPaused(true)
+                            }
+                            BudgetGuard.State.WARN -> budgetNotice.setMessage(
+                                SubtleNotice.Level.WARN,
+                                "Token budget warning: ${formatChars(used)} of ${formatChars(warn.toLong())} tokens used this session.",
+                            )
+                            BudgetGuard.State.OFF -> budgetNotice.hideNotice()
+                        }
+                    }
                     if (session != null) {
                         val tokIn =
                             usage?.inputTokens?.toLong()

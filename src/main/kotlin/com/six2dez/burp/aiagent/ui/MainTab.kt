@@ -106,6 +106,8 @@ class MainTab(
                 showError = { showError(it) },
                 onStatusChanged = { refreshStatus() },
                 onResponseReady = { notifyResponseReady() },
+                // CAP-04: thread scanner reference so ChatPanel can call setBudgetPaused(true) on hard cap
+                passiveScanner = passiveAiScanner,
             )
         root.background = UiTheme.Colors.surface
 
