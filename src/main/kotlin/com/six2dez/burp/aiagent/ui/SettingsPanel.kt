@@ -197,6 +197,17 @@ class SettingsPanel(
         }
     private val privacyNotice = com.six2dez.burp.aiagent.ui.components.SubtleNotice()
     private val saveFeedbackLabel = JLabel("No recent save activity.")
+    // PRIV-02: custom-pattern text area (one regex per line) + inline validation-feedback label.
+    // Both are injected into PrivacyConfigPanel; validation runs on Save via SafeRegex.isPatternSafe.
+    private val customPatternsArea =
+        JTextArea(settings.customRedactionPatterns.joinToString("\n"), 4, 20).also {
+            com.six2dez.burp.aiagent.ui.design.applyAreaStyle(it)
+        }
+    private val patternsFeedbackLabel =
+        JLabel("").also {
+            it.font = DesignTokens.Typography.caption
+            it.isVisible = false
+        }
     private val mcpEnabled = ToggleSwitch(settings.mcpSettings.enabled)
     private val mcpHost =
         JTextField(settings.mcpSettings.host, 15).apply {
@@ -1183,7 +1194,60 @@ class SettingsPanel(
             // 07-02 D-02: ToggleSwitch.isSelected is inherited from JToggleButton and returns
             // kotlin.Boolean — verified at compile time by this AgentSettings constructor call.
             smallModelMode = chatSmallModelMode.isSelected,
+            // PRIV-02: validate each non-blank pattern line via SafeRegex.isPatternSafe.
+            // Invalid/slow lines are dropped (not persisted); feedback label shows outcome.
+            customRedactionPatterns = validateAndCollectCustomPatterns(),
         )
+    }
+
+    /**
+     * Splits the custom-patterns text area by newline, validates each non-blank line via
+     * SafeRegex.isPatternSafe (regex compile + 50 ms ReDoS probe), and updates the
+     * patternsFeedbackLabel with statusError / statusSuccess accordingly.
+     *
+     * Valid lines are returned; invalid/slow lines are dropped (not persisted).
+     * The feedback label is hidden when the area is empty.
+     */
+    private fun validateAndCollectCustomPatterns(): List<String> {
+        val lines =
+            customPatternsArea.text
+                .split('\n')
+                .map { it.trim() }
+                .filter { it.isNotBlank() }
+
+        if (lines.isEmpty()) {
+            patternsFeedbackLabel.isVisible = false
+            return emptyList()
+        }
+
+        val rejected = mutableListOf<String>()
+        val valid = mutableListOf<String>()
+        for (line in lines) {
+            if (com.six2dez.burp.aiagent.redact.SafeRegex.isPatternSafe(line)) {
+                valid.add(line)
+            } else {
+                rejected.add(line)
+            }
+        }
+
+        // Update the feedback label — re-read tokens each time (UI-SPEC Light/dark rule 4).
+        if (rejected.isNotEmpty()) {
+            val msg =
+                if (rejected.size == 1) {
+                    "Pattern rejected: invalid regex or too slow (ReDoS guard). Fix it and save again."
+                } else {
+                    "${rejected.size} patterns rejected: invalid regex or too slow. Fix the highlighted lines and save again."
+                }
+            patternsFeedbackLabel.text = msg
+            patternsFeedbackLabel.foreground = DesignTokens.Colors.statusError
+            patternsFeedbackLabel.isVisible = true
+        } else {
+            patternsFeedbackLabel.text = "Custom patterns saved."
+            patternsFeedbackLabel.foreground = DesignTokens.Colors.statusSuccess
+            patternsFeedbackLabel.isVisible = true
+        }
+
+        return valid
     }
 
     private fun applySettingsToUi(updated: AgentSettings) {
@@ -1247,6 +1311,9 @@ class SettingsPanel(
         bountyPromptDir.text = updated.bountyPromptDir
         bountyPromptAutoCreateIssues.isSelected = updated.bountyPromptAutoCreateIssues
         customPromptLibraryEditor.load(updated.customPromptLibrary)
+        // PRIV-02: reload custom patterns into the text area; clear validation feedback on reload.
+        customPatternsArea.text = updated.customRedactionPatterns.joinToString("\n")
+        patternsFeedbackLabel.isVisible = false
         bountyPromptIssueThreshold.value = updated.bountyPromptIssueConfidenceThreshold
         bountyPromptEnabledIds.text = updated.bountyPromptEnabledPromptIds.joinToString(",")
         aiLoggerEnabled.isSelected = updated.aiRequestLoggerEnabled
@@ -1399,6 +1466,10 @@ class SettingsPanel(
             updated.toPreprocessorSettings(),
         )
 
+        // PRIV-02: push validated custom patterns into the live redaction pipeline so edits
+        // take effect without a restart (per 13-RESEARCH A7 / Open Question 1).
+        com.six2dez.burp.aiagent.redact.Redaction.setCustomPatterns(updated.customRedactionPatterns)
+
         // Apply passive AI scanner settings
         passiveAiScanner.rateLimitSeconds = updated.passiveAiRateSeconds
         passiveAiScanner.scopeOnly = updated.passiveAiScopeOnly
@@ -1450,6 +1521,8 @@ class SettingsPanel(
             saveFeedback = saveFeedbackLabel,
             aiLoggerEnabled = aiLoggerEnabled,
             aiLoggerMaxEntries = aiLoggerMaxEntries,
+            customPatternsArea = customPatternsArea,
+            patternsFeedback = patternsFeedbackLabel,
         ).build()
 
     private fun passiveAiScannerSection(): JPanel =

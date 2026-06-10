@@ -132,6 +132,10 @@ data class AgentSettings(
     // 1278-token-class local models do not blow their context window. Defaults to false
     // so legacy serialised preferences load without crashing (no schema bump needed).
     val smallModelMode: Boolean = false,
+    // PRIV-02: user-configurable custom redaction patterns (one regex per line in the UI).
+    // Persisted plaintext under privacy.custom.redaction.patterns.v1 — NOT a secret, NOT
+    // routed through SecretCipher. Absent key loads as empty list (no migration needed).
+    val customRedactionPatterns: List<String> = emptyList(),
 )
 
 fun AgentSettings.toPreprocessorSettings() =
@@ -385,6 +389,11 @@ class AgentSettingsRepository(
                 },
             // 07-02 D-02: absent key defaults to false so legacy v3 prefs load safely.
             smallModelMode = prefs.getBoolean(KEY_CHAT_SMALL_MODEL_MODE) ?: false,
+            // PRIV-02: custom redaction patterns stored plaintext, newline-joined.
+            // Absent key → empty list (mirrors the v3 absent-key-default precedent — no migration).
+            customRedactionPatterns =
+                prefs.getString(KEY_CUSTOM_REDACTION_PATTERNS).orEmpty()
+                    .split('\n').map { it.trim() }.filter { it.isNotBlank() },
         ).also { cachedSettings.set(it) }
     }
 
@@ -484,6 +493,7 @@ class AgentSettingsRepository(
             aiRequestLoggerMaxEntries = 500,
             customPromptLibrary = emptyList(),
             smallModelMode = false,
+            customRedactionPatterns = emptyList(),
         )
 
     fun save(settings: AgentSettings) {
@@ -637,6 +647,9 @@ class AgentSettingsRepository(
         prefs.setString(KEY_CUSTOM_PROMPT_LIBRARY, serializeCustomPromptLibrary(settings.customPromptLibrary))
         // 07-02 D-02: persist small-model mode alongside the other chat-context settings.
         prefs.setBoolean(KEY_CHAT_SMALL_MODEL_MODE, settings.smallModelMode)
+        // PRIV-02: persist custom redaction patterns as plaintext newline-joined string.
+        // NOT routed through cipher.encrypt — patterns are config, not secrets (Pitfall 5).
+        prefs.setString(KEY_CUSTOM_REDACTION_PATTERNS, settings.customRedactionPatterns.joinToString("\n"))
         prefs.setInteger(KEY_SETTINGS_SCHEMA_VERSION, CURRENT_SETTINGS_SCHEMA_VERSION)
         // All writes succeeded — now safe to cache.
         cachedSettings.set(settings)
@@ -861,6 +874,9 @@ class AgentSettingsRepository(
         private const val KEY_AI_LOGGER_ENABLED = "ai.logger.enabled"
         private const val KEY_AI_LOGGER_MAX_ENTRIES = "ai.logger.max.entries"
         private const val KEY_CUSTOM_PROMPT_LIBRARY = "custom.prompt.library.v1"
+        // PRIV-02: plaintext config (NOT a secret — do NOT route through SecretCipher).
+        // Versioned key so future renames are detectable. Absent key → empty list (no migration).
+        private const val KEY_CUSTOM_REDACTION_PATTERNS = "privacy.custom.redaction.patterns.v1"
         private const val KEY_SETTINGS_SCHEMA_VERSION = "settings.schema.version"
         private const val CURRENT_SETTINGS_SCHEMA_VERSION = 4
 

@@ -23,6 +23,9 @@ class PrivacyConfigPanel(
     private val saveFeedback: JComponent,
     private val aiLoggerEnabled: JComponent? = null,
     private val aiLoggerMaxEntries: JComponent? = null,
+    // PRIV-02: custom-pattern text area + inline validation-feedback label (injected by SettingsPanel).
+    private val customPatternsArea: JComponent? = null,
+    private val patternsFeedback: JComponent? = null,
 ) : ConfigPanel {
     override fun build(): JPanel {
         val grid = formGrid()
@@ -44,6 +47,20 @@ class PrivacyConfigPanel(
         addSpacerRow(grid, 4)
         addRowFull(grid, "Anonymization", rotateSaltBtn)
         addSpacerRow(grid, 4)
+        // PRIV-02: custom-pattern row (inserted after Anonymization, before Save feedback).
+        // addRowFull with helpText auto-adds the help line — do NOT add a separate helpLabel row.
+        if (customPatternsArea != null) {
+            addRowFull(
+                grid,
+                "Custom redaction patterns",
+                customPatternsArea,
+                helpText = "One regex per line. Applied in STRICT and BALANCED. Validated on Save.",
+            )
+            if (patternsFeedback != null) {
+                addRowFull(grid, "", patternsFeedback)
+            }
+            addSpacerRow(grid, DesignTokens.Spacing.xs)
+        }
         addRowFull(grid, "Save feedback", saveFeedback)
 
         // Stack the form grid + advisory vertically and pin everything to the top of the panel.
