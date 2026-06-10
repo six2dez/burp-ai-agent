@@ -2,6 +2,7 @@ package com.six2dez.burp.aiagent.ui.components
 
 import com.six2dez.burp.aiagent.redact.PrivacyMode
 import com.six2dez.burp.aiagent.redact.SecretShapes
+import com.six2dez.burp.aiagent.ui.design.DesignTokens
 import java.awt.BorderLayout
 import java.awt.Component
 import java.awt.Dimension
@@ -69,7 +70,7 @@ object ContextPreviewDialog {
         } else {
             survivedNotice.hideNotice()
         }
-        header.add(Box.createVerticalStrut(6))
+        header.add(Box.createVerticalStrut(DesignTokens.Spacing.sm))
         header.add(survivedNotice)
 
         val body =
