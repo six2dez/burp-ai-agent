@@ -83,4 +83,5 @@ Out of scope: the pre-send tripwire itself (Phase 15, PRIV-03) — Phase 13 only
 
 - The pre-send secret tripwire that scans the final outbound payload and warns before send (PRIV-03) — Phase 15. Phase 13 only provides the shared `SecretShapes` set it will consume.
 - Bounded/cleared host-anonymization maps as a reliability concern (REL-02) — Phase 17.
+- **Interactive "test custom pattern against a sample request" tester** (literal PRIV-04 requirement text) — explicitly OUT of scope for Phase 13 per maintainer decision (2026-06-10). PRIV-04's "test custom patterns" is delivered as save-time syntax + ReDoS-timeout validation (ROADMAP SC3) plus the survived-secret preview banner; a live sample-request tester was not requested. Revisit in a future phase if user demand surfaces.
 </deferred>
