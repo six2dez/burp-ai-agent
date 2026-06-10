@@ -50,7 +50,7 @@ Phases 9–11 closed. Features: design system foundation (UI-01), MCP tools tab 
 
 - [x] **Phase 12: Secrets at Rest & Transport Security** — Encrypt all stored API keys (AES-256-GCM), fix keytool argv password exposure, add soft SSRF backend URL warning ✓ 2026-06-10
 - [x] **Phase 13: Privacy & Redaction Hardening** — Fix host-anonymization algorithm (real HKDF), broaden redaction to request/response bodies with user-configurable patterns, add redaction-coverage UI (completed 2026-06-10)
-- [ ] **Phase 14: Anthropic Backend + Token Budget + Listener Port** — Native Anthropic Messages API backend with streaming/tool-use/prompt-caching; per-session token-budget guardrails; MCP proxy-history listener port filter
+- [x] **Phase 14: Anthropic Backend + Token Budget + Listener Port** — Native Anthropic Messages API backend with streaming/tool-use/prompt-caching; per-session token-budget guardrails; MCP proxy-history listener port filter (completed 2026-06-10)
 - [ ] **Phase 15: Pre-Send Secret Tripwire** — Post-redaction tripwire scanning final payload for high-entropy secrets before any send; warn-with-confirmation UI; audit-logged allowlist
 - [ ] **Phase 16: External MCP Client** — Connect to external/custom MCP servers (SSE + stdio transports); auth tokens encrypted; SSRF guard; untrusted-output trust boundary
 - [ ] **Phase 17: Reliability & Concurrency Hardening** — EDT confinement on ChatPanel session maps; CLI temp file cleanup via finally; bounded MCP shutdown; uniform HTTP timeouts/CircuitBreaker; fix CLI timeout bug #71
@@ -124,7 +124,7 @@ Plans:
 **Plans**: 3 plans
 - [x] 14-01-PLAN.md — Anthropic Messages API backend + supervisor branch + registration + all AgentSettings fields (encrypted key) + Anthropic settings card (CAP-01)
 - [x] 14-02-PLAN.md — Token-budget guardrails: AWT-free BudgetGuard + scanner budgetPaused gate + chat banner + Settings token-budget section (CAP-04)
-- [ ] 14-03-PLAN.md — proxy_http_history listener_port filter on both dispatch paths (CAP-03, closes #70)
+- [x] 14-03-PLAN.md — proxy_http_history listener_port filter on both dispatch paths (CAP-03, closes #70)
 **UI hint**: yes
 
 ### Phase 15: Pre-Send Secret Tripwire
@@ -216,7 +216,7 @@ Phase 12 (SEC) must be first. Phase 13 (Privacy) and Phase 12 are sequential (av
 |-------|----------------|--------|-----------|
 | 12. Secrets at Rest & Transport Security | 4/4 | ✅ Complete | 2026-06-10 |
 | 13. Privacy & Redaction Hardening | 3/3 | Complete    | 2026-06-10 |
-| 14. Anthropic Backend + Token Budget + Listener Port | 2/3 | In Progress|  |
+| 14. Anthropic Backend + Token Budget + Listener Port | 3/3 | Complete   | 2026-06-10 |
 | 15. Pre-Send Secret Tripwire | 0/TBD | Not started | - |
 | 16. External MCP Client | 0/TBD | Not started | - |
 | 17. Reliability & Concurrency Hardening | 0/TBD | Not started | - |

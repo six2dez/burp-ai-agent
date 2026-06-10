@@ -41,7 +41,7 @@ Research-mandated ordering: **SEC (encrypt secrets) lands before CAP-01 (Anthrop
 
 - [x] **CAP-01** (C1): User can select a native **Anthropic Messages API** backend with streaming, tool-use, prompt caching, and token counting — reusing OkHttp + `MontoyaHttpTransport` (no SDK that bypasses Burp), API key encrypted via SEC-01 *[Phase 14 scope decision, 2026-06-10: ships streaming (single-chunk, proxy-visible — MontoyaHttpTransport buffers, matching all existing backends) + token counting + encrypted key + model selection (SC1–SC3); **native tool-use and prompt-caching deferred to a future phase** — not in SC1–SC5, recorded in 14-CONTEXT.md Deferred Ideas]*
 - [ ] **CAP-02** (C3, closes #41): User can register external/custom **MCP server(s)** and the agent can call their tools — scope/unsafe-gated, external server auth tokens stored encrypted (SEC-01), with SSRF/untrusted-output safeguards
-- [ ] **CAP-03** (C5, closes #70): User can filter MCP proxy-history tool output by Burp **listener port**
+- [x] **CAP-03** (C5, closes #70): User can filter MCP proxy-history tool output by Burp **listener port**
 - [x] **CAP-04** (C7): User gets per-session **token-budget guardrails** — warn at a threshold and cap at a limit (pausing the passive scanner when the hard cap fires), built on the existing `TokenTracker`
 
 ### Planning & Docs Reconciliation (DOC)
@@ -79,7 +79,7 @@ Explicitly excluded for v0.9.0. Tracked to prevent scope creep.
 | PRIV-02 | Phase 13: Privacy & Redaction Hardening | Complete |
 | PRIV-04 | Phase 13: Privacy & Redaction Hardening | Complete |
 | CAP-01 | Phase 14: Anthropic Backend + Token Budget + Listener Port | Complete |
-| CAP-03 | Phase 14: Anthropic Backend + Token Budget + Listener Port | Pending |
+| CAP-03 | Phase 14: Anthropic Backend + Token Budget + Listener Port | Complete |
 | CAP-04 | Phase 14: Anthropic Backend + Token Budget + Listener Port | Complete |
 | PRIV-03 | Phase 15: Pre-Send Secret Tripwire | Pending |
 | CAP-02 | Phase 16: External MCP Client | Pending |

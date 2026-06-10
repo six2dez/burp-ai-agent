@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.9.0
 milestone_name: Hardening, Quality & New Capabilities
-status: executing
-stopped_at: Completed Phase 13 Plan 03 (PRIV-04 SecretShapes + ContextPreviewDialog WARN banner)
-last_updated: "2026-06-10T17:39:43.410Z"
+status: verifying
+stopped_at: Completed Phase 14 Plan 03 (CAP-03 listener-port filter for proxy_http_history)
+last_updated: "2026-06-10T17:48:58.661Z"
 last_activity: 2026-06-10
 progress:
   total_phases: 8
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 10
-  completed_plans: 10
-  percent: 25
+  completed_plans: 11
+  percent: 38
 ---
 
 # Project State
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-06-10)
 
 Phase: 14 (Anthropic Backend + Token Budget + Listener Port) — EXECUTING
 Plan: 3 of 3
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-06-10
 
 ## Performance Metrics
@@ -97,6 +97,7 @@ Recent decisions affecting current work:
 - [13-03]: SecretShapes includes high-entropy hex shape placed last; T-13-11 false-positive risk accepted (non-blocking banner)
 - [13-03]: SecretShapes is single AWT-free source of truth for PRIV-04 and Phase 15 tripwire reuse contract
 - [13-03]: ContextPreviewDialog banner uses Level.WARN (advisory); categories-only — raw values never interpolated (T-13-10)
+- [14-03]: listenerPort JSON key is camelCase (listenerPort) matching kotlinx-serialization field name — MCP clients send listenerPort not listener_port; GetProxyHttpHistoryRestricted also gains listenerPort for schema exposure under restricted branch
 
 ### Roadmap Evolution
 
@@ -139,6 +140,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-10T17:39:43.405Z
+Last session: 2026-06-10T17:48:58.656Z
 Stopped at: Completed Phase 13 Plan 03 (PRIV-04 SecretShapes + ContextPreviewDialog WARN banner)
 Resume file: None
