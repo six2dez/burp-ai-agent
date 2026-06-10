@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.9.0
 milestone_name: Hardening, Quality & New Capabilities
 status: executing
-stopped_at: Completed Phase 13 Plan 02 (PRIV-02 body/custom redaction)
-last_updated: "2026-06-10T14:54:33.533Z"
+stopped_at: Completed Phase 13 Plan 03 (PRIV-04 SecretShapes + ContextPreviewDialog WARN banner)
+last_updated: "2026-06-10T15:01:00Z"
 last_activity: 2026-06-10
 progress:
   total_phases: 8
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 7
-  completed_plans: 7
-  percent: 13
+  completed_plans: 8
+  percent: 25
 ---
 
 # Project State
@@ -25,9 +25,9 @@ See: .planning/PROJECT.md (updated 2026-06-10)
 
 ## Current Position
 
-Phase: 13 (Privacy & Redaction Hardening) — EXECUTING
-Plan: 3 of 3
-Status: Ready to execute
+Phase: 13 (Privacy & Redaction Hardening) — COMPLETE
+Plan: 3 of 3 (all plans complete)
+Status: Phase 13 complete — advancing to Phase 14
 Last activity: 2026-06-10
 
 ## Performance Metrics
@@ -62,6 +62,7 @@ Last activity: 2026-06-10
 | Phase 11-settings-tabs-theme-rollout P04 | 35 | 2 tasks | 1 files |
 | Phase 13-privacy-redaction-hardening P01 | 30 | 3 tasks | 4 files |
 | Phase 13 P02 | 30 | 3 tasks | 7 files |
+| Phase 13 P03 | 5 | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -92,6 +93,9 @@ Recent decisions affecting current work:
 - [Phase ?]: customRedactionPatterns persisted plaintext newline-joined — NOT SecretCipher (config not secrets)
 - [Phase ?]: compiledCustomPatterns @Volatile list — EDT write visible to redaction thread without full synchronization
 - [Phase ?]: setCustomPatterns called in applyAndSaveSettings — edits take effect without restart
+- [13-03]: SecretShapes includes high-entropy hex shape placed last; T-13-11 false-positive risk accepted (non-blocking banner)
+- [13-03]: SecretShapes is single AWT-free source of truth for PRIV-04 and Phase 15 tripwire reuse contract
+- [13-03]: ContextPreviewDialog banner uses Level.WARN (advisory); categories-only — raw values never interpolated (T-13-10)
 
 ### Roadmap Evolution
 
@@ -134,6 +138,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-10T14:54:33.528Z
-Stopped at: Completed Phase 13 Plan 02 (PRIV-02 body/custom redaction)
+Last session: 2026-06-10T15:01:00Z
+Stopped at: Completed Phase 13 Plan 03 (PRIV-04 SecretShapes + ContextPreviewDialog WARN banner)
 Resume file: None

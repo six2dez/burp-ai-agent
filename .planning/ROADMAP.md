@@ -49,7 +49,7 @@ Phases 9–11 closed. Features: design system foundation (UI-01), MCP tools tab 
 ## Phases
 
 - [x] **Phase 12: Secrets at Rest & Transport Security** — Encrypt all stored API keys (AES-256-GCM), fix keytool argv password exposure, add soft SSRF backend URL warning ✓ 2026-06-10
-- [ ] **Phase 13: Privacy & Redaction Hardening** — Fix host-anonymization algorithm (real HKDF), broaden redaction to request/response bodies with user-configurable patterns, add redaction-coverage UI
+- [x] **Phase 13: Privacy & Redaction Hardening** — Fix host-anonymization algorithm (real HKDF), broaden redaction to request/response bodies with user-configurable patterns, add redaction-coverage UI (completed 2026-06-10)
 - [ ] **Phase 14: Anthropic Backend + Token Budget + Listener Port** — Native Anthropic Messages API backend with streaming/tool-use/prompt-caching; per-session token-budget guardrails; MCP proxy-history listener port filter
 - [ ] **Phase 15: Pre-Send Secret Tripwire** — Post-redaction tripwire scanning final payload for high-entropy secrets before any send; warn-with-confirmation UI; audit-logged allowlist
 - [ ] **Phase 16: External MCP Client** — Connect to external/custom MCP servers (SSE + stdio transports); auth tokens encrypted; SSRF guard; untrusted-output trust boundary
@@ -104,7 +104,7 @@ Plans:
 **Wave 2** *(blocked on Wave 1 completion)*
 
 - [x] 13-02-PLAN.md — Body/form/JSON redaction + custom-pattern engine, persistence, and Privacy panel wiring (PRIV-02) [wave 2]
-- [ ] 13-03-PLAN.md — Shared SecretShapes curated set + survived-secret WARN banner in the preview dialog (PRIV-04) [wave 2]
+- [x] 13-03-PLAN.md — Shared SecretShapes curated set + survived-secret WARN banner in the preview dialog (PRIV-04) [wave 2]
 
 **UI hint**: yes
 
@@ -212,7 +212,7 @@ Phase 12 (SEC) must be first. Phase 13 (Privacy) and Phase 12 are sequential (av
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 12. Secrets at Rest & Transport Security | 4/4 | ✅ Complete | 2026-06-10 |
-| 13. Privacy & Redaction Hardening | 2/3 | In Progress|  |
+| 13. Privacy & Redaction Hardening | 3/3 | Complete   | 2026-06-10 |
 | 14. Anthropic Backend + Token Budget + Listener Port | 0/TBD | Not started | - |
 | 15. Pre-Send Secret Tripwire | 0/TBD | Not started | - |
 | 16. External MCP Client | 0/TBD | Not started | - |
