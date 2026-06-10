@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.9.0
 milestone_name: Hardening, Quality & New Capabilities
 status: executing
-stopped_at: v0.9.0 roadmap created; Phases 12–19 written; 22 requirements mapped (100% coverage); ROADMAP.md, STATE.md, REQUIREMENTS.md updated
-last_updated: "2026-06-10T14:37:51.889Z"
+stopped_at: Completed Phase 13 Plan 02 (PRIV-02 body/custom redaction)
+last_updated: "2026-06-10T14:54:33.533Z"
 last_activity: 2026-06-10
 progress:
   total_phases: 8
   completed_phases: 1
   total_plans: 7
-  completed_plans: 6
+  completed_plans: 7
   percent: 13
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-06-10)
 ## Current Position
 
 Phase: 13 (Privacy & Redaction Hardening) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-06-10
 
@@ -61,6 +61,7 @@ Last activity: 2026-06-10
 | Phase 11 P03 | 14 | 2 tasks | 5 files |
 | Phase 11-settings-tabs-theme-rollout P04 | 35 | 2 tasks | 1 files |
 | Phase 13-privacy-redaction-hardening P01 | 30 | 3 tasks | 4 files |
+| Phase 13 P02 | 30 | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -87,6 +88,10 @@ Recent decisions affecting current work:
 - v0.9.0 Roadmap: CAP-03 (listener port filter) and CAP-04 (token budget) co-land with CAP-01 (Anthropic) in Phase 14 — small, non-conflicting additions; natural fit alongside Anthropic's four-field token usage surfacing.
 - v0.9.0 Roadmap: CAP-02 (external MCP) requires kotlin-sdk 0.5.0→0.13.0 Burp-JVM test-run gate; placed after CAP-01 so the SDK bump does not block earlier phases.
 - v0.9.0 Roadmap: PRIV-04 (redaction coverage UI) co-lands with PRIV-01+PRIV-02 in Phase 13 — the UI indicator shows when a known secret shape passes through, using the same curated pattern set as the Phase 15 tripwire.
+- [Phase ?]: Body/form regex uses (^|[?&]) anchor to close leading-field gap (T-13-05)
+- [Phase ?]: customRedactionPatterns persisted plaintext newline-joined — NOT SecretCipher (config not secrets)
+- [Phase ?]: compiledCustomPatterns @Volatile list — EDT write visible to redaction thread without full synchronization
+- [Phase ?]: setCustomPatterns called in applyAndSaveSettings — edits take effect without restart
 
 ### Roadmap Evolution
 
@@ -129,6 +134,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-10T14:37:51.883Z
-Stopped at: v0.9.0 roadmap created; Phases 12–19 written; 22 requirements mapped (100% coverage); ROADMAP.md, STATE.md, REQUIREMENTS.md updated
+Last session: 2026-06-10T14:54:33.528Z
+Stopped at: Completed Phase 13 Plan 02 (PRIV-02 body/custom redaction)
 Resume file: None

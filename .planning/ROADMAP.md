@@ -103,7 +103,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 13-02-PLAN.md — Body/form/JSON redaction + custom-pattern engine, persistence, and Privacy panel wiring (PRIV-02) [wave 2]
+- [x] 13-02-PLAN.md — Body/form/JSON redaction + custom-pattern engine, persistence, and Privacy panel wiring (PRIV-02) [wave 2]
 - [ ] 13-03-PLAN.md — Shared SecretShapes curated set + survived-secret WARN banner in the preview dialog (PRIV-04) [wave 2]
 
 **UI hint**: yes
@@ -212,7 +212,7 @@ Phase 12 (SEC) must be first. Phase 13 (Privacy) and Phase 12 are sequential (av
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 12. Secrets at Rest & Transport Security | 4/4 | ✅ Complete | 2026-06-10 |
-| 13. Privacy & Redaction Hardening | 1/3 | In Progress|  |
+| 13. Privacy & Redaction Hardening | 2/3 | In Progress|  |
 | 14. Anthropic Backend + Token Budget + Listener Port | 0/TBD | Not started | - |
 | 15. Pre-Send Secret Tripwire | 0/TBD | Not started | - |
 | 16. External MCP Client | 0/TBD | Not started | - |
