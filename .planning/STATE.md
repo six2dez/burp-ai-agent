@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v0.9.0
 milestone_name: Hardening, Quality & New Capabilities
-status: executing
-stopped_at: Completed Phase 13 Plan 03 (PRIV-04 SecretShapes + ContextPreviewDialog WARN banner)
-last_updated: "2026-06-10T15:01:00Z"
+status: ready_to_plan
+stopped_at: Phase 13 complete (3/3) — ready to discuss Phase 14
+last_updated: 2026-06-10T16:25:44.521Z
 last_activity: 2026-06-10
 progress:
   total_phases: 8
   completed_phases: 2
   total_plans: 7
-  completed_plans: 8
+  completed_plans: 30
   percent: 25
 ---
 
@@ -21,20 +21,20 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-10)
 
 **Core value:** Bring modern AI to a real security workflow without leaking sensitive traffic to third-party providers — privacy controls and an audit trail are non-negotiable, AI capability is additive.
-**Current focus:** Phase 13 — Privacy & Redaction Hardening
+**Current focus:** Phase 14 — anthropic backend + token budget + listener port
 
 ## Current Position
 
-Phase: 13 (Privacy & Redaction Hardening) — COMPLETE
-Plan: 3 of 3 (all plans complete)
-Status: Phase 13 complete — advancing to Phase 14
+Phase: 14
+Plan: Not started
+Status: Ready to plan
 Last activity: 2026-06-10
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 5
+- Total plans completed: 8
 - Average duration: —
 - Total execution time: 0 hours
 
@@ -45,6 +45,7 @@ Last activity: 2026-06-10
 | — | — | — | — |
 | 01 | 1 | - | - |
 | 11 | 4 | - | - |
+| 13 | 3 | - | - |
 
 **Recent Trend:**
 
