@@ -40,6 +40,14 @@ class BackendRegistryTest {
     }
 
     @Test
+    fun anthropicBackend_registeredWithCorrectId() {
+        // Verify AnthropicBackendFactory is registered (ServiceLoader + fallback).
+        val registry = createRegistry()
+        val allIds = registry.listAllBackendIds()
+        assertTrue(allIds.contains("anthropic"), "Expected 'anthropic' in registry, got: $allIds")
+    }
+
+    @Test
     fun reloadAndShutdown_clearAvailabilityCache() {
         val registry = createRegistry()
         val cache = availabilityCacheField(registry)

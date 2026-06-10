@@ -126,6 +126,8 @@ class SettingsPanel(
                 perplexityApiKey = settings.perplexityApiKey,
                 perplexityHeaders = settings.perplexityHeaders,
                 perplexityTimeoutSeconds = settings.perplexityTimeoutSeconds.toString(),
+                anthropicModel = settings.anthropicModel,
+                anthropicApiKey = settings.anthropicApiKey,
                 copilotCmd = settings.copilotCmd,
             ),
         )
@@ -1118,6 +1120,8 @@ class SettingsPanel(
             perplexityApiKey = backendState.perplexityApiKey,
             perplexityHeaders = backendState.perplexityHeaders,
             perplexityTimeoutSeconds = perplexityTimeoutSeconds,
+            anthropicModel = backendState.anthropicModel,
+            anthropicApiKey = backendState.anthropicApiKey,
             copilotCmd = backendState.copilotCmd,
             requestPromptTemplate = promptRequest.text.trim(),
             issuePromptTemplate = promptIssueFull.text.trim(),
@@ -1288,6 +1292,8 @@ class SettingsPanel(
                 perplexityApiKey = updated.perplexityApiKey,
                 perplexityHeaders = updated.perplexityHeaders,
                 perplexityTimeoutSeconds = updated.perplexityTimeoutSeconds.toString(),
+                anthropicModel = updated.anthropicModel,
+                anthropicApiKey = updated.anthropicApiKey,
                 copilotCmd = updated.copilotCmd,
             ),
         )

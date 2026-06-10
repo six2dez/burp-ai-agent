@@ -54,7 +54,8 @@ class AgentSettingsSecretEncryptionTest {
     }
 
     @Test
-    fun roundTrip_allSevenSecretKeys_encryptedAtRest() {
+    fun roundTrip_allEightSecretKeys_encryptedAtRest() {
+        // Eight keys: the original seven + anthropic.apiKey (14-01 CAP-01).
         val prefs = InMemoryPrefs()
         val writer = AgentSettingsRepository(apiWith(prefs.mock))
         val base = writer.defaultSettings()
@@ -65,6 +66,7 @@ class AgentSettingsSecretEncryptionTest {
                 openAiCompatibleApiKey = "k-openai",
                 nvidiaNimApiKey = "k-nvidia",
                 perplexityApiKey = "k-perplexity",
+                anthropicApiKey = "k-anthropic",
                 mcpSettings = base.mcpSettings.copy(token = "k-mcp-token", tlsKeystorePassword = "k-mcp-tls"),
             ),
         )
@@ -76,6 +78,7 @@ class AgentSettingsSecretEncryptionTest {
                 "openai.compat.apiKey",
                 "nvidia.nim.apiKey",
                 "perplexity.apiKey",
+                "anthropic.apiKey",
                 "mcp.token",
                 "mcp.tls.keystore.password",
             )
@@ -91,6 +94,7 @@ class AgentSettingsSecretEncryptionTest {
         assertEquals("k-openai", loaded.openAiCompatibleApiKey)
         assertEquals("k-nvidia", loaded.nvidiaNimApiKey)
         assertEquals("k-perplexity", loaded.perplexityApiKey)
+        assertEquals("k-anthropic", loaded.anthropicApiKey)
         assertEquals("k-mcp-token", loaded.mcpSettings.token)
         assertEquals("k-mcp-tls", loaded.mcpSettings.tlsKeystorePassword)
     }

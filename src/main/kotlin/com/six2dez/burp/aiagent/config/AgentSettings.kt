@@ -59,6 +59,15 @@ data class AgentSettings(
     val perplexityApiKey: String = "",
     val perplexityHeaders: String = "",
     val perplexityTimeoutSeconds: Int = 60,
+    // CAP-01: Anthropic Messages API backend fields (14-01).
+    // All four carry defaults so existing named/positional constructions keep compiling (Planner Note 3).
+    val anthropicModel: String = "claude-sonnet-4-6",
+    val anthropicApiKey: String = "",
+    // CAP-04: Token-budget guardrail thresholds. 0 = off (unlimited).
+    // Declared here (14-01) so wave-2 plans never collide on AgentSettings.
+    // NOT secrets — persisted as plain integers, never routed through SecretCipher (Pitfall 5).
+    val tokenBudgetWarnThreshold: Int = 0,
+    val tokenBudgetHardCap: Int = 0,
     val copilotCmd: String = "",
     val requestPromptTemplate: String,
     val issuePromptTemplate: String,
@@ -280,6 +289,14 @@ class AgentSettingsRepository(
             perplexityTimeoutSeconds =
                 (prefs.getInteger(KEY_PERPLEXITY_TIMEOUT) ?: defaultPerplexityTimeoutSeconds())
                     .coerceIn(30, 3600),
+            // CAP-01: Anthropic backend — decrypt key, string model (14-01)
+            anthropicModel =
+                prefs.getString(KEY_ANTHROPIC_MODEL).orEmpty().trim().ifBlank { "claude-sonnet-4-6" },
+            anthropicApiKey =
+                cipher.decrypt(prefs.getString(KEY_ANTHROPIC_API_KEY).orEmpty().trim(), KEY_ANTHROPIC_API_KEY),
+            // CAP-04: token-budget thresholds — plain integers, never encrypted (Pitfall 5)
+            tokenBudgetWarnThreshold = (prefs.getInteger(KEY_TOKEN_BUDGET_WARN) ?: 0).coerceAtLeast(0),
+            tokenBudgetHardCap = (prefs.getInteger(KEY_TOKEN_BUDGET_CAP) ?: 0).coerceAtLeast(0),
             copilotCmd =
                 prefs
                     .getString(KEY_COPILOT_CMD)
@@ -435,6 +452,10 @@ class AgentSettingsRepository(
             perplexityApiKey = "",
             perplexityHeaders = "",
             perplexityTimeoutSeconds = defaultPerplexityTimeoutSeconds(),
+            anthropicModel = "claude-sonnet-4-6",
+            anthropicApiKey = "",
+            tokenBudgetWarnThreshold = 0,
+            tokenBudgetHardCap = 0,
             copilotCmd = defaultCopilotCmd(),
             requestPromptTemplate = defaultRequestPrompt(),
             issuePromptTemplate = defaultIssuePrompt(),
@@ -537,6 +558,12 @@ class AgentSettingsRepository(
         prefs.setString(KEY_PERPLEXITY_API_KEY, cipher.encrypt(settings.perplexityApiKey, KEY_PERPLEXITY_API_KEY))
         prefs.setString(KEY_PERPLEXITY_HEADERS, settings.perplexityHeaders)
         prefs.setInteger(KEY_PERPLEXITY_TIMEOUT, settings.perplexityTimeoutSeconds.coerceIn(30, 3600))
+        // CAP-01: Anthropic — model (plain string), API key (encrypted), token-budget (plain integers)
+        prefs.setString(KEY_ANTHROPIC_MODEL, settings.anthropicModel)
+        prefs.setString(KEY_ANTHROPIC_API_KEY, cipher.encrypt(settings.anthropicApiKey, KEY_ANTHROPIC_API_KEY))
+        // CAP-04: token-budget thresholds are integers, NOT secrets — never SecretCipher (Pitfall 5)
+        prefs.setInteger(KEY_TOKEN_BUDGET_WARN, settings.tokenBudgetWarnThreshold.coerceAtLeast(0))
+        prefs.setInteger(KEY_TOKEN_BUDGET_CAP, settings.tokenBudgetHardCap.coerceAtLeast(0))
         prefs.setString(KEY_COPILOT_CMD, settings.copilotCmd)
         prefs.setString(KEY_PROMPT_FIND_VULNS, settings.requestPromptTemplate)
         prefs.setString(KEY_PROMPT_FULL_REPORT, settings.issuePromptTemplate)
@@ -705,6 +732,7 @@ class AgentSettingsRepository(
                 KEY_OPENAI_COMPAT_API_KEY,
                 KEY_NVIDIA_NIM_API_KEY,
                 KEY_PERPLEXITY_API_KEY,
+                KEY_ANTHROPIC_API_KEY,
                 KEY_MCP_TOKEN,
                 KEY_MCP_TLS_PASSWORD,
             )
@@ -784,6 +812,12 @@ class AgentSettingsRepository(
         private const val KEY_PERPLEXITY_API_KEY = "perplexity.apiKey"
         private const val KEY_PERPLEXITY_HEADERS = "perplexity.headers"
         private const val KEY_PERPLEXITY_TIMEOUT = "perplexity.timeoutSeconds"
+        // CAP-01: Anthropic backend (14-01)
+        private const val KEY_ANTHROPIC_MODEL = "anthropic.model"
+        private const val KEY_ANTHROPIC_API_KEY = "anthropic.apiKey"
+        // CAP-04: token-budget guardrails (14-01 — fields declared here; logic in 14-02)
+        private const val KEY_TOKEN_BUDGET_WARN = "tokenBudget.warnThreshold"
+        private const val KEY_TOKEN_BUDGET_CAP = "tokenBudget.hardCap"
         private const val KEY_COPILOT_CMD = "copilot.cmd"
         private const val KEY_PROMPT_FIND_VULNS = "prompt.find_vulns"
         private const val KEY_PROMPT_QUICK_RECON = "prompt.quick_recon"

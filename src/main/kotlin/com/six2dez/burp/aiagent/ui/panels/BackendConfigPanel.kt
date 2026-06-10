@@ -58,6 +58,9 @@ data class BackendConfigState(
     val perplexityApiKey: String = "",
     val perplexityHeaders: String = "",
     val perplexityTimeoutSeconds: String = "",
+    // CAP-01: Anthropic backend (14-01)
+    val anthropicModel: String = "",
+    val anthropicApiKey: String = "",
     val copilotCmd: String = "",
 )
 
@@ -114,6 +117,8 @@ class BackendConfigPanel(
     private val perplexityApiKey = JPasswordField(initialState.perplexityApiKey)
     private val perplexityHeaders = JTextArea(initialState.perplexityHeaders, 3, 20)
     private val perplexityTimeout = JTextField(initialState.perplexityTimeoutSeconds)
+    private val anthropicModel = JTextField(initialState.anthropicModel)
+    private val anthropicApiKey = JPasswordField(initialState.anthropicApiKey)
     private val copilotCmd = JTextField(initialState.copilotCmd)
 
     init {
@@ -152,6 +157,8 @@ class BackendConfigPanel(
         applyFieldStyle(perplexityApiKey)
         applyAreaStyle(perplexityHeaders)
         applyFieldStyle(perplexityTimeout)
+        applyFieldStyle(anthropicModel)
+        applyFieldStyle(anthropicApiKey)
         applyFieldStyle(copilotCmd)
 
         codexCmd.toolTipText = "Command used to launch Codex CLI."
@@ -188,6 +195,8 @@ class BackendConfigPanel(
         perplexityApiKey.toolTipText = "Perplexity API key (Authorization: Bearer pplx-...)."
         perplexityHeaders.toolTipText = "Extra headers (one per line: Header: value)."
         perplexityTimeout.toolTipText = "Request timeout in seconds."
+        anthropicModel.toolTipText = "Anthropic model name (e.g., claude-sonnet-4-6, claude-opus-4-8)."
+        anthropicApiKey.toolTipText = "Anthropic API key (x-api-key header). Stored encrypted at rest."
         copilotCmd.toolTipText = "Command used to launch Copilot CLI (e.g., copilot)."
 
         cards.add(buildBurpAiPanel(), "burp-ai")
@@ -200,6 +209,7 @@ class BackendConfigPanel(
         cards.add(buildOpenAiCompatPanel(), "openai-compatible")
         cards.add(buildNvidiaNimPanel(), "nvidia-nim")
         cards.add(buildPerplexityPanel(), "perplexity")
+        cards.add(buildAnthropicPanel(), "anthropic")
         cards.add(buildSingleFieldPanelWithCli("Copilot CLI command", copilotCmd, "copilot-cli") { copilotCmd.text.trim() }, "copilot-cli")
 
         add(cards, BorderLayout.CENTER)
@@ -274,6 +284,8 @@ class BackendConfigPanel(
             perplexityApiKey = String(perplexityApiKey.password).trim(),
             perplexityHeaders = perplexityHeaders.text.trim(),
             perplexityTimeoutSeconds = perplexityTimeout.text.trim(),
+            anthropicModel = anthropicModel.text.trim(),
+            anthropicApiKey = String(anthropicApiKey.password).trim(),
             copilotCmd = copilotCmd.text.trim(),
         )
     }
@@ -313,6 +325,8 @@ class BackendConfigPanel(
         perplexityApiKey.text = state.perplexityApiKey
         perplexityHeaders.text = state.perplexityHeaders
         perplexityTimeout.text = state.perplexityTimeoutSeconds
+        anthropicModel.text = state.anthropicModel
+        anthropicApiKey.text = state.anthropicApiKey
         copilotCmd.text = state.copilotCmd
         // IN-03: show the SSRF advisory immediately on load so a previously-saved private-range
         // URL is flagged without requiring the user to click Save first.
@@ -477,6 +491,22 @@ class BackendConfigPanel(
         addRowFull(panel, "API key (Bearer)", perplexityApiKey)
         addRowFull(panel, "Extra headers", JScrollPane(perplexityHeaders))
         addRowFull(panel, "Timeout (seconds)", perplexityTimeout)
+        addSpacerRow(panel, DesignTokens.Spacing.sm)
+        return panel
+    }
+
+    /** Anthropic card — Model + masked API key + Test connection (no Base URL: FLAG-14-02). */
+    private fun buildAnthropicPanel(): JPanel {
+        val panel = formGrid()
+        panel.border = EmptyBorder(
+            DesignTokens.Spacing.sectionPad,
+            DesignTokens.Spacing.sectionPad,
+            DesignTokens.Spacing.sectionPad,
+            DesignTokens.Spacing.sectionPad,
+        )
+        addRowFull(panel, "Model", anthropicModel)
+        addRowFull(panel, "API key (Bearer)", anthropicApiKey)
+        addRowFull(panel, "", buildButtonRowPanel(buildTestConnectionButton("anthropic")))
         addSpacerRow(panel, DesignTokens.Spacing.sm)
         return panel
     }
