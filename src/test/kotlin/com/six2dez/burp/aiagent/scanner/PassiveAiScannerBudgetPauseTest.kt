@@ -6,6 +6,10 @@ import burp.api.montoya.http.message.requests.HttpRequest
 import com.six2dez.burp.aiagent.TestSettings
 import com.six2dez.burp.aiagent.audit.AuditLogger
 import com.six2dez.burp.aiagent.supervisor.AgentSupervisor
+import com.six2dez.burp.aiagent.util.BudgetGuard
+import com.six2dez.burp.aiagent.util.TokenTracker
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -22,6 +26,15 @@ import java.lang.reflect.Field
  * which would clear the knowledge base and change the user's visible toggle.
  */
 class PassiveAiScannerBudgetPauseTest {
+
+    @AfterEach
+    fun clearTokenTracker() {
+        // TokenTracker is a process-wide singleton; reset its counters so per-session token sums
+        // do not bleed across tests (the budget tests below assert on currentSessionTokens()).
+        val countersField = TokenTracker::class.java.getDeclaredField("counters")
+        countersField.isAccessible = true
+        (countersField.get(TokenTracker) as java.util.concurrent.ConcurrentHashMap<*, *>).clear()
+    }
 
     private fun makeScanner(): PassiveAiScanner =
         PassiveAiScanner(
@@ -143,6 +156,92 @@ class PassiveAiScannerBudgetPauseTest {
     fun isBudgetPaused_initialState_returnsFalse() {
         val scanner = makeScanner()
         assertFalse(scanner.isBudgetPaused(), "budgetPaused must start false (per-process reset by design)")
+    }
+
+    // --- WR-01: scanner self-pauses when its OWN recorded tokens cross the hard cap ---
+
+    @Test
+    fun reconcileBudget_scannerOwnTokensCrossCap_selfPauses() {
+        val scanner = makeScanner()
+        scanner.setEnabled(true)
+        // hard cap of 100 tokens. Record scanner consumption that crosses it: 800 input chars ≈ 200
+        // input tokens estimated (>= 100 cap). This simulates a scanner-only run with no chat turn.
+        TokenTracker.record(flow = "passive_scanner", backendId = "test-backend", inputChars = 800, outputChars = 0)
+        val settings = TestSettings.baselineSettings().copy(tokenBudgetWarnThreshold = 0, tokenBudgetHardCap = 100)
+
+        val state = scanner.reconcileBudget(settings)
+
+        assertEquals(BudgetGuard.State.CAP, state, "Scanner-recorded tokens over the cap must evaluate to CAP")
+        assertTrue(
+            scanner.isBudgetPaused(),
+            "WR-01: passive scanner must self-pause once its own recorded tokens cross the hard cap, " +
+                "even with no chat turn",
+        )
+    }
+
+    @Test
+    fun reconcileBudget_belowCap_doesNotPause() {
+        val scanner = makeScanner()
+        scanner.setEnabled(true)
+        // 40 input chars ≈ 10 estimated tokens, well below the 100 cap.
+        TokenTracker.record(flow = "passive_scanner", backendId = "test-backend", inputChars = 40, outputChars = 0)
+        val settings = TestSettings.baselineSettings().copy(tokenBudgetWarnThreshold = 0, tokenBudgetHardCap = 100)
+
+        val state = scanner.reconcileBudget(settings)
+
+        assertEquals(BudgetGuard.State.OFF, state, "Below both thresholds should evaluate OFF")
+        assertFalse(scanner.isBudgetPaused(), "Scanner must NOT pause while under the cap")
+    }
+
+    // --- WR-02: the pause is reversible (not a one-way latch) ---
+
+    @Test
+    fun reconcileBudget_capRaisedAboveUsage_releasesPause() {
+        val scanner = makeScanner()
+        scanner.setEnabled(true)
+        // Cross a cap of 100 → paused.
+        TokenTracker.record(flow = "passive_scanner", backendId = "test-backend", inputChars = 800, outputChars = 0)
+        scanner.reconcileBudget(TestSettings.baselineSettings().copy(tokenBudgetHardCap = 100))
+        assertTrue(scanner.isBudgetPaused(), "precondition: scanner is paused after crossing the cap")
+
+        // Operator raises the cap well above current usage; re-evaluation must RESUME.
+        val state = scanner.reconcileBudget(TestSettings.baselineSettings().copy(tokenBudgetHardCap = 1_000_000))
+
+        assertEquals(BudgetGuard.State.OFF, state, "Usage now below the raised cap should evaluate OFF")
+        assertFalse(scanner.isBudgetPaused(), "WR-02: raising the cap above usage must release the pause")
+    }
+
+    @Test
+    fun reconcileBudget_capClearedToUnlimited_releasesPause() {
+        val scanner = makeScanner()
+        scanner.setEnabled(true)
+        TokenTracker.record(flow = "passive_scanner", backendId = "test-backend", inputChars = 800, outputChars = 0)
+        scanner.reconcileBudget(TestSettings.baselineSettings().copy(tokenBudgetHardCap = 100))
+        assertTrue(scanner.isBudgetPaused(), "precondition: scanner is paused after crossing the cap")
+
+        // Operator clears the cap (0 = unlimited / off); re-evaluation must RESUME.
+        val state = scanner.reconcileBudget(TestSettings.baselineSettings().copy(tokenBudgetHardCap = 0))
+
+        assertEquals(BudgetGuard.State.OFF, state, "Cap=0 means unlimited; must evaluate OFF")
+        assertFalse(scanner.isBudgetPaused(), "WR-02: clearing the cap (unlimited) must release the pause")
+    }
+
+    @Test
+    fun reconcileBudget_warnState_doesNotPauseAndResumesFromCap() {
+        val scanner = makeScanner()
+        scanner.setEnabled(true)
+        // 800 chars ≈ 200 tokens. warn=100, cap=300 → WARN (over warn, under cap).
+        TokenTracker.record(flow = "passive_scanner", backendId = "test-backend", inputChars = 800, outputChars = 0)
+        // Start paused to prove WARN releases an existing pause.
+        scanner.setBudgetPaused(true)
+
+        val state =
+            scanner.reconcileBudget(
+                TestSettings.baselineSettings().copy(tokenBudgetWarnThreshold = 100, tokenBudgetHardCap = 300),
+            )
+
+        assertEquals(BudgetGuard.State.WARN, state, "Between warn and cap should evaluate WARN")
+        assertFalse(scanner.isBudgetPaused(), "WARN must not keep the scanner paused")
     }
 
     /** Reflectively read the size of ScanKnowledgeBase's tech stack map. */

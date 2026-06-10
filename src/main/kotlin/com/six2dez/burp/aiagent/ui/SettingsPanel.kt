@@ -1499,6 +1499,10 @@ class SettingsPanel(
         passiveAiScanner.maxSizeKb = updated.passiveAiMaxSizeKb
         passiveAiScanner.applyOptimizationSettings(updated)
         passiveAiScanner.setEnabled(updated.passiveAiEnabled)
+        // CAP-04 (WR-02): re-evaluate against the freshly-applied warn/cap so raising, clearing
+        // (cap=0 → unlimited), or otherwise dropping below the cap RELEASES the pause gate. Without
+        // this, once the hard cap fires the scanner stays paused for the whole Burp run.
+        passiveAiScanner.reconcileBudget(updated)
 
         // Apply active AI scanner settings
         activeAiScanner.maxConcurrent = updated.activeAiMaxConcurrent

@@ -572,19 +572,25 @@ class ChatPanel(
                         inputTokensActual = usage?.inputTokens,
                         outputTokensActual = usage?.outputTokens,
                     )
-                    // CAP-04: evaluate token budget after each response and update banner / pause scanner
+                    // CAP-04: evaluate token budget after each response and update banner / pause scanner.
+                    // WR-01/WR-02: drive the scanner pause gate through the shared single-consultation
+                    // point (PassiveAiScanner.reconcileBudget) so chat and scanner use the SAME
+                    // evaluation and the pause is released (not latched) once usage drops below the cap.
                     SwingUtilities.invokeLater {
                         val warn = getSettings().tokenBudgetWarnThreshold
                         val cap = getSettings().tokenBudgetHardCap
                         val used = BudgetGuard.currentSessionTokens()
-                        when (BudgetGuard.evaluate(used, warn, cap)) {
-                            BudgetGuard.State.CAP -> {
+                        // When no scanner is wired (tests / chat-only embedding), fall back to a local
+                        // evaluation so the banner still reflects the budget.
+                        val state =
+                            passiveScanner?.reconcileBudget(getSettings())
+                                ?: BudgetGuard.evaluate(used, warn, cap)
+                        when (state) {
+                            BudgetGuard.State.CAP ->
                                 budgetNotice.setMessage(
                                     SubtleNotice.Level.RISK,
                                     "Token budget reached (${formatChars(used)}/${formatChars(cap.toLong())}). Passive scanning paused; chat is still available.",
                                 )
-                                passiveScanner?.setBudgetPaused(true)
-                            }
                             BudgetGuard.State.WARN -> budgetNotice.setMessage(
                                 SubtleNotice.Level.WARN,
                                 "Token budget warning: ${formatChars(used)} of ${formatChars(warn.toLong())} tokens used this session.",

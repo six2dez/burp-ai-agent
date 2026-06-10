@@ -17,6 +17,7 @@ import com.six2dez.burp.aiagent.config.Defaults
 import com.six2dez.burp.aiagent.redact.Redaction
 import com.six2dez.burp.aiagent.redact.RedactionPolicy
 import com.six2dez.burp.aiagent.supervisor.AgentSupervisor
+import com.six2dez.burp.aiagent.util.BudgetGuard
 import com.six2dez.burp.aiagent.util.IssueText
 import com.six2dez.burp.aiagent.util.IssueUtils
 import com.six2dez.burp.aiagent.util.SecurityExcerpts
@@ -66,6 +67,43 @@ class PassiveAiScanner(
 
     fun setBudgetPaused(on: Boolean) { budgetPaused.set(on) }
     fun isBudgetPaused(): Boolean = budgetPaused.get()
+
+    /**
+     * CAP-04 single budget-consultation point (RESEARCH Open-Q2): evaluate the per-session token
+     * budget against the live session totals and drive the pause gate in BOTH directions.
+     *
+     * - [BudgetGuard.State.CAP] → [setBudgetPaused] `true` (pause passive scanning).
+     * - [BudgetGuard.State.WARN] / [BudgetGuard.State.OFF] → [setBudgetPaused] `false` (resume),
+     *   which makes the gate genuinely reversible (its KDoc contract) once the cap is raised,
+     *   cleared, or usage drops back below it.
+     *
+     * Called from the scanner's own token-record sites (so a scanner-only run trips the cap —
+     * WR-01) and from the chat / settings-apply paths so chat and scanner share ONE evaluation.
+     * Returns the resulting [BudgetGuard.State] so EDT callers can refresh their banner from the
+     * same decision without re-evaluating. Stays AWT-free: no Swing access here.
+     */
+    fun reconcileBudget(settings: AgentSettings): BudgetGuard.State {
+        val state =
+            BudgetGuard.evaluate(
+                BudgetGuard.currentSessionTokens(),
+                settings.tokenBudgetWarnThreshold,
+                settings.tokenBudgetHardCap,
+            )
+        setBudgetPaused(state == BudgetGuard.State.CAP)
+        return state
+    }
+
+    /**
+     * Scanner-thread wrapper around [reconcileBudget] that logs once on the resume→pause edge so the
+     * operator sees a single "hard cap reached — pausing" line rather than one per analyzed request.
+     */
+    private fun reconcileBudgetAndLog(settings: AgentSettings) {
+        val wasPaused = isBudgetPaused()
+        val state = reconcileBudget(settings)
+        if (state == BudgetGuard.State.CAP && !wasPaused) {
+            api.logging().logToOutput("[PassiveAiScanner] Token hard cap reached — pausing passive scanning")
+        }
+    }
 
     private val requestsAnalyzed = AtomicInteger(0)
     private val issuesFound = AtomicInteger(0)
@@ -823,6 +861,8 @@ class PassiveAiScanner(
                     outputChars = 0,
                     cacheHit = true,
                 )
+                // CAP-04 (WR-01): self-pause when the scanner's own consumption crosses the cap.
+                reconcileBudgetAndLog(settings)
                 audit.logEvent(
                     "passive_ai_scan_cache_hit",
                     mapOf(
@@ -970,6 +1010,8 @@ class PassiveAiScanner(
                 inputChars = singlePrompt.length,
                 outputChars = responseBuffer.length,
             )
+            // CAP-04 (WR-01): self-pause when the scanner's own consumption crosses the cap.
+            reconcileBudgetAndLog(settings)
 
             audit.logEvent(
                 "passive_ai_scan",
@@ -1561,6 +1603,8 @@ $batchMetadata
                 inputChars = prompt.length,
                 outputChars = responseBuffer.length,
             )
+            // CAP-04 (WR-01): self-pause when the scanner's own consumption crosses the cap.
+            reconcileBudgetAndLog(settings)
         }
     }
 
