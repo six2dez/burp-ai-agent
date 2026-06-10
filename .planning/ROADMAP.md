@@ -121,7 +121,10 @@ Plans:
   4. A user can set a session token-budget warn threshold and hard cap; the passive scanner pauses when the hard cap fires; the chat UI shows a warning banner when the warn threshold is crossed.
   5. A user using the MCP `proxy_http_history` tool can filter results by Burp listener port (e.g. `8080`), and only requests received on that port are returned.
 
-**Plans**: TBD
+**Plans**: 3 plans
+- [ ] 14-01-PLAN.md — Anthropic Messages API backend + supervisor branch + registration + all AgentSettings fields (encrypted key) + Anthropic settings card (CAP-01)
+- [ ] 14-02-PLAN.md — Token-budget guardrails: AWT-free BudgetGuard + scanner budgetPaused gate + chat banner + Settings token-budget section (CAP-04)
+- [ ] 14-03-PLAN.md — proxy_http_history listener_port filter on both dispatch paths (CAP-03, closes #70)
 **UI hint**: yes
 
 ### Phase 15: Pre-Send Secret Tripwire
