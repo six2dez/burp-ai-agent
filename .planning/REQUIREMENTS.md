@@ -1,144 +1,89 @@
-# Requirements: Burp AI Agent — v0.8.0 (active) + v0.7.0 (carryover)
+# Requirements: Burp AI Agent — v0.9.0 (Hardening, Quality & New Capabilities)
 
-**Defined:** 2026-05-13
-**Core Value:** Bring modern AI to a real security workflow **without** leaking sensitive traffic to third-party providers.
+**Defined:** 2026-06-10
+**Core Value:** Bring modern AI to a real security workflow **without** leaking sensitive traffic to third-party providers — privacy controls and an audit trail are non-negotiable.
 
-## v0.8.0 Requirements — UI/UX Overhaul (ACTIVE milestone)
+Scope = the 18 items of the approved project-review roadmap, grouped into 6 themes. Derived from `~/.claude/plans/haz-una-revision-completa-sleepy-puddle.md` and the milestone research in `.planning/research/`. New roadmap phases continue numbering from the previous milestone (Phase 12+).
 
-Scope = redesign the extension's Swing UI on a small shared design system, applied across the Settings area and all its tabs, with special focus on the MCP tools tab. New roadmap phases continue numbering from the previous milestone (Phase 9+).
+Research-mandated ordering: **SEC (encrypt secrets) lands before CAP-01 (Anthropic key must be encrypted from day one)**; **QUAL-01 (mega-file split) lands last** as a pure no-behaviour-change refactor so it does not conflict with the C4/feature hooks.
 
-### UI / UX
+## v0.9.0 Requirements
 
-- [x] **UI-01**: A shared design-system module (spacing / typography / color tokens + reusable Swing components — section headers, labeled fields, help text, buttons) is the single styling source for settings panels
-- [x] **UI-02**: Every Settings tab is rebuilt on the design system — consistent layout, spacing, grouping, labels, and one-line descriptions
-- [x] **UI-03**: The MCP tools tab groups tools into extension-native (AI) vs generic (Montoya) sections with clear visual hierarchy, replacing the current flat/disordered list
-- [x] **UI-04**: Each MCP tool row shows whether it ships in the store build (native) or only the full build (generic)
-- [x] **UI-05**: The MCP tools list has a live search/filter (name + description) and per-group bulk enable/disable
-- [x] **UI-06**: Settings navigation is scannable — each tab/section has a title + short description; long tabs use collapsible sections
-- [x] **UI-07**: The redesign preserves all existing functionality and settings persistence — no behaviour or config regressions (values still load/save; tests green)
-- [x] **UI-08**: The UI honours Burp's light/dark theme via tokens — no hardcoded colors that break in dark mode
+### Privacy & Redaction (PRIV) — core value
 
----
+- [ ] **PRIV-01** (A1): Host anonymization uses a cryptographic method consistent with its documentation — either real HKDF (HMAC-SHA256 extract/expand) **or** docs corrected to "salted SHA-256"; the forward/reverse host mapping still resolves and existing privacy-mode tests stay green. *[HKDF-vs-docs decision resolved at this item's plan-phase]*
+- [ ] **PRIV-02** (A2): Redaction catches secrets in request/response **bodies**, not just header lines — the leading field of an `x-www-form-urlencoded` body and a **user-configurable custom pattern list** are redacted; covered by STRICT/BALANCED unit tests and a ReDoS/perf guard on large bodies
+- [ ] **PRIV-03** (C4): A pre-send **secret tripwire** scans the **final redacted payload** and warns the user (warn-with-confirmation, not silent) before a high-entropy secret leaves Burp; allowlist actions are audit-logged and visibly flagged in the preview dialog
+- [ ] **PRIV-04** (C6): The redaction preview/coverage UI flags when a known secret shape passes through and lets the user test custom patterns against a sample request
 
-> The **v0.7.0** (v1) and **v2** sections below are **carryover** from the previous milestone — kept open, not archived. New roadmap phases (9+) map only to the v0.8.0 UI-* requirements above.
+### Secrets at Rest & Transport Security (SEC)
 
-## v1 Requirements
+- [ ] **SEC-01** (C2): The 7+ stored secrets (all backend API keys, `mcp.token`, `mcp.tls.keystore.password`) are **encrypted at rest** (AES-256-GCM via `javax.crypto`); a one-time idempotent migration encrypts existing plaintext values; decryption is transparent at runtime and secrets never appear in logs. *[key-bootstrap mechanism — per-install key vs passphrase vs OS keychain — resolved at this item's plan-phase]*
+- [ ] **SEC-02** (A3): The TLS keystore password is never exposed on a process command line (no `keytool -storepass` argv) — generated in-JVM or via `-storepass:file`/`:env`
+- [ ] **SEC-03** (A6): The user is warned when a configured backend base-URL resolves to a non-loopback internal/link-local address (soft SSRF guard) without blocking deliberate advanced use
 
-Scope = the next release cut, `v0.7.0`. Stabilizes the three `Unreleased` CHANGELOG features (Perplexity backend, AI-scan-on-insertion-point, custom-prompt-library UX), clears the two open bugs that gate a clean release, refreshes user-facing documentation, and ships.
+### Reliability & Concurrency (REL)
 
-### Perplexity Backend
+- [ ] **REL-01** (A4): ChatPanel session state is accessed safely with respect to the Swing EDT — no data races on the session maps (EDT-confined or thread-safe collections), verified by a concurrency test
+- [ ] **REL-02** (A5): Sensitive CLI temp files (prompt/context) are reliably deleted via `finally`+`deleteOnExit`; MCP server shutdown is bounded (no hang); host-anonymization maps are cleared/bounded
+- [ ] **REL-03** (B6): All HTTP backends apply consistent timeouts/retries and route through the `CircuitBreaker` — none can bypass `MontoyaHttpTransport`
+- [ ] **REL-04** (#71): The reported CLI-command-timeout failure (issue #71) is diagnosed and fixed or handled with an actionable error message, with a regression test
 
-- [ ] **PPLX-01**: User can pick **Perplexity** in Settings → Backend with URL / Model / API key / Headers / Timeout fields pre-populated to sane defaults
-- [ ] **PPLX-02**: User running a prompt via Perplexity gets a successful chat completion against `https://api.perplexity.ai/chat/completions` (no `/v1` prefix) using a Sonar-family model
-- [ ] **PPLX-03**: Perplexity backend silently skips the unsupported `response_format: json_object` field, even when callers (e.g. passive scanner) request JSON mode — JSON intent is preserved in the system prompt
-- [ ] **PPLX-04**: Existing backends (NVIDIA NIM, Generic OpenAI-compatible) still behave identically — `OpenAiCompatibleBackend` constructor defaults are backwards-compatible
-- [ ] **PPLX-05**: Saved settings from v0.6.x load unchanged — new `perplexity*` fields default safely; no `migrateIfNeeded` bump required
+### Quality & Maintainability (QUAL)
 
-### AI Scan on Insertion Point
+- [ ] **QUAL-01** (B1): The three mega-files (`McpTools.kt` 2770, `SettingsPanel.kt` 2596, `PassiveAiScanner.kt` 2480) are split into focused files with **no behaviour change** — full test suite green before/after; ServiceLoader/registration intact
+- [ ] **QUAL-02** (B2): Test coverage is raised for the scanner queue/dedup, CLI backend supervision, and the `cache` module (currently 0–3%)
+- [ ] **QUAL-03** (B3): `detekt` is added to the build and `ktlint` is enforced as a **blocking** check, each with a committed baseline so existing code does not break CI
+- [ ] **QUAL-04** (B4): Silently-swallowed `catch (Exception)` sites are audited and replaced with logged, contextual handling via a shared logging helper (ties to REL-04 diagnosability)
+- [ ] **QUAL-05** (B5): The `generateBuildFlags` step is modeled as a proper source-generating task wired via `sourceSets`, so consumers inherit the dependency automatically and `./gradlew ktlintCheck` runs standalone (removes the fragile `dependsOn` workaround)
 
-- [ ] **INSP-01**: Right-clicking a request with a text selection in the editor shows **AI Scan on Selected Insertion Point** in the context menu
-- [ ] **INSP-02**: The menu item is hidden when there is no selection or the selection overlaps no candidate parameter / header / JSON field
-- [ ] **INSP-03**: User selects one or more vuln classes via the existing vuln-class picker; the active scan queues one `ActiveScanTarget` per class at priority 60 (ahead of background passive queue)
-- [ ] **INSP-04**: Selection resolution covers URL params, body params, cookies, header lines, and JSON/XML body field substrings (via Montoya `ParsedHttpParameter.valueOffsets()` then fallbacks)
+### New Capabilities (CAP)
 
-### Custom Prompt Library UX
+- [ ] **CAP-01** (C1): User can select a native **Anthropic Messages API** backend with streaming, tool-use, prompt caching, and token counting — reusing OkHttp + `MontoyaHttpTransport` (no SDK that bypasses Burp), API key encrypted via SEC-01
+- [ ] **CAP-02** (C3, closes #41): User can register external/custom **MCP server(s)** and the agent can call their tools — scope/unsafe-gated, external server auth tokens stored encrypted (SEC-01), with SSRF/untrusted-output safeguards
+- [ ] **CAP-03** (C5, closes #70): User can filter MCP proxy-history tool output by Burp **listener port**
+- [ ] **CAP-04** (C7): User gets per-session **token-budget guardrails** — warn at a threshold and cap at a limit (pausing the passive scanner when the hard cap fires), built on the existing `TokenTracker`
 
-- [ ] **PROM-01**: User filters the Prompt Templates editor with a live, case-insensitive search across title and prompt text
-- [ ] **PROM-02**: User toggles **★ Favorite** on entries; favorites pin to the top of the editor and the right-click submenus
-- [ ] **PROM-03**: User exports the library to a pretty-printed `.json` file with favorites first
-- [ ] **PROM-04**: User imports a `.json` library file; matching ids replace existing entries, new ids append, duplicate ids in the input are de-duplicated defensively
-- [ ] **PROM-05**: Move Up / Move Down respects the favorites grouping — reorders cannot scramble the favorites/non-favorites boundary
-- [ ] **PROM-06**: Right-click submenu order matches editor order (favorites first), without re-sorting at menu-build time
+### Planning & Docs Reconciliation (DOC)
 
-### Bugs Gating Release
+- [ ] **DOC-01** (A7): `.planning/` (PROJECT, STATE, ROADMAP, REQUIREMENTS) reflects shipped v0.7.0/v0.8.0 and closed issues #62/#66/#67/#68/#69; stale carryover removed *(partially completed at milestone start; finalized when phases close)*
+- [ ] **DOC-02**: User-facing docs (`README.md`, `SPEC.md`, `DECISIONS.md`, `burp-ai-agent.six2dez.com`) are updated for the v0.9.0 changes (Anthropic backend, secret encryption, redaction changes, external MCP, token budgets)
 
-- [ ] **BUG-01** (closes #62): Release pipeline publishes the **current tagged code**, not a stale revision — release JAR, SBOM, and SHA-256 match the source at the release commit
-- [ ] **BUG-02** (closes #66): Generic OpenAI-compatible backend handles the user-reported usage error cleanly — root cause identified, surfaced with an actionable error message, fix verified against the reporter's scenario
+## Deferred (v2 / future)
 
-### Release Engineering
-
-- [ ] **REL-01**: `CHANGELOG.md`'s `[Unreleased]` section is promoted to `[0.7.0] - <release date>` with upgrade notes preserved and any new fixes folded in
-- [ ] **REL-02**: Version is bumped consistently (`build.gradle.kts`, any version constants, JAR name `Custom-AI-Agent-0.7.0.jar`)
-- [ ] **REL-03**: `./gradlew clean shadowJar` produces a loadable JAR on macOS, Linux, and Windows (matches existing CI matrix)
-- [ ] **REL-04**: Git tag pushed; GitHub release pipeline uploads JAR + SHA-256 + CycloneDX SBOM with release notes extracted from the matching `CHANGELOG.md` section
-- [ ] **REL-05**: `ktlintCheck`, `jacocoTestReport`, and the full test suite pass on the release commit across the existing OS matrix
-
-### Documentation
-
-- [ ] **DOC-01**: `README.md` lists Perplexity in the backend table with setup notes (default URL, sample model)
-- [ ] **DOC-02**: User-facing documentation (`burp-ai-agent.six2dez.com`) covers Perplexity backend, insertion-point scanning, and the custom prompt library UX additions
-- [ ] **DOC-03**: `SPEC.md` `## 4 Core features` reflects the Unreleased additions (Perplexity in 4.4, insertion-point scanning in 4.2 or §5.2, prompt library UX in 4.2)
-
-## v2 Requirements
-
-Deferred to a post-`v0.7.0` cycle.
-
-### Custom MCP server (issue #41)
-
-- **MCP-V2-01**: Users can register an additional, user-defined MCP server alongside the built-in one (read-only initially, unsafe-mode gated where applicable)
-
-### Telemetry-free reliability signals
-
-- **REL-V2-01**: Optional local-only structured diagnostics endpoint that users can opt into for self-debugging without sending anything offline
+- **REL-V2-01**: Opt-in local-only structured diagnostics endpoint for self-debugging without sending anything offline — *still deferred*
+- *(MCP-V2-01, user-registered MCP server #41, is promoted into this milestone as **CAP-02**.)*
 
 ## Out of Scope
 
-Explicitly excluded for `v0.7.0`. Tracked here to prevent scope creep.
+Explicitly excluded for v0.9.0. Tracked to prevent scope creep.
 
 | Feature | Reason |
 |---------|--------|
-| Hot-swapping backends at runtime | SPEC non-goal — stop + restart is acceptable; complexity does not pay back |
+| Hot-swapping backends at runtime | SPEC non-goal — stop + restart is acceptable |
 | Replacing Burp's native scanner | SPEC non-goal — AI scanners are complementary, secondary to Burp evidence |
-| New AI backends beyond the existing 11 | v0.7.0 is a stabilization release, not a backend-expansion release |
+| AI backends beyond Anthropic (CAP-01) this milestone | Scope control — one new backend; others remain via OpenAI-compatible/CLI |
 | Rewriting UI in JavaFX / Compose | ADR-2 locked Swing in for native Burp embedding |
-| Outbound telemetry / crash reporting | Violates the core privacy contract; users explicitly enable audit logging instead |
-| Mobile / standalone build | Plugin only runs inside Burp; out of remit |
+| Outbound telemetry / crash reporting | Violates the core privacy contract |
+| Vendoring an Anthropic SDK that embeds its own HTTP client | Would bypass `MontoyaHttpTransport` (the #69 trap) and bloat the fat JAR |
+| Bouncy Castle / Tink / java-keyring as new runtime deps | Research: javax.crypto suffices for SEC-01; avoid fat-JAR/protobuf conflicts |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PPLX-01 | Phase 1 — Perplexity Backend Audit | Pending |
-| PPLX-02 | Phase 1 — Perplexity Backend Audit | Pending |
-| PPLX-03 | Phase 1 — Perplexity Backend Audit | Pending |
-| PPLX-04 | Phase 1 — Perplexity Backend Audit | Pending |
-| PPLX-05 | Phase 1 — Perplexity Backend Audit | Pending |
-| INSP-01 | Phase 2 — Insertion-Point Scan Audit | Pending |
-| INSP-02 | Phase 2 — Insertion-Point Scan Audit | Pending |
-| INSP-03 | Phase 2 — Insertion-Point Scan Audit | Pending |
-| INSP-04 | Phase 2 — Insertion-Point Scan Audit | Pending |
-| PROM-01 | Phase 3 — Prompt Library UX Audit | Pending |
-| PROM-02 | Phase 3 — Prompt Library UX Audit | Pending |
-| PROM-03 | Phase 3 — Prompt Library UX Audit | Pending |
-| PROM-04 | Phase 3 — Prompt Library UX Audit | Pending |
-| PROM-05 | Phase 3 — Prompt Library UX Audit | Pending |
-| PROM-06 | Phase 3 — Prompt Library UX Audit | Pending |
-| BUG-01 | Phase 4 — Release-Gating Bug Fixes | Pending |
-| BUG-02 | Phase 4 — Release-Gating Bug Fixes | Pending |
-| DOC-01 | Phase 5 — Documentation Refresh | Pending |
-| DOC-02 | Phase 5 — Documentation Refresh | Pending |
-| DOC-03 | Phase 5 — Documentation Refresh | Pending |
-| REL-01 | Phase 6 — v0.7.0 Release Cut | Pending |
-| REL-02 | Phase 6 — v0.7.0 Release Cut | Pending |
-| REL-03 | Phase 6 — v0.7.0 Release Cut | Pending |
-| REL-04 | Phase 6 — v0.7.0 Release Cut | Pending |
-| REL-05 | Phase 6 — v0.7.0 Release Cut | Pending |
-| UI-01 | Phase 9 — Design System Foundation | Complete |
-| UI-03 | Phase 10 — MCP Tools Tab Redesign | Complete |
-| UI-04 | Phase 10 — MCP Tools Tab Redesign | Complete |
-| UI-05 | Phase 10 — MCP Tools Tab Redesign | Complete |
-| UI-07 | Phase 10 — MCP Tools Tab Redesign (cross-cutting SC) | Complete |
-| UI-02 | Phase 11 — Settings Tabs + Theme Rollout | Complete |
-| UI-06 | Phase 11 — Settings Tabs + Theme Rollout | Complete |
-| UI-08 | Phase 11 — Settings Tabs + Theme Rollout | Complete |
+| *(filled by gsd-roadmapper)* | — | Pending |
 
 **Coverage:**
-- v0.7.0 (v1) requirements: 25 total
-- Mapped to phases: 25 (Phase 1: 5, Phase 2: 4, Phase 3: 6, Phase 4: 2, Phase 5: 3, Phase 6: 5)
-- v0.8.0 requirements: 8 total (UI-01..UI-08)
-- Mapped to phases: 8 (Phase 9: 1, Phase 10: 4 incl. UI-07 cross-cutting, Phase 11: 3+UI-07 cross-cutting)
-- Unmapped: 0
+- v0.9.0 requirements: 22 total (PRIV 4, SEC 3, REL 4, QUAL 5, CAP 4, DOC 2)
+- Mapped to phases: *(pending roadmap)*
 
 ---
-*Requirements defined: 2026-05-13*
-*Last updated: 2026-05-29 — v0.8.0 UI-01..UI-08 mapped to Phases 9-11 (gsd-roadmapper)*
+
+## Shipped (historical record)
+
+- **v0.8.0 — UI/UX Overhaul** (2026-06-02): UI-01..UI-08 (design system, MCP tools tab redesign, settings rebuilt on tokens, light/dark theme). Phases 9–11.
+- **v0.7.0 — Release Cut + stabilization** (2026-05-15): PPLX-01..05 (Perplexity backend), INSP-01..04 (insertion-point scan), PROM-01..06 (prompt library UX), BUG-01 (#62 release pipeline), BUG-02 (#66 OpenAI-compatible), REL/DOC release engineering, plus Phase 7 (#69 proxy transport + MCP scope) and Phase 8 (#231 BApp Store resubmission). Phases 1–8.
+
+---
+*Requirements defined: 2026-06-10 — milestone v0.9.0*
