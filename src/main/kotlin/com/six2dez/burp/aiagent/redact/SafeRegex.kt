@@ -90,9 +90,19 @@ object SafeRegex {
     ): Boolean =
         try {
             val compiled = Pattern.compile(regex) // syntax check — throws PatternSyntaxException on bad regex
-            val deadline = System.nanoTime() + timeoutMs * 1_000_000L
-            compiled.matcher(DeadlineCharSequence(ADVERSARIAL_PROBE, deadline)).find()
-            true
+            // WR-01: reject patterns that can match the empty (zero-width) string, e.g. a*, \d*,
+            // [0-9]*, \s*, x?, (foo)?, .*. Matcher.replaceAll advances past zero-width matches one
+            // character at a time, inserting the replacement between EVERY character — corrupting
+            // and bloating the outbound context (a 44-char body explodes to ~490 chars). Fail-safe
+            // for secrecy, but a foreseeable footgun for non-expert regex users, so reject it up
+            // front and surface a distinct rejection message in the save path.
+            if (compiled.matcher("").find()) {
+                false
+            } else {
+                val deadline = System.nanoTime() + timeoutMs * 1_000_000L
+                compiled.matcher(DeadlineCharSequence(ADVERSARIAL_PROBE, deadline)).find()
+                true
+            }
         } catch (_: PatternSyntaxException) {
             false
         } catch (_: RegexTimeoutException) {

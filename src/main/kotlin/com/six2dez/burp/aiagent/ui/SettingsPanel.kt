@@ -1234,9 +1234,9 @@ class SettingsPanel(
         if (rejected.isNotEmpty()) {
             val msg =
                 if (rejected.size == 1) {
-                    "Pattern rejected: invalid regex or too slow (ReDoS guard). Fix it and save again."
+                    "Pattern rejected: invalid regex, matches empty string, or too slow (ReDoS guard). Fix it and save again."
                 } else {
-                    "${rejected.size} patterns rejected: invalid regex or too slow. Fix the highlighted lines and save again."
+                    "${rejected.size} patterns rejected: invalid regex, match empty string, or too slow. Fix the highlighted lines and save again."
                 }
             patternsFeedbackLabel.text = msg
             patternsFeedbackLabel.foreground = DesignTokens.Colors.statusError

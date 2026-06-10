@@ -45,6 +45,26 @@ class SafeRegexTest {
         assertTrue(elapsed < 200L, "replaceAllSafe must return within 200 ms; took $elapsed ms")
     }
 
+    // WR-01: patterns that can match the empty (zero-width) string must be rejected. Otherwise
+    // replaceAll would insert the replacement between every character, corrupting/bloating the
+    // outbound context. Covers the common footguns: *, ?, and alternations with an empty branch.
+    @Test
+    fun emptyMatchingPatternsAreRejected() {
+        val emptyMatchers = listOf("a*", "\\d*", "[0-9]*", "\\s*", "x?", "(foo)?", ".*", "(abc)*", "a|")
+        for (p in emptyMatchers) {
+            assertFalse(SafeRegex.isPatternSafe(p), "Empty-matching pattern must be rejected: $p")
+        }
+    }
+
+    // WR-01: a pattern that requires at least one character (cannot match empty) must still pass.
+    @Test
+    fun nonEmptyMatchingPatternsStillAccepted() {
+        val nonEmptyMatchers = listOf("\\bSECRET-\\d{4}\\b", "\\d+", "[A-Z]+", "INTERNAL-[A-Z0-9]{6}", "a+")
+        for (p in nonEmptyMatchers) {
+            assertTrue(SafeRegex.isPatternSafe(p), "Non-empty-matching pattern must be accepted: $p")
+        }
+    }
+
     // PRIV-02: replaceAllSafe on a benign pattern must apply the replacement correctly.
     @Test
     fun benignReplaceAppliesReplacement() {
