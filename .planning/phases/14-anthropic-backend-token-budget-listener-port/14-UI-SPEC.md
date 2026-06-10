@@ -1,10 +1,11 @@
 ---
 phase: 14
 slug: anthropic-backend-token-budget-listener-port
-status: draft
+status: approved
 shadcn_initialized: false
 preset: none
 created: 2026-06-10
+reviewed_at: 2026-06-10
 ---
 
 # Phase 14 — UI Design Contract: Anthropic Backend + Token Budget + Listener Port
