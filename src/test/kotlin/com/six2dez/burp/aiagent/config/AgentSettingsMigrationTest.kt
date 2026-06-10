@@ -3,6 +3,7 @@ package com.six2dez.burp.aiagent.config
 import burp.api.montoya.MontoyaApi
 import burp.api.montoya.persistence.Preferences
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.mockito.Answers
@@ -122,6 +123,38 @@ class AgentSettingsMigrationTest {
         val repo = AgentSettingsRepository(apiWith(prefs.mock))
         val loaded = repo.load()
         assertEquals(100 * 1024 * 1024, loaded.mcpSettings.maxBodyBytes, "values > 100 MB must be clamped down")
+    }
+
+    // PRIV-02: customRedactionPatterns must persist as a plaintext newline-joined string under
+    // the versioned key privacy.custom.redaction.patterns.v1 (NOT SecretCipher / NOT ENC1:).
+    @Test
+    fun customRedactionPatterns_roundTripsThroughSaveLoad() {
+        val patterns = listOf("foo", "bar")
+
+        // Save with non-default custom patterns.
+        val prefs = InMemoryPrefs()
+        val writer = AgentSettingsRepository(apiWith(prefs.mock))
+        writer.save(writer.defaultSettings().copy(customRedactionPatterns = patterns))
+
+        // The stored string must be plaintext newline-joined — NOT an ENC1: blob.
+        val stored = prefs.strings["privacy.custom.redaction.patterns.v1"] ?: ""
+        assertEquals("foo\nbar", stored, "Patterns must be stored as plaintext newline-joined")
+        assertFalse(stored.startsWith("ENC1:"), "Patterns must NOT be encrypted (they are config, not secrets)")
+
+        // Fresh repository on the same prefs → round-trip loads back the original list.
+        val reader = AgentSettingsRepository(apiWith(prefs.mock))
+        val loaded = reader.load()
+        assertEquals(patterns, loaded.customRedactionPatterns, "Loaded patterns must match saved patterns")
+    }
+
+    // PRIV-02: absent key (fresh install) must yield an empty list — no migration, no throw.
+    @Test
+    fun customRedactionPatterns_absentKeyDefaultsToEmptyList() {
+        val prefs = InMemoryPrefs()
+        // No privacy.custom.redaction.patterns.v1 key in prefs.
+        val repo = AgentSettingsRepository(apiWith(prefs.mock))
+        val loaded = repo.load()
+        assertEquals(emptyList<String>(), loaded.customRedactionPatterns, "Absent key must default to empty list")
     }
 
     @Test

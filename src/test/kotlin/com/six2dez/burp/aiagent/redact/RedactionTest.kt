@@ -1,6 +1,9 @@
 package com.six2dez.burp.aiagent.redact
 
+import com.six2dez.burp.aiagent.config.Defaults
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -41,6 +44,12 @@ private object Rfc5869TestCase1 {
 }
 
 class RedactionTest {
+    @AfterEach
+    fun resetCustomPatterns() {
+        // Prevent custom-pattern bleed across tests: reset after each test.
+        Redaction.setCustomPatterns(emptyList())
+    }
+
     @Test
     fun strictModeStripsCookiesTokensAndHosts() {
         val input =
@@ -177,5 +186,94 @@ class RedactionTest {
             okm.toList(),
             "OKM must match RFC 5869 Test Case 1",
         )
+    }
+
+    // PRIV-02: Leading x-www-form-urlencoded field (no leading ?/&) must be redacted in STRICT
+    // and BALANCED. This is the documented gap: the old [?&]-only urlTokenParamRegex missed the
+    // first field of a body like apikey=sk-abc123&user=bob.
+    @Test
+    fun bodyFormLeadingFieldRedacted() {
+        val body = "apikey=sk-abc123&user=bob"
+
+        for (mode in listOf(PrivacyMode.STRICT, PrivacyMode.BALANCED)) {
+            val policy = RedactionPolicy.fromMode(mode)
+            val output = Redaction.apply(body, policy, stableHostSalt = "salt")
+            assertTrue(output.contains("apikey=[REDACTED]"), "$mode: leading form field apikey must be redacted")
+            assertTrue(output.contains("user=bob"), "$mode: non-sensitive param user must NOT be touched")
+            assertFalse(output.contains("sk-abc123"), "$mode: original secret value must not appear")
+        }
+    }
+
+    // PRIV-02: Known-sensitive JSON keys must be redacted (key-scoped — only the value under
+    // a sensitive key name is replaced). Non-sensitive keys must be left untouched.
+    @Test
+    fun bodyJsonSecretKeysRedacted() {
+        val body = """{"api_key":"sk-xyz","name":"alice","token":"abc"}"""
+
+        for (mode in listOf(PrivacyMode.STRICT, PrivacyMode.BALANCED)) {
+            val policy = RedactionPolicy.fromMode(mode)
+            val output = Redaction.apply(body, policy, stableHostSalt = "salt")
+            assertTrue(output.contains("\"api_key\":\"[REDACTED]\""), "$mode: api_key JSON value must be redacted")
+            assertTrue(output.contains("\"token\":\"[REDACTED]\""), "$mode: token JSON value must be redacted")
+            assertTrue(output.contains("\"name\":\"alice\""), "$mode: non-sensitive name key must NOT be touched")
+            assertFalse(output.contains("sk-xyz"), "$mode: original api_key value must not appear")
+            assertFalse(output.contains("\"abc\""), "$mode: original token value must not appear")
+        }
+    }
+
+    // PRIV-02: OFF mode must leave bodies completely untouched — no form-body or JSON redaction.
+    @Test
+    fun offModePreservesBodies() {
+        val formBody = "apikey=sk-abc123&user=bob"
+        val jsonBody = """{"api_key":"sk-xyz","name":"alice","token":"abc"}"""
+
+        val policy = RedactionPolicy.fromMode(PrivacyMode.OFF)
+
+        val formOutput = Redaction.apply(formBody, policy, stableHostSalt = "salt")
+        assertEquals(formBody, formOutput, "OFF mode must not touch form body")
+
+        val jsonOutput = Redaction.apply(jsonBody, policy, stableHostSalt = "salt")
+        assertEquals(jsonBody, jsonOutput, "OFF mode must not touch JSON body")
+    }
+
+    // PRIV-02: User-supplied custom pattern applied in STRICT and BALANCED, inactive in OFF.
+    // The test resets patterns in @AfterEach to avoid cross-test bleed.
+    @Test
+    fun customPatternRedactsInStrictAndBalanced() {
+        Redaction.setCustomPatterns(listOf("\\bSECRET-\\d{4}\\b"))
+
+        val input = "Content: SECRET-1234 is the value"
+
+        for (mode in listOf(PrivacyMode.STRICT, PrivacyMode.BALANCED)) {
+            val policy = RedactionPolicy.fromMode(mode)
+            val output = Redaction.apply(input, policy, stableHostSalt = "salt")
+            assertTrue(output.contains("[REDACTED]"), "$mode: custom pattern must redact SECRET-1234")
+            assertFalse(output.contains("SECRET-1234"), "$mode: original value must not appear after redaction")
+        }
+
+        // OFF mode: custom patterns are in the redactTokens branch — inactive in OFF.
+        val offPolicy = RedactionPolicy.fromMode(PrivacyMode.OFF)
+        val offOutput = Redaction.apply(input, offPolicy, stableHostSalt = "salt")
+        assertEquals(input, offOutput, "OFF mode must not apply custom patterns")
+    }
+
+    // PRIV-02: A body larger than Defaults.MAX_REDACTION_BODY_CHARS must be short-circuited.
+    // The body-stage redaction is skipped; the call must return promptly and not throw.
+    // The over-cap secret may remain (documented size-cap behaviour).
+    @Test
+    fun oversizeBodySkippedSafely() {
+        // Generate a body larger than the cap (cap is ~1 MB = 1_000_000 chars).
+        val oversizeBody = "apikey=" + "x".repeat(Defaults.MAX_REDACTION_BODY_CHARS + 10)
+        val policy = RedactionPolicy.fromMode(PrivacyMode.STRICT)
+
+        // The primary assertion: the call must return without throwing or hanging.
+        val start = System.currentTimeMillis()
+        val output = Redaction.apply(oversizeBody, policy, stableHostSalt = "salt")
+        val elapsed = System.currentTimeMillis() - start
+
+        // Should return in well under a second (body stage is skipped entirely).
+        assertTrue(elapsed < 5_000, "Oversize body must short-circuit quickly; took ${elapsed}ms")
+        // The output must be a string (not null, not empty) — the call completed.
+        assertTrue(output.isNotEmpty(), "Output must be non-empty even when oversize body is skipped")
     }
 }
