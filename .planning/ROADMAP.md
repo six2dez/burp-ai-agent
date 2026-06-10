@@ -36,6 +36,7 @@ Phases 9–11 closed. Features: design system foundation (UI-01), MCP tools tab 
 **Goal:** Harden privacy/security, pay down quality and maintainability debt, and add new capabilities on the stable v0.8.0 base — without compromising the non-negotiable core value (privacy controls + audit trail).
 
 **Ordering rationale (from research):**
+
 - SEC (Phase 12) must land first — all new secret fields (Anthropic key, external MCP tokens) must be encrypted from day one; migration ladder must exist before any new secret field is added.
 - Privacy hardening (Phase 13) is independent of SEC and can run after it without conflicts.
 - CAP-01/03/04 (Phase 14) depends on Phase 12; Anthropic API key must be encrypted from the first commit that introduces it.
@@ -64,14 +65,17 @@ Phases 9–11 closed. Features: design system foundation (UI-01), MCP tools tab 
 **Depends on**: Nothing (must be first — every subsequent phase that introduces a new secret relies on this)
 **Requirements**: SEC-01, SEC-02, SEC-03
 **Success Criteria** (what must be TRUE):
+
   1. A user who upgrades from v0.8.0 has all their existing API keys and MCP tokens transparently migrated to AES-256-GCM encrypted form; Settings loads correctly with plaintext values at runtime; plaintext form is overwritten only after round-trip decrypt succeeds.
   2. Secrets never appear in Burp's output/error logs — the crypto path logs only the Preferences key name on failure, never the key material.
   3. A user enabling MCP TLS no longer has the keystore password exposed in a `ps aux` listing during keytool execution; the password is written to a temp file with owner-read-only permissions or generated in-JVM.
   4. A user who types a non-loopback private/link-local URL in any backend settings field sees a soft SSRF warning on save (non-blocking — the user can proceed deliberately).
   5. Unit tests cover: AES-GCM round-trip, schema-V4 migration idempotency (re-running migration does not double-encrypt), and headless Linux fallback path (no `HeadlessException` with `java.awt.headless=true`).
+
 **Plans**: 4 plans
 
 Plans:
+
 - [ ] 12-01-PLAN.md — SecretCipher.kt: AES-256-GCM utility + per-install master key (SEC-01 foundation)
 - [ ] 12-02-PLAN.md — Schema v4 migration + encrypt/decrypt wiring in AgentSettingsRepository (SEC-01)
 - [ ] 12-03-PLAN.md — In-JVM TLS cert generation in McpTls.kt, removes keytool subprocess (SEC-02)
@@ -83,17 +87,25 @@ Plans:
 **Depends on**: Phase 12 (Phase 12 closes before Phase 13 begins, ensuring no conflicts on Redaction.kt; the two phases touch different files and are logically independent but sequencing avoids any merge friction)
 **Requirements**: PRIV-01, PRIV-02, PRIV-04
 **Success Criteria** (what must be TRUE):
+
   1. `Redaction.anonymizeHost` uses `Mac.getInstance("HmacSHA256")` (HKDF extract/expand) not `MessageDigest.getInstance("SHA-256")` — the SPEC's stated privacy guarantee now matches the implementation; existing STRICT-mode tests stay green.
   2. A secret in the leading field of a `application/x-www-form-urlencoded` request body (e.g. `apikey=sk-abc123&...`) is redacted in STRICT and BALANCED modes, confirmed by a unit test.
   3. A user can enter a custom regex pattern in Settings; the pattern is applied during redaction and the UI validates it against an adversarial ReDoS test string (50 ms timeout) before accepting it.
   4. The redaction preview dialog flags when a known secret shape (matching the same curated pattern set as the tripwire) passed through redaction, so the user can see what the pipeline missed before sending.
   5. Unit tests cover STRICT/BALANCED/OFF mode matrix for the new body-redaction paths and the custom-pattern ReDoS guard.
+
 **Plans**: 3 plans
 
 Plans:
+**Wave 1**
+
 - [ ] 13-01-PLAN.md — HKDF host anonymization (PRIV-01) + SafeRegex ReDoS-guard foundation (redact core) [wave 1]
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 13-02-PLAN.md — Body/form/JSON redaction + custom-pattern engine, persistence, and Privacy panel wiring (PRIV-02) [wave 2]
 - [ ] 13-03-PLAN.md — Shared SecretShapes curated set + survived-secret WARN banner in the preview dialog (PRIV-04) [wave 2]
+
 **UI hint**: yes
 
 ### Phase 14: Anthropic Backend + Token Budget + Listener Port
@@ -102,11 +114,13 @@ Plans:
 **Depends on**: Phase 12 (anthropicApiKey must be encrypted from the first commit that introduces it)
 **Requirements**: CAP-01, CAP-03, CAP-04
 **Success Criteria** (what must be TRUE):
+
   1. A user can select "Anthropic" in Settings > Backend, enter an API key (encrypted on save), choose a model (editable, defaulting to a current alias), and send a chat message that streams tokens back through the Burp proxy — verified by a HUMAN-UAT smoke test with a live Anthropic API key.
   2. Anthropic traffic appears in Burp's Proxy > HTTP history (confirming `MontoyaHttpTransport` is used, not a direct OkHttp client); `grep OkHttp AnthropicBackend.kt` returns empty on the production code path.
   3. A 400 response from Anthropic that contains "model" in the error body surfaces a specific user-visible message ("Anthropic rejected the model ID — check Settings > Anthropic > Model") rather than a generic error.
   4. A user can set a session token-budget warn threshold and hard cap; the passive scanner pauses when the hard cap fires; the chat UI shows a warning banner when the warn threshold is crossed.
   5. A user using the MCP `proxy_http_history` tool can filter results by Burp listener port (e.g. `8080`), and only requests received on that port are returned.
+
 **Plans**: TBD
 **UI hint**: yes
 
@@ -116,11 +130,13 @@ Plans:
 **Depends on**: Phase 12 (meaningful once existing keys are no longer plaintext in preferences; adds hooks to PassiveAiScanner before Phase 19 moves those methods)
 **Requirements**: PRIV-03
 **Success Criteria** (what must be TRUE):
+
   1. A request body containing a live AWS-format key (`AKIA...`) that survives BALANCED-mode redaction triggers a confirmation dialog ("This payload appears to contain a high-entropy value — send anyway?") before reaching the AI backend — verified by a unit test with a synthetic high-entropy string.
   2. A legitimate high-entropy pentest payload (e.g. a base64-encoded fuzz string) also shows the confirmation dialog and the user can dismiss it to proceed; the send is never hard-blocked.
   3. Allowlist actions (user chose "send anyway") are written to the audit log with the session ID and a truncated entropy score — the allowlist decision is auditable.
   4. The tripwire fires on all three outbound paths: ChatPanel interactive send, PassiveAiScanner batch/single sends, and MCP tool output via `McpToolContext.redactIfNeeded()`.
   5. The confirmation dialog is visible in the context preview dialog where the tripwire match is highlighted.
+
 **Plans**: TBD
 **UI hint**: yes
 
@@ -130,11 +146,13 @@ Plans:
 **Depends on**: Phase 12 (external MCP bearer tokens must be encrypted from day one); kotlin-sdk 0.5.0→0.13.0 bump (Ktor 3.4.3, kotlin-stdlib 2.3.21) requires a Burp-JVM test-run gate before this phase begins
 **Requirements**: CAP-02
 **Success Criteria** (what must be TRUE):
+
   1. A user can add an external MCP server (SSE or stdio transport) in the MCP settings CRUD UI; the server connects and its tools appear alongside Burp's built-in tools in the agent's tool preamble — verified by a HUMAN-UAT with a real external MCP server.
   2. External MCP tool results are wrapped in an explicit trust-boundary marker before they enter the AI prompt context; the audit log records every external tool invocation and its result summary.
   3. Configuring an external MCP server URL that resolves to an RFC-1918 or link-local address triggers the same soft SSRF warning introduced in Phase 12.
   4. External server auth tokens are stored encrypted (Phase 12 SecretStore); they are never logged or exposed in the Settings UI in plaintext (show/hide toggle, same as other API key fields).
   5. The extension loads, the embedded MCP server starts, and the UI is responsive after the kotlin-sdk 0.13.0 bump — no `ClassLoader` conflicts or `NoClassDefFoundError` on Burp's JVM (verified in CI).
+
 **Plans**: TBD
 **UI hint**: yes
 
@@ -144,11 +162,13 @@ Plans:
 **Depends on**: Phase 14 (AnthropicBackend must be included in the CircuitBreaker/timeout audit); Phase 16 recommended (McpClientManager lifecycle included in shutdown-bound audit)
 **Requirements**: REL-01, REL-02, REL-03, REL-04
 **Success Criteria** (what must be TRUE):
+
   1. `ChatPanel`'s four session maps (`sessionPanels`, `sessionStates`, `sessionsById`, `sessionDrafts`) carry `@GuardedBy("EDT")` annotations and an `assert(SwingUtilities.isEventDispatchThread())` guard at every write site; a `ChatPanelConcurrencyTest` verifies no off-EDT writes are reachable.
   2. CLI temp files containing prompt/context content are deleted in `finally` blocks (not only in `catch`); `deleteOnExit()` is also called as a belt-and-suspenders fallback; confirmed by a test that simulates an exception mid-execution.
   3. All HTTP backends (including the new AnthropicBackend from Phase 14) share consistent connect/read timeouts and route through `CircuitBreaker`; no backend can bypass `MontoyaHttpTransport` on the production code path.
   4. Issue #71 (CLI command timeout failure) is reproduced, diagnosed, and fixed or given an actionable error message; a regression test prevents recurrence.
   5. MCP server shutdown completes within a bounded timeout (no hang on `McpSupervisor.stop()`); host-anonymization maps are bounded or cleared to prevent memory growth over long pentests.
+
 **Plans**: TBD
 
 ### Phase 18: Quality Tooling & Build Hardening
@@ -157,11 +177,13 @@ Plans:
 **Depends on**: Phase 17 recommended (reliability fixes increase coverage scope); independent of Phase 19
 **Requirements**: QUAL-02, QUAL-03, QUAL-04, QUAL-05
 **Success Criteria** (what must be TRUE):
+
   1. `./gradlew ktlintCheck` passes standalone (without init-script workarounds), confirming the `generateBuildFlags` task is wired via `sourceSets` so consumers inherit the dependency automatically.
   2. `detekt` runs as a blocking CI check with a committed `detekt-baseline.xml`; new code must be clean; existing violations are captured in the baseline and do not break CI.
   3. `ktlintFormat` has been run on the entire codebase in a dedicated commit that precedes the `ktlintCheck` blocking-gate commit — confirmed by git log ordering.
   4. Test coverage for `scanner` queue/dedup, `cli` backend supervision, and the `cache` module is measurably raised from the current 0–3% baseline (target: at least one meaningful test class per module that exercises the critical path).
   5. Silently-swallowed `catch (Exception)` sites have been audited; each site either logs a contextual message via a shared helper or carries a `// INTENTIONAL: <reason>` comment; the audit is documented in a short tracking note.
+
 **Plans**: TBD
 
 ### Phase 19: Mega-File Split + Docs
@@ -170,11 +192,13 @@ Plans:
 **Depends on**: All code phases (12–18) complete — pure refactor must be last so no in-flight feature conflicts; PRIV-03 hooks (Phase 15) are inside PassiveAiScanner and must be committed before the split
 **Requirements**: QUAL-01, DOC-01, DOC-02
 **Success Criteria** (what must be TRUE):
+
   1. `McpTools.kt`, `SettingsPanel.kt`, and `PassiveAiScanner.kt` are each under 400–500 lines after the split; the full test suite (`./gradlew test`) passes before and after each individual extraction with zero behaviour changes.
   2. `ServiceLoader` registration (`META-INF/services`) is intact after the split — `BackendRegistryTest.loadAll()` asserts the expected number of built-in factories; no `ClassNotFoundException` at runtime.
   3. `.planning/` (PROJECT.md, STATE.md, ROADMAP.md, REQUIREMENTS.md) reflects shipped v0.7.0 and v0.8.0; closed issues #62/#66/#67/#68/#69 are acknowledged in the relevant planning artifacts with no stale carryover entries.
   4. `README.md`, `SPEC.md`, and `DECISIONS.md` are updated to document the Anthropic backend, secret encryption (AES-256-GCM), redaction changes (real HKDF, body patterns, custom patterns), external MCP client, and token-budget guardrails.
   5. The public docs site (`burp-ai-agent.six2dez.com`) has pages or sections for the Anthropic backend and external MCP servers, so v0.9.0 ships with no doc drift on the two highest-novelty features.
+
 **Plans**: TBD
 
 ---
