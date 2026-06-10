@@ -123,7 +123,7 @@ Plans:
 
 **Plans**: 3 plans
 - [x] 14-01-PLAN.md — Anthropic Messages API backend + supervisor branch + registration + all AgentSettings fields (encrypted key) + Anthropic settings card (CAP-01)
-- [ ] 14-02-PLAN.md — Token-budget guardrails: AWT-free BudgetGuard + scanner budgetPaused gate + chat banner + Settings token-budget section (CAP-04)
+- [x] 14-02-PLAN.md — Token-budget guardrails: AWT-free BudgetGuard + scanner budgetPaused gate + chat banner + Settings token-budget section (CAP-04)
 - [ ] 14-03-PLAN.md — proxy_http_history listener_port filter on both dispatch paths (CAP-03, closes #70)
 **UI hint**: yes
 
@@ -216,7 +216,7 @@ Phase 12 (SEC) must be first. Phase 13 (Privacy) and Phase 12 are sequential (av
 |-------|----------------|--------|-----------|
 | 12. Secrets at Rest & Transport Security | 4/4 | ✅ Complete | 2026-06-10 |
 | 13. Privacy & Redaction Hardening | 3/3 | Complete    | 2026-06-10 |
-| 14. Anthropic Backend + Token Budget + Listener Port | 1/3 | In Progress|  |
+| 14. Anthropic Backend + Token Budget + Listener Port | 2/3 | In Progress|  |
 | 15. Pre-Send Secret Tripwire | 0/TBD | Not started | - |
 | 16. External MCP Client | 0/TBD | Not started | - |
 | 17. Reliability & Concurrency Hardening | 0/TBD | Not started | - |
