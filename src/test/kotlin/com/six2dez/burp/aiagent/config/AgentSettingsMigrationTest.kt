@@ -25,7 +25,7 @@ class AgentSettingsMigrationTest {
             listOf("https://ops.example.com", "http://127.0.0.1"),
             loaded.mcpSettings.allowedOrigins,
         )
-        assertEquals(3, prefs.integers["settings.schema.version"])
+        assertEquals(4, prefs.integers["settings.schema.version"])
         assertTrue((prefs.strings["mcp.allowed.origins"] ?: "").contains("\n"))
     }
 
@@ -36,7 +36,7 @@ class AgentSettingsMigrationTest {
 
         repo.save(repo.defaultSettings())
 
-        assertEquals(3, prefs.integers["settings.schema.version"])
+        assertEquals(4, prefs.integers["settings.schema.version"])
     }
 
     @Test
@@ -48,7 +48,7 @@ class AgentSettingsMigrationTest {
         val loaded = repo.load()
 
         assertEquals(emptyList<CustomPromptDefinition>(), loaded.customPromptLibrary)
-        assertEquals(3, prefs.integers["settings.schema.version"])
+        assertEquals(4, prefs.integers["settings.schema.version"])
     }
 
     @Test
@@ -65,7 +65,7 @@ class AgentSettingsMigrationTest {
         assertEquals("", loaded.perplexityApiKey)
         assertEquals("", loaded.perplexityHeaders)
         assertEquals(120, loaded.perplexityTimeoutSeconds)
-        assertEquals(3, prefs.integers["settings.schema.version"])
+        assertEquals(4, prefs.integers["settings.schema.version"])
     }
 
     @Test

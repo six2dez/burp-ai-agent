@@ -147,6 +147,13 @@ class AgentSettingsRepository(
 ) {
     private val prefs: Preferences = api.persistence().preferences()
 
+    /**
+     * SEC-01 secret encryption. Reuses the existing [prefs] instance so the per-install master
+     * key is shared across encrypt/decrypt — do NOT call api.persistence().preferences() again
+     * (a second mock instance in tests would store the master key separately and break round-trips).
+     */
+    private val cipher: SecretCipher = SecretCipher(prefs)
+
     /** Thread-safe cached settings snapshot. Updated atomically on save(). */
     private val cachedSettings =
         java.util.concurrent.atomic
@@ -214,7 +221,7 @@ class AgentSettingsRepository(
                     .trim()
                     .ifBlank { defaultOllamaServeCmd() },
             ollamaAutoStart = prefs.getBoolean(KEY_OLLAMA_AUTOSTART) ?: true,
-            ollamaApiKey = prefs.getString(KEY_OLLAMA_API_KEY).orEmpty().trim(),
+            ollamaApiKey = cipher.decrypt(prefs.getString(KEY_OLLAMA_API_KEY).orEmpty().trim(), KEY_OLLAMA_API_KEY),
             ollamaHeaders = prefs.getString(KEY_OLLAMA_HEADERS).orEmpty(),
             ollamaTimeoutSeconds =
                 (prefs.getInteger(KEY_OLLAMA_TIMEOUT) ?: defaultOllamaTimeoutSeconds())
@@ -239,11 +246,12 @@ class AgentSettingsRepository(
                     .trim()
                     .ifBlank { defaultLmStudioServerCmd() },
             lmStudioAutoStart = prefs.getBoolean(KEY_LMSTUDIO_AUTOSTART) ?: true,
-            lmStudioApiKey = prefs.getString(KEY_LMSTUDIO_API_KEY).orEmpty().trim(),
+            lmStudioApiKey = cipher.decrypt(prefs.getString(KEY_LMSTUDIO_API_KEY).orEmpty().trim(), KEY_LMSTUDIO_API_KEY),
             lmStudioHeaders = prefs.getString(KEY_LMSTUDIO_HEADERS).orEmpty(),
             openAiCompatibleUrl = prefs.getString(KEY_OPENAI_COMPAT_URL).orEmpty().trim(),
             openAiCompatibleModel = prefs.getString(KEY_OPENAI_COMPAT_MODEL).orEmpty().trim(),
-            openAiCompatibleApiKey = prefs.getString(KEY_OPENAI_COMPAT_API_KEY).orEmpty().trim(),
+            openAiCompatibleApiKey =
+                cipher.decrypt(prefs.getString(KEY_OPENAI_COMPAT_API_KEY).orEmpty().trim(), KEY_OPENAI_COMPAT_API_KEY),
             openAiCompatibleHeaders = prefs.getString(KEY_OPENAI_COMPAT_HEADERS).orEmpty(),
             openAiCompatibleTimeoutSeconds =
                 (prefs.getInteger(KEY_OPENAI_COMPAT_TIMEOUT) ?: defaultOpenAiCompatTimeoutSeconds())
@@ -253,7 +261,7 @@ class AgentSettingsRepository(
                     defaultNvidiaNimUrl()
                 },
             nvidiaNimModel = prefs.getString(KEY_NVIDIA_NIM_MODEL).orEmpty().trim(),
-            nvidiaNimApiKey = prefs.getString(KEY_NVIDIA_NIM_API_KEY).orEmpty().trim(),
+            nvidiaNimApiKey = cipher.decrypt(prefs.getString(KEY_NVIDIA_NIM_API_KEY).orEmpty().trim(), KEY_NVIDIA_NIM_API_KEY),
             nvidiaNimHeaders = prefs.getString(KEY_NVIDIA_NIM_HEADERS).orEmpty(),
             nvidiaNimTimeoutSeconds =
                 (prefs.getInteger(KEY_NVIDIA_NIM_TIMEOUT) ?: defaultNvidiaNimTimeoutSeconds())
@@ -263,7 +271,7 @@ class AgentSettingsRepository(
                     defaultPerplexityUrl()
                 },
             perplexityModel = prefs.getString(KEY_PERPLEXITY_MODEL).orEmpty().trim(),
-            perplexityApiKey = prefs.getString(KEY_PERPLEXITY_API_KEY).orEmpty().trim(),
+            perplexityApiKey = cipher.decrypt(prefs.getString(KEY_PERPLEXITY_API_KEY).orEmpty().trim(), KEY_PERPLEXITY_API_KEY),
             perplexityHeaders = prefs.getString(KEY_PERPLEXITY_HEADERS).orEmpty(),
             perplexityTimeoutSeconds =
                 (prefs.getInteger(KEY_PERPLEXITY_TIMEOUT) ?: defaultPerplexityTimeoutSeconds())
@@ -491,7 +499,7 @@ class AgentSettingsRepository(
         prefs.setString(KEY_OLLAMA_URL, settings.ollamaUrl)
         prefs.setString(KEY_OLLAMA_SERVE_CMD, settings.ollamaServeCmd)
         prefs.setBoolean(KEY_OLLAMA_AUTOSTART, settings.ollamaAutoStart)
-        prefs.setString(KEY_OLLAMA_API_KEY, settings.ollamaApiKey)
+        prefs.setString(KEY_OLLAMA_API_KEY, cipher.encrypt(settings.ollamaApiKey, KEY_OLLAMA_API_KEY))
         prefs.setString(KEY_OLLAMA_HEADERS, settings.ollamaHeaders)
         prefs.setInteger(KEY_OLLAMA_TIMEOUT, settings.ollamaTimeoutSeconds.coerceIn(30, 3600))
         prefs.setInteger(KEY_OLLAMA_CONTEXT_WINDOW, settings.ollamaContextWindow.coerceIn(2048, 128000))
@@ -500,21 +508,21 @@ class AgentSettingsRepository(
         prefs.setInteger(KEY_LMSTUDIO_TIMEOUT, settings.lmStudioTimeoutSeconds.coerceIn(30, 3600))
         prefs.setString(KEY_LMSTUDIO_SERVER_CMD, settings.lmStudioServerCmd)
         prefs.setBoolean(KEY_LMSTUDIO_AUTOSTART, settings.lmStudioAutoStart)
-        prefs.setString(KEY_LMSTUDIO_API_KEY, settings.lmStudioApiKey)
+        prefs.setString(KEY_LMSTUDIO_API_KEY, cipher.encrypt(settings.lmStudioApiKey, KEY_LMSTUDIO_API_KEY))
         prefs.setString(KEY_LMSTUDIO_HEADERS, settings.lmStudioHeaders)
         prefs.setString(KEY_OPENAI_COMPAT_URL, settings.openAiCompatibleUrl)
         prefs.setString(KEY_OPENAI_COMPAT_MODEL, settings.openAiCompatibleModel)
-        prefs.setString(KEY_OPENAI_COMPAT_API_KEY, settings.openAiCompatibleApiKey)
+        prefs.setString(KEY_OPENAI_COMPAT_API_KEY, cipher.encrypt(settings.openAiCompatibleApiKey, KEY_OPENAI_COMPAT_API_KEY))
         prefs.setString(KEY_OPENAI_COMPAT_HEADERS, settings.openAiCompatibleHeaders)
         prefs.setInteger(KEY_OPENAI_COMPAT_TIMEOUT, settings.openAiCompatibleTimeoutSeconds.coerceIn(30, 3600))
         prefs.setString(KEY_NVIDIA_NIM_URL, settings.nvidiaNimUrl)
         prefs.setString(KEY_NVIDIA_NIM_MODEL, settings.nvidiaNimModel)
-        prefs.setString(KEY_NVIDIA_NIM_API_KEY, settings.nvidiaNimApiKey)
+        prefs.setString(KEY_NVIDIA_NIM_API_KEY, cipher.encrypt(settings.nvidiaNimApiKey, KEY_NVIDIA_NIM_API_KEY))
         prefs.setString(KEY_NVIDIA_NIM_HEADERS, settings.nvidiaNimHeaders)
         prefs.setInteger(KEY_NVIDIA_NIM_TIMEOUT, settings.nvidiaNimTimeoutSeconds.coerceIn(30, 3600))
         prefs.setString(KEY_PERPLEXITY_URL, settings.perplexityUrl)
         prefs.setString(KEY_PERPLEXITY_MODEL, settings.perplexityModel)
-        prefs.setString(KEY_PERPLEXITY_API_KEY, settings.perplexityApiKey)
+        prefs.setString(KEY_PERPLEXITY_API_KEY, cipher.encrypt(settings.perplexityApiKey, KEY_PERPLEXITY_API_KEY))
         prefs.setString(KEY_PERPLEXITY_HEADERS, settings.perplexityHeaders)
         prefs.setInteger(KEY_PERPLEXITY_TIMEOUT, settings.perplexityTimeoutSeconds.coerceIn(30, 3600))
         prefs.setString(KEY_COPILOT_CMD, settings.copilotCmd)
@@ -646,8 +654,59 @@ class AgentSettingsRepository(
             effectiveVersion = 3
         }
 
+        if (effectiveVersion < 4) {
+            // v4 (SEC-01): encrypt existing plaintext secret prefs in place. Idempotent via the
+            // ENC1: prefix guard; plaintext is overwritten only after a round-trip decrypt verifies.
+            migrateToSchemaV4()
+            effectiveVersion = 4
+        }
+
         if (storedVersion != effectiveVersion) {
             prefs.setInteger(KEY_SETTINGS_SCHEMA_VERSION, effectiveVersion)
+        }
+    }
+
+    /**
+     * v3 → v4 migration (SEC-01): encrypt each plaintext secret preference in place.
+     *
+     * Idempotent — an already-ENC1: value is skipped (never double-encrypted). The plaintext is
+     * overwritten only after a round-trip decrypt verifies (no data loss per D-01 / PITFALLS C2-2).
+     * Catch blocks log only the preference KEY NAME, never the raw value. Version stamping is the
+     * caller's ([migrateIfNeeded]) responsibility — this function does not touch the version marker.
+     */
+    private fun migrateToSchemaV4() {
+        val secretKeys =
+            listOf(
+                KEY_OLLAMA_API_KEY,
+                KEY_LMSTUDIO_API_KEY,
+                KEY_OPENAI_COMPAT_API_KEY,
+                KEY_NVIDIA_NIM_API_KEY,
+                KEY_PERPLEXITY_API_KEY,
+                KEY_MCP_TOKEN,
+                KEY_MCP_TLS_PASSWORD,
+            )
+        secretKeys.forEach { key ->
+            val raw = prefs.getString(key).orEmpty()
+            if (raw.startsWith("ENC1:")) return@forEach // already encrypted — idempotency guard
+            if (raw.isBlank()) return@forEach // nothing to migrate
+            val enc =
+                try {
+                    cipher.encrypt(raw, key)
+                } catch (e: Exception) {
+                    api.logging().logToError("SecretCipher migration failed for key: $key")
+                    return@forEach
+                }
+            val verified =
+                try {
+                    cipher.decrypt(enc, key)
+                } catch (e: Exception) {
+                    api.logging().logToError("SecretCipher round-trip verify failed for key: $key")
+                    return@forEach
+                }
+            // Overwrite the plaintext only when the round-trip is byte-for-byte intact.
+            if (verified == raw) {
+                prefs.setString(key, enc)
+            }
         }
     }
 
@@ -793,7 +852,7 @@ class AgentSettingsRepository(
         private const val KEY_AI_LOGGER_MAX_ENTRIES = "ai.logger.max.entries"
         private const val KEY_CUSTOM_PROMPT_LIBRARY = "custom.prompt.library.v1"
         private const val KEY_SETTINGS_SCHEMA_VERSION = "settings.schema.version"
-        private const val CURRENT_SETTINGS_SCHEMA_VERSION = 3
+        private const val CURRENT_SETTINGS_SCHEMA_VERSION = 4
 
         private fun defaultCodexCmd(): String = "codex chat"
 
@@ -1082,9 +1141,9 @@ Response Language: English.
 
     private fun loadMcpSettings(): McpSettings {
         val token =
-            (prefs.getString(KEY_MCP_TOKEN) ?: "").trim().ifBlank {
+            cipher.decrypt((prefs.getString(KEY_MCP_TOKEN) ?: "").trim(), KEY_MCP_TOKEN).ifBlank {
                 val generated = McpSettings.generateToken()
-                prefs.setString(KEY_MCP_TOKEN, generated)
+                prefs.setString(KEY_MCP_TOKEN, cipher.encrypt(generated, KEY_MCP_TOKEN))
                 generated
             }
         val tlsAuto = prefs.getBoolean(KEY_MCP_TLS_AUTO) ?: true
@@ -1098,9 +1157,9 @@ Response Language: English.
                 keystorePath
             }
         val tlsPassword =
-            prefs.getString(KEY_MCP_TLS_PASSWORD).orEmpty().trim().ifBlank {
+            cipher.decrypt(prefs.getString(KEY_MCP_TLS_PASSWORD).orEmpty().trim(), KEY_MCP_TLS_PASSWORD).ifBlank {
                 val generated = McpSettings.generatePassword()
-                prefs.setString(KEY_MCP_TLS_PASSWORD, generated)
+                prefs.setString(KEY_MCP_TLS_PASSWORD, cipher.encrypt(generated, KEY_MCP_TLS_PASSWORD))
                 generated
             }
         val toolToggles = McpSettings.parseToolToggles(prefs.getString(KEY_MCP_TOOL_TOGGLES))
@@ -1159,12 +1218,12 @@ Response Language: English.
         prefs.setInteger(KEY_MCP_PORT, settings.port)
         prefs.setBoolean(KEY_MCP_EXTERNAL, settings.externalEnabled)
         prefs.setBoolean(KEY_MCP_STDIO, settings.stdioEnabled)
-        prefs.setString(KEY_MCP_TOKEN, settings.token)
+        prefs.setString(KEY_MCP_TOKEN, cipher.encrypt(settings.token, KEY_MCP_TOKEN))
         prefs.setString(KEY_MCP_ALLOWED_ORIGINS, McpSettings.serializeAllowedOrigins(settings.allowedOrigins))
         prefs.setBoolean(KEY_MCP_TLS_ENABLED, settings.tlsEnabled)
         prefs.setBoolean(KEY_MCP_TLS_AUTO, settings.tlsAutoGenerate)
         prefs.setString(KEY_MCP_TLS_KEYSTORE, settings.tlsKeystorePath)
-        prefs.setString(KEY_MCP_TLS_PASSWORD, settings.tlsKeystorePassword)
+        prefs.setString(KEY_MCP_TLS_PASSWORD, cipher.encrypt(settings.tlsKeystorePassword, KEY_MCP_TLS_PASSWORD))
         prefs.setInteger(KEY_MCP_SCAN_TASK_TTL_MINUTES, settings.scanTaskTtlMinutes.coerceIn(5, 24 * 60))
         prefs.setInteger(
             KEY_MCP_COLLABORATOR_TTL_MINUTES,
