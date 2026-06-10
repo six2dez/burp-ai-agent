@@ -2,6 +2,7 @@ package com.six2dez.burp.aiagent.ui.panels
 
 import com.six2dez.burp.aiagent.ui.components.ToggleSwitch
 import com.six2dez.burp.aiagent.ui.design.DesignTokens
+import com.six2dez.burp.aiagent.util.SsrfGuard
 import com.six2dez.burp.aiagent.ui.design.addRowFull
 import com.six2dez.burp.aiagent.ui.design.addSpacerRow
 import com.six2dez.burp.aiagent.ui.design.applyAreaStyle
@@ -67,6 +68,17 @@ class BackendConfigPanel(
     var onTestConnection: ((backendId: String) -> Unit)? = null
     private val cardLayout = CardLayout()
     private val cards = JPanel(cardLayout)
+
+    /**
+     * SEC-03 / A6: inline, non-blocking SSRF advisory shown when a backend base-URL resolves to a
+     * private/link-local/cloud-metadata address. Hidden by default (takes no visible space). Shared
+     * across all backend cards via the panel's SOUTH bar — it never blocks saving.
+     */
+    private val ssrfWarningLabel =
+        JLabel("Warning: this URL resolves to a private/internal address — verify this is intentional").apply {
+            foreground = DesignTokens.Colors.statusWarning
+            isVisible = false
+        }
 
     private val codexCmd = JTextField(initialState.codexCmd)
     private val geminiCmd = JTextField(initialState.geminiCmd)
@@ -191,14 +203,43 @@ class BackendConfigPanel(
         cards.add(buildSingleFieldPanelWithCli("Copilot CLI command", copilotCmd, "copilot-cli") { copilotCmd.text.trim() }, "copilot-cli")
 
         add(cards, BorderLayout.CENTER)
+
+        // SEC-03 / A6: shared SSRF advisory bar, always present but only visible when the warning
+        // fires. Placed outside the CardLayout so it shows regardless of which backend card is up.
+        val ssrfWarningBar =
+            JPanel(BorderLayout()).apply {
+                background = DesignTokens.Colors.surface
+                border =
+                    EmptyBorder(0, DesignTokens.Spacing.sectionPad, DesignTokens.Spacing.sm, DesignTokens.Spacing.sectionPad)
+                add(ssrfWarningLabel, BorderLayout.WEST)
+            }
+        add(ssrfWarningBar, BorderLayout.SOUTH)
+    }
+
+    /**
+     * SEC-03 / A6: toggles the inline SSRF advisory based on the supplied URL field values. Pure UI
+     * side effect — never blocks; the settings are saved regardless.
+     */
+    private fun checkAndShowSsrfWarning(urls: List<String>) {
+        ssrfWarningLabel.isVisible = urls.any { it.isNotBlank() && SsrfGuard.isPrivateOrLinkLocal(it) }
     }
 
     fun setBackend(id: String) {
         cardLayout.show(cards, id)
     }
 
-    fun currentBackendSettings(): BackendConfigState =
-        BackendConfigState(
+    fun currentBackendSettings(): BackendConfigState {
+        // SEC-03 / A6: fire the non-blocking SSRF advisory whenever settings are collected (Save).
+        checkAndShowSsrfWarning(
+            listOf(
+                ollamaUrl.text,
+                lmStudioUrl.text,
+                openAiCompatUrl.text,
+                nvidiaNimUrl.text,
+                perplexityUrl.text,
+            ),
+        )
+        return BackendConfigState(
             codexCmd = codexCmd.text.trim(),
             geminiCmd = geminiCmd.text.trim(),
             opencodeCmd = opencodeCmd.text.trim(),
@@ -235,6 +276,7 @@ class BackendConfigPanel(
             perplexityTimeoutSeconds = perplexityTimeout.text.trim(),
             copilotCmd = copilotCmd.text.trim(),
         )
+    }
 
     fun applyState(state: BackendConfigState) {
         codexCmd.text = state.codexCmd
