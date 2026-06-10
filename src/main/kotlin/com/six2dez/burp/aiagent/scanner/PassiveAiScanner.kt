@@ -550,6 +550,14 @@ class PassiveAiScanner(
         onProgress: (Int, Int) -> Unit = { _, _ -> },
     ): Int {
         if (requests.isEmpty()) return 0
+        // CAP-04 / WR-01: manual passive scan is scanner work that enqueues AI analysis, so it must
+        // respect the hard-cap pause just like enqueueForScanCheck (line ~356). When paused, queue
+        // nothing and return 0 (callers already handle a 0 count) so the advertised spend ceiling is
+        // a real ceiling. Does NOT clear the KB or flip the user's enabled toggle. Chat stays usable.
+        if (budgetPaused.get()) {
+            api.logging().logToOutput("[PassiveAiScanner] Manual scan skipped — token hard cap reached")
+            return 0
+        }
 
         val total = requests.size
         manualScanTotal.set(total)

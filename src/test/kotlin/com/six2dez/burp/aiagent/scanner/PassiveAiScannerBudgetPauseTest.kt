@@ -244,6 +244,45 @@ class PassiveAiScannerBudgetPauseTest {
         assertFalse(scanner.isBudgetPaused(), "WARN must not keep the scanner paused")
     }
 
+    // --- WR-01 (iter 2): manual passive scan also respects the budget pause gate ---
+
+    @Test
+    fun manualScan_whenBudgetPaused_isNoOpAndReturnsZero() {
+        val scanner = makeScanner()
+        scanner.setEnabled(true)
+        scanner.setBudgetPaused(true)
+
+        val countBefore = executorSubmitCount(scanner)
+        val queued = scanner.manualScan(listOf(mockRequestResponse(), mockRequestResponse()))
+        val countAfter = executorSubmitCount(scanner)
+
+        assertEquals(
+            0,
+            queued,
+            "WR-01: manualScan must queue nothing and return 0 when the budget hard cap is paused",
+        )
+        if (countBefore >= 0 && countAfter >= 0) {
+            assertTrue(
+                countAfter == countBefore,
+                "WR-01: no executor task should be submitted by manualScan while paused " +
+                    "(before=$countBefore, after=$countAfter)",
+            )
+        }
+        // Pause must not have touched the user's enabled toggle.
+        assertTrue(scanner.isEnabled(), "manualScan pause must not flip isEnabled()")
+    }
+
+    @Test
+    fun manualScan_whenNotPaused_queuesRequests() {
+        val scanner = makeScanner()
+        scanner.setEnabled(true)
+        scanner.setBudgetPaused(false)
+
+        val queued = scanner.manualScan(listOf(mockRequestResponse(), mockRequestResponse()))
+
+        assertEquals(2, queued, "When not paused, manualScan must queue all supplied requests")
+    }
+
     /** Reflectively read the size of ScanKnowledgeBase's tech stack map. */
     private fun getScanKnowledgeBaseSize(): Int {
         // ScanKnowledgeBase is an object; look for the techStack or hostData map
