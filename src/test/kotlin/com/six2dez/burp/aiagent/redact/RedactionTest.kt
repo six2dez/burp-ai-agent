@@ -4,6 +4,42 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
+// RFC 5869 Test Case 1 inputs/outputs for the HKDF vector test.
+// Source: https://www.rfc-editor.org/rfc/rfc5869 Appendix A.1
+private object Rfc5869TestCase1 {
+    // IKM = 22 bytes of 0x0b
+    val ikm: ByteArray = ByteArray(22) { 0x0b.toByte() }
+
+    // salt = 0x000102...0c (13 bytes)
+    val salt: ByteArray = ByteArray(13) { i -> i.toByte() }
+
+    // info = 0xf0f1...f9 (10 bytes)
+    val info: ByteArray = ByteArray(10) { i -> (0xf0 + i).toByte() }
+
+    val l = 42
+
+    // Expected PRK (HMAC-SHA256 of salt over IKM):
+    // 077709362c2e32df0ddc3f0dc47bba6390b6c73bb50f9c3122ec844ad7c2b3e5
+    val expectedPrk: ByteArray = byteArrayOf(
+        0x07, 0x77, 0x09, 0x36, 0x2c, 0x2e, 0x32, 0xdf.toByte(),
+        0x0d, 0xdc.toByte(), 0x3f, 0x0d, 0xc4.toByte(), 0x7b, 0xba.toByte(), 0x63,
+        0x90.toByte(), 0xb6.toByte(), 0xc7.toByte(), 0x3b, 0xb5.toByte(), 0x0f, 0x9c.toByte(), 0x31,
+        0x22, 0xec.toByte(), 0x84.toByte(), 0x4a, 0xd7.toByte(), 0xc2.toByte(), 0xb3.toByte(), 0xe5.toByte(),
+    )
+
+    // Expected OKM (first 42 bytes):
+    // 3cb25f25faacd57a90434f64d0362f2a2d2d0a90cf1a5a4c5db02d56ecc4c5bf
+    // 34007208d5b887185865
+    val expectedOkm: ByteArray = byteArrayOf(
+        0x3c, 0xb2.toByte(), 0x5f, 0x25, 0xfa.toByte(), 0xac.toByte(), 0xd5.toByte(), 0x7a,
+        0x90.toByte(), 0x43, 0x4f, 0x64, 0xd0.toByte(), 0x36, 0x2f, 0x2a,
+        0x2d, 0x2d, 0x0a, 0x90.toByte(), 0xcf.toByte(), 0x1a, 0x5a, 0x4c,
+        0x5d, 0xb0.toByte(), 0x2d, 0x56, 0xec.toByte(), 0xc4.toByte(), 0xc5.toByte(), 0xbf.toByte(),
+        0x34, 0x00, 0x72, 0x08, 0xd5.toByte(), 0xb8.toByte(), 0x87.toByte(), 0x18,
+        0x58, 0x65,
+    )
+}
+
 class RedactionTest {
     @Test
     fun strictModeStripsCookiesTokensAndHosts() {
@@ -109,5 +145,37 @@ class RedactionTest {
 
         Redaction.clearMappings()
         assertEquals(null, Redaction.deAnonymizeHost(anonB, "salt-b"))
+    }
+
+    // PRIV-01: output format test — added for HKDF swap (Task 1 Wave 0 RED)
+    @Test
+    fun hostAnonymizationFormatIsStable() {
+        val result = Redaction.anonymizeHost("example.com", "salt")
+        // Assert format only — never hardcode the hex value so the crypto can evolve.
+        assertTrue(
+            result.matches(Regex("^host-[0-9a-f]{12}\\.local$")),
+            "Expected format host-<12hex>.local but got: $result",
+        )
+    }
+
+    // PRIV-01: RFC 5869 Test Case 1 HKDF vector — proves the HMAC-SHA256 extract/expand
+    // math is correct against a published reference vector.
+    // Source: https://www.rfc-editor.org/rfc/rfc5869 Appendix A.1
+    @Test
+    fun hkdfMatchesRfc5869Vector() {
+        // Access the internal HKDF helpers via the test-internal seam exposed on Redaction.
+        val prk = Redaction.testHkdfExtract(Rfc5869TestCase1.salt, Rfc5869TestCase1.ikm)
+        assertEquals(
+            Rfc5869TestCase1.expectedPrk.toList(),
+            prk.toList(),
+            "PRK must match RFC 5869 Test Case 1",
+        )
+
+        val okm = Redaction.testHkdfExpand(prk, Rfc5869TestCase1.info, Rfc5869TestCase1.l)
+        assertEquals(
+            Rfc5869TestCase1.expectedOkm.toList(),
+            okm.toList(),
+            "OKM must match RFC 5869 Test Case 1",
+        )
     }
 }
