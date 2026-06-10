@@ -655,6 +655,7 @@ private fun Server.registerToolsLegacy(
         val includeRaw = context.allowUnpreprocessedProxyHistory && includeUnpreprocessedResponse
         val items = api.proxy().history()
         val seq = orderedProxyHistory(items, context) { it.request()?.toString().orEmpty() }
+            .let { s -> if (listenerPort != null) s.filter { it.listenerPort() == listenerPort } else s }
         val preprocess =
             context.responsePreprocessorSettings().copy(
                 preprocessProxyHistory = !includeRaw,
@@ -1867,6 +1868,7 @@ object McpToolExecutor {
                                     preprocessProxyHistory = !includeRaw,
                                 )
                             val seq = orderedProxyHistory(items, context) { it.request()?.toString().orEmpty() }
+                                .let { s -> if (input.listenerPort != null) s.filter { it.listenerPort() == input.listenerPort } else s }
                             // 07-03 D-03: filter by Burp scope when mcpScopeOnly is on.
                             val scoped = McpScopeFilter.filterInScope(seq, { it.request()?.url() }, context)
                             context.limitedJoin(
@@ -2720,12 +2722,14 @@ data class GetProxyHttpHistory(
     override val count: Int = 5,
     override val offset: Int = 0,
     val includeUnpreprocessedResponse: Boolean = false,
+    val listenerPort: Int? = null, // CAP-03 — null/unset = all ports
 ) : Paginated
 
 @Serializable
 data class GetProxyHttpHistoryRestricted(
     override val count: Int = 5,
     override val offset: Int = 0,
+    val listenerPort: Int? = null, // CAP-03 — null/unset = all ports (schema exposed under restricted branch)
 ) : Paginated
 
 @Serializable

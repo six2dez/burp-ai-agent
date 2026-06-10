@@ -76,7 +76,7 @@ class ProxyHistoryListenerPortFilterTest {
 
     private fun stubApi(items: List<ProxyHttpRequestResponse>): MontoyaApi {
         val api = mock<MontoyaApi>(defaultAnswer = Answers.RETURNS_DEEP_STUBS)
-        whenever(api.burpSuite().version().edition()).thenReturn(BurpSuiteEdition.COMMUNITY)
+        whenever(api.burpSuite().version().edition()).thenReturn(BurpSuiteEdition.PROFESSIONAL)
         whenever(api.proxy().history()).thenReturn(items)
         return api
     }
@@ -92,7 +92,7 @@ class ProxyHistoryListenerPortFilterTest {
             unsafeTools = emptySet(),
             enabledUnsafeTools = emptySet(),
             limiter = McpRequestLimiter(8),
-            edition = BurpSuiteEdition.COMMUNITY,
+            edition = BurpSuiteEdition.PROFESSIONAL,
             maxBodyBytes = 65_536,
             scopeOnly = false,
         )
@@ -104,9 +104,11 @@ class ProxyHistoryListenerPortFilterTest {
         val api = stubApi(mixedItems())
         val context = contextWith(api)
 
+        // The decode path uses kotlinx-serialization with camelCase field names.
+        // The MCP JSON parameter name matches the Kotlin field name: listenerPort (camelCase).
         val result = McpToolExecutor.executeTool(
             "proxy_http_history",
-            "{\"count\":10,\"listener_port\":8080}",
+            "{\"count\":10,\"listenerPort\":8080}",
             context,
         )
 
@@ -123,7 +125,7 @@ class ProxyHistoryListenerPortFilterTest {
         val result = assertDoesNotThrow<String> {
             McpToolExecutor.executeTool(
                 "proxy_http_history",
-                "{\"count\":10,\"listener_port\":9999}",
+                "{\"count\":10,\"listenerPort\":9999}",
                 context,
             )
         }
