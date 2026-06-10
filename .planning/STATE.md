@@ -4,13 +4,13 @@ milestone: v0.9.0
 milestone_name: Hardening, Quality & New Capabilities
 status: executing
 stopped_at: v0.9.0 roadmap created; Phases 12–19 written; 22 requirements mapped (100% coverage); ROADMAP.md, STATE.md, REQUIREMENTS.md updated
-last_updated: "2026-06-10T14:18:54.711Z"
-last_activity: 2026-06-10 -- Phase 13 planning complete
+last_updated: "2026-06-10T14:37:51.889Z"
+last_activity: 2026-06-10
 progress:
   total_phases: 8
   completed_phases: 1
   total_plans: 7
-  completed_plans: 5
+  completed_plans: 6
   percent: 13
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-10)
 
 **Core value:** Bring modern AI to a real security workflow without leaking sensitive traffic to third-party providers — privacy controls and an audit trail are non-negotiable, AI capability is additive.
-**Current focus:** v0.9.0 roadmap defined; Phase 12 (Secrets at Rest) is next.
+**Current focus:** Phase 13 — Privacy & Redaction Hardening
 
 ## Current Position
 
-Phase: 12 — Secrets at Rest & Transport Security (not started)
-Plan: —
+Phase: 13 (Privacy & Redaction Hardening) — EXECUTING
+Plan: 2 of 3
 Status: Ready to execute
-Last activity: 2026-06-10 -- Phase 13 planning complete
+Last activity: 2026-06-10
 
 ## Performance Metrics
 
@@ -60,6 +60,7 @@ Last activity: 2026-06-10 -- Phase 13 planning complete
 | Phase 11 P02 | 8 | 2 tasks | 3 files |
 | Phase 11 P03 | 14 | 2 tasks | 5 files |
 | Phase 11-settings-tabs-theme-rollout P04 | 35 | 2 tasks | 1 files |
+| Phase 13-privacy-redaction-hardening P01 | 30 | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -128,6 +129,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-10T00:00:00Z
+Last session: 2026-06-10T14:37:51.883Z
 Stopped at: v0.9.0 roadmap created; Phases 12–19 written; 22 requirements mapped (100% coverage); ROADMAP.md, STATE.md, REQUIREMENTS.md updated
 Resume file: None

@@ -11,8 +11,8 @@ Research-mandated ordering: **SEC (encrypt secrets) lands before CAP-01 (Anthrop
 
 ### Privacy & Redaction (PRIV) — core value
 
-- [ ] **PRIV-01** (A1): Host anonymization uses a cryptographic method consistent with its documentation — either real HKDF (HMAC-SHA256 extract/expand) **or** docs corrected to "salted SHA-256"; the forward/reverse host mapping still resolves and existing privacy-mode tests stay green. *[HKDF-vs-docs decision resolved at this item's plan-phase]*
-- [ ] **PRIV-02** (A2): Redaction catches secrets in request/response **bodies**, not just header lines — the leading field of an `x-www-form-urlencoded` body and a **user-configurable custom pattern list** are redacted; covered by STRICT/BALANCED unit tests and a ReDoS/perf guard on large bodies
+- [x] **PRIV-01** (A1): Host anonymization uses a cryptographic method consistent with its documentation — either real HKDF (HMAC-SHA256 extract/expand) **or** docs corrected to "salted SHA-256"; the forward/reverse host mapping still resolves and existing privacy-mode tests stay green. *[HKDF-vs-docs decision resolved at this item's plan-phase]*
+- [x] **PRIV-02** (A2): Redaction catches secrets in request/response **bodies**, not just header lines — the leading field of an `x-www-form-urlencoded` body and a **user-configurable custom pattern list** are redacted; covered by STRICT/BALANCED unit tests and a ReDoS/perf guard on large bodies
 - [ ] **PRIV-03** (C4): A pre-send **secret tripwire** scans the **final redacted payload** and warns the user (warn-with-confirmation, not silent) before a high-entropy secret leaves Burp; allowlist actions are audit-logged and visibly flagged in the preview dialog
 - [ ] **PRIV-04** (C6): The redaction preview/coverage UI flags when a known secret shape passes through and lets the user test custom patterns against a sample request *[Phase 13 scope decision, 2026-06-10: "test custom patterns" delivered as save-time syntax + ReDoS-timeout validation (ROADMAP SC3), NOT an interactive sample-request tester — narrowing accepted by maintainer; the survived-secret preview-dialog banner is the "coverage UI flag"]*
 
@@ -75,8 +75,8 @@ Explicitly excluded for v0.9.0. Tracked to prevent scope creep.
 | SEC-01 | Phase 12: Secrets at Rest & Transport Security | Pending |
 | SEC-02 | Phase 12: Secrets at Rest & Transport Security | Pending |
 | SEC-03 | Phase 12: Secrets at Rest & Transport Security | Pending |
-| PRIV-01 | Phase 13: Privacy & Redaction Hardening | Pending |
-| PRIV-02 | Phase 13: Privacy & Redaction Hardening | Pending |
+| PRIV-01 | Phase 13: Privacy & Redaction Hardening | Complete |
+| PRIV-02 | Phase 13: Privacy & Redaction Hardening | Complete |
 | PRIV-04 | Phase 13: Privacy & Redaction Hardening | Pending |
 | CAP-01 | Phase 14: Anthropic Backend + Token Budget + Listener Port | Pending |
 | CAP-03 | Phase 14: Anthropic Backend + Token Budget + Listener Port | Pending |
