@@ -69,7 +69,13 @@ Phases 9–11 closed. Features: design system foundation (UI-01), MCP tools tab 
   3. A user enabling MCP TLS no longer has the keystore password exposed in a `ps aux` listing during keytool execution; the password is written to a temp file with owner-read-only permissions or generated in-JVM.
   4. A user who types a non-loopback private/link-local URL in any backend settings field sees a soft SSRF warning on save (non-blocking — the user can proceed deliberately).
   5. Unit tests cover: AES-GCM round-trip, schema-V4 migration idempotency (re-running migration does not double-encrypt), and headless Linux fallback path (no `HeadlessException` with `java.awt.headless=true`).
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+- [ ] 12-01-PLAN.md — SecretCipher.kt: AES-256-GCM utility + per-install master key (SEC-01 foundation)
+- [ ] 12-02-PLAN.md — Schema v4 migration + encrypt/decrypt wiring in AgentSettingsRepository (SEC-01)
+- [ ] 12-03-PLAN.md — In-JVM TLS cert generation in McpTls.kt, removes keytool subprocess (SEC-02)
+- [ ] 12-04-PLAN.md — SsrfGuard + inline warning in BackendConfigPanel (SEC-03)
 
 ### Phase 13: Privacy & Redaction Hardening
 
@@ -176,7 +182,7 @@ Phase 12 (SEC) must be first. Phase 13 (Privacy) and Phase 12 are sequential (av
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 12. Secrets at Rest & Transport Security | 0/TBD | Not started | - |
+| 12. Secrets at Rest & Transport Security | 0/4 | In progress | - |
 | 13. Privacy & Redaction Hardening | 0/TBD | Not started | - |
 | 14. Anthropic Backend + Token Budget + Listener Port | 0/TBD | Not started | - |
 | 15. Pre-Send Secret Tripwire | 0/TBD | Not started | - |
