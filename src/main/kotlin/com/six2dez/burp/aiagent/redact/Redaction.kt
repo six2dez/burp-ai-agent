@@ -1,8 +1,11 @@
 package com.six2dez.burp.aiagent.redact
 
+import com.six2dez.burp.aiagent.config.Defaults
 import java.io.ByteArrayOutputStream
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.ConcurrentHashMap
+import java.util.regex.Pattern
+import java.util.regex.PatternSyntaxException
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
@@ -72,11 +75,59 @@ object Redaction {
     // very generic JWT-like pattern (not perfect by design)
     private val jwtRegex = Regex("\\beyJ[A-Za-z0-9_\\-]+\\.[A-Za-z0-9_\\-]+\\.[A-Za-z0-9_\\-]+\\b")
 
+    // Sensitive parameter/key name vocabulary — shared by urlTokenParamRegex, formBodyParamRegex,
+    // and jsonSecretKeyRegex so query-string and body coverage stay consistent (PRIV-02).
+    private const val SENSITIVE_KEYS =
+        "access_token|api_key|apikey|auth|token|key|secret|password|pwd|session|sid|code"
+
     // Tokens/secrets in URL query strings, e.g. ?access_token=xyz or &api_key=xyz
     private val urlTokenParamRegex =
         Regex(
-            "(?i)([?&](access_token|api_key|apikey|auth|token|key|secret|password|pwd|session|sid|code)=)[^&\\s\"'<>]+",
+            "(?i)([?&]($SENSITIVE_KEYS)=)[^&\\s\"'<>]+",
         )
+
+    // (PRIV-02) x-www-form-urlencoded field ANYWHERE in a body, INCLUDING the leading field.
+    // The (^|[?&]) anchor closes the documented gap: the old [?&]-only urlTokenParamRegex
+    // missed "apikey=sk-abc123&user=bob" (no leading ? or &). (?im) = multiline+case-insensitive.
+    // The value charclass [^&\s"'<>]+ is bounded — no trailing anchor that would backtrack (Pitfall 3).
+    private val formBodyParamRegex =
+        Regex(
+            "(?im)(^|[?&])($SENSITIVE_KEYS)=[^&\\s\"'<>]+",
+        )
+
+    // (PRIV-02) JSON string values for known-sensitive key names.
+    // Key-scoped: only a value following a matching key name is redacted; "name":"alice" is untouched.
+    // Limitation: a value containing an escaped quote (e.g. "token":"ab\"cd") will be partially
+    // matched (stops at the backslash). This is an accepted limitation — real API tokens are
+    // [A-Za-z0-9._-] and do not contain embedded quotes; use a JSON parser if full coverage is needed.
+    private val jsonSecretKeyRegex =
+        Regex(
+            "(?i)(\"(?:$SENSITIVE_KEYS)\"\\s*:\\s*)\"[^\"]*\"",
+        )
+
+    // (PRIV-02) Custom user patterns compiled by setCustomPatterns. Volatile so writes from the
+    // EDT (save) are immediately visible to the redaction thread (apply) without full synchronization.
+    @Volatile
+    private var compiledCustomPatterns: List<Pattern> = emptyList()
+
+    /**
+     * Sets the list of user-supplied custom redaction patterns. Each string is compiled as a
+     * java.util.regex.Pattern; entries that fail to compile (PatternSyntaxException) are silently
+     * dropped. Passing an empty list clears all custom patterns.
+     *
+     * Call this from applyAndSaveSettings after the persisted list has been validated by
+     * SafeRegex.isPatternSafe so the patterns in this list are already known-safe.
+     */
+    fun setCustomPatterns(patterns: List<String>) {
+        compiledCustomPatterns =
+            patterns.mapNotNull { raw ->
+                try {
+                    Pattern.compile(raw)
+                } catch (_: PatternSyntaxException) {
+                    null // silently skip uncompilable patterns
+                }
+            }
+    }
 
     private val hostHeaderRegex = Regex("(?im)^host:\\s*([^\\s]+)\\s*$")
 
@@ -168,6 +219,29 @@ object Redaction {
             out = out.replace(basicAuthRegex, "Basic [REDACTED]")
             out = out.replace(jwtRegex, "[JWT_REDACTED]")
             out = out.replace(urlTokenParamRegex, "$1[REDACTED]")
+
+            // PRIV-02: body-level redaction (form + JSON + custom patterns).
+            // The size cap (~1 MB) is a belt-and-suspenders bound for callers that may pass
+            // larger strings (MCP tools, bounty resolver). Bodies over the cap are skipped
+            // entirely — not hung, not partially redacted.
+            if (out.length <= Defaults.MAX_REDACTION_BODY_CHARS) {
+                // x-www-form-urlencoded: redact sensitive field values including the LEADING
+                // field (no preceding ?/&). Replacement keeps the key + delimiter in group 1+2.
+                out =
+                    out.replace(formBodyParamRegex) { m ->
+                        "${m.groupValues[1]}${m.groupValues[2]}=[REDACTED]"
+                    }
+                // JSON: redact the value of a known-sensitive key, preserving the key + colon.
+                out =
+                    out.replace(jsonSecretKeyRegex) { m ->
+                        "${m.groupValues[1]}\"[REDACTED]\""
+                    }
+                // User-supplied custom patterns — each one runs under the SafeRegex 50 ms deadline
+                // so no single pathological pattern can stall the pipeline (T-13-06).
+                for (p in compiledCustomPatterns) {
+                    out = SafeRegex.replaceAllSafe(out, p, "[REDACTED]")
+                }
+            }
         }
 
         if (policy.anonymizeHosts) {

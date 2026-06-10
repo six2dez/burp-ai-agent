@@ -51,6 +51,12 @@ object Defaults {
     const val PAYLOAD_MAX_OUTPUT_TOKENS = 1024
     const val OPENCODE_IDLE_TIMEOUT_MS = 30_000L
 
+    // Belt-and-suspenders cap for the body-redaction stage in Redaction.apply.
+    // ContextCollector already truncates bodies to 4k/8k; this cap protects the other callers
+    // (MCP tools, bounty resolver) that may pass larger strings. Bodies over this limit are
+    // skipped entirely — not hung, not partially redacted — per PRIV-02 size-cap requirement.
+    const val MAX_REDACTION_BODY_CHARS = 1_000_000
+
     const val PREPROCESS_PROXY_HISTORY_ENABLED = true
     const val PREPROCESS_MAX_RESPONSE_SIZE_KB = 20
     const val PREPROCESS_FILTER_BINARY_CONTENT = true
