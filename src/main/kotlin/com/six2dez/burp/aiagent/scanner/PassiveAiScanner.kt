@@ -60,6 +60,13 @@ class PassiveAiScanner(
     var aiRequestLogger: AiRequestLogger? = null
 
     private val enabled = AtomicBoolean(false)
+
+    /** CAP-04: per-process budget pause gate. Starts false each Burp run (reversible). */
+    private val budgetPaused = AtomicBoolean(false)
+
+    fun setBudgetPaused(on: Boolean) { budgetPaused.set(on) }
+    fun isBudgetPaused(): Boolean = budgetPaused.get()
+
     private val requestsAnalyzed = AtomicInteger(0)
     private val issuesFound = AtomicInteger(0)
     private val lastAnalysisTime = AtomicLong(0)
@@ -308,6 +315,7 @@ class PassiveAiScanner(
      */
     fun enqueueForScanCheck(requestResponse: HttpRequestResponse) {
         if (!enabled.get()) return
+        if (budgetPaused.get()) return // CAP-04: no-op when paused (does NOT clear KB or flip enabled)
         if (supervisor.isBlockedByBurpAiGate()) return
         executor.submit { analyzeManually(requestResponse) }
     }
