@@ -1,8 +1,8 @@
 ---
 phase: 14
 slug: anthropic-backend-token-budget-listener-port
-status: draft
-nyquist_compliant: false
+status: approved
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-06-10
 ---

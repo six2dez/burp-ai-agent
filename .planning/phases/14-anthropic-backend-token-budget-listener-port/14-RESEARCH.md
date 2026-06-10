@@ -498,7 +498,9 @@ Source: javap of montoya-api-2026.2.jar + codebase McpTools.kt [VERIFIED: local 
 
 **If the maintainer wants token-by-token rendering in SC1:** choose Pitfall-1 option 2 (parse the buffered SSE body and replay `text_delta`s as multiple `onChunk` calls). This is a discretionary UI nicety, not an SC requirement.
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+> RESOLVED at plan-phase (2026-06-10): Q1 → single-chunk `stream:false` (14-01, matches all existing backends; SC1 = proxy-visible request). Q2 → pure AWT-free `BudgetGuard` consulted at the chat record site + scanner gate (14-02). Q3 (invalid-model 400 contains "model") → confirmed at SC1 HUMAN-UAT.
 
 1. **Per-token streaming vs single-chunk render for SC1**
    - What we know: `MontoyaHttpTransport` buffers the full response; SC2 forbids OkHttp SSE.
