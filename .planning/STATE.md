@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v0.9.0
 milestone_name: Hardening, Quality & New Capabilities
-status: verifying
-stopped_at: Completed Phase 14 Plan 03 (CAP-03 listener-port filter for proxy_http_history)
-last_updated: "2026-06-10T17:48:58.661Z"
+status: ready_to_plan
+stopped_at: Phase 14 complete (3/3) — ready to discuss Phase 15
+last_updated: 2026-06-10T19:46:30.845Z
 last_activity: 2026-06-10
 progress:
   total_phases: 8
   completed_phases: 3
   total_plans: 10
-  completed_plans: 11
+  completed_plans: 33
   percent: 38
 ---
 
@@ -21,20 +21,20 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-10)
 
 **Core value:** Bring modern AI to a real security workflow without leaking sensitive traffic to third-party providers — privacy controls and an audit trail are non-negotiable, AI capability is additive.
-**Current focus:** Phase 14 — Anthropic Backend + Token Budget + Listener Port
+**Current focus:** Phase 15 — pre send secret tripwire
 
 ## Current Position
 
-Phase: 14 (Anthropic Backend + Token Budget + Listener Port) — EXECUTING
-Plan: 3 of 3
-Status: Phase complete — ready for verification
+Phase: 15
+Plan: Not started
+Status: Ready to plan
 Last activity: 2026-06-10
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 8
+- Total plans completed: 11
 - Average duration: —
 - Total execution time: 0 hours
 
@@ -46,6 +46,7 @@ Last activity: 2026-06-10
 | 01 | 1 | - | - |
 | 11 | 4 | - | - |
 | 13 | 3 | - | - |
+| 14 | 3 | - | - |
 
 **Recent Trend:**
 
