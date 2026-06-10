@@ -72,11 +72,32 @@ Explicitly excluded for v0.9.0. Tracked to prevent scope creep.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| *(filled by gsd-roadmapper)* | — | Pending |
+| SEC-01 | Phase 12: Secrets at Rest & Transport Security | Pending |
+| SEC-02 | Phase 12: Secrets at Rest & Transport Security | Pending |
+| SEC-03 | Phase 12: Secrets at Rest & Transport Security | Pending |
+| PRIV-01 | Phase 13: Privacy & Redaction Hardening | Pending |
+| PRIV-02 | Phase 13: Privacy & Redaction Hardening | Pending |
+| PRIV-04 | Phase 13: Privacy & Redaction Hardening | Pending |
+| CAP-01 | Phase 14: Anthropic Backend + Token Budget + Listener Port | Pending |
+| CAP-03 | Phase 14: Anthropic Backend + Token Budget + Listener Port | Pending |
+| CAP-04 | Phase 14: Anthropic Backend + Token Budget + Listener Port | Pending |
+| PRIV-03 | Phase 15: Pre-Send Secret Tripwire | Pending |
+| CAP-02 | Phase 16: External MCP Client | Pending |
+| REL-01 | Phase 17: Reliability & Concurrency Hardening | Pending |
+| REL-02 | Phase 17: Reliability & Concurrency Hardening | Pending |
+| REL-03 | Phase 17: Reliability & Concurrency Hardening | Pending |
+| REL-04 | Phase 17: Reliability & Concurrency Hardening | Pending |
+| QUAL-02 | Phase 18: Quality Tooling & Build Hardening | Pending |
+| QUAL-03 | Phase 18: Quality Tooling & Build Hardening | Pending |
+| QUAL-04 | Phase 18: Quality Tooling & Build Hardening | Pending |
+| QUAL-05 | Phase 18: Quality Tooling & Build Hardening | Pending |
+| QUAL-01 | Phase 19: Mega-File Split + Docs | Pending |
+| DOC-01 | Phase 19: Mega-File Split + Docs | Pending |
+| DOC-02 | Phase 19: Mega-File Split + Docs | Pending |
 
 **Coverage:**
 - v0.9.0 requirements: 22 total (PRIV 4, SEC 3, REL 4, QUAL 5, CAP 4, DOC 2)
-- Mapped to phases: *(pending roadmap)*
+- Mapped to phases: 22/22 (100%)
 
 ---
 

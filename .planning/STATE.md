@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v0.9.0
 milestone_name: Hardening, Quality & New Capabilities
 status: planning
-last_updated: "2026-06-10T09:57:49.592Z"
+last_updated: "2026-06-10T10:00:00.000Z"
 last_activity: 2026-06-10
 progress:
-  total_phases: 0
+  total_phases: 8
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -17,17 +17,17 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-05-29)
+See: .planning/PROJECT.md (updated 2026-06-10)
 
 **Core value:** Bring modern AI to a real security workflow without leaking sensitive traffic to third-party providers — privacy controls and an audit trail are non-negotiable, AI capability is additive.
-**Current focus:** Milestone complete
+**Current focus:** v0.9.0 roadmap defined; Phase 12 (Secrets at Rest) is next.
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 12 — Secrets at Rest & Transport Security (not started)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-06-10 — Milestone v0.9.0 started
+Status: Roadmap created; ready for Phase 12 planning
+Last activity: 2026-06-10 — v0.9.0 roadmap created (Phases 12–19; 22 requirements mapped)
 
 ## Performance Metrics
 
@@ -81,23 +81,30 @@ Recent decisions affecting current work:
 - v0.8.0 Roadmap: Phase 9 (design system) is additive only (new module, no panel migration); Phases 10 and 11 consume it. Phase 10 (MCP tab) prioritized over Phase 11 (settings rollout) because the MCP tab is the highest user pain point and benefits from Phase 8's nativeTool classification already in place.
 - [Phase ?]: UiTheme.kt retained as legacy shim (KDoc-only change): Phase 11 will align naming (outline→border, statusRunning→statusSuccess) once all call sites migrated
 - [Phase ?]: SC5 (formGrid non-null) deferred to DesignComponentsTest in Plan 02: formGrid() lives in Components.kt not DesignTokens.kt
+- v0.9.0 Roadmap: Phase 12 (SEC) must be first — all new secret fields rely on it; no new secret lands in plaintext. Phase 19 (QUAL-01 mega-file split) must be last — PassiveAiScanner hook points from Phase 15 must be committed before the split.
+- v0.9.0 Roadmap: CAP-03 (listener port filter) and CAP-04 (token budget) co-land with CAP-01 (Anthropic) in Phase 14 — small, non-conflicting additions; natural fit alongside Anthropic's four-field token usage surfacing.
+- v0.9.0 Roadmap: CAP-02 (external MCP) requires kotlin-sdk 0.5.0→0.13.0 Burp-JVM test-run gate; placed after CAP-01 so the SDK bump does not block earlier phases.
+- v0.9.0 Roadmap: PRIV-04 (redaction coverage UI) co-lands with PRIV-01+PRIV-02 in Phase 13 — the UI indicator shows when a known secret shape passes through, using the same curated pattern set as the Phase 15 tripwire.
 
 ### Roadmap Evolution
 
 - 2026-05-27: Phase 7 added — Proxy Transport + MCP Scope Hardening (closes GitHub issue #69; parallel-safe with Phases 1, 4, 5; must merge before Phase 6).
 - 2026-05-28: Phase 8 added — BApp Store resubmission (MCP pivot to extension-native tools + `-PstoreBuild` gate, gate all AI calls on `ai.isEnabled()`, migrate passive scanning to `ScanCheck.passiveAudit()`, confirm name). Addresses PortSwigger review feedback on issue #231; follows Phase 07. Approved plan seed: ~/.claude/plans/drifting-hatching-sphinx.md.
 - 2026-05-29: Phases 9-11 added — v0.8.0 UI/UX Overhaul milestone. Phase 9: Design System Foundation (UI-01). Phase 10: MCP Tools Tab Redesign (UI-03, UI-04, UI-05, UI-07). Phase 11: Settings Tabs + Theme Rollout (UI-02, UI-06, UI-08, UI-07). All 8 UI-* requirements mapped; 100% coverage.
+- 2026-06-10: Phases 12-19 added — v0.9.0 Hardening, Quality & New Capabilities milestone. 22 requirements mapped across 8 phases. Hard ordering constraints from research enforced: SEC first, QUAL-01 split last.
 
 ### Pending Todos
 
 [From .planning/todos/pending/ — ideas captured during sessions]
 
-None yet.
+- Phase 16 (CAP-02) pre-planning: run kotlin-sdk 0.13.0 Burp-JVM compatibility test (add dep, build fat JAR, load in Burp, confirm no ClassLoader conflict) before Phase 16 planning begins.
+- Phase 14 (CAP-01) planning: decide key-bootstrap UX for C2 (per-install random key vs user passphrase vs OS-keychain-with-fallback); this must be decided in Phase 12 plan before Phase 14 begins.
 
 ### Blockers/Concerns
 
 [Issues that affect future work]
 
+- Phase 16 (CAP-02) is gated on a kotlin-sdk 0.13.0 Burp-JVM test-run; the transitive kotlin-stdlib 2.3.21 bump needs runtime verification before Phase 16 planning begins.
 - GitHub issue #62 (release pipeline publishes stale code) gates the v0.7.0 release; Phase 4 must close before Phase 6 can ship.
 - Phase 8 code + resubmission artifacts complete and verified (v0.8.0, 308 tests green); maintainer is performing the manual Burp smoke test and posting /reopen on issue #231. 08-REOPEN-REPLY.md is ready to paste.
 
@@ -115,11 +122,11 @@ Items acknowledged and carried forward from previous milestone close:
 
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
-| v2 | MCP-V2-01 — user-registered MCP server (#41) | Deferred to post-v0.7.0 | 2026-05-13 |
-| v2 | REL-V2-01 — opt-in local-only diagnostics endpoint | Deferred to post-v0.7.0 | 2026-05-13 |
+| v2 | MCP-V2-01 — user-registered MCP server (#41) | Promoted to CAP-02 in v0.9.0 | 2026-05-13 |
+| v2 | REL-V2-01 — opt-in local-only diagnostics endpoint | Deferred to post-v0.9.0 | 2026-05-13 |
 
 ## Session Continuity
 
-Last session: 2026-06-09T00:00:00Z
-Stopped at: Phase 8 plan 04 SUMMARY + ROADMAP + STATE finalized; autonomous work complete; maintainer to post /reopen on issue #231
+Last session: 2026-06-10T00:00:00Z
+Stopped at: v0.9.0 roadmap created; Phases 12–19 written; 22 requirements mapped (100% coverage); ROADMAP.md, STATE.md, REQUIREMENTS.md updated
 Resume file: None

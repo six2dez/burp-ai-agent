@@ -1,280 +1,186 @@
-# Roadmap: Burp AI Agent — v0.7.0 (carryover) + v0.8.0 (active)
+# Roadmap: Burp AI Agent
 
-## Overview
+## Shipped (Historical)
 
-Stabilization milestone for the three `Unreleased` features (Perplexity backend, AI scan on selected insertion point, custom prompt library UX), the two open bugs gating release (#62 release pipeline, #66 openai-compatible usage error), the user-facing documentation refresh, and the v0.7.0 release cut itself. The three feature-audit phases (1, 2, 3) are independent and parallel-safe. The release phase (6) is a choke point that depends on every earlier phase being green.
+### v0.7.0 — Release Cut + Stabilization (shipped 2026-05-15)
 
-**v0.8.0 phases (9-11)** begin after the carryover milestone. They redesign the extension's Swing UI on a shared design-system foundation, applied across the MCP tools tab and all Settings tabs, with light/dark theme consistency via tokens.
+Phases 1–8 closed. Features: Perplexity backend, AI scan on selected insertion point, custom prompt library UX, bug fixes #62/#66/#67/#68, proxy transport + MCP scope hardening (#69), BApp Store resubmission (#231).
+
+| Phase | Name | Status |
+|-------|------|--------|
+| 1 | Perplexity Backend Audit | Not started |
+| 2 | Insertion-Point Scan Audit | Complete (2026-05-13) |
+| 3 | Prompt Library UX Audit | Complete (2026-05-13) |
+| 4 | Release-Gating Bug Fixes | — |
+| 5 | Documentation Refresh | — |
+| 6 | v0.7.0 Release Cut | — |
+| 7 | Proxy Transport + MCP Scope Hardening | Complete (2026-05-27) |
+| 8 | BApp Store resubmission — MCP pivot + compliance | Complete (2026-06-09) |
+
+### v0.8.0 — UI/UX Overhaul (shipped 2026-06-02)
+
+Phases 9–11 closed. Features: design system foundation (UI-01), MCP tools tab redesign (UI-03/04/05/07), all settings tabs rebuilt on design system with light/dark theme (UI-02/06/07/08).
+
+| Phase | Name | Status |
+|-------|------|--------|
+| 9 | Design System Foundation | Complete (2026-05-29) |
+| 10 | MCP Tools Tab Redesign | Complete (2026-05-29) |
+| 11 | Settings Tabs + Theme Rollout | Complete (2026-06-02) |
+
+---
+
+## Active Milestone: v0.9.0 — Hardening, Quality & New Capabilities
+
+**Status:** Planning — started 2026-06-10
+
+**Goal:** Harden privacy/security, pay down quality and maintainability debt, and add new capabilities on the stable v0.8.0 base — without compromising the non-negotiable core value (privacy controls + audit trail).
+
+**Ordering rationale (from research):**
+- SEC (Phase 12) must land first — all new secret fields (Anthropic key, external MCP tokens) must be encrypted from day one; migration ladder must exist before any new secret field is added.
+- Privacy hardening (Phase 13) is independent of SEC and can run after it without conflicts.
+- CAP-01/03/04 (Phase 14) depends on Phase 12; Anthropic API key must be encrypted from the first commit that introduces it.
+- PRIV-03 tripwire (Phase 15) depends on Phase 12 (meaningful once keys leave plaintext) and must land before QUAL-01 (the split moves the PassiveAiScanner hook points).
+- CAP-02 external MCP (Phase 16) is highest novelty/build-risk; placed after CAP-01; kotlin-sdk 0.5.0→0.13.0 bump gated on a Burp-JVM test-run.
+- REL reliability (Phase 17) is independent and can follow feature phases.
+- Quality tooling (Phase 18) adds detekt/ktlint gates and test coverage — independent, safe after features.
+- QUAL-01 mega-file split (Phase 19) is the last code phase — pure no-behaviour-change refactor; DOC-01/02 co-land here once features are stable.
 
 ## Phases
 
-**Phase Numbering:**
-
-- Integer phases (1, 2, 3): Planned milestone work
-- Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
-
-Decimal phases appear between their surrounding integers in numeric order.
-
-- [ ] **Phase 1: Perplexity Backend Audit** - Verify shipped Perplexity backend meets SPEC, lock behaviour with tests
-- [x] **Phase 2: Insertion-Point Scan Audit** - Verify right-click insertion-point scanning + selection resolution, lock with tests (completed 2026-05-13)
-- [x] **Phase 3: Prompt Library UX Audit** - Verify search / favorites / import-export / ordering, lock with tests (completed 2026-05-13)
-- [ ] **Phase 4: Release-Gating Bug Fixes** - Close #62 (release pipeline publishes stale code) and #66 (openai-compatible usage error)
-- [ ] **Phase 5: Documentation Refresh** - README, `burp-ai-agent.six2dez.com`, and `SPEC.md` reflect the three Unreleased features
-- [ ] **Phase 6: v0.7.0 Release Cut** - Promote CHANGELOG, bump version, build, tag, publish JAR + SBOM + SHA-256, CI green on matrix
-- [x] **Phase 7: Proxy Transport + MCP Scope Hardening** - Close #69: route all AI-backend HTTP via Montoya, small-model context defaults, MCP in-scope-only enforcement (completed 2026-05-27)
-- [x] **Phase 8: BApp Store resubmission — MCP pivot + compliance** - Close #231 review: store-build MCP exposes only extension-native AI tools (generic Montoya tools gated to a GitHub full build), gate all AI calls on `ai.isEnabled()`, migrate passive scan to `PassiveScanCheck.doCheck()`, confirm name (completed 2026-06-09)
-- [x] **Phase 9: Design System Foundation** - Shared spacing/typography/color tokens + reusable Swing components as the single styling source for all settings panels (completed 2026-05-29)
-- [x] **Phase 10: MCP Tools Tab Redesign** - Group tools into native (AI) vs generic (Montoya) sections, show store/full-build indicators, add live search/filter + per-group bulk toggle (completed 2026-05-29)
-- [x] **Phase 11: Settings Tabs + Theme Rollout** - Rebuild every Settings tab on the design system with scannable navigation, collapsible sections, and light/dark theme token support (completed 2026-06-02)
+- [ ] **Phase 12: Secrets at Rest & Transport Security** — Encrypt all stored API keys (AES-256-GCM), fix keytool argv password exposure, add soft SSRF backend URL warning
+- [ ] **Phase 13: Privacy & Redaction Hardening** — Fix host-anonymization algorithm (real HKDF), broaden redaction to request/response bodies with user-configurable patterns, add redaction-coverage UI
+- [ ] **Phase 14: Anthropic Backend + Token Budget + Listener Port** — Native Anthropic Messages API backend with streaming/tool-use/prompt-caching; per-session token-budget guardrails; MCP proxy-history listener port filter
+- [ ] **Phase 15: Pre-Send Secret Tripwire** — Post-redaction tripwire scanning final payload for high-entropy secrets before any send; warn-with-confirmation UI; audit-logged allowlist
+- [ ] **Phase 16: External MCP Client** — Connect to external/custom MCP servers (SSE + stdio transports); auth tokens encrypted; SSRF guard; untrusted-output trust boundary
+- [ ] **Phase 17: Reliability & Concurrency Hardening** — EDT confinement on ChatPanel session maps; CLI temp file cleanup via finally; bounded MCP shutdown; uniform HTTP timeouts/CircuitBreaker; fix CLI timeout bug #71
+- [ ] **Phase 18: Quality Tooling & Build Hardening** — Raise scanner/CLI/cache test coverage; add detekt + blocking ktlint with committed baseline; audit 136 exception-logging sites; fix generateBuildFlags sourceSets wiring
+- [ ] **Phase 19: Mega-File Split + Docs** — Split 3 mega-files (no behaviour change); finalize .planning reconciliation; update user-facing docs for v0.9.0 changes
 
 ## Phase Details
 
-### Phase 1: Perplexity Backend Audit
+### Phase 12: Secrets at Rest & Transport Security
 
-**Goal**: Perplexity backend shipped in `Unreleased` is verified against SPEC and locked with tests so regressions cannot ship in v0.7.0.
-**Depends on**: Nothing (parallel-safe with Phase 2 and Phase 3)
-**Requirements**: PPLX-01, PPLX-02, PPLX-03, PPLX-04, PPLX-05
+**Goal**: All stored credentials are encrypted at rest from this phase forward — no professional tool stores secrets in plaintext; existing secrets are migrated non-destructively; two secondary transport-security gaps (keytool argv password, SSRF-blind backend URLs) are closed simultaneously.
+**Depends on**: Nothing (must be first — every subsequent phase that introduces a new secret relies on this)
+**Requirements**: SEC-01, SEC-02, SEC-03
 **Success Criteria** (what must be TRUE):
-
-  1. User can select **Perplexity** in Settings -> Backend and the URL / Model / API key / Headers / Timeout fields are pre-populated to documented defaults (`https://api.perplexity.ai/chat/completions`, Sonar-family model).
-  2. A unit test asserts that `OpenAiCompatibleBackend` configured for Perplexity targets `chat/completions` with no `/v1` prefix and omits `response_format: json_object` even when callers set `jsonMode = true`; the JSON intent is still expressed in the system prompt.
-  3. A unit test asserts the existing NVIDIA NIM and Generic OpenAI-compatible backends retain their pre-Perplexity behaviour (constructor defaults are backwards-compatible: `chatCompletionsBasePath = "/v1/chat/completions"`, `supportsJsonObjectResponseFormat = true`).
-  4. A unit test asserts `AgentSettings` saved by v0.6.1 deserialises in v0.7.0 with the five new `perplexity*` fields defaulting safely and **no** `migrateIfNeeded` schema bump.
-  5. Running a real prompt through the Perplexity backend with a valid API key returns a streamed chat completion end-to-end (manual or integration-test confirmation).
-
-**Plans**: 1 plan
-Plans:
-
-- [x] 01-01-PLAN.md — Add MockWebServer dep + write 2 new wire-level test classes (Perplexity + OpenAI defaults) + extend AgentSettingsMigrationTest with PPLX-05 + record D-06 manual smoke and D-08 wording-gap handoffs in 01-VERIFICATION.md
-
-### Phase 2: Insertion-Point Scan Audit
-
-**Goal**: The right-click "AI Scan on Selected Insertion Point" action correctly resolves the selection across all Burp parameter shapes, queues active scan targets at the right priority, and hides itself when there is no valid candidate.
-**Depends on**: Nothing (parallel-safe with Phase 1 and Phase 3)
-**Requirements**: INSP-01, INSP-02, INSP-03, INSP-04
-**Success Criteria** (what must be TRUE):
-
-  1. Right-clicking a request in Proxy / Repeater with a text selection that overlaps a URL/body/cookie parameter, a header line, or a JSON/XML body field shows **AI Scan on Selected Insertion Point** in the context menu.
-  2. The menu item is hidden when the selection is empty or overlaps no candidate parameter / header / JSON field (verified by both a unit test on the resolver and a manual smoke check).
-  3. Selecting one or more vuln classes via the existing picker queues exactly one `ActiveScanTarget` per class at priority 60 — ahead of the background passive queue — verified by a unit test against the active-scanner queue.
-  4. Selection resolution covers (a) URL parameters via `ParsedHttpParameter.valueOffsets()`, (b) body parameters, (c) cookies, (d) header lines, and (e) JSON/XML body field substring matches, each covered by a unit test.
-
-**Plans**: 3 plans
-Plans:
-
-- [x] 02-01-PLAN.md — Add 5 resolver sub-case @Test methods to InjectionPointExtractorTest.kt (BODY_PARAM, COOKIE, XML_ELEMENT, PATH_SEGMENT, non-empty headerAllowlist) — locks INSP-04 + INSP-02 boundary
-- [x] 02-02-PLAN.md — Add 4 queue-contract @Test methods to ActiveScannerQueueModelTest.kt (one-per-class + dedup-bypass, out-of-scope short-circuit, PASSIVE_ONLY filter, queue-full short count) — locks INSP-03 + threats T-2-01/T-2-02
-- [x] 02-03-PLAN.md — Create 02-HUMAN-UAT.md scaffolding with 6 maintainer-fillable scenarios — locks INSP-01 + INSP-02 UI-builder branches per D-08/D-09
-
-**UI hint**: yes
-
-### Phase 3: Prompt Library UX Audit
-
-**Goal**: The Settings -> Prompt Templates editor and right-click submenus correctly implement search, favorites, JSON import/export, and ordering invariants so users cannot get into a corrupted or surprising state.
-**Depends on**: Nothing (parallel-safe with Phase 1 and Phase 2)
-**Requirements**: PROM-01, PROM-02, PROM-03, PROM-04, PROM-05, PROM-06
-**Success Criteria** (what must be TRUE):
-
-  1. The editor's live search filter matches case-insensitively across title and prompt text and updates the visible row set on every keystroke (covered by a unit test on the filter logic).
-  2. Toggling `★ Favorite` pins an entry to the top of the editor table and to the right-click submenus, and the `isFavorite` field round-trips through save -> reload and export -> import (unit-tested).
-  3. Export writes a pretty-printed `.json` file with favorites first; import merges by id (matching ids replace, new ids append) and de-duplicates duplicate ids in the input file defensively. A unit test feeds a hand-crafted JSON with duplicate ids and verifies the post-import library is well-formed.
-  4. Move Up / Move Down cannot scramble the favorites / non-favorites boundary — a reorder attempt that would cross the boundary is rejected or clamped, locked by a unit test.
-  5. Right-click submenus iterate entries in editor order (favorites first) with no re-sort at menu-build time — verified by a unit test on `filterForMenu`.
-
-**Plans**: 3 plans
-Plans:
-
-- [x] 03-01-PLAN.md — Add filterForMenuPreservesExternalFavoritesFirstOrder @Test to CustomPromptFilterTest.kt — locks PROM-06 favorites-first ordering invariant (Wave 1)
-- [x] 03-02-PLAN.md — Extract parseLibraryJson + mergeById + applyMove into CustomPromptDefinition.Companion, wire handleImport/handleExport/handleMove as thin shells, add 10 @Test methods in new CustomPromptLibraryJsonTest.kt — locks PROM-03/04/05 + fixes distinctBy → associateBy behaviour (Wave 1)
-- [x] 03-03-PLAN.md — Create 03-HUMAN-UAT.md with 4 maintainer-fillable scenarios — locks PROM-01/02/03/04/05 Swing-layer verification (Wave 2)
-
-**UI hint**: yes
-
-### Phase 4: Release-Gating Bug Fixes
-
-**Goal**: The two GitHub issues that block a clean release are resolved with regression coverage: #62 (release pipeline publishes stale code) and #66 (openai-compatible backend usage error).
-**Depends on**: Nothing (can run in parallel with Phases 1-3, but its outcome must be merged before Phase 6)
-**Requirements**: BUG-01, BUG-02
-**Success Criteria** (what must be TRUE):
-
-  1. A dry-run of the release workflow on a tagged commit produces a JAR whose SHA-256 matches the source tree at the tagged commit (verified by re-running `./gradlew shadowJar` locally on that commit and comparing checksums) — closes #62.
-  2. The Generic OpenAI-compatible backend, when triggered by the user-reported scenario in #66, either succeeds or surfaces an actionable error message that identifies the upstream cause (HTTP status, body snippet, suggested remediation) — verified by a unit test that exercises the failure path.
-  3. The root cause of #66 is documented in the PR description (and folded into `CHANGELOG.md [Unreleased]`'s `Fixed` section) so reviewers and downstream users understand the fix.
-
+  1. A user who upgrades from v0.8.0 has all their existing API keys and MCP tokens transparently migrated to AES-256-GCM encrypted form; Settings loads correctly with plaintext values at runtime; plaintext form is overwritten only after round-trip decrypt succeeds.
+  2. Secrets never appear in Burp's output/error logs — the crypto path logs only the Preferences key name on failure, never the key material.
+  3. A user enabling MCP TLS no longer has the keystore password exposed in a `ps aux` listing during keytool execution; the password is written to a temp file with owner-read-only permissions or generated in-JVM.
+  4. A user who types a non-loopback private/link-local URL in any backend settings field sees a soft SSRF warning on save (non-blocking — the user can proceed deliberately).
+  5. Unit tests cover: AES-GCM round-trip, schema-V4 migration idempotency (re-running migration does not double-encrypt), and headless Linux fallback path (no `HeadlessException` with `java.awt.headless=true`).
 **Plans**: TBD
 
-### Phase 5: Documentation Refresh
+### Phase 13: Privacy & Redaction Hardening
 
-**Goal**: User-facing documentation (README, `burp-ai-agent.six2dez.com`, `SPEC.md`) reflects the Perplexity backend, insertion-point scanning, and prompt library UX additions so v0.7.0 ships with no doc drift.
-**Depends on**: Phases 1, 2, 3 (behaviour must be locked before documenting it)
-**Requirements**: DOC-01, DOC-02, DOC-03
+**Goal**: The redaction pipeline's privacy claims match its implementation — host anonymization uses real HKDF; redaction covers request/response bodies (not just headers); users can add custom patterns and test them; a UI indicator surfaces when a known secret shape survived redaction.
+**Depends on**: Phase 12 (Phase 12 closes before Phase 13 begins, ensuring no conflicts on Redaction.kt; the two phases touch different files and are logically independent but sequencing avoids any merge friction)
+**Requirements**: PRIV-01, PRIV-02, PRIV-04
 **Success Criteria** (what must be TRUE):
+  1. `Redaction.anonymizeHost` uses `Mac.getInstance("HmacSHA256")` (HKDF extract/expand) not `MessageDigest.getInstance("SHA-256")` — the SPEC's stated privacy guarantee now matches the implementation; existing STRICT-mode tests stay green.
+  2. A secret in the leading field of a `application/x-www-form-urlencoded` request body (e.g. `apikey=sk-abc123&...`) is redacted in STRICT and BALANCED modes, confirmed by a unit test.
+  3. A user can enter a custom regex pattern in Settings; the pattern is applied during redaction and the UI validates it against an adversarial ReDoS test string (50 ms timeout) before accepting it.
+  4. The redaction preview dialog flags when a known secret shape (matching the same curated pattern set as the tripwire) passed through redaction, so the user can see what the pipeline missed before sending.
+  5. Unit tests cover STRICT/BALANCED/OFF mode matrix for the new body-redaction paths and the custom-pattern ReDoS guard.
+**Plans**: TBD
+**UI hint**: yes
 
-  1. `README.md`'s backend table lists Perplexity alongside the existing 10 backends with the default URL (`https://api.perplexity.ai/chat/completions`), a sample Sonar model id, and a note that no `/v1` prefix is used.
-  2. The public docs site (`burp-ai-agent.six2dez.com`) has a dedicated Perplexity page, an "AI Scan on Selected Insertion Point" walkthrough, and a section under the Prompt Library page covering search / favorites / import-export — all linked from the appropriate index pages.
-  3. `SPEC.md` section 4 (Core features) is updated: 4.4 lists Perplexity as a supported HTTP backend; 5.2 (or 4.2) documents the insertion-point scanning entry point; 4.2 documents the prompt library UX additions. No other SPEC sections drift.
+### Phase 14: Anthropic Backend + Token Budget + Listener Port
 
+**Goal**: Users can select a native Anthropic Messages API backend (the highest-demand gap in the current backend roster); per-session token-budget guardrails surface consumption and enforce hard caps; and MCP proxy-history results can be filtered by listener port — all three ship together since CAP-03 and CAP-04 are small additions that share no conflicts with CAP-01.
+**Depends on**: Phase 12 (anthropicApiKey must be encrypted from the first commit that introduces it)
+**Requirements**: CAP-01, CAP-03, CAP-04
+**Success Criteria** (what must be TRUE):
+  1. A user can select "Anthropic" in Settings > Backend, enter an API key (encrypted on save), choose a model (editable, defaulting to a current alias), and send a chat message that streams tokens back through the Burp proxy — verified by a HUMAN-UAT smoke test with a live Anthropic API key.
+  2. Anthropic traffic appears in Burp's Proxy > HTTP history (confirming `MontoyaHttpTransport` is used, not a direct OkHttp client); `grep OkHttp AnthropicBackend.kt` returns empty on the production code path.
+  3. A 400 response from Anthropic that contains "model" in the error body surfaces a specific user-visible message ("Anthropic rejected the model ID — check Settings > Anthropic > Model") rather than a generic error.
+  4. A user can set a session token-budget warn threshold and hard cap; the passive scanner pauses when the hard cap fires; the chat UI shows a warning banner when the warn threshold is crossed.
+  5. A user using the MCP `proxy_http_history` tool can filter results by Burp listener port (e.g. `8080`), and only requests received on that port are returned.
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 15: Pre-Send Secret Tripwire
+
+**Goal**: A post-redaction tripwire scans the final outbound payload for high-entropy strings that survived the redaction pipeline and warns the user before the payload leaves Burp — the warning is non-blocking (warn-with-confirmation, not hard-stop) so legitimate pentest payloads are never silently blocked.
+**Depends on**: Phase 12 (meaningful once existing keys are no longer plaintext in preferences; adds hooks to PassiveAiScanner before Phase 19 moves those methods)
+**Requirements**: PRIV-03
+**Success Criteria** (what must be TRUE):
+  1. A request body containing a live AWS-format key (`AKIA...`) that survives BALANCED-mode redaction triggers a confirmation dialog ("This payload appears to contain a high-entropy value — send anyway?") before reaching the AI backend — verified by a unit test with a synthetic high-entropy string.
+  2. A legitimate high-entropy pentest payload (e.g. a base64-encoded fuzz string) also shows the confirmation dialog and the user can dismiss it to proceed; the send is never hard-blocked.
+  3. Allowlist actions (user chose "send anyway") are written to the audit log with the session ID and a truncated entropy score — the allowlist decision is auditable.
+  4. The tripwire fires on all three outbound paths: ChatPanel interactive send, PassiveAiScanner batch/single sends, and MCP tool output via `McpToolContext.redactIfNeeded()`.
+  5. The confirmation dialog is visible in the context preview dialog where the tripwire match is highlighted.
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 16: External MCP Client
+
+**Goal**: Users can register external/custom MCP servers and the agent can call their tools — the highest-novelty phase of the milestone; external server auth tokens are encrypted (Phase 12 dependency); untrusted tool output is wrapped before entering the AI context to prevent prompt injection; SSRF warning covers external MCP URLs.
+**Depends on**: Phase 12 (external MCP bearer tokens must be encrypted from day one); kotlin-sdk 0.5.0→0.13.0 bump (Ktor 3.4.3, kotlin-stdlib 2.3.21) requires a Burp-JVM test-run gate before this phase begins
+**Requirements**: CAP-02
+**Success Criteria** (what must be TRUE):
+  1. A user can add an external MCP server (SSE or stdio transport) in the MCP settings CRUD UI; the server connects and its tools appear alongside Burp's built-in tools in the agent's tool preamble — verified by a HUMAN-UAT with a real external MCP server.
+  2. External MCP tool results are wrapped in an explicit trust-boundary marker before they enter the AI prompt context; the audit log records every external tool invocation and its result summary.
+  3. Configuring an external MCP server URL that resolves to an RFC-1918 or link-local address triggers the same soft SSRF warning introduced in Phase 12.
+  4. External server auth tokens are stored encrypted (Phase 12 SecretStore); they are never logged or exposed in the Settings UI in plaintext (show/hide toggle, same as other API key fields).
+  5. The extension loads, the embedded MCP server starts, and the UI is responsive after the kotlin-sdk 0.13.0 bump — no `ClassLoader` conflicts or `NoClassDefFoundError` on Burp's JVM (verified in CI).
+**Plans**: TBD
+**UI hint**: yes
+
+### Phase 17: Reliability & Concurrency Hardening
+
+**Goal**: The four known reliability gaps are closed: ChatPanel session state is safely EDT-confined; CLI temp files containing prompt content are reliably deleted even on crashes; all HTTP backends enforce consistent timeouts through the CircuitBreaker; and the CLI-command-timeout failure (issue #71) is diagnosed and fixed with a regression test.
+**Depends on**: Phase 14 (AnthropicBackend must be included in the CircuitBreaker/timeout audit); Phase 16 recommended (McpClientManager lifecycle included in shutdown-bound audit)
+**Requirements**: REL-01, REL-02, REL-03, REL-04
+**Success Criteria** (what must be TRUE):
+  1. `ChatPanel`'s four session maps (`sessionPanels`, `sessionStates`, `sessionsById`, `sessionDrafts`) carry `@GuardedBy("EDT")` annotations and an `assert(SwingUtilities.isEventDispatchThread())` guard at every write site; a `ChatPanelConcurrencyTest` verifies no off-EDT writes are reachable.
+  2. CLI temp files containing prompt/context content are deleted in `finally` blocks (not only in `catch`); `deleteOnExit()` is also called as a belt-and-suspenders fallback; confirmed by a test that simulates an exception mid-execution.
+  3. All HTTP backends (including the new AnthropicBackend from Phase 14) share consistent connect/read timeouts and route through `CircuitBreaker`; no backend can bypass `MontoyaHttpTransport` on the production code path.
+  4. Issue #71 (CLI command timeout failure) is reproduced, diagnosed, and fixed or given an actionable error message; a regression test prevents recurrence.
+  5. MCP server shutdown completes within a bounded timeout (no hang on `McpSupervisor.stop()`); host-anonymization maps are bounded or cleared to prevent memory growth over long pentests.
 **Plans**: TBD
 
-### Phase 7: Proxy Transport + MCP Scope Hardening
+### Phase 18: Quality Tooling & Build Hardening
 
-**Goal**: GitHub issue #69 closed. All AI-backend HTTP traffic (health-check + chat) is routed through `MontoyaHttpTransport` so Burp's upstream proxy / SOCKS / cert store is honored; the chat-context builder respects a small-model defaults profile that fits 1278-token-class models; and the MCP server enforces an in-scope-only restriction across every tool that returns Burp HTTP data.
-**Depends on**: Nothing (parallel-safe with Phase 1, 4, 5)
-**Requirements**: BUG-69-01 (transport unification), BUG-69-02 (small-model defaults), BUG-69-03 (MCP scope enforcement)
+**Goal**: The build and test infrastructure is hardened so regressions surface quickly: detekt static analysis and blocking ktlint are added with committed baselines; test coverage for the scanner queue, CLI supervision, and cache module is raised from near-zero; 136 silently-swallowed exception sites are audited; and the `generateBuildFlags` Gradle wiring is fixed so `./gradlew ktlintCheck` runs standalone.
+**Depends on**: Phase 17 recommended (reliability fixes increase coverage scope); independent of Phase 19
+**Requirements**: QUAL-02, QUAL-03, QUAL-04, QUAL-05
 **Success Criteria** (what must be TRUE):
+  1. `./gradlew ktlintCheck` passes standalone (without init-script workarounds), confirming the `generateBuildFlags` task is wired via `sourceSets` so consumers inherit the dependency automatically.
+  2. `detekt` runs as a blocking CI check with a committed `detekt-baseline.xml`; new code must be clean; existing violations are captured in the baseline and do not break CI.
+  3. `ktlintFormat` has been run on the entire codebase in a dedicated commit that precedes the `ktlintCheck` blocking-gate commit — confirmed by git log ordering.
+  4. Test coverage for `scanner` queue/dedup, `cli` backend supervision, and the `cache` module is measurably raised from the current 0–3% baseline (target: at least one meaningful test class per module that exercises the critical path).
+  5. Silently-swallowed `catch (Exception)` sites have been audited; each site either logs a contextual message via a shared helper or carries a `// INTENTIONAL: <reason>` comment; the audit is documented in a short tracking note.
+**Plans**: TBD
 
-  1. `healthCheck()` for every HTTP-based backend (OpenAI-compatible, Perplexity, NVIDIA, LM Studio, Ollama HTTP) goes through `MontoyaHttpTransport` when a `BurpExtensionApi` instance is available; the OkHttp fallback path is removed from production code paths so Burp's upstream proxy and SOCKS config are always honored.
-  2. The chat code path in `OpenAiCompatibleBackend.send()` and `LmStudioBackend.send()` no longer contains an OkHttp fallback branch; if `transport == null` at runtime in a real Burp session, the call fails fast with a clear error rather than silently bypassing Burp's network stack.
-  3. A unit test asserts the OkHttp fallback (still kept for non-Burp test environments) is never reached when a non-null `MontoyaHttpTransport` is passed; another asserts the fallback's documentation comment is corrected to reflect that it does NOT honor Burp's upstream proxy.
-  4. The MCP "Max body size" UI spinner accepts values from 32 KB to 100 MB (today: 1 MB minimum), denominated in KB so users with small-context models can configure tight caps without UI gymnastics.
-  5. A "Small-model mode" toggle (or per-backend max-context awareness) caps `ContextCollector` request/response chars to 1500/750 (today: 4000/8000) when enabled or when the active backend declares a context window ≤ 4k tokens.
-  6. A new `mcpScopeOnly: Boolean` setting plus checkbox in the MCP section of `SettingsPanel` controls the scope filter. When enabled, every MCP tool that returns Burp HTTP data (`site_map`, `proxy_history`, `target_tree`, repeater/intercept history, etc.) filters results to `api.scope().isInScope(url)`, and the `send_request` tool rejects calls targeting out-of-scope URLs.
-  7. Unit tests cover (a) `MontoyaHttpTransport.get()` is invoked for the health-check path, (b) small-model mode emits a 1500/750 ContextCapture, (c) every scope-aware MCP tool short-circuits when `mcpScopeOnly=true` and the target is out of scope.
+### Phase 19: Mega-File Split + Docs
 
-**Plans**: 3 plans
-Plans:
-
-- [x] 07-01-PLAN.md — Transport unification: route healthCheck for OpenAi/LmStudio/Ollama/NvidiaNim through MontoyaHttpTransport, remove OkHttp send() fallback, fix misleading buildClient KDoc (Wave 1, BUG-69-01)
-- [x] 07-02-PLAN.md — Small-model defaults: add `chat.smallModelMode` toggle that caps ContextCollector to 1500/750 chars + convert MCP body-cap UI from MB to KB (range 32-102400) + lower storage floor to 32 KB (Wave 1, BUG-69-02)
-- [x] 07-03-PLAN.md — MCP scope enforcement: add `mcpScopeOnly` setting + checkbox + McpScopeFilter helper; filter every read-style MCP tool to in-scope hosts; reject out-of-scope URLs in write-style tools (Wave 2, BUG-69-03)
-
-### Phase 8: BApp Store resubmission — MCP pivot to extension-native tools + compliance fixes
-
-**Goal:** Get the extension accepted on the PortSwigger BApp Store (issue #231) by resolving all four review feedback points without discarding the MCP work: (1) pivot the store build's MCP server to expose only extension-native AI tools while gating the 51 generic Montoya wrappers out of the store JAR (kept in a GitHub "full" build); (2) gate AI-calling MCP tools on `api.ai().isEnabled()`; (3) migrate passive scanning from `ProxyResponseHandler` to `PassiveScanCheck.doCheck()` (modern Montoya 2026.2 interface); (4) confirm the name "Custom AI Agent".
-**Requirements**: BApp Store AI extension best practices (enhancedCapabilities + ai.isEnabled gating, Montoya networking + TLS verification, Burp AI as default provider); no generic-Montoya MCP duplication of the official server; preserve privacy redaction + audit trail; keep Burp Community support (verify the AI gate does not break non-Burp-AI backends there).
-**Depends on:** Phase 7
-**Plans:** 4/4 plans complete
-
-Plans:
-**Wave 1**
-
-- [x] 08-01-PLAN.md — Wave 1: -PstoreBuild Gradle gate + BuildFlags.kt generate task + two-artifact naming + nativeTool field + McpToolCatalog.available() + Wave-0 test stubs (Wave 1, completed 2026-05-29)
-
-**Wave 2** *(blocked on Wave 1 completion)*
-
-- [x] 08-02-PLAN.md — Wave 2: 6 new native MCP tools (ai_analyze, ai_passive_scan, ai_findings_recent, redact_preview, ai_audit_query, ai_backends_list) + context injection + available() routing in registration + SettingsPanel UI (Wave 2, depends on 08-01)
-- [x] 08-03-PLAN.md — Wave 3: AiPassiveScanCheck implementing PassiveScanCheck.doCheck() + remove ProxyResponseHandler from PassiveAiScanner + App.kt registration (Wave 3, depends on 08-01)
-
-**Wave 4** *(blocked on Wave 2 completion)*
-
-- [x] 08-04-PLAN.md — Wave 4: artifact inspection + Community/Pro AI-gate manual verification (checkpoint) + /reopen reply draft (Wave 4, depends on 08-02 + 08-03)
-
-### Phase 6: v0.7.0 Release Cut
-
-**Goal**: v0.7.0 is tagged, built, and published with a complete release artefact set (JAR + SHA-256 + SBOM + release notes) on a green CI matrix across macOS, Linux, and Windows.
-**Depends on**: Phases 1, 2, 3, 4, 5 (every feature audit + both bug fixes + docs must be merged first)
-**Requirements**: REL-01, REL-02, REL-03, REL-04, REL-05
+**Goal**: The three mega-files are split into focused files with no behaviour change (the last code change of the milestone, so no subsequent feature lands on top of the refactor); planning artifacts reflect the shipped v0.7.0/v0.8.0 state; user-facing docs are updated for all v0.9.0 additions.
+**Depends on**: All code phases (12–18) complete — pure refactor must be last so no in-flight feature conflicts; PRIV-03 hooks (Phase 15) are inside PassiveAiScanner and must be committed before the split
+**Requirements**: QUAL-01, DOC-01, DOC-02
 **Success Criteria** (what must be TRUE):
-
-  1. `CHANGELOG.md`'s `[Unreleased]` block is renamed to `[0.7.0] - <release date>`, the upgrade notes are preserved, and any new fixes folded in by Phase 4 appear under `Fixed`.
-  2. Version is bumped consistently across `build.gradle.kts` and any version constants; `./gradlew clean shadowJar` produces `Custom-AI-Agent-0.7.0.jar` that loads in Burp Community and Burp Pro on macOS, Linux, and Windows (CI matrix green).
-  3. `ktlintCheck`, `jacocoTestReport`, and the full test suite pass on the release commit across the existing OS matrix.
-  4. Git tag `v0.7.0` is pushed; the GitHub release pipeline uploads `Custom-AI-Agent-0.7.0.jar`, a matching SHA-256 checksum, and a CycloneDX SBOM (`bom.json`) with release notes auto-extracted from the `[0.7.0]` `CHANGELOG.md` section.
-  5. The published JAR's SHA-256 matches the SHA-256 of `./gradlew shadowJar` run locally on the tagged commit (regression coverage for BUG-01 in production).
-
+  1. `McpTools.kt`, `SettingsPanel.kt`, and `PassiveAiScanner.kt` are each under 400–500 lines after the split; the full test suite (`./gradlew test`) passes before and after each individual extraction with zero behaviour changes.
+  2. `ServiceLoader` registration (`META-INF/services`) is intact after the split — `BackendRegistryTest.loadAll()` asserts the expected number of built-in factories; no `ClassNotFoundException` at runtime.
+  3. `.planning/` (PROJECT.md, STATE.md, ROADMAP.md, REQUIREMENTS.md) reflects shipped v0.7.0 and v0.8.0; closed issues #62/#66/#67/#68/#69 are acknowledged in the relevant planning artifacts with no stale carryover entries.
+  4. `README.md`, `SPEC.md`, and `DECISIONS.md` are updated to document the Anthropic backend, secret encryption (AES-256-GCM), redaction changes (real HKDF, body patterns, custom patterns), external MCP client, and token-budget guardrails.
+  5. The public docs site (`burp-ai-agent.six2dez.com`) has pages or sections for the Anthropic backend and external MCP servers, so v0.9.0 ships with no doc drift on the two highest-novelty features.
 **Plans**: TBD
 
 ---
 
-## v0.8.0 Phase Details
-
-### Phase 9: Design System Foundation
-
-**Goal**: A shared Swing design-system module (spacing, typography, color tokens + reusable components) exists in `ui/` and is the single styling source that all settings panels can adopt — no panel depends on ad-hoc literals after this phase.
-**Depends on**: Nothing (new module; no existing panel is migrated yet)
-**Requirements**: UI-01
-**Success Criteria** (what must be TRUE):
-
-  1. A `DesignTokens` object (or equivalent) in `ui/design/` exposes spacing constants, font descriptors, and color roles (primary, surface, muted, border) that resolve correctly against `UIManager` in both Burp light and dark themes — no hardcoded hex values in the token layer.
-  2. At least four reusable Swing component builders exist — section header label, labeled field row (label + control + optional help text), inline help/description label, and primary/secondary action button — each applying tokens so visual consistency is guaranteed by construction.
-  3. A unit or visual-verification test (or a developer-run harness) confirms token values load without throwing in a headless JVM context, exercising both "light" and "dark" UIManager overrides.
-  4. No existing panel behaviour or settings-persistence changes: the new module is additive only; all tests remain green after the addition (`./gradlew test` passes).
-
-**Plans**: 2 plans
-Plans:
-
-**Wave 1**
-
-- [x] 09-01-PLAN.md — Create DesignTokens.kt (Spacing / Typography / Colors objects) + DesignTokensTest.kt (7 headless tests: spacing multiples-of-4, light/dark UIManager flip, color roles non-null, typography derivation)
-
-**Wave 2** *(blocked on Wave 1 completion)*
-
-- [x] 09-02-PLAN.md — Create Components.kt (11 builder functions + BadgeStyle + applyFieldStyle/applyAreaStyle) + DesignComponentsTest.kt (15 builder construction tests) + full suite regression check
-
-**UI hint**: yes
-
-### Phase 10: MCP Tools Tab Redesign
-
-**Goal**: The MCP tools tab (`McpConfigPanel`) is reorganized into two clearly labelled sections — extension-native AI tools and generic Montoya tools — with store-build / full-build badges per row, a live search/filter field, and per-group bulk enable/disable toggles, built on the Phase 9 design system.
-**Depends on**: Phase 9 (design-system tokens + components); Phase 8 (nativeTool field + McpToolCatalog.available() already in place)
-**Requirements**: UI-03, UI-04, UI-05, UI-07
-**Success Criteria** (what must be TRUE):
-
-  1. Opening the MCP tab shows two visually distinct sections — "AI Tools (extension-native)" and "Montoya Tools (generic)" — each rendered with the Phase 9 section-header component; tools appear in the correct section based on `McpToolDescriptor.nativeTool`.
-  2. Each tool row displays a "store" or "full" badge (or equivalent visual indicator) derived from the tool's build availability, so users can immediately see which tools ship in the BApp Store build without consulting external docs.
-  3. Typing in the search/filter field narrows both sections in real time (case-insensitive match on tool name and description); clearing the field restores all tools.
-  4. A "Enable all / Disable all" control per group performs a bulk toggle that applies to all tools currently visible in that group (respects active search filter); the resulting per-tool enabled states persist through settings save/reload.
-  5. All existing per-tool enable/disable toggles, the master unsafe-mode switch, and MCP server start/stop remain fully functional — no behavior or persistence regression; the full test suite passes.
-
-**Plans**: 2 plans
-Plans:
-
-**Wave 1**
-
-- [x] 10-01-PLAN.md — Extract McpToolTabModel (pure grouping/badge/filter/bulk-toggle helpers) + McpToolTabModelTest (>= 14 unit tests, no Swing)
-
-**Wave 2** *(blocked on Wave 1 completion)*
-
-- [x] 10-02-PLAN.md — Rebuild buildMcpToolsPanel() as thin Swing shell: two sectionPanel sections, toolBadge per row, search DocumentListener (Option B show/hide), per-group bulk toggles, AccordionPanel for unsafe allowlist, FLAG-10-01 updateUI() mitigation
-
-**UI hint**: yes
-
-### Phase 11: Settings Tabs + Theme Rollout
-
-**Goal**: Every Settings tab is rebuilt on the Phase 9 design system, giving the entire Settings area a consistent layout (labeled fields, section headers, one-line descriptions, collapsible sections for long tabs) and full light/dark theme fidelity via tokens — no hardcoded colors remain anywhere in settings panels.
-**Depends on**: Phase 9 (design-system tokens + components); Phase 10 recommended (MCP tab done first as the highest-priority panel)
-**Requirements**: UI-02, UI-06, UI-08, UI-07
-**Success Criteria** (what must be TRUE):
-
-  1. Every Settings tab (`SettingsPanel`, `MainTab`, and all panels under `ui/panels/`) uses Phase 9 labeled-field rows and section headers exclusively — no ad-hoc `JLabel` + `JTextField` pairs remain that bypass the design system.
-  2. Each tab and each collapsible section within a tab has a visible title and a one-line description (≤ 80 chars) so a user scanning the settings can understand the purpose of each group without opening it.
-  3. Long tabs (MCP, Scanner, Backend) use collapsible sections; collapsed state is preserved between extension restarts via `AgentSettings` (or equivalent persistence key).
-  4. With Burp's theme set to dark, all settings panels render using dark-appropriate token values — no visible white/light backgrounds or black text against dark surfaces; verified by a developer smoke-check in Burp Pro dark mode.
-  5. All existing settings values (backend selection, privacy mode, audit toggle, MCP config, scanner thresholds, prompt library) load and save correctly after the redesign — a regression test pass (`./gradlew test`) and a manual settings-persistence smoke-check confirm no regressions.
-
-**Plans**: 4 plans
-Plans:
-
-**Wave 1** *(plans 01–03 run in parallel)*
-
-- [x] 11-01-PLAN.md — Wave 1: BackendConfigPanel + PrivacyConfigPanel → design-system builders (UI-02, UI-07, UI-08)
-- [x] 11-02-PLAN.md — Wave 1: PassiveScanConfigPanel (5 AccordionPanel sections) + ActiveScanConfigPanel + ActiveScanQueuePanel (UI-02, UI-06, UI-07, UI-08)
-- [x] 11-03-PLAN.md — Wave 1: PromptConfigPanel + CustomPromptsConfigPanel + HelpConfigPanel + McpConfigPanel (UI-02, UI-07, UI-08)
-
-**Wave 2** *(blocked on Wave 1 completion)*
-
-- [x] 11-04-PLAN.md — Wave 2: SettingsPanel.kt final cleanup + human visual smoke-check (all tabs, light + dark) (UI-02, UI-06, UI-07, UI-08)
-
-**UI hint**: yes
-
 ## Progress
 
-**Execution Order (v0.7.0 carryover):**
-Phases 1, 2, 3, and 4 are parallel-safe and can be planned/executed concurrently. Phase 5 (docs) depends on Phases 1-3 being merged. Phase 6 (release cut) depends on every other phase being complete.
+**Execution Order (v0.9.0):**
 
-**Execution Order (v0.8.0):**
-Phase 9 must complete first (design-system foundation). Phase 10 (MCP tab) and Phase 11 (settings rollout) both depend on Phase 9; Phase 10 is recommended before Phase 11 since it is the highest-priority panel.
+Phase 12 (SEC) must be first. Phase 13 (Privacy) and Phase 12 are sequential (avoid merge friction on crypto/redaction files). Phase 14 (Anthropic/CAP) depends on Phase 12. Phase 15 (tripwire) depends on Phase 12 and must precede Phase 19. Phase 16 (external MCP) depends on Phase 12; requires kotlin-sdk Burp-JVM test-run gate. Phase 17 (reliability) follows Phases 14 and 16 for full scope. Phase 18 (quality tooling) is independent, runs after Phase 17. Phase 19 (split + docs) is the last code phase.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Perplexity Backend Audit | 0/1 | Not started | - |
-| 2. Insertion-Point Scan Audit | 3/3 | Complete   | 2026-05-13 |
-| 3. Prompt Library UX Audit | 3/3 | Complete   | 2026-05-13 |
-| 4. Release-Gating Bug Fixes | 0/TBD | Not started | - |
-| 5. Documentation Refresh | 0/TBD | Not started | - |
-| 6. v0.7.0 Release Cut | 0/TBD | Not started | - |
-| 7. Proxy Transport + MCP Scope Hardening | 3/3 | Complete   | 2026-05-27 |
-| 8. BApp Store resubmission — MCP pivot + compliance | 4/4 | Complete   | 2026-06-09 |
-| 9. Design System Foundation | 2/2 | Complete   | 2026-05-29 |
-| 10. MCP Tools Tab Redesign | 2/2 | Complete   | 2026-05-29 |
-| 11. Settings Tabs + Theme Rollout | 4/4 | Complete    | 2026-06-02 |
+| 12. Secrets at Rest & Transport Security | 0/TBD | Not started | - |
+| 13. Privacy & Redaction Hardening | 0/TBD | Not started | - |
+| 14. Anthropic Backend + Token Budget + Listener Port | 0/TBD | Not started | - |
+| 15. Pre-Send Secret Tripwire | 0/TBD | Not started | - |
+| 16. External MCP Client | 0/TBD | Not started | - |
+| 17. Reliability & Concurrency Hardening | 0/TBD | Not started | - |
+| 18. Quality Tooling & Build Hardening | 0/TBD | Not started | - |
+| 19. Mega-File Split + Docs | 0/TBD | Not started | - |
