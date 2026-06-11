@@ -33,9 +33,9 @@ Research-mandated ordering: **SEC (encrypt secrets) lands before CAP-01 (Anthrop
 
 - [ ] **QUAL-01** (B1): The three mega-files (`McpTools.kt` 2770, `SettingsPanel.kt` 2596, `PassiveAiScanner.kt` 2480) are split into focused files with **no behaviour change** — full test suite green before/after; ServiceLoader/registration intact
 - [ ] **QUAL-02** (B2): Test coverage is raised for the scanner queue/dedup, CLI backend supervision, and the `cache` module (currently 0–3%)
-- [ ] **QUAL-03** (B3): `detekt` is added to the build and `ktlint` is enforced as a **blocking** check, each with a committed baseline so existing code does not break CI
+- [x] **QUAL-03** (B3): `detekt` is added to the build and `ktlint` is enforced as a **blocking** check, each with a committed baseline so existing code does not break CI
 - [ ] **QUAL-04** (B4): Silently-swallowed `catch (Exception)` sites are audited and replaced with logged, contextual handling via a shared logging helper (ties to REL-04 diagnosability)
-- [ ] **QUAL-05** (B5): The `generateBuildFlags` step is modeled as a proper source-generating task wired via `sourceSets`, so consumers inherit the dependency automatically and `./gradlew ktlintCheck` runs standalone (removes the fragile `dependsOn` workaround)
+- [x] **QUAL-05** (B5): The `generateBuildFlags` step is modeled as a proper source-generating task wired via `sourceSets`, so consumers inherit the dependency automatically and `./gradlew ktlintCheck` runs standalone (removes the fragile `dependsOn` workaround)
 
 ### New Capabilities (CAP)
 
@@ -88,9 +88,9 @@ Explicitly excluded for v0.9.0. Tracked to prevent scope creep.
 | REL-03 | Phase 17: Reliability & Concurrency Hardening | Complete |
 | REL-04 | Phase 17: Reliability & Concurrency Hardening | Complete |
 | QUAL-02 | Phase 18: Quality Tooling & Build Hardening | Pending |
-| QUAL-03 | Phase 18: Quality Tooling & Build Hardening | Pending |
+| QUAL-03 | Phase 18: Quality Tooling & Build Hardening | Complete |
 | QUAL-04 | Phase 18: Quality Tooling & Build Hardening | Pending |
-| QUAL-05 | Phase 18: Quality Tooling & Build Hardening | Pending |
+| QUAL-05 | Phase 18: Quality Tooling & Build Hardening | Complete |
 | QUAL-01 | Phase 19: Mega-File Split + Docs | Pending |
 | DOC-01 | Phase 19: Mega-File Split + Docs | Pending |
 | DOC-02 | Phase 19: Mega-File Split + Docs | Pending |

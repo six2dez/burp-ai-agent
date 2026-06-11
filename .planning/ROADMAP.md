@@ -210,7 +210,7 @@ Plans:
 Plans:
 **Wave 1** *(SC1 + SC2 — both modify build.gradle.kts, serialized within one plan)*
 
-- [ ] 18-01-PLAN.md — Fix generateBuildFlags srcDir wiring (SC1/QUAL-05) + add detekt 1.23.8 with committed baseline (SC2/QUAL-02-detekt) [wave 1]
+- [x] 18-01-PLAN.md — Fix generateBuildFlags srcDir wiring (SC1/QUAL-05) + add detekt 1.23.8 with committed baseline (SC2/QUAL-02-detekt) [wave 1]
 
 **Wave 2** *(SC3 — depends on SC1 for standalone ktlintCheck; two-commit sequence within plan)*
 
@@ -252,5 +252,5 @@ Phase 12 (SEC) must be first. Phase 13 (Privacy) and Phase 12 are sequential (av
 | 15. Pre-Send Secret Tripwire | 3/3 | Complete    | 2026-06-11 |
 | 16. External MCP Client | 0/TBD | Not started | - |
 | 17. Reliability & Concurrency Hardening | 3/3 | Complete    | 2026-06-11 |
-| 18. Quality Tooling & Build Hardening | 0/TBD | Not started | - |
+| 18. Quality Tooling & Build Hardening | 1/4 | In Progress|  |
 | 19. Mega-File Split + Docs | 0/TBD | Not started | - |
