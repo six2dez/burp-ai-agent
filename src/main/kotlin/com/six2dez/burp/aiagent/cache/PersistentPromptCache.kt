@@ -45,6 +45,7 @@ class PersistentPromptCache(
                 }
                 entry
             } catch (_: Exception) {
+                // INTENTIONAL: cache read failures are best-effort; corrupt files are deleted; must not crash scanner pipeline
                 if (file.exists()) file.delete()
                 null
             }
@@ -61,7 +62,7 @@ class PersistentPromptCache(
                 mapper.writeValue(file, entry)
                 evictIfNeeded()
             } catch (_: Exception) {
-                // Silently fail on disk write errors
+                // INTENTIONAL: cache write failures are best-effort; must not crash scanner pipeline
             }
         }
     }

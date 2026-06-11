@@ -329,6 +329,7 @@ class ActiveAiScanner(
             executor?.awaitTermination(5, TimeUnit.SECONDS)
             scheduledExecutor?.awaitTermination(5, TimeUnit.SECONDS)
         } catch (_: InterruptedException) {
+            // INTENTIONAL: thread interrupt during executor shutdown; interrupt flag restored
             Thread.currentThread().interrupt()
         }
         executor = null
@@ -1576,6 +1577,7 @@ class ActiveAiScanner(
                 requestExecutor.shutdownNow()
             }
         } catch (_: InterruptedException) {
+            // INTENTIONAL: thread interrupt on executor shutdown; shutdownNow() for immediate termination
             requestExecutor.shutdownNow()
         }
     }

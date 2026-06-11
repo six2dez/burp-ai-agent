@@ -1,6 +1,7 @@
 package com.six2dez.burp.aiagent.supervisor
 
 import com.six2dez.burp.aiagent.backends.AgentConnection
+import com.six2dez.burp.aiagent.backends.BackendDiagnostics
 import com.six2dez.burp.aiagent.backends.SessionAwareConnection
 import java.util.concurrent.ConcurrentHashMap
 
@@ -79,7 +80,7 @@ class ChatSessionManager {
             try {
                 state.connection?.stop()
             } catch (e: Exception) {
-                System.err.println("Failed to stop chat session connection: ${e.message}")
+                BackendDiagnostics.logError("[ChatSessionManager] Failed to stop session connection: ${e.message}")
             }
         }
         sessions.clear()

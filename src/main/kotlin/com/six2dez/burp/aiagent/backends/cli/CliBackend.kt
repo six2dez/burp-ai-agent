@@ -2,6 +2,7 @@ package com.six2dez.burp.aiagent.backends.cli
 
 import com.six2dez.burp.aiagent.backends.AgentConnection
 import com.six2dez.burp.aiagent.backends.AiBackend
+import com.six2dez.burp.aiagent.backends.BackendDiagnostics
 import com.six2dez.burp.aiagent.backends.BackendLaunchConfig
 import com.six2dez.burp.aiagent.backends.ChatMessage
 import com.six2dez.burp.aiagent.backends.DiagnosableConnection
@@ -147,10 +148,11 @@ class CliBackend(
                                     ),
                                 )
                             } catch (_: UnsupportedOperationException) {
-                                // Non-POSIX filesystem (Windows) — skip
+                                // INTENTIONAL: non-POSIX filesystem (Windows) does not support POSIX file permissions; skip
                             }
                             tFile.writeText(combinedText)
                         } catch (e: Exception) {
+                            // INTENTIONAL: temp file write failed; cleanup and propagate error via onComplete
                             tFile.delete()
                             onComplete(e)
                             return@submit
@@ -244,6 +246,7 @@ class CliBackend(
                                 try {
                                     readerThread.join(2000)
                                 } catch (_: InterruptedException) {
+                                    // INTENTIONAL: interrupted while waiting for reader thread; restores interrupt flag
                                     Thread.currentThread().interrupt()
                                 }
                                 val tail = rawOutput.toString().trim().take(2000)
@@ -254,6 +257,7 @@ class CliBackend(
                         try {
                             readerThread.join(2000)
                         } catch (_: InterruptedException) {
+                            // INTENTIONAL: interrupted while waiting for reader thread after timeout; restores interrupt flag
                             Thread.currentThread().interrupt()
                         }
                         if (!terminatedAfterIdle && process.exitValue() != 0) {
@@ -281,24 +285,29 @@ class CliBackend(
                         if (finalMessage.isNotBlank()) onChunk(finalMessage)
                         onComplete(null)
                     } catch (e: Exception) {
+                        // INTENTIONAL: CLI process launch/execution error; propagated via onComplete
                         onComplete(e)
                     } finally {
                         // Guaranteed cleanup: kill process, delete temp files
                         try {
                             process?.destroyForcibly()
                         } catch (_: Exception) {
+                            // INTENTIONAL: finally block cleanup; destroyForcibly() must not prevent file cleanup
                         }
                         try {
                             promptFile?.delete()
                         } catch (_: Exception) {
+                            // INTENTIONAL: finally block cleanup; file deletion must not prevent process cleanup
                         }
                         try {
                             outputFile?.delete()
                         } catch (_: Exception) {
+                            // INTENTIONAL: finally block cleanup; file deletion must not prevent process cleanup
                         }
                     }
                 }
             } catch (e: java.util.concurrent.RejectedExecutionException) {
+                // INTENTIONAL: executor shut down; propagate shutdown state via onComplete
                 onComplete(IllegalStateException("Backend connection has been stopped", e))
             }
         }
@@ -308,6 +317,7 @@ class CliBackend(
             try {
                 executor.awaitTermination(3, TimeUnit.SECONDS)
             } catch (_: InterruptedException) {
+                // INTENTIONAL: interrupted during executor shutdown; restores interrupt flag
                 Thread.currentThread().interrupt()
             }
         }
@@ -615,10 +625,12 @@ class CliBackend(
                         try {
                             exitCode.set(process.waitFor())
                         } catch (_: Exception) {
+                            // INTENTIONAL: waitFor() in finally block must not throw to avoid masking reader exception
                         }
                     }
                 }
             } catch (e: Exception) {
+                // INTENTIONAL: process start failed; stop() for cleanup then re-throw
                 stop()
                 throw e
             }
@@ -672,6 +684,7 @@ class CliBackend(
                         onComplete(null)
                     }
                 } catch (e: Exception) {
+                    // INTENTIONAL: send() execution error; propagated via onComplete
                     onComplete(e)
                 }
             }
@@ -682,7 +695,7 @@ class CliBackend(
             try {
                 writer.close()
             } catch (e: Exception) {
-                System.err.println("Failed to close CLI writer: ${e.message}")
+                BackendDiagnostics.logError("[CliBackend] Failed to close CLI writer: ${e.message}")
             }
             process.destroy()
             try {
@@ -690,6 +703,7 @@ class CliBackend(
                     process.destroyForcibly()
                 }
             } catch (_: InterruptedException) {
+                // INTENTIONAL: interrupted while waiting for process; destroyForcibly() + restore interrupt flag
                 process.destroyForcibly()
                 Thread.currentThread().interrupt()
             }
@@ -698,11 +712,13 @@ class CliBackend(
             try {
                 exec.awaitTermination(2, TimeUnit.SECONDS)
             } catch (_: InterruptedException) {
+                // INTENTIONAL: interrupted during exec executor shutdown; restores interrupt flag
                 Thread.currentThread().interrupt()
             }
             try {
                 readerExec.awaitTermination(2, TimeUnit.SECONDS)
             } catch (_: InterruptedException) {
+                // INTENTIONAL: interrupted during reader executor shutdown; restores interrupt flag
                 Thread.currentThread().interrupt()
             }
         }
@@ -974,6 +990,7 @@ private fun resolveCommand(
                     return listOf(candidate.absolutePath) + cmd.drop(1)
                 }
             } catch (_: Exception) {
+                // INTENTIONAL: unreadable PATH directory; skip silently to avoid aborting full PATH search
             }
         }
     }

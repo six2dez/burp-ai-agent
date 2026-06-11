@@ -120,6 +120,7 @@ class AgentSupervisor(
         try {
             api.ai().isEnabled()
         } catch (_: Exception) {
+            // INTENTIONAL: Burp AI API unavailable in Community edition; fallback returns false
             false
         }
 
@@ -223,7 +224,7 @@ class AgentSupervisor(
                 false
             }
         } catch (e: Exception) {
-            val msg = "Failed to launch backend $backendId: ${e.message}"
+            val msg = "[AgentSupervisor] Failed to launch backend $backendId: ${e.message}"
             lastErrorRef.set(msg)
             api.logging().logToError(msg)
             // Reset to Idle if still in STARTING
@@ -460,7 +461,7 @@ class AgentSupervisor(
             try {
                 connection = backend.launch(launchConfig)
             } catch (e: Exception) {
-                val msg = "Failed to launch backend $backendId: ${e.message}"
+                val msg = "[AgentSupervisor] Failed to launch backend $backendId: ${e.message}"
                 lastErrorRef.set(msg)
                 api.logging().logToError(msg)
                 onComplete(e)
@@ -1026,7 +1027,7 @@ class AgentSupervisor(
             safeLogOutput("Started service: $name")
             true
         } catch (e: Exception) {
-            safeLogError("Failed to start service $name: ${e.message}")
+            safeLogError("[AgentSupervisor] Failed to start service $name: ${e.message}")
             false
         }
     }
@@ -1035,6 +1036,7 @@ class AgentSupervisor(
         try {
             api.logging().logToOutput(message)
         } catch (_: Throwable) {
+            // INTENTIONAL: safeLogOutput fallback must not throw; stderr is the last resort
             System.err.println(message)
         }
     }
@@ -1043,6 +1045,7 @@ class AgentSupervisor(
         try {
             api.logging().logToError(message)
         } catch (_: Throwable) {
+            // INTENTIONAL: safeLogError fallback must not throw; stderr is the last resort
             System.err.println(message)
         }
     }
@@ -1056,13 +1059,14 @@ class AgentSupervisor(
                 monitorExec.shutdownNow()
             }
         } catch (_: InterruptedException) {
+            // INTENTIONAL: interrupt during monitor shutdown; shutdownNow() called; interrupt flag restored via JVM
             monitorExec.shutdownNow()
         }
         for ((name, process) in services) {
             try {
                 process.destroyForcibly()
             } catch (e: Exception) {
-                safeLogError("Failed to terminate service '$name': ${e.message}")
+                safeLogError("[AgentSupervisor] Failed to terminate service '$name': ${e.message}")
             }
         }
         services.clear()
@@ -1234,6 +1238,7 @@ class AgentSupervisor(
                     }
                 }
             } catch (_: Exception) {
+                // INTENTIONAL: shell PATH capture is best-effort; returns null on failure (fallback to System.getenv)
             }
             return null
         }
