@@ -149,7 +149,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1; file-disjoint, run in parallel)*
 
-- [ ] 15-02-PLAN.md — Interactive path: ContextPreviewDialog RISK gate + "Send anyway"/Cancel + ChatPanel allowlist audit (SC5/SC3) [wave 2]
+- [x] 15-02-PLAN.md — Interactive path: ContextPreviewDialog RISK gate + "Send anyway"/Cancel + ChatPanel allowlist audit (SC5/SC3) [wave 2]
 - [ ] 15-03-PLAN.md — Non-interactive paths: PassiveAiScanner three send sites + McpToolContext.redactIfNeeded, detect+audit+proceed (SC4/SC2) [wave 2]
 
 **UI hint**: yes
@@ -228,7 +228,7 @@ Phase 12 (SEC) must be first. Phase 13 (Privacy) and Phase 12 are sequential (av
 | 12. Secrets at Rest & Transport Security | 4/4 | ✅ Complete | 2026-06-10 |
 | 13. Privacy & Redaction Hardening | 3/3 | Complete    | 2026-06-10 |
 | 14. Anthropic Backend + Token Budget + Listener Port | 3/3 | Complete    | 2026-06-10 |
-| 15. Pre-Send Secret Tripwire | 1/3 | In Progress|  |
+| 15. Pre-Send Secret Tripwire | 2/3 | In Progress|  |
 | 16. External MCP Client | 0/TBD | Not started | - |
 | 17. Reliability & Concurrency Hardening | 0/TBD | Not started | - |
 | 18. Quality Tooling & Build Hardening | 0/TBD | Not started | - |
