@@ -218,7 +218,7 @@ Plans:
 
 **Wave 3** *(SC4 + SC5 — both depend on Wave 2 ktlintFormat; file-disjoint, run in parallel)*
 
-- [ ] 18-03-PLAN.md — Raise test coverage: PersistentPromptCacheTest, ActiveScannerDedupTest, CliSupervisionTest (SC4/QUAL-03) [wave 3]
+- [x] 18-03-PLAN.md — Raise test coverage: PersistentPromptCacheTest, ActiveScannerDedupTest, CliSupervisionTest (SC4/QUAL-03) [wave 3]
 - [ ] 18-04-PLAN.md — Exception audit: annotate/log ~30-50 catch sites in cache/scanner/supervisor/cli; tracking note (SC5/QUAL-04) [wave 3]
 
 ### Phase 19: Mega-File Split + Docs
@@ -252,5 +252,5 @@ Phase 12 (SEC) must be first. Phase 13 (Privacy) and Phase 12 are sequential (av
 | 15. Pre-Send Secret Tripwire | 3/3 | Complete    | 2026-06-11 |
 | 16. External MCP Client | 0/TBD | Not started | - |
 | 17. Reliability & Concurrency Hardening | 3/3 | Complete    | 2026-06-11 |
-| 18. Quality Tooling & Build Hardening | 2/4 | In Progress|  |
+| 18. Quality Tooling & Build Hardening | 3/4 | In Progress|  |
 | 19. Mega-File Split + Docs | 0/TBD | Not started | - |
