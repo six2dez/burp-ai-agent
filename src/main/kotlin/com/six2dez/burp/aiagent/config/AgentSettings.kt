@@ -59,6 +59,9 @@ data class AgentSettings(
     val perplexityApiKey: String = "",
     val perplexityHeaders: String = "",
     val perplexityTimeoutSeconds: Int = 60,
+    // REL-04: user-configurable CLI process timeout (issue #71). Defaulted so existing
+    // positional/named constructions keep compiling. Plaintext pref (not a secret — timeout integer).
+    val cliTimeoutSeconds: Int = Defaults.CLI_PROCESS_TIMEOUT_SECONDS,
     // CAP-01: Anthropic Messages API backend fields (14-01).
     // All four carry defaults so existing named/positional constructions keep compiling (Planner Note 3).
     val anthropicModel: String = "claude-sonnet-4-6",
@@ -289,6 +292,10 @@ class AgentSettingsRepository(
             perplexityTimeoutSeconds =
                 (prefs.getInteger(KEY_PERPLEXITY_TIMEOUT) ?: defaultPerplexityTimeoutSeconds())
                     .coerceIn(30, 3600),
+            // REL-04: configurable CLI timeout — V5 input validation (coerceIn rejects negative/zero/absurd)
+            cliTimeoutSeconds =
+                (prefs.getInteger(KEY_CLI_TIMEOUT) ?: Defaults.CLI_PROCESS_TIMEOUT_SECONDS)
+                    .coerceIn(30, 3600),
             // CAP-01: Anthropic backend — decrypt key, string model (14-01)
             anthropicModel =
                 prefs.getString(KEY_ANTHROPIC_MODEL).orEmpty().trim().ifBlank { "claude-sonnet-4-6" },
@@ -452,6 +459,7 @@ class AgentSettingsRepository(
             perplexityApiKey = "",
             perplexityHeaders = "",
             perplexityTimeoutSeconds = defaultPerplexityTimeoutSeconds(),
+            cliTimeoutSeconds = Defaults.CLI_PROCESS_TIMEOUT_SECONDS,
             anthropicModel = "claude-sonnet-4-6",
             anthropicApiKey = "",
             tokenBudgetWarnThreshold = 0,
@@ -558,6 +566,8 @@ class AgentSettingsRepository(
         prefs.setString(KEY_PERPLEXITY_API_KEY, cipher.encrypt(settings.perplexityApiKey, KEY_PERPLEXITY_API_KEY))
         prefs.setString(KEY_PERPLEXITY_HEADERS, settings.perplexityHeaders)
         prefs.setInteger(KEY_PERPLEXITY_TIMEOUT, settings.perplexityTimeoutSeconds.coerceIn(30, 3600))
+        // REL-04: persist CLI timeout plaintext (not a secret — timeout integer, V5 validated)
+        prefs.setInteger(KEY_CLI_TIMEOUT, settings.cliTimeoutSeconds.coerceIn(30, 3600))
         // CAP-01: Anthropic — model (plain string), API key (encrypted), token-budget (plain integers)
         prefs.setString(KEY_ANTHROPIC_MODEL, settings.anthropicModel)
         prefs.setString(KEY_ANTHROPIC_API_KEY, cipher.encrypt(settings.anthropicApiKey, KEY_ANTHROPIC_API_KEY))
@@ -812,6 +822,8 @@ class AgentSettingsRepository(
         private const val KEY_PERPLEXITY_API_KEY = "perplexity.apiKey"
         private const val KEY_PERPLEXITY_HEADERS = "perplexity.headers"
         private const val KEY_PERPLEXITY_TIMEOUT = "perplexity.timeoutSeconds"
+        // REL-04: configurable CLI process timeout (issue #71) — plaintext integer pref, not a secret
+        private const val KEY_CLI_TIMEOUT = "cli.timeoutSeconds"
         // CAP-01: Anthropic backend (14-01)
         private const val KEY_ANTHROPIC_MODEL = "anthropic.model"
         private const val KEY_ANTHROPIC_API_KEY = "anthropic.apiKey"

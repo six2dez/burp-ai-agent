@@ -29,8 +29,10 @@ class CliBackend(
     override fun launch(config: BackendLaunchConfig): AgentConnection {
         require(config.command.isNotEmpty()) { "CLI backend requires a command" }
         val usePty = (id == "codex-cli" || id == "gemini-cli" || id == "claude-cli" || id == "copilot-cli") && !config.embeddedMode
+        // REL-04: use the user-configured timeout if provided, otherwise fall back to the shared constant
+        val timeoutSeconds = config.cliTimeoutSeconds ?: Defaults.CLI_PROCESS_TIMEOUT_SECONDS
         return if (config.embeddedMode) {
-            NonInteractiveCliConnection(id, config.command, config.env, config.cliSessionId)
+            NonInteractiveCliConnection(id, config.command, config.env, config.cliSessionId, timeoutSeconds)
         } else {
             CliConnection(config.command, config.env, usePty, config.embeddedMode)
         }
@@ -83,6 +85,8 @@ class CliBackend(
         private val baseCommand: List<String>,
         private val env: Map<String, String>,
         initialCliSessionId: String? = null,
+        // REL-04: user-configurable CLI process timeout (issue #71)
+        private val cliTimeoutSeconds: Int = Defaults.CLI_PROCESS_TIMEOUT_SECONDS,
     ) : SessionAwareConnection {
         private val executor = Executors.newSingleThreadExecutor()
         private val _cliSessionId = AtomicReference<String?>(initialCliSessionId)
@@ -219,10 +223,12 @@ class CliBackend(
                                     process.destroyForcibly()
                                     break
                                 }
-                                if (System.currentTimeMillis() - start > Defaults.CLI_PROCESS_TIMEOUT_SECONDS * 1000L) break
+                                // REL-04: use the user-configured timeout for the wall-clock safety break
+                                if (System.currentTimeMillis() - start > cliTimeoutSeconds * 1000L) break
                             }
                         } else {
-                            if (!process.waitFor(Defaults.CLI_PROCESS_TIMEOUT_SECONDS.toLong(), TimeUnit.SECONDS)) {
+                            // REL-04: read user-configured cliTimeoutSeconds instead of hardcoded constant
+                            if (!process.waitFor(cliTimeoutSeconds.toLong(), TimeUnit.SECONDS)) {
                                 process.destroyForcibly()
                                 try {
                                     readerThread.join(2000)
@@ -230,13 +236,7 @@ class CliBackend(
                                     Thread.currentThread().interrupt()
                                 }
                                 val tail = rawOutput.toString().trim().take(2000)
-                                val msg =
-                                    if (tail.isBlank()) {
-                                        "CLI command timed out"
-                                    } else {
-                                        "CLI command timed out: $tail"
-                                    }
-                                onComplete(IllegalStateException(msg))
+                                onComplete(IllegalStateException(buildTimeoutMessage(tail, cliTimeoutSeconds)))
                                 return@submit
                             }
                         }
@@ -803,6 +803,32 @@ class CliBackend(
             val os = System.getProperty("os.name").lowercase(Locale.ROOT)
             return os.contains("mac") || os.contains("nix") || os.contains("nux")
         }
+    }
+}
+
+/**
+ * Issue #71 — Build an actionable timeout message for the CLI process watchdog (REL-04).
+ *
+ * The message names the configured limit and suggests how to fix it so users know what to do
+ * when a CLI (e.g. `npx @google/gemini-cli` first-run download) exceeds the timeout.
+ *
+ * Privacy guarantee: only [tail] is interpolated and it is already bounded by the caller's
+ * `take(2000)` discipline — prompt/context content is never interpolated here.
+ *
+ * Visibility: `internal` so CliTimeoutMessageTest can call it directly (same pattern as
+ * buildCopilotCommand / CopilotCommandBuilderTest). Not part of the public API.
+ */
+internal fun buildTimeoutMessage(
+    tail: String,
+    timeoutSeconds: Int,
+): String {
+    val remedy =
+        "To fix: increase the cliTimeoutSeconds setting, or pre-install the CLI tool " +
+            "so it does not need to download on first run."
+    return if (tail.isBlank()) {
+        "CLI command timed out after ${timeoutSeconds}s. $remedy"
+    } else {
+        "CLI command timed out after ${timeoutSeconds}s: $tail. $remedy"
     }
 }
 

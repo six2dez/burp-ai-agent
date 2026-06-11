@@ -657,6 +657,7 @@ class AgentSupervisor(
                     determinismMode = determinism,
                     env = env,
                     cliSessionId = cliSessionId,
+                    cliTimeoutSeconds = settings?.cliTimeoutSeconds,
                 )
             }
             "gemini-cli" -> {
@@ -671,6 +672,7 @@ class AgentSupervisor(
                     determinismMode = determinism,
                     env = env,
                     cliSessionId = cliSessionId,
+                    cliTimeoutSeconds = settings?.cliTimeoutSeconds,
                 )
             }
             "opencode-cli" -> {
@@ -686,6 +688,7 @@ class AgentSupervisor(
                     determinismMode = determinism,
                     env = env,
                     cliSessionId = cliSessionId,
+                    cliTimeoutSeconds = settings?.cliTimeoutSeconds,
                 )
             }
             "claude-cli" -> {
@@ -700,6 +703,7 @@ class AgentSupervisor(
                     determinismMode = determinism,
                     env = env,
                     cliSessionId = cliSessionId,
+                    cliTimeoutSeconds = settings?.cliTimeoutSeconds,
                 )
             }
             "ollama" -> {
@@ -887,6 +891,7 @@ class AgentSupervisor(
                     determinismMode = determinism,
                     env = env,
                     cliSessionId = cliSessionId,
+                    cliTimeoutSeconds = settings?.cliTimeoutSeconds,
                 )
             }
             else -> BackendLaunchConfig(backendId, backendId, embeddedMode = embeddedMode, env = baseEnv, cliSessionId = cliSessionId)

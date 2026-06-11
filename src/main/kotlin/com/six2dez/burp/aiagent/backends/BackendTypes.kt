@@ -17,6 +17,8 @@ data class BackendLaunchConfig(
     val cliSessionId: String? = null, // for CLI session resume (e.g. Claude --resume)
     val contextWindow: Int? = null,
     val transport: MontoyaHttpTransport? = null,
+    // REL-04: user-configurable CLI process timeout in seconds; null means use Defaults.CLI_PROCESS_TIMEOUT_SECONDS
+    val cliTimeoutSeconds: Int? = null,
 )
 
 data class ChatMessage(
