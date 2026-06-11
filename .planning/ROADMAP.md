@@ -205,7 +205,21 @@ Plans:
   4. Test coverage for `scanner` queue/dedup, `cli` backend supervision, and the `cache` module is measurably raised from the current 0–3% baseline (target: at least one meaningful test class per module that exercises the critical path).
   5. Silently-swallowed `catch (Exception)` sites have been audited; each site either logs a contextual message via a shared helper or carries a `// INTENTIONAL: <reason>` comment; the audit is documented in a short tracking note.
 
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+**Wave 1** *(SC1 + SC2 — both modify build.gradle.kts, serialized within one plan)*
+
+- [ ] 18-01-PLAN.md — Fix generateBuildFlags srcDir wiring (SC1/QUAL-05) + add detekt 1.23.8 with committed baseline (SC2/QUAL-02-detekt) [wave 1]
+
+**Wave 2** *(SC3 — depends on SC1 for standalone ktlintCheck; two-commit sequence within plan)*
+
+- [ ] 18-02-PLAN.md — ktlintFormat mass-format commit then ktlint strict-by-default gate-flip commit (SC3/QUAL-02-ktlint) [wave 2]
+
+**Wave 3** *(SC4 + SC5 — both depend on Wave 2 ktlintFormat; file-disjoint, run in parallel)*
+
+- [ ] 18-03-PLAN.md — Raise test coverage: PersistentPromptCacheTest, ActiveScannerDedupTest, CliSupervisionTest (SC4/QUAL-03) [wave 3]
+- [ ] 18-04-PLAN.md — Exception audit: annotate/log ~30-50 catch sites in cache/scanner/supervisor/cli; tracking note (SC5/QUAL-04) [wave 3]
 
 ### Phase 19: Mega-File Split + Docs
 
