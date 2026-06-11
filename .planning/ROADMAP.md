@@ -145,7 +145,7 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 15-01-PLAN.md — Detector core: AWT-free Entropy.kt (Shannon) + SecretTripwire.kt reusing SecretShapes.findSurviving + EntropyTest/SecretTripwireTest (SC1/SC2/SC3-no-leak) [wave 1]
+- [x] 15-01-PLAN.md — Detector core: AWT-free Entropy.kt (Shannon) + SecretTripwire.kt reusing SecretShapes.findSurviving + EntropyTest/SecretTripwireTest (SC1/SC2/SC3-no-leak) [wave 1]
 
 **Wave 2** *(blocked on Wave 1; file-disjoint, run in parallel)*
 
@@ -228,7 +228,7 @@ Phase 12 (SEC) must be first. Phase 13 (Privacy) and Phase 12 are sequential (av
 | 12. Secrets at Rest & Transport Security | 4/4 | ✅ Complete | 2026-06-10 |
 | 13. Privacy & Redaction Hardening | 3/3 | Complete    | 2026-06-10 |
 | 14. Anthropic Backend + Token Budget + Listener Port | 3/3 | Complete    | 2026-06-10 |
-| 15. Pre-Send Secret Tripwire | 0/TBD | Not started | - |
+| 15. Pre-Send Secret Tripwire | 1/3 | In Progress|  |
 | 16. External MCP Client | 0/TBD | Not started | - |
 | 17. Reliability & Concurrency Hardening | 0/TBD | Not started | - |
 | 18. Quality Tooling & Build Hardening | 0/TBD | Not started | - |
