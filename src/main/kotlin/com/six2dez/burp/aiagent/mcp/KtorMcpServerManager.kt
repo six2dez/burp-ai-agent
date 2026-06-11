@@ -30,6 +30,7 @@ import java.security.MessageDigest
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 
 class KtorMcpServerManager(
     private val api: MontoyaApi,
@@ -229,7 +230,12 @@ class KtorMcpServerManager(
 
     override fun stop(callback: (McpServerState) -> Unit) {
         callback(McpServerState.Stopping)
-        executor.submit {
+        // REL-02/SC5a: bound the submitted server-stop task so stop() never hangs.
+        // RESTART-SAFE: we use future.get(BOUND) only — NOT executor.shutdown/awaitTermination/shutdownNow.
+        // Terminating the executor here would cause start() to throw RejectedExecutionException on
+        // the next restart attempt (the single-thread executor is shared across start/stop cycles).
+        // awaitTermination+shutdownNow is correct ONLY in the terminal shutdown() method below.
+        val future = executor.submit {
             try {
                 server?.stop(1000, 5000)
                 server = null
@@ -239,6 +245,23 @@ class KtorMcpServerManager(
                 api.logging().logToError(e)
                 callback(McpServerState.Failed(e))
             }
+        }
+        try {
+            future.get(10, TimeUnit.SECONDS)
+        } catch (e: TimeoutException) {
+            // Force-stop: the server task is taking too long. Cancel the future and force-stop
+            // any remaining server reference so the port is released.
+            future.cancel(true)
+            try {
+                server?.stop(0, 0)
+            } catch (_: Exception) {
+            }
+            server = null
+            // Always fire the callback so the UI never waits forever (DoS mitigation).
+            callback(McpServerState.Stopped)
+        } catch (e: Exception) {
+            api.logging().logToError(e)
+            callback(McpServerState.Failed(e))
         }
     }
 

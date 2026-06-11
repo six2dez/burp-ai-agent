@@ -142,8 +142,25 @@ object Redaction {
 
     private val hostHeaderRegex = Regex("(?im)^host:\\s*([^\\s]+)\\s*$")
 
-    private val hostForwardMap = ConcurrentHashMap<String, ConcurrentHashMap<String, String>>()
-    private val hostReverseMap = ConcurrentHashMap<String, ConcurrentHashMap<String, String>>()
+    // REL-02/SC5b: cap for the inner per-salt LRU maps. A few thousand entries (4096) is large
+    // enough that a normal pentest session never evicts, but small enough to bound memory over
+    // a long session (DoS mitigation). Forward/reverse eviction skew is benign: if forward evicts
+    // host→anon but reverse still holds anon→host, de-anonymization still works (reverse is the
+    // lookup path). Re-anonymizing an evicted host is deterministic (HKDF is pure, so the same
+    // host+salt always produces the same anon value) and merely re-populates the forward entry.
+    private const val HOST_MAP_CAP = 4096
+
+    // Creates a bounded LRU map (synchronized, access-ordered LinkedHashMap with eldest-entry
+    // eviction). Used for INNER per-salt maps only; the OUTER ConcurrentHashMap stays unbounded.
+    private fun <K, V> boundedLru(maxEntries: Int): MutableMap<K, V> =
+        java.util.Collections.synchronizedMap(
+            object : LinkedHashMap<K, V>(16, 0.75f, /* accessOrder = */ true) {
+                override fun removeEldestEntry(eldest: Map.Entry<K, V>): Boolean = size > maxEntries
+            },
+        )
+
+    private val hostForwardMap = ConcurrentHashMap<String, MutableMap<String, String>>()
+    private val hostReverseMap = ConcurrentHashMap<String, MutableMap<String, String>>()
 
     // HKDF constants (RFC 5869, https://www.rfc-editor.org/rfc/rfc5869).
     // App-specific context label binds the derivation to this use case (host anonymization).
@@ -288,8 +305,10 @@ object Redaction {
         val short = okm.joinToString("") { "%02x".format(it) }  // 6 bytes → 12 hex chars
         val anon = "host-$short.local"
         if (recordMapping) {
-            hostForwardMap.computeIfAbsent(salt) { ConcurrentHashMap() }[host] = anon
-            hostReverseMap.computeIfAbsent(salt) { ConcurrentHashMap() }[anon] = host
+            // REL-02/SC5b: inner map is bounded LRU (cap HOST_MAP_CAP); outer map + computeIfAbsent/
+            // remove are unchanged so clearMappings() keeps working (Pitfall 5).
+            hostForwardMap.computeIfAbsent(salt) { boundedLru(HOST_MAP_CAP) }[host] = anon
+            hostReverseMap.computeIfAbsent(salt) { boundedLru(HOST_MAP_CAP) }[anon] = host
         }
         return anon
     }
