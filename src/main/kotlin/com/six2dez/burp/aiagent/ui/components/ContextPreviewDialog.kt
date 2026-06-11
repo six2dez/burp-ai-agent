@@ -1,7 +1,7 @@
 package com.six2dez.burp.aiagent.ui.components
 
 import com.six2dez.burp.aiagent.redact.PrivacyMode
-import com.six2dez.burp.aiagent.redact.SecretShapes
+import com.six2dez.burp.aiagent.redact.SecretTripwire
 import com.six2dez.burp.aiagent.ui.design.DesignTokens
 import java.awt.BorderLayout
 import java.awt.Component
@@ -51,22 +51,27 @@ object ContextPreviewDialog {
         header.add(Box.createVerticalStrut(6))
         header.add(JLabel("Context (as will be sent, after redaction):"))
 
-        // PRIV-04: scan the post-redaction contextJson for surviving known secret shapes.
-        // The banner is informational only — Send/Cancel semantics are unchanged (no hard stop).
-        // UI-SPEC Touch Point 2: Level.WARN (amber, advisory); names categories only, never the raw value.
-        // FLAG-13-02: only the SubtleNotice banner is added; the surrounding un-migrated dialog
-        // literals (BorderLayout(8,8), Dimension, Box.createVerticalStrut) are left as-is.
+        // PRIV-03 / Phase 15: tripwire scan — replaces the Phase 13 SecretShapes.findSurviving
+        // advisory banner with a two-state clean/RISK gate (FLAG-15-01 two-state collapse).
+        // The contextJson arg is the FINAL post-redaction payload (redacted in ContextCollector
+        // L52-53, G2). Do NOT re-redact — scan it as-is (G8).
+        // FLAG-13-02: only the SubtleNotice banner level + button label are changed; the surrounding
+        // un-migrated dialog literals (BorderLayout(8,8), Dimension, Box.createVerticalStrut) stay.
+        val scan = SecretTripwire.scan(contextJson)
+        val gate = SecretTripwire.gateDecision(scan)
         val survivedNotice = SubtleNotice()
-        val survivors = SecretShapes.findSurviving(contextJson)
-        if (survivors.isNotEmpty()) {
-            val shapes = survivors.joinToString(", ")
+        if (scan.matched) {
+            // UI-SPEC Delta 1 / SC5: escalate to RISK (red) and name categories only, never the raw value.
+            val shapes = scan.shapeCategories.joinToString(", ")
             val html =
-                if (survivors.size == 1) {
-                    "A value matching a known secret shape ($shapes) survived redaction. Review before sending."
+                if (scan.shapeCategories.isEmpty()) {
+                    // Entropy-only match — no named shape to display.
+                    "A high-entropy value that may be a secret survived redaction. Review before sending."
                 } else {
-                    "${survivors.size} values matching known secret shapes ($shapes) survived redaction. Review before sending."
+                    // Named-shape match (may also have entropy component).
+                    "A value matching a known secret shape ($shapes) survived redaction. Review before sending."
                 }
-            survivedNotice.setMessage(SubtleNotice.Level.WARN, html)
+            survivedNotice.setMessage(SubtleNotice.Level.RISK, html)
         } else {
             survivedNotice.hideNotice()
         }
@@ -88,7 +93,10 @@ object ContextPreviewDialog {
         panel.add(header, BorderLayout.NORTH)
         panel.add(bodyScroll, BorderLayout.CENTER)
 
-        val options = arrayOf("Send", "Cancel")
+        // UI-SPEC Delta 2 / SC5: relabel the affirmative to "Send anyway" only when a tripwire
+        // match is present. Cancel (options[1]) stays the initialValue — the default focus is
+        // NEVER the affirmative (G5 / Pitfall 5 / FLAG-15-02).
+        val options = arrayOf(gate.affirmativeLabel, "Cancel")
         val choice =
             JOptionPane.showOptionDialog(
                 parent,
@@ -98,8 +106,12 @@ object ContextPreviewDialog {
                 JOptionPane.PLAIN_MESSAGE,
                 null,
                 options,
-                options[1],
+                options[1],   // Cancel = default focus, regardless of tripwire state
             )
+        // Boolean return contract preserved (G3 / FLAG-15-03): false routes ChatPanel.kt:299 to
+        // the "cancelled by user" path. The secret_tripwire_allow audit event is emitted by the
+        // ChatPanel call site AFTER createSession (RESEARCH Open Q1 Option b) — not here,
+        // to avoid double-logging and to carry a real session id.
         return choice == 0
     }
 

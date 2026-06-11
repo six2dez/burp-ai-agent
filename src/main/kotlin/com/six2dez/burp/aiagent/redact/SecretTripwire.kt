@@ -42,6 +42,68 @@ object SecretTripwire {
     )
 
     /**
+     * Pure gate-decision record for the interactive confirmation gate (SC5).
+     * AWT-free — consumed by [ContextPreviewDialog] to drive banner level + button label,
+     * and exercised directly in [SecretTripwireGateTest] without any Swing instantiation.
+     *
+     * @param bannerRisk True when the [SubtleNotice] banner should escalate to [Level.RISK] (red).
+     *   False when the clean state applies (banner hidden) or no match is present.
+     * @param affirmativeLabel The label for the "send" action in [JOptionPane.showOptionDialog].
+     *   "Send anyway" when [bannerRisk] is true; "Send" on the clean path.
+     * @param cancelIsDefault Always true — Cancel ([options[1]]) is the [showOptionDialog] initialValue
+     *   so Enter never silently sends past a suspected secret (G5 / Pitfall 5 / UI-SPEC Delta 2).
+     */
+    data class GateDecision(
+        val bannerRisk: Boolean,
+        val affirmativeLabel: String,
+        val cancelIsDefault: Boolean = true,
+    )
+
+    /**
+     * Derives the pure gate-decision from a [ScanResult].
+     *
+     * - When [ScanResult.matched] is true: [GateDecision.bannerRisk] = true,
+     *   [GateDecision.affirmativeLabel] = "Send anyway".
+     * - When [ScanResult.matched] is false (clean path): [GateDecision.bannerRisk] = false,
+     *   [GateDecision.affirmativeLabel] = "Send".
+     * - [GateDecision.cancelIsDefault] is always true (never the affirmative — G5).
+     *
+     * This helper is AWT-free and unit-tested in [SecretTripwireGateTest] without Swing
+     * (SC5 branch picks RISK + "Send anyway" + Cancel-default when matched).
+     */
+    fun gateDecision(scan: ScanResult): GateDecision =
+        GateDecision(
+            bannerRisk = scan.matched,
+            affirmativeLabel = if (scan.matched) "Send anyway" else "Send",
+            cancelIsDefault = true,
+        )
+
+    /**
+     * Builds the audit payload map for a `secret_tripwire_allow` event (SC3).
+     *
+     * The map contains:
+     * - `"path"` = `"chat"` (the interactive chat send path)
+     * - `"sessionId"` = the real session id (resolved after [createSession] at the ChatPanel call site)
+     * - `"shapeCategories"` = sorted list of category names from [ScanResult.shapeCategories]
+     *   (names only — NEVER the raw matched value, CLAUDE.md / AGENTS.md non-negotiable)
+     * - `"entropyScore"` = one-decimal-place string from [Entropy.truncatedScore]
+     *   (a number — NEVER the token)
+     *
+     * Consumed by [ChatPanel.startSessionFromContext] after [createSession] so the event carries
+     * a real session id (RESEARCH Open Q1 Option b / G3).
+     */
+    fun buildAllowAuditPayload(
+        scan: ScanResult,
+        sessionId: String,
+    ): Map<String, Any?> =
+        mapOf(
+            "path" to "chat",
+            "sessionId" to sessionId,
+            "shapeCategories" to scan.shapeCategories.toList().sorted(),
+            "entropyScore" to Entropy.truncatedScore(scan.maxEntropyBitsPerChar),
+        )
+
+    /**
      * Scans the FINAL post-redaction [payload] for secrets that may have survived the redaction
      * pipeline.
      *
