@@ -214,7 +214,7 @@ Plans:
 
 **Wave 2** *(SC3 — depends on SC1 for standalone ktlintCheck; two-commit sequence within plan)*
 
-- [ ] 18-02-PLAN.md — ktlintFormat mass-format commit then ktlint strict-by-default gate-flip commit (SC3/QUAL-02-ktlint) [wave 2]
+- [x] 18-02-PLAN.md — ktlintFormat mass-format commit then ktlint strict-by-default gate-flip commit (SC3/QUAL-02-ktlint) [wave 2]
 
 **Wave 3** *(SC4 + SC5 — both depend on Wave 2 ktlintFormat; file-disjoint, run in parallel)*
 
@@ -252,5 +252,5 @@ Phase 12 (SEC) must be first. Phase 13 (Privacy) and Phase 12 are sequential (av
 | 15. Pre-Send Secret Tripwire | 3/3 | Complete    | 2026-06-11 |
 | 16. External MCP Client | 0/TBD | Not started | - |
 | 17. Reliability & Concurrency Hardening | 3/3 | Complete    | 2026-06-11 |
-| 18. Quality Tooling & Build Hardening | 1/4 | In Progress|  |
+| 18. Quality Tooling & Build Hardening | 2/4 | In Progress|  |
 | 19. Mega-File Split + Docs | 0/TBD | Not started | - |
