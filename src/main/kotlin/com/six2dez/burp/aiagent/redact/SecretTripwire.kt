@@ -89,7 +89,7 @@ object SecretTripwire {
      * - `"shapeCategories"` — sorted list of category names from [ScanResult.shapeCategories]
      *   (names only — NEVER the raw matched value, CLAUDE.md / AGENTS.md non-negotiable)
      * - `"entropyScore"` — one-decimal-place string from [Entropy.truncatedScore] (a number —
-     *   NEVER the token)
+     *   NEVER the token), present ONLY when the entropy half actually contributed to the match.
      *
      * The raw matched token is NEVER a key or value here (SC3 no-leak).
      */
@@ -102,7 +102,16 @@ object SecretTripwire {
             put("path", path)
             put("sessionId", sessionId ?: "none")
             put("shapeCategories", scan.shapeCategories.toList().sorted())
-            put("entropyScore", Entropy.truncatedScore(scan.maxEntropyBitsPerChar))
+            // WR-02: emit entropyScore ONLY when the entropy half actually contributed. A
+            // shape-only match (e.g. an AWS AKIA… key) has maxEntropyBitsPerChar == 0.0; writing
+            // "entropyScore":"0.0" there would falsely imply the entropy detector measured 0.0
+            // rather than "did not contribute to this match". Omitting the key keeps audit.jsonl
+            // honest while preserving the no-leak invariant (still only categories + sessionId +
+            // a numeric score). maxQualifyingTokenEntropy never returns a qualifying value <= 0.0,
+            // so the > 0.0 guard exactly distinguishes "contributed" from "did not contribute".
+            if (scan.maxEntropyBitsPerChar > 0.0) {
+                put("entropyScore", Entropy.truncatedScore(scan.maxEntropyBitsPerChar))
+            }
         }
 
     /**
@@ -110,8 +119,8 @@ object SecretTripwire {
      *
      * Delegates to the single [buildAuditPayload] builder with `path = "chat"` (the interactive
      * chat send path). The map carries `"path"`, `"sessionId"`, a sorted `"shapeCategories"` name
-     * list, and `"entropyScore"`. The raw matched value is NEVER present (CLAUDE.md / AGENTS.md
-     * non-negotiable).
+     * list, and `"entropyScore"` only when the entropy half contributed to the match (WR-02). The
+     * raw matched value is NEVER present (CLAUDE.md / AGENTS.md non-negotiable).
      *
      * Consumed by [ChatPanel.startSessionFromContext] after [createSession] so the event carries
      * a real session id (RESEARCH Open Q1 Option b / G3).
@@ -125,7 +134,8 @@ object SecretTripwire {
      * Builds the audit payload map for a `secret_tripwire_detect` event on the non-interactive
      * paths (PassiveAiScanner and McpToolContext). Delegates to the single [buildAuditPayload]
      * builder. This is the SC3 payload: it carries only category names + sessionId + a truncated
-     * numeric entropy score — NEVER the raw matched token (CLAUDE.md / AGENTS.md non-negotiable).
+     * numeric entropy score (present only when the entropy half contributed, WR-02) — NEVER the
+     * raw matched token (CLAUDE.md / AGENTS.md non-negotiable).
      *
      * @param scan The [ScanResult] from [scan] on the FINAL post-redaction payload.
      * @param path One of `"passive_scanner"` or `"mcp"` — identifies the outbound hook.

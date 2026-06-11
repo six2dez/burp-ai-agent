@@ -45,7 +45,12 @@ class SecretTripwireHooksTest {
         assertEquals("passive_scanner", payload["path"], "path must match the supplied value")
         assertEquals("sess-1", payload["sessionId"], "sessionId must match the supplied value")
         assertNotNull(payload["shapeCategories"], "shapeCategories must be present")
-        assertNotNull(payload["entropyScore"], "entropyScore must be present")
+        // WR-02: awsToken is a shape-only match (no qualifying high-entropy token), so the entropy
+        // half did NOT contribute and entropyScore must be OMITTED — never a misleading "0.0".
+        assertFalse(
+            payload.containsKey("entropyScore"),
+            "entropyScore must be absent on a shape-only match (WR-02 — no misleading 0.0)",
+        )
     }
 
     @Test
@@ -72,7 +77,45 @@ class SecretTripwireHooksTest {
         assertEquals("mcp", payload["path"])
         assertEquals("sess-2", payload["sessionId"])
         assertNotNull(payload["shapeCategories"])
-        assertNotNull(payload["entropyScore"])
+        // WR-02: shape-only AWS match → entropyScore omitted (not a misleading "0.0").
+        assertFalse(payload.containsKey("entropyScore"), "entropyScore must be absent on a shape-only match")
+    }
+
+    // -------------------------------------------------------------------------
+    // WR-02: entropyScore presence is honest — omitted on shape-only matches,
+    // present (and a numeric decimal) when the entropy half contributed.
+    // -------------------------------------------------------------------------
+
+    @Test
+    fun `buildDetectAuditPayload omits entropyScore on a shape-only match`() {
+        // awsToken trips SecretShapes but has no qualifying high-entropy token (maxEntropy == 0.0).
+        val scan = SecretTripwire.scan(awsToken)
+        assertEquals(0.0, scan.maxEntropyBitsPerChar, 0.0001, "Pre-condition: AWS key is shape-only")
+        val payload = SecretTripwire.buildDetectAuditPayload(scan, path = "passive_scanner", sessionId = "s")
+
+        assertFalse(
+            payload.containsKey("entropyScore"),
+            "WR-02: a 0.0 entropy contribution must omit the key, not record a misleading \"0.0\"",
+        )
+        // The remaining required keys are still present.
+        assertNotNull(payload["path"])
+        assertNotNull(payload["sessionId"])
+        assertNotNull(payload["shapeCategories"])
+    }
+
+    @Test
+    fun `buildDetectAuditPayload includes entropyScore when the entropy half contributed`() {
+        // highEntropyB64 has no known shape prefix — the entropy half is what fires here.
+        val scan = SecretTripwire.scan(highEntropyB64)
+        assertTrue(scan.maxEntropyBitsPerChar > 0.0, "Pre-condition: entropy half contributed")
+        val payload = SecretTripwire.buildDetectAuditPayload(scan, path = "mcp", sessionId = "s")
+
+        assertTrue(
+            payload.containsKey("entropyScore"),
+            "WR-02: entropyScore must be present when the entropy half actually contributed",
+        )
+        val score = payload["entropyScore"] as String
+        assertTrue(score.matches(Regex("\\d+\\.\\d")), "entropyScore must be a one-decimal string; got: $score")
     }
 
     // -------------------------------------------------------------------------

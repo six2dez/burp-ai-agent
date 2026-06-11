@@ -120,7 +120,26 @@ class SecretTripwireGateTest {
         assertTrue(payload.containsKey("path"), "SC3: payload must contain key 'path'")
         assertTrue(payload.containsKey("sessionId"), "SC3: payload must contain key 'sessionId'")
         assertTrue(payload.containsKey("shapeCategories"), "SC3: payload must contain key 'shapeCategories'")
-        assertTrue(payload.containsKey("entropyScore"), "SC3: payload must contain key 'entropyScore'")
+        // WR-02: the AWS key is a shape-only match (entropy half did not contribute), so
+        // entropyScore is OMITTED rather than recorded as a misleading "0.0".
+        assertFalse(
+            payload.containsKey("entropyScore"),
+            "WR-02: entropyScore must be absent on a shape-only allow event (no misleading 0.0)",
+        )
+    }
+
+    @Test
+    fun sc3_allowPayloadIncludesEntropyScoreWhenEntropyContributed() {
+        // An entropy-only match (no known shape prefix) must carry the entropyScore key.
+        val syntheticToken = "xK8mN2pQrT5vWyZ1aB3cD6eFgHiJkLmNoPqRsT7uV"
+        val scan = SecretTripwire.scan(syntheticToken)
+        assertTrue(scan.maxEntropyBitsPerChar > 0.0, "Pre-condition: entropy half contributed")
+
+        val payload = SecretTripwire.buildAllowAuditPayload(scan, "sess-entropy")
+        assertTrue(
+            payload.containsKey("entropyScore"),
+            "WR-02: entropyScore must be present when the entropy half contributed",
+        )
     }
 
     @Test
