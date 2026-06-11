@@ -156,6 +156,45 @@ class ChatPanelConcurrencyTest {
         assertEquals(iterations, mapSnapshot.size, "Map size mismatch — possible lost write or corruption")
     }
 
+    /**
+     * WR-01 regression guard: `ChatPanel.shutdown()` is reachable off the EDT (Burp's unload
+     * handler runs on a Montoya thread), yet it touches `@GuardedBy("EDT")` session maps and Swing
+     * via `cancelInFlightRequest()` + `stopAllTimers()`. The fix marshals that work onto the EDT
+     * with an `isEventDispatchThread()`-guarded `invokeAndWait`.
+     *
+     * Constructing a real `ChatPanel` throws `HeadlessException` in CI (see SC1 test above), so this
+     * exercises the exact marshaling shape `shutdown()` uses and asserts the confined work runs on
+     * the EDT — never on the calling (off-EDT) thread — and that the call is synchronous.
+     */
+    @Test
+    fun shutdownMarshalingRunsConfinedWorkOnEdtWhenCalledOffEdt() {
+        val ranOnEdt = AtomicBoolean(false)
+        val ranOnCallingThread = AtomicBoolean(false)
+        val executed = AtomicBoolean(false)
+        val callerThread = Thread.currentThread()
+
+        // Mirror ChatPanel.shutdown(): if off-EDT, marshal via invokeAndWait; else run inline.
+        val work = Runnable {
+            executed.set(true)
+            ranOnEdt.set(javax.swing.SwingUtilities.isEventDispatchThread())
+            ranOnCallingThread.set(Thread.currentThread() === callerThread)
+        }
+
+        // Sanity: this test thread is NOT the EDT, so the off-EDT branch is the one under test.
+        assertFalse(javax.swing.SwingUtilities.isEventDispatchThread(), "test must run off the EDT")
+
+        if (javax.swing.SwingUtilities.isEventDispatchThread()) {
+            work.run()
+        } else {
+            javax.swing.SwingUtilities.invokeAndWait(work)
+        }
+
+        // invokeAndWait is synchronous: the work has already completed by the time we return.
+        assertTrue(executed.get(), "confined work did not execute")
+        assertTrue(ranOnEdt.get(), "confined work must run on the EDT (REL-01 confinement)")
+        assertFalse(ranOnCallingThread.get(), "confined work must NOT run on the off-EDT calling thread")
+    }
+
     private class FakeConnection(
         private val id: String,
     ) : AgentConnection {

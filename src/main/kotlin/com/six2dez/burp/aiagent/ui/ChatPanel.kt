@@ -853,8 +853,16 @@ class ChatPanel(
         inputArea.isEnabled = !sending
     }
 
-    /** Cancel the current in-flight AI request */
+    /**
+     * Cancel the current in-flight AI request.
+     *
+     * REL-01: reads `sessionsList.selectedValue` / `sessionPanels` (both `@GuardedBy("EDT")`)
+     * and mutates Swing (`setSendingState`, `panel.addMessage`), so it MUST run on the EDT.
+     * Callers reachable off the EDT (e.g. `shutdown()` from Burp's unload handler) must marshal
+     * onto the EDT first — see `shutdown()`.
+     */
     fun cancelInFlightRequest(): Boolean {
+        assertEdt()
         val conn = inFlightConnection.take() ?: return false
         setSendingState(false)
         try {
@@ -1291,8 +1299,25 @@ class ChatPanel(
     private fun projectData(): burp.api.montoya.persistence.PersistedObject = api.persistence().extensionData()
 
     fun shutdown() {
-        cancelInFlightRequest()
-        sessionPanels.values.forEach { it.stopAllTimers() }
+        // REL-01: shutdown() is wired to Burp's unload handler, which runs on a Montoya/Burp
+        // thread, NOT the EDT. cancelInFlightRequest() + stopAllTimers() touch @GuardedBy("EDT")
+        // maps and Swing, so marshal onto the EDT. Use invokeAndWait so unload is synchronous
+        // (Burp may tear down the classloader right after), guarded against EDT re-entrancy.
+        val work = {
+            cancelInFlightRequest()
+            sessionPanels.values.forEach { it.stopAllTimers() }
+        }
+        if (SwingUtilities.isEventDispatchThread()) {
+            work()
+        } else {
+            try {
+                SwingUtilities.invokeAndWait(work)
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+            } catch (_: java.lang.reflect.InvocationTargetException) {
+                // Swallow: shutdown must not throw out of the unload handler.
+            }
+        }
     }
 
     /**
