@@ -53,7 +53,7 @@ Phases 9–11 closed. Features: design system foundation (UI-01), MCP tools tab 
 - [x] **Phase 14: Anthropic Backend + Token Budget + Listener Port** — Native Anthropic Messages API backend with streaming/tool-use/prompt-caching; per-session token-budget guardrails; MCP proxy-history listener port filter (completed 2026-06-10)
 - [x] **Phase 15: Pre-Send Secret Tripwire** — Post-redaction tripwire scanning final payload for high-entropy secrets before any send; warn-with-confirmation UI; audit-logged allowlist (completed 2026-06-11)
 - [ ] **Phase 16: External MCP Client** — Connect to external/custom MCP servers (SSE + stdio transports); auth tokens encrypted; SSRF guard; untrusted-output trust boundary
-- [ ] **Phase 17: Reliability & Concurrency Hardening** — EDT confinement on ChatPanel session maps; CLI temp file cleanup via finally; bounded MCP shutdown; uniform HTTP timeouts/CircuitBreaker; fix CLI timeout bug #71
+- [x] **Phase 17: Reliability & Concurrency Hardening** — EDT confinement on ChatPanel session maps; CLI temp file cleanup via finally; bounded MCP shutdown; uniform HTTP timeouts/CircuitBreaker; fix CLI timeout bug #71 (completed 2026-06-11)
 - [ ] **Phase 18: Quality Tooling & Build Hardening** — Raise scanner/CLI/cache test coverage; add detekt + blocking ktlint with committed baseline; audit 136 exception-logging sites; fix generateBuildFlags sourceSets wiring
 - [ ] **Phase 19: Mega-File Split + Docs** — Split 3 mega-files (no behaviour change); finalize .planning reconciliation; update user-facing docs for v0.9.0 changes
 
@@ -190,7 +190,7 @@ Plans:
 
 - [x] 17-01-PLAN.md — REL-03: shared 429/5xx → CircuitBreaker.recordFailure helper in HttpBackendSupport + wire all 4 HTTP backends (OpenAiCompatible/Anthropic/Ollama/LmStudio) + HttpBackendCircuitFailureTest (closes Phase 14 WR-05)
 - [x] 17-02-PLAN.md — REL-01: local SOURCE-retained @GuardedBy annotation + ChatPanel EDT confinement (invokeLater on off-EDT tool-result map reads + addMessage) + jvmArgs("-ea") + ChatPanelConcurrencyTest
-- [ ] 17-03-PLAN.md — REL-02 + REL-04: CLI deleteOnExit + configurable cliTimeoutSeconds + actionable buildTimeoutMessage (#71); bounded McpServerManager.stop(); LRU-capped host-anonymization maps + 4 tests
+- [x] 17-03-PLAN.md — REL-02 + REL-04: CLI deleteOnExit + configurable cliTimeoutSeconds + actionable buildTimeoutMessage (#71); bounded McpServerManager.stop(); LRU-capped host-anonymization maps + 4 tests
 
 ### Phase 18: Quality Tooling & Build Hardening
 
@@ -237,6 +237,6 @@ Phase 12 (SEC) must be first. Phase 13 (Privacy) and Phase 12 are sequential (av
 | 14. Anthropic Backend + Token Budget + Listener Port | 3/3 | Complete    | 2026-06-10 |
 | 15. Pre-Send Secret Tripwire | 3/3 | Complete    | 2026-06-11 |
 | 16. External MCP Client | 0/TBD | Not started | - |
-| 17. Reliability & Concurrency Hardening | 2/3 | In Progress|  |
+| 17. Reliability & Concurrency Hardening | 3/3 | Complete   | 2026-06-11 |
 | 18. Quality Tooling & Build Hardening | 0/TBD | Not started | - |
 | 19. Mega-File Split + Docs | 0/TBD | Not started | - |
