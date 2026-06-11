@@ -295,7 +295,10 @@ class OllamaBackend : AiBackend {
                                 if (!resp.isSuccessful) {
                                     errorLog("HTTP ${resp.statusCode}: ${resp.body.take(500)}")
                                     circuitBreaker.recordHttpFailureIfRetryable(resp.statusCode)
-                                    onComplete(IllegalStateException("Ollama HTTP ${resp.statusCode}: ${resp.body}"))
+                                    // WR-04: bound the surfaced body (matches OpenAI/Anthropic .take(800))
+                                    // so a large/secret-laden error envelope isn't echoed wholesale into the
+                                    // chat bubble and persisted session.messages.
+                                    onComplete(IllegalStateException("Ollama HTTP ${resp.statusCode}: ${resp.body.take(800)}"))
                                     return@submit
                                 }
                                 debugLog("response <- HTTP ${resp.statusCode}")

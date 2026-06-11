@@ -194,7 +194,10 @@ class LmStudioBackend : AiBackend {
                             if (!resp.isSuccessful) {
                                 errorLog("HTTP ${resp.statusCode}: ${resp.body.take(500)}")
                                 circuitBreaker.recordHttpFailureIfRetryable(resp.statusCode)
-                                onComplete(IllegalStateException("LM Studio HTTP ${resp.statusCode}: ${resp.body}"))
+                                // WR-04: bound the surfaced body (matches OpenAI/Anthropic .take(800))
+                                // so a large/secret-laden error envelope isn't echoed wholesale into the
+                                // chat bubble and persisted session.messages.
+                                onComplete(IllegalStateException("LM Studio HTTP ${resp.statusCode}: ${resp.body.take(800)}"))
                                 return@submit
                             }
                             val body: String = resp.body
