@@ -110,7 +110,10 @@ class CliBackend(
                     val finalText = historyText + text
                     val outputFile =
                         if (backendId == "codex-cli") {
+                            // REL-02: deleteOnExit() registers a JVM shutdown hook as crash-safety net;
+                            // the finally block below (:274-288) is the primary cleanup path.
                             java.io.File.createTempFile("burp-ai-agent-codex", ".txt")
+                                .also { it.deleteOnExit() }
                         } else {
                             null
                         }
@@ -123,6 +126,9 @@ class CliBackend(
                         combinedText.length > Defaults.LARGE_PROMPT_THRESHOLD
                     ) {
                         val tFile = java.io.File.createTempFile("burp_uv_prompt_", ".txt")
+                        // REL-02: deleteOnExit() registers a JVM shutdown hook as crash-safety net;
+                        // the finally block below (:274-288) is the primary cleanup path.
+                        tFile.deleteOnExit()
                         try {
                             // Set restrictive permissions (owner-only read/write)
                             val posixPath = tFile.toPath()
