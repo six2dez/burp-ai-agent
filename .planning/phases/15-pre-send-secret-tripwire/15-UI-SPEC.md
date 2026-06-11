@@ -1,10 +1,11 @@
 ---
 phase: 15
 slug: pre-send-secret-tripwire
-status: draft
+status: approved
 shadcn_initialized: false
 preset: none
 created: 2026-06-11
+reviewed_at: 2026-06-11
 extends: 13-UI-SPEC.md
 ---
 
