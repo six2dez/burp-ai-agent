@@ -140,7 +140,18 @@ Plans:
   4. The tripwire fires on all three outbound paths: ChatPanel interactive send, PassiveAiScanner batch/single sends, and MCP tool output via `McpToolContext.redactIfNeeded()`.
   5. The confirmation dialog is visible in the context preview dialog where the tripwire match is highlighted.
 
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 15-01-PLAN.md — Detector core: AWT-free Entropy.kt (Shannon) + SecretTripwire.kt reusing SecretShapes.findSurviving + EntropyTest/SecretTripwireTest (SC1/SC2/SC3-no-leak) [wave 1]
+
+**Wave 2** *(blocked on Wave 1; file-disjoint, run in parallel)*
+
+- [ ] 15-02-PLAN.md — Interactive path: ContextPreviewDialog RISK gate + "Send anyway"/Cancel + ChatPanel allowlist audit (SC5/SC3) [wave 2]
+- [ ] 15-03-PLAN.md — Non-interactive paths: PassiveAiScanner three send sites + McpToolContext.redactIfNeeded, detect+audit+proceed (SC4/SC2) [wave 2]
+
 **UI hint**: yes
 
 ### Phase 16: External MCP Client
