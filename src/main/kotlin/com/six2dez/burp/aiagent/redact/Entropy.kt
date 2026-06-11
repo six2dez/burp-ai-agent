@@ -130,11 +130,17 @@ object Entropy {
         }
         // Pass 2 (WR-01): dot-joined candidates — evaluate the dots-removed payload so a
         // dot-delimited base64url secret with sub-MIN_TOKEN_LEN segments is still detected.
+        // Restricted to the BASE64 path (>= 4.5 bits/char) ONLY: pure hex maxes out at 4.0
+        // bits/char, so requiring 4.5 excludes dotted-hex runs (MAC addresses, hex-octet
+        // sequences) that would otherwise be audit noise here — a contiguous high-entropy hex
+        // secret is already covered by Pass 1 and SecretShapes' broad hex-key shape.
         for (candidate in text.split(DOTTED_SPLIT)) {
             if (!candidate.contains('.')) continue // pass 1 already covered dot-free runs
             val joined = candidate.replace(".", "")
-            val h = qualifyingEntropy(joined)
-            if (h > max) max = h
+            if (joined.length < MIN_TOKEN_LEN) continue
+            if (!joined.all { it in BASE64_CHARS }) continue
+            val h = shannon(joined)
+            if (h >= BASE64_THRESHOLD && h > max) max = h
         }
         return max
     }
