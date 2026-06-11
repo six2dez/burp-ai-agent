@@ -51,7 +51,7 @@ Phases 9–11 closed. Features: design system foundation (UI-01), MCP tools tab 
 - [x] **Phase 12: Secrets at Rest & Transport Security** — Encrypt all stored API keys (AES-256-GCM), fix keytool argv password exposure, add soft SSRF backend URL warning ✓ 2026-06-10
 - [x] **Phase 13: Privacy & Redaction Hardening** — Fix host-anonymization algorithm (real HKDF), broaden redaction to request/response bodies with user-configurable patterns, add redaction-coverage UI (completed 2026-06-10)
 - [x] **Phase 14: Anthropic Backend + Token Budget + Listener Port** — Native Anthropic Messages API backend with streaming/tool-use/prompt-caching; per-session token-budget guardrails; MCP proxy-history listener port filter (completed 2026-06-10)
-- [ ] **Phase 15: Pre-Send Secret Tripwire** — Post-redaction tripwire scanning final payload for high-entropy secrets before any send; warn-with-confirmation UI; audit-logged allowlist
+- [x] **Phase 15: Pre-Send Secret Tripwire** — Post-redaction tripwire scanning final payload for high-entropy secrets before any send; warn-with-confirmation UI; audit-logged allowlist (completed 2026-06-11)
 - [ ] **Phase 16: External MCP Client** — Connect to external/custom MCP servers (SSE + stdio transports); auth tokens encrypted; SSRF guard; untrusted-output trust boundary
 - [ ] **Phase 17: Reliability & Concurrency Hardening** — EDT confinement on ChatPanel session maps; CLI temp file cleanup via finally; bounded MCP shutdown; uniform HTTP timeouts/CircuitBreaker; fix CLI timeout bug #71
 - [ ] **Phase 18: Quality Tooling & Build Hardening** — Raise scanner/CLI/cache test coverage; add detekt + blocking ktlint with committed baseline; audit 136 exception-logging sites; fix generateBuildFlags sourceSets wiring
@@ -150,7 +150,7 @@ Plans:
 **Wave 2** *(blocked on Wave 1; file-disjoint, run in parallel)*
 
 - [x] 15-02-PLAN.md — Interactive path: ContextPreviewDialog RISK gate + "Send anyway"/Cancel + ChatPanel allowlist audit (SC5/SC3) [wave 2]
-- [ ] 15-03-PLAN.md — Non-interactive paths: PassiveAiScanner three send sites + McpToolContext.redactIfNeeded, detect+audit+proceed (SC4/SC2) [wave 2]
+- [x] 15-03-PLAN.md — Non-interactive paths: PassiveAiScanner three send sites + McpToolContext.redactIfNeeded, detect+audit+proceed (SC4/SC2) [wave 2]
 
 **UI hint**: yes
 
@@ -228,7 +228,7 @@ Phase 12 (SEC) must be first. Phase 13 (Privacy) and Phase 12 are sequential (av
 | 12. Secrets at Rest & Transport Security | 4/4 | ✅ Complete | 2026-06-10 |
 | 13. Privacy & Redaction Hardening | 3/3 | Complete    | 2026-06-10 |
 | 14. Anthropic Backend + Token Budget + Listener Port | 3/3 | Complete    | 2026-06-10 |
-| 15. Pre-Send Secret Tripwire | 2/3 | In Progress|  |
+| 15. Pre-Send Secret Tripwire | 3/3 | Complete   | 2026-06-11 |
 | 16. External MCP Client | 0/TBD | Not started | - |
 | 17. Reliability & Concurrency Hardening | 0/TBD | Not started | - |
 | 18. Quality Tooling & Build Hardening | 0/TBD | Not started | - |
