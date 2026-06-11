@@ -13,7 +13,10 @@ import com.six2dez.burp.aiagent.mcp.McpRequestLimiter
 import com.six2dez.burp.aiagent.mcp.McpToolCatalog
 import com.six2dez.burp.aiagent.mcp.McpToolContext
 import com.six2dez.burp.aiagent.mcp.tools.McpToolExecutor
+import com.six2dez.burp.aiagent.audit.AuditLogger
+import com.six2dez.burp.aiagent.redact.Entropy
 import com.six2dez.burp.aiagent.redact.PrivacyMode
+import com.six2dez.burp.aiagent.redact.SecretTripwire
 import com.six2dez.burp.aiagent.supervisor.AgentSupervisor
 import com.six2dez.burp.aiagent.ui.components.ActionCard
 import com.six2dez.burp.aiagent.ui.components.ContextPreviewDialog
@@ -311,6 +314,18 @@ class ChatPanel(
         val baseTitle = spec.customPromptTitle ?: spec.actionName
         val title = if (uri.isNullOrBlank()) baseTitle else "$baseTitle: $uri"
         val session = createSession(title)
+        // PRIV-03 / SC3 / Phase 15: audit the "Send anyway" allowlist decision once, here, so the
+        // event carries the real session id (createSession resolved it above, G3 / RESEARCH Open Q1
+        // Option b). Re-scan the same final payload — cheap, same bytes confirm() already scanned.
+        // Only emit when the user actually clicked "Send anyway" on a matched payload (scan.matched).
+        // Do NOT emit inside confirm() to avoid double-logging (PATTERNS.md "pick ONE home").
+        val tripwireScan = SecretTripwire.scan(capture.contextJson)
+        if (tripwireScan.matched) {
+            AuditLogger.emitGlobal(
+                "secret_tripwire_allow",
+                SecretTripwire.buildAllowAuditPayload(tripwireScan, session.id),
+            )
+        }
         session.launchMetadata = spec.toMetadataMap()
         val panel = sessionPanels[session.id] ?: return
         val state = sessionStates[session.id] ?: ToolSessionState()
