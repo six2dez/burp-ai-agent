@@ -25,6 +25,7 @@ import com.six2dez.burp.aiagent.ui.components.ToolInvocationDialog
 import com.six2dez.burp.aiagent.scanner.PassiveAiScanner
 import com.six2dez.burp.aiagent.ui.components.SubtleNotice
 import com.six2dez.burp.aiagent.util.BudgetGuard
+import com.six2dez.burp.aiagent.util.GuardedBy
 import com.six2dez.burp.aiagent.util.TokenTracker
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.contentOrNull
@@ -101,10 +102,10 @@ class ChatPanel(
     private val inputArea = JTextArea(3, 24)
     private val newSessionBtn = JButton("New Session")
     private val privacyPill = PrivacyPill()
-    private val sessionPanels = linkedMapOf<String, SessionPanel>()
-    private val sessionStates = linkedMapOf<String, ToolSessionState>()
-    private val sessionsById = linkedMapOf<String, ChatSession>()
-    private val sessionDrafts = linkedMapOf<String, String>()
+    @GuardedBy("EDT") private val sessionPanels = linkedMapOf<String, SessionPanel>()
+    @GuardedBy("EDT") private val sessionStates = linkedMapOf<String, ToolSessionState>()
+    @GuardedBy("EDT") private val sessionsById = linkedMapOf<String, ChatSession>()
+    @GuardedBy("EDT") private val sessionDrafts = linkedMapOf<String, String>()
     private var mcpAvailable = true
     private var activeSessionId: String? = null
     private var suppressDraftSync = false
@@ -643,21 +644,39 @@ class ChatPanel(
                             refreshSessionList()
                             onResponseReady()
                         }
-                        val chained =
-                            if (allowToolCalls && state.toolsMode && toolContext != null) {
-                                maybeExecuteToolCall(
-                                    sessionId = sessionId,
-                                    userText = userText,
-                                    responseText = finalResp,
-                                    context = toolContext,
-                                    remainingToolIterations = toolIterationsLeft,
-                                    traceId = traceId,
-                                    onCompleted = onCompleted,
-                                )
-                            } else {
-                                false
+                        // REL-01: maybeExecuteToolCall reads sessionPanels/sessionsById and calls
+                        // panel.addMessage — all EDT-confined map/Swing operations.  This callback
+                        // runs on the backend executor thread (NOT the EDT), so marshal the
+                        // map-touching + Swing-mutating body onto the EDT via invokeLater.
+                        // onCompleted is invoked OFF the EDT (see below) — narrowest change that
+                        // keeps chained tool-call continuations from stalling the UI thread.
+                        if (allowToolCalls && state.toolsMode && toolContext != null) {
+                            SwingUtilities.invokeLater {
+                                // Map reads and panel.addMessage now run on the EDT (confinement fix).
+                                val chained =
+                                    maybeExecuteToolCall(
+                                        sessionId = sessionId,
+                                        userText = userText,
+                                        responseText = finalResp,
+                                        context = toolContext,
+                                        remainingToolIterations = toolIterationsLeft,
+                                        traceId = traceId,
+                                        onCompleted = onCompleted,
+                                    )
+                                // sendMessage (called inside maybeExecuteToolCall when chained=true)
+                                // submits work to a backend executor — it does not block the EDT.
+                                // When not chained, invoke onCompleted back on this EDT-scheduled
+                                // block so the continuation thread choice is consistent.
+                                if (!chained) {
+                                    // onCompleted does no Swing work itself; invoking it here on the
+                                    // EDT is safe — it re-enters sendMessage which dispatches to a
+                                    // backend executor internally and returns immediately.
+                                    onCompleted?.invoke(finalResp, null)
+                                }
                             }
-                        if (!chained) {
+                        } else {
+                            // No tool-call attempt: invoke onCompleted off-EDT on this backend thread,
+                            // matching the existing behaviour at the error branch above (:634).
                             onCompleted?.invoke(finalResp, null)
                         }
                     }
@@ -665,6 +684,17 @@ class ChatPanel(
             )
         callbackConnectionRef.set(connection)
         inFlightConnection.set(connection)
+    }
+
+    /**
+     * Asserts that the calling code is on the AWT Event Dispatch Thread.
+     * Uses JVM assert (active under -ea in CI tests; no-op in production) so this never
+     * changes prod behavior — the EDT-confinement test is the real SC1 gate, not this check.
+     */
+    private fun assertEdt() {
+        assert(SwingUtilities.isEventDispatchThread()) {
+            "session maps must be touched on the EDT only — off-EDT access is a data race (REL-01)"
+        }
     }
 
     private fun sanitizeTitle(raw: String): String = raw.replace(Regex("[\\t\\n\\r\\u0000-\\u001F]"), " ").trim()
@@ -2044,6 +2074,9 @@ class ChatPanel(
         traceId: String,
         onCompleted: ((String, Throwable?) -> Unit)?,
     ): Boolean {
+        // REL-01: this function reads EDT-confined maps and calls panel.addMessage (Swing).
+        // It must only be called from the EDT — enforced by assertEdt() under -ea.
+        assertEdt()
         if (remainingToolIterations <= 0) return false
         val call = ToolCallParser.extractFirst(responseText) ?: return false
         val panel = sessionPanels[sessionId] ?: return false
