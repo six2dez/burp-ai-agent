@@ -23,27 +23,26 @@ import com.six2dez.burp.aiagent.ui.McpToolTabModel
 import com.six2dez.burp.aiagent.ui.components.AccordionPanel
 import com.six2dez.burp.aiagent.ui.components.CustomPromptLibraryEditor
 import com.six2dez.burp.aiagent.ui.components.ToggleSwitch
-import com.six2dez.burp.aiagent.ui.design.BadgeStyle
 import com.six2dez.burp.aiagent.ui.design.DesignTokens
 import com.six2dez.burp.aiagent.ui.design.addRowFull
 import com.six2dez.burp.aiagent.ui.design.addSpacerRow
-import com.six2dez.burp.aiagent.ui.design.applyFieldStyle
 import com.six2dez.burp.aiagent.ui.design.applyAreaStyle
+import com.six2dez.burp.aiagent.ui.design.applyFieldStyle
 import com.six2dez.burp.aiagent.ui.design.buildTabPanel
 import com.six2dez.burp.aiagent.ui.design.formGrid
 import com.six2dez.burp.aiagent.ui.design.helpLabel
-import com.six2dez.burp.aiagent.ui.design.sectionPanel
 import com.six2dez.burp.aiagent.ui.design.secondaryButton
+import com.six2dez.burp.aiagent.ui.design.sectionPanel
 import com.six2dez.burp.aiagent.ui.design.toolBadge
 import com.six2dez.burp.aiagent.ui.panels.ActiveScanConfigPanel
 import com.six2dez.burp.aiagent.ui.panels.ActiveScanQueuePanel
 import com.six2dez.burp.aiagent.ui.panels.BackendConfigPanel
 import com.six2dez.burp.aiagent.ui.panels.BackendConfigState
+import com.six2dez.burp.aiagent.ui.panels.CustomPromptsConfigPanel
 import com.six2dez.burp.aiagent.ui.panels.HelpConfigPanel
 import com.six2dez.burp.aiagent.ui.panels.McpConfigPanel
 import com.six2dez.burp.aiagent.ui.panels.PassiveScanConfigPanel
 import com.six2dez.burp.aiagent.ui.panels.PrivacyConfigPanel
-import com.six2dez.burp.aiagent.ui.panels.CustomPromptsConfigPanel
 import com.six2dez.burp.aiagent.ui.panels.PromptConfigPanel
 import java.awt.BorderLayout
 import java.awt.Toolkit
@@ -51,7 +50,22 @@ import java.awt.datatransfer.StringSelection
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import javax.swing.*
+import javax.swing.Box
+import javax.swing.JButton
+import javax.swing.JCheckBox
+import javax.swing.JComboBox
+import javax.swing.JComponent
+import javax.swing.JLabel
+import javax.swing.JOptionPane
+import javax.swing.JPanel
+import javax.swing.JPasswordField
+import javax.swing.JScrollPane
+import javax.swing.JSpinner
+import javax.swing.JTextArea
+import javax.swing.JTextField
+import javax.swing.SpinnerNumberModel
+import javax.swing.SwingUtilities
+import javax.swing.Timer
 import javax.swing.border.EmptyBorder
 import javax.swing.border.LineBorder
 import javax.swing.event.DocumentEvent
@@ -197,13 +211,17 @@ class SettingsPanel(
             preferredSize = java.awt.Dimension(80, preferredSize.height)
             maximumSize = java.awt.Dimension(80, preferredSize.height)
         }
-    private val privacyNotice = com.six2dez.burp.aiagent.ui.components.SubtleNotice()
+    private val privacyNotice =
+        com.six2dez.burp.aiagent.ui.components
+            .SubtleNotice()
     private val saveFeedbackLabel = JLabel("No recent save activity.")
+
     // PRIV-02: custom-pattern text area (one regex per line) + inline validation-feedback label.
     // Both are injected into PrivacyConfigPanel; validation runs on Save via SafeRegex.isPatternSafe.
     private val customPatternsArea =
         JTextArea(settings.customRedactionPatterns.joinToString("\n"), 4, 20).also {
-            com.six2dez.burp.aiagent.ui.design.applyAreaStyle(it)
+            com.six2dez.burp.aiagent.ui.design
+                .applyAreaStyle(it)
         }
     private val patternsFeedbackLabel =
         JLabel("").also {
@@ -237,7 +255,9 @@ class SettingsPanel(
             3,
             20,
         )
-    private val mcpNotice = com.six2dez.burp.aiagent.ui.components.SubtleNotice()
+    private val mcpNotice =
+        com.six2dez.burp.aiagent.ui.components
+            .SubtleNotice()
     private val mcpTokenRegenerate = JButton("Regenerate token")
     private val mcpMaxConcurrent =
         JSpinner(
@@ -620,7 +640,7 @@ class SettingsPanel(
         mcpScopeOnly.font = DesignTokens.Typography.body
         mcpScopeOnly.toolTipText =
             "When enabled, MCP tools that return Burp HTTP data only include in-scope items, " +
-                "and send_request-style tools refuse out-of-scope URLs. Issue #69."
+            "and send_request-style tools refuse out-of-scope URLs. Issue #69."
         preprocessProxyHistory.toolTipText =
             "Preprocess proxy history before MCP returns it, reducing context-window overflow from large or binary responses."
         preprocessMaxResponseSizeKb.toolTipText =
@@ -634,7 +654,8 @@ class SettingsPanel(
         saveFeedbackLabel.font = DesignTokens.Typography.body
         saveFeedbackLabel.foreground = DesignTokens.Colors.onPrimary
         saveFeedbackLabel.background = DesignTokens.Colors.borderSubtle
-        saveFeedbackLabel.border = EmptyBorder(DesignTokens.Spacing.xs, DesignTokens.Spacing.sm, DesignTokens.Spacing.xs, DesignTokens.Spacing.sm)
+        saveFeedbackLabel.border =
+            EmptyBorder(DesignTokens.Spacing.xs, DesignTokens.Spacing.sm, DesignTokens.Spacing.xs, DesignTokens.Spacing.sm)
         saveFeedbackLabel.isOpaque = true
 
         val backendBody =
@@ -1134,8 +1155,16 @@ class SettingsPanel(
             perplexityTimeoutSeconds = perplexityTimeoutSeconds,
             anthropicModel = backendState.anthropicModel,
             anthropicApiKey = backendState.anthropicApiKey,
-            tokenBudgetWarnThreshold = tokenBudgetWarnField.text.trim().toIntOrNull()?.coerceAtLeast(0) ?: 0,
-            tokenBudgetHardCap = tokenBudgetHardCapField.text.trim().toIntOrNull()?.coerceAtLeast(0) ?: 0,
+            tokenBudgetWarnThreshold =
+                tokenBudgetWarnField.text
+                    .trim()
+                    .toIntOrNull()
+                    ?.coerceAtLeast(0) ?: 0,
+            tokenBudgetHardCap =
+                tokenBudgetHardCapField.text
+                    .trim()
+                    .toIntOrNull()
+                    ?.coerceAtLeast(0) ?: 0,
             copilotCmd = backendState.copilotCmd,
             requestPromptTemplate = promptRequest.text.trim(),
             issuePromptTemplate = promptIssueFull.text.trim(),
@@ -1241,7 +1270,9 @@ class SettingsPanel(
         val rejected = mutableListOf<String>()
         val valid = mutableListOf<String>()
         for (line in lines) {
-            if (com.six2dez.burp.aiagent.redact.SafeRegex.isPatternSafe(line)) {
+            if (com.six2dez.burp.aiagent.redact.SafeRegex
+                    .isPatternSafe(line)
+            ) {
                 valid.add(line)
             } else {
                 rejected.add(line)
@@ -1491,7 +1522,8 @@ class SettingsPanel(
 
         // PRIV-02: push validated custom patterns into the live redaction pipeline so edits
         // take effect without a restart (per 13-RESEARCH A7 / Open Question 1).
-        com.six2dez.burp.aiagent.redact.Redaction.setCustomPatterns(updated.customRedactionPatterns)
+        com.six2dez.burp.aiagent.redact.Redaction
+            .setCustomPatterns(updated.customRedactionPatterns)
 
         // Apply passive AI scanner settings
         passiveAiScanner.rateLimitSeconds = updated.passiveAiRateSeconds
@@ -2094,14 +2126,15 @@ class SettingsPanel(
         searchField.maximumSize = java.awt.Dimension(Int.MAX_VALUE, searchField.preferredSize.height)
         val totalTools = McpToolCatalog.available().size
         val resultCountLabel = helpLabel("$totalTools tools")
-        val searchBarPanel = JPanel().apply {
-            layout = BoxLayout(this, BoxLayout.X_AXIS)
-            background = DesignTokens.Colors.surface
-            border = EmptyBorder(0, 0, DesignTokens.Spacing.lg, 0)
-            add(searchField)
-            add(Box.createRigidArea(java.awt.Dimension(DesignTokens.Spacing.sm, 0)))
-            add(resultCountLabel)
-        }
+        val searchBarPanel =
+            JPanel().apply {
+                layout = BoxLayout(this, BoxLayout.X_AXIS)
+                background = DesignTokens.Colors.surface
+                border = EmptyBorder(0, 0, DesignTokens.Spacing.lg, 0)
+                add(searchField)
+                add(Box.createRigidArea(java.awt.Dimension(DesignTokens.Spacing.sm, 0)))
+                add(resultCountLabel)
+            }
 
         // STEP 3 — Tool-row builder (local helper)
         fun buildToolRow(tool: com.six2dez.burp.aiagent.mcp.McpToolDescriptor): JPanel {
@@ -2129,37 +2162,40 @@ class SettingsPanel(
             mcpToolCheckboxes[tool.id] = checkbox
 
             // North sub-row: checkbox + gap + badge + glue + optional indicator
-            val badge = toolBadge(
-                if (tool.nativeTool) "Store + Full" else "Full only",
-                McpToolTabModel.badgeStyle(tool),
-            )
-            val northRow = JPanel().apply {
-                layout = BoxLayout(this, BoxLayout.X_AXIS)
-                isOpaque = false
-                add(checkbox)
-                add(Box.createRigidArea(java.awt.Dimension(DesignTokens.Spacing.sm, 0)))
-                add(badge)
-                add(Box.createHorizontalGlue())
-            }
+            val badge =
+                toolBadge(
+                    if (tool.nativeTool) "Store + Full" else "Full only",
+                    McpToolTabModel.badgeStyle(tool),
+                )
+            val northRow =
+                JPanel().apply {
+                    layout = BoxLayout(this, BoxLayout.X_AXIS)
+                    isOpaque = false
+                    add(checkbox)
+                    add(Box.createRigidArea(java.awt.Dimension(DesignTokens.Spacing.sm, 0)))
+                    add(badge)
+                    add(Box.createHorizontalGlue())
+                }
             // Optional indicator label (right-aligned, visual only — does NOT affect isEnabled)
-            val indicator: JLabel? = when {
-                tool.proOnly && edition != BurpSuiteEdition.PROFESSIONAL ->
-                    JLabel("Pro only").apply {
-                        font = DesignTokens.Typography.caption
-                        foreground = DesignTokens.Colors.onSurfaceVariant
-                    }
-                tool.unsafeOnly && !unsafeEnabled && unsafeAllowlist.contains(tool.id) ->
-                    JLabel("allowlisted").apply {
-                        font = DesignTokens.Typography.caption
-                        foreground = DesignTokens.Colors.statusWarning
-                    }
-                tool.unsafeOnly && !unsafeEnabled ->
-                    JLabel("unsafe").apply {
-                        font = DesignTokens.Typography.caption
-                        foreground = DesignTokens.Colors.statusError
-                    }
-                else -> null
-            }
+            val indicator: JLabel? =
+                when {
+                    tool.proOnly && edition != BurpSuiteEdition.PROFESSIONAL ->
+                        JLabel("Pro only").apply {
+                            font = DesignTokens.Typography.caption
+                            foreground = DesignTokens.Colors.onSurfaceVariant
+                        }
+                    tool.unsafeOnly && !unsafeEnabled && unsafeAllowlist.contains(tool.id) ->
+                        JLabel("allowlisted").apply {
+                            font = DesignTokens.Typography.caption
+                            foreground = DesignTokens.Colors.statusWarning
+                        }
+                    tool.unsafeOnly && !unsafeEnabled ->
+                        JLabel("unsafe").apply {
+                            font = DesignTokens.Typography.caption
+                            foreground = DesignTokens.Colors.statusError
+                        }
+                    else -> null
+                }
             if (indicator != null) northRow.add(indicator)
 
             // South sub-row: description help label
@@ -2168,12 +2204,13 @@ class SettingsPanel(
 
             return JPanel(BorderLayout()).apply {
                 isOpaque = false
-                border = EmptyBorder(
-                    DesignTokens.Spacing.xs,
-                    DesignTokens.Spacing.md,
-                    DesignTokens.Spacing.xs,
-                    DesignTokens.Spacing.md,
-                )
+                border =
+                    EmptyBorder(
+                        DesignTokens.Spacing.xs,
+                        DesignTokens.Spacing.md,
+                        DesignTokens.Spacing.xs,
+                        DesignTokens.Spacing.md,
+                    )
                 add(northRow, BorderLayout.NORTH)
                 add(descLabel, BorderLayout.SOUTH)
             }
@@ -2181,28 +2218,33 @@ class SettingsPanel(
 
         // Helper: compute set of disabled checkbox tool IDs at call time
         val disabledCheckboxIds: () -> Set<String> = {
-            mcpToolCheckboxes.entries.filter { !it.value.isEnabled }.map { it.key }.toSet()
+            mcpToolCheckboxes.entries
+                .filter { !it.value.isEnabled }
+                .map { it.key }
+                .toSet()
         }
 
         // STEP 4 — AI Tools section
         val aiToolRows = mutableListOf<Pair<com.six2dez.burp.aiagent.mcp.McpToolDescriptor, JPanel>>()
         val aiEnableAll = secondaryButton("Enable all")
         val aiDisableAll = secondaryButton("Disable all")
-        val aiBulkBar = JPanel().apply {
-            layout = BoxLayout(this, BoxLayout.X_AXIS)
-            isOpaque = false
-            border = EmptyBorder(0, 0, DesignTokens.Spacing.sm, 0)
-            add(aiEnableAll)
-            add(Box.createRigidArea(java.awt.Dimension(DesignTokens.Spacing.sm, 0)))
-            add(aiDisableAll)
-            add(Box.createHorizontalGlue())
-        }
+        val aiBulkBar =
+            JPanel().apply {
+                layout = BoxLayout(this, BoxLayout.X_AXIS)
+                isOpaque = false
+                border = EmptyBorder(0, 0, DesignTokens.Spacing.sm, 0)
+                add(aiEnableAll)
+                add(Box.createRigidArea(java.awt.Dimension(DesignTokens.Spacing.sm, 0)))
+                add(aiDisableAll)
+                add(Box.createHorizontalGlue())
+            }
         val aiEmptyLabel = helpLabel("No tools match your search.").also { it.isVisible = false }
-        val aiListPanel = JPanel().apply {
-            layout = BoxLayout(this, BoxLayout.Y_AXIS)
-            isOpaque = false
-            add(aiBulkBar)
-        }
+        val aiListPanel =
+            JPanel().apply {
+                layout = BoxLayout(this, BoxLayout.Y_AXIS)
+                isOpaque = false
+                add(aiBulkBar)
+            }
         for (tool in grouping.native) {
             val row = buildToolRow(tool)
             aiToolRows.add(tool to row)
@@ -2219,31 +2261,34 @@ class SettingsPanel(
             for (target in targets) mcpToolCheckboxes[target.id]?.isSelected = false
         }
 
-        val aiSection = sectionPanel(
-            title = "AI Tools (extension-native)",
-            subtitle = "Extension-native tools — available in both the BApp Store and the full build.",
-            content = aiListPanel,
-        )
+        val aiSection =
+            sectionPanel(
+                title = "AI Tools (extension-native)",
+                subtitle = "Extension-native tools — available in both the BApp Store and the full build.",
+                content = aiListPanel,
+            )
 
         // STEP 5 — Montoya Tools section
         val montoyaToolRows = mutableListOf<Pair<com.six2dez.burp.aiagent.mcp.McpToolDescriptor, JPanel>>()
         val montoyaCategoryHeaders = mutableListOf<Pair<String, JLabel>>()
         val montoyaEnableAll = secondaryButton("Enable all")
         val montoyaDisableAll = secondaryButton("Disable all")
-        val montoyaBulkBar = JPanel().apply {
-            layout = BoxLayout(this, BoxLayout.X_AXIS)
-            isOpaque = false
-            border = EmptyBorder(0, 0, DesignTokens.Spacing.sm, 0)
-            add(montoyaEnableAll)
-            add(Box.createRigidArea(java.awt.Dimension(DesignTokens.Spacing.sm, 0)))
-            add(montoyaDisableAll)
-            add(Box.createHorizontalGlue())
-        }
+        val montoyaBulkBar =
+            JPanel().apply {
+                layout = BoxLayout(this, BoxLayout.X_AXIS)
+                isOpaque = false
+                border = EmptyBorder(0, 0, DesignTokens.Spacing.sm, 0)
+                add(montoyaEnableAll)
+                add(Box.createRigidArea(java.awt.Dimension(DesignTokens.Spacing.sm, 0)))
+                add(montoyaDisableAll)
+                add(Box.createHorizontalGlue())
+            }
         val montoyaEmptyLabel = helpLabel("No tools match your search.").also { it.isVisible = false }
-        val montoyaListPanel = JPanel().apply {
-            layout = BoxLayout(this, BoxLayout.Y_AXIS)
-            isOpaque = false
-        }
+        val montoyaListPanel =
+            JPanel().apply {
+                layout = BoxLayout(this, BoxLayout.Y_AXIS)
+                isOpaque = false
+            }
 
         val categoryMap = McpToolTabModel.categoryGroups(grouping.generic)
         if (grouping.generic.isEmpty()) {
@@ -2252,11 +2297,12 @@ class SettingsPanel(
         } else {
             montoyaListPanel.add(montoyaBulkBar)
             for ((category, tools) in categoryMap) {
-                val catHeader = JLabel(category).apply {
-                    font = DesignTokens.Typography.label
-                    foreground = DesignTokens.Colors.onSurfaceVariant
-                    border = EmptyBorder(DesignTokens.Spacing.sm, 0, DesignTokens.Spacing.xs, 0)
-                }
+                val catHeader =
+                    JLabel(category).apply {
+                        font = DesignTokens.Typography.label
+                        foreground = DesignTokens.Colors.onSurfaceVariant
+                        border = EmptyBorder(DesignTokens.Spacing.sm, 0, DesignTokens.Spacing.xs, 0)
+                    }
                 montoyaCategoryHeaders.add(category to catHeader)
                 montoyaListPanel.add(catHeader)
                 for (tool in tools) {
@@ -2278,18 +2324,20 @@ class SettingsPanel(
         }
 
         // STEP 6 — Unsafe Allowlist AccordionPanel (bottom of Montoya section)
-        val allowlistContentPanel = JPanel().apply {
-            layout = BoxLayout(this, BoxLayout.Y_AXIS)
-            isOpaque = false
-        }
+        val allowlistContentPanel =
+            JPanel().apply {
+                layout = BoxLayout(this, BoxLayout.Y_AXIS)
+                isOpaque = false
+            }
         val unsafeTools = McpToolCatalog.available().filter { it.unsafeOnly }.sortedBy { it.title }
         for (tool in unsafeTools) {
             val approved = unsafeAllowlist.contains(tool.id)
-            val approval = JCheckBox(tool.title, approved).apply {
-                toolTipText = tool.description
-                putClientProperty("proOnly", tool.proOnly)
-                putClientProperty("toolId", tool.id)
-            }
+            val approval =
+                JCheckBox(tool.title, approved).apply {
+                    toolTipText = tool.description
+                    putClientProperty("proOnly", tool.proOnly)
+                    putClientProperty("toolId", tool.id)
+                }
             val proDisabled = tool.proOnly && edition != BurpSuiteEdition.PROFESSIONAL
             if (proDisabled) {
                 approval.isEnabled = false
@@ -2299,36 +2347,40 @@ class SettingsPanel(
             }
             approval.addActionListener { updateUnsafeToolStates() }
             mcpUnsafeApprovalCheckboxes[tool.id] = approval
-            val row = JPanel().apply {
-                layout = BoxLayout(this, BoxLayout.X_AXIS)
-                isOpaque = false
-                border = EmptyBorder(DesignTokens.Spacing.xs, DesignTokens.Spacing.md, DesignTokens.Spacing.xs, DesignTokens.Spacing.md)
-                add(approval)
-                add(Box.createHorizontalGlue())
-            }
+            val row =
+                JPanel().apply {
+                    layout = BoxLayout(this, BoxLayout.X_AXIS)
+                    isOpaque = false
+                    border = EmptyBorder(DesignTokens.Spacing.xs, DesignTokens.Spacing.md, DesignTokens.Spacing.xs, DesignTokens.Spacing.md)
+                    add(approval)
+                    add(Box.createHorizontalGlue())
+                }
             allowlistContentPanel.add(row)
         }
-        val allowlistAccordion = AccordionPanel(
-            "Unsafe tool allowlist",
-            "Approve individual unsafe tools without enabling global unsafe mode.",
-            allowlistContentPanel,
-            initiallyExpanded = false,
-        )
+        val allowlistAccordion =
+            AccordionPanel(
+                "Unsafe tool allowlist",
+                "Approve individual unsafe tools without enabling global unsafe mode.",
+                allowlistContentPanel,
+                initiallyExpanded = false,
+            )
         montoyaListPanel.add(Box.createRigidArea(java.awt.Dimension(0, DesignTokens.Spacing.sm)))
         montoyaListPanel.add(allowlistAccordion)
 
-        val montoyaSection = sectionPanel(
-            title = "Montoya Tools (generic)",
-            subtitle = "Generic Montoya API wrappers — available in the full build only.",
-            content = montoyaListPanel,
-        )
+        val montoyaSection =
+            sectionPanel(
+                title = "Montoya Tools (generic)",
+                subtitle = "Generic Montoya API wrappers — available in the full build only.",
+                content = montoyaListPanel,
+            )
 
         // STEP 7 — Section separator (Spacing.xl gap between AI and Montoya sections)
-        val sectionSeparator = JPanel().apply {
-            isOpaque = false
-            preferredSize = java.awt.Dimension(0, DesignTokens.Spacing.xl)
-            maximumSize = java.awt.Dimension(Int.MAX_VALUE, DesignTokens.Spacing.xl)
-        }
+        val sectionSeparator =
+            JPanel().apply {
+                isOpaque = false
+                preferredSize = java.awt.Dimension(0, DesignTokens.Spacing.xl)
+                maximumSize = java.awt.Dimension(Int.MAX_VALUE, DesignTokens.Spacing.xl)
+            }
 
         // STEP 8 — DocumentListener for live filter (Option B — show/hide rows)
         fun applyFilter(query: String) {
@@ -2360,11 +2412,15 @@ class SettingsPanel(
             montoyaListPanel.repaint()
         }
 
-        searchField.document.addDocumentListener(object : DocumentListener {
-            override fun insertUpdate(e: DocumentEvent) = applyFilter(searchField.text)
-            override fun removeUpdate(e: DocumentEvent) = applyFilter(searchField.text)
-            override fun changedUpdate(e: DocumentEvent) = applyFilter(searchField.text)
-        })
+        searchField.document.addDocumentListener(
+            object : DocumentListener {
+                override fun insertUpdate(e: DocumentEvent) = applyFilter(searchField.text)
+
+                override fun removeUpdate(e: DocumentEvent) = applyFilter(searchField.text)
+
+                override fun changedUpdate(e: DocumentEvent) = applyFilter(searchField.text)
+            },
+        )
 
         // STEP 9 — Return via buildTabPanel from design module
         return buildTabPanel(listOf(searchBarPanel, aiSection, sectionSeparator, montoyaSection))

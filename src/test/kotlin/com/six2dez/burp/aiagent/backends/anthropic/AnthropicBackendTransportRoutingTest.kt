@@ -27,7 +27,6 @@ import java.util.concurrent.atomic.AtomicReference
  *   (c) AnthropicBackend.kt source contains no okhttp3 / OkHttpClient reference.
  */
 class AnthropicBackendTransportRoutingTest {
-
     /** A representative Anthropic Messages API 200 success body (RESEARCH §3). */
     private val successBody =
         """

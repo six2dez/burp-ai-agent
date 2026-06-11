@@ -23,24 +23,90 @@ private object Rfc5869TestCase1 {
 
     // Expected PRK (HMAC-SHA256 of salt over IKM):
     // 077709362c2e32df0ddc3f0dc47bba6390b6c73bb50f9c3122ec844ad7c2b3e5
-    val expectedPrk: ByteArray = byteArrayOf(
-        0x07, 0x77, 0x09, 0x36, 0x2c, 0x2e, 0x32, 0xdf.toByte(),
-        0x0d, 0xdc.toByte(), 0x3f, 0x0d, 0xc4.toByte(), 0x7b, 0xba.toByte(), 0x63,
-        0x90.toByte(), 0xb6.toByte(), 0xc7.toByte(), 0x3b, 0xb5.toByte(), 0x0f, 0x9c.toByte(), 0x31,
-        0x22, 0xec.toByte(), 0x84.toByte(), 0x4a, 0xd7.toByte(), 0xc2.toByte(), 0xb3.toByte(), 0xe5.toByte(),
-    )
+    val expectedPrk: ByteArray =
+        byteArrayOf(
+            0x07,
+            0x77,
+            0x09,
+            0x36,
+            0x2c,
+            0x2e,
+            0x32,
+            0xdf.toByte(),
+            0x0d,
+            0xdc.toByte(),
+            0x3f,
+            0x0d,
+            0xc4.toByte(),
+            0x7b,
+            0xba.toByte(),
+            0x63,
+            0x90.toByte(),
+            0xb6.toByte(),
+            0xc7.toByte(),
+            0x3b,
+            0xb5.toByte(),
+            0x0f,
+            0x9c.toByte(),
+            0x31,
+            0x22,
+            0xec.toByte(),
+            0x84.toByte(),
+            0x4a,
+            0xd7.toByte(),
+            0xc2.toByte(),
+            0xb3.toByte(),
+            0xe5.toByte(),
+        )
 
     // Expected OKM (first 42 bytes):
     // 3cb25f25faacd57a90434f64d0362f2a2d2d0a90cf1a5a4c5db02d56ecc4c5bf
     // 34007208d5b887185865
-    val expectedOkm: ByteArray = byteArrayOf(
-        0x3c, 0xb2.toByte(), 0x5f, 0x25, 0xfa.toByte(), 0xac.toByte(), 0xd5.toByte(), 0x7a,
-        0x90.toByte(), 0x43, 0x4f, 0x64, 0xd0.toByte(), 0x36, 0x2f, 0x2a,
-        0x2d, 0x2d, 0x0a, 0x90.toByte(), 0xcf.toByte(), 0x1a, 0x5a, 0x4c,
-        0x5d, 0xb0.toByte(), 0x2d, 0x56, 0xec.toByte(), 0xc4.toByte(), 0xc5.toByte(), 0xbf.toByte(),
-        0x34, 0x00, 0x72, 0x08, 0xd5.toByte(), 0xb8.toByte(), 0x87.toByte(), 0x18,
-        0x58, 0x65,
-    )
+    val expectedOkm: ByteArray =
+        byteArrayOf(
+            0x3c,
+            0xb2.toByte(),
+            0x5f,
+            0x25,
+            0xfa.toByte(),
+            0xac.toByte(),
+            0xd5.toByte(),
+            0x7a,
+            0x90.toByte(),
+            0x43,
+            0x4f,
+            0x64,
+            0xd0.toByte(),
+            0x36,
+            0x2f,
+            0x2a,
+            0x2d,
+            0x2d,
+            0x0a,
+            0x90.toByte(),
+            0xcf.toByte(),
+            0x1a,
+            0x5a,
+            0x4c,
+            0x5d,
+            0xb0.toByte(),
+            0x2d,
+            0x56,
+            0xec.toByte(),
+            0xc4.toByte(),
+            0xc5.toByte(),
+            0xbf.toByte(),
+            0x34,
+            0x00,
+            0x72,
+            0x08,
+            0xd5.toByte(),
+            0xb8.toByte(),
+            0x87.toByte(),
+            0x18,
+            0x58,
+            0x65,
+        )
 }
 
 class RedactionTest {

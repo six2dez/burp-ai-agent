@@ -24,18 +24,15 @@ import javax.swing.JTextField
 import javax.swing.border.EmptyBorder
 import javax.swing.border.LineBorder
 
-/**
- * Public component builder API for the Burp AI Agent design system.
- *
- * All builders source colors from [DesignTokens.Colors], fonts from [DesignTokens.Typography],
- * and spacing from [DesignTokens.Spacing]. No inline Color() literals or Font() constructors
- * appear in builder bodies — all tokens are resolved at call time from UIManager.
- *
- * Contract reference: `.planning/phases/09-design-system-foundation/09-UI-SPEC.md`
- * Companion to: [DesignTokens]
- *
- * Phases 10 and 11 MUST import from this module rather than duplicating layout logic.
- */
+// -------------------------------------------------------------------------------------------------
+// Public component builder API for the Burp AI Agent design system.
+// All builders source colors from DesignTokens.Colors, fonts from DesignTokens.Typography,
+// and spacing from DesignTokens.Spacing. No inline Color() literals or Font() constructors
+// appear in builder bodies — all tokens are resolved at call time from UIManager.
+// Contract reference: .planning/phases/09-design-system-foundation/09-UI-SPEC.md
+// Companion to: DesignTokens
+// Phases 10 and 11 MUST import from this module rather than duplicating layout logic.
+// -------------------------------------------------------------------------------------------------
 
 // -------------------------------------------------------------------------------------------------
 // Badge style enum
@@ -118,44 +115,48 @@ fun addRowFull(
     val row = nextRow(grid)
 
     // Label cell
-    val labelGbc = GridBagConstraints().apply {
-        gridx = 0
-        gridy = row
-        anchor = GridBagConstraints.WEST
-        insets = DesignTokens.Spacing.rowInsets
-    }
-    val label = JLabel(labelText).apply {
-        font = DesignTokens.Typography.body
-        foreground = DesignTokens.Colors.onSurface
-    }
+    val labelGbc =
+        GridBagConstraints().apply {
+            gridx = 0
+            gridy = row
+            anchor = GridBagConstraints.WEST
+            insets = DesignTokens.Spacing.rowInsets
+        }
+    val label =
+        JLabel(labelText).apply {
+            font = DesignTokens.Typography.body
+            foreground = DesignTokens.Colors.onSurface
+        }
     grid.add(label, labelGbc)
 
     // Field cell
-    val fieldGbc = GridBagConstraints().apply {
-        gridx = 1
-        gridy = row
-        gridwidth = 3
-        weightx = 1.0
-        insets = DesignTokens.Spacing.fieldInsets
-        if (isSmallComponent(field)) {
-            anchor = GridBagConstraints.WEST
-            fill = GridBagConstraints.NONE
-        } else {
-            fill = GridBagConstraints.HORIZONTAL
+    val fieldGbc =
+        GridBagConstraints().apply {
+            gridx = 1
+            gridy = row
+            gridwidth = 3
+            weightx = 1.0
+            insets = DesignTokens.Spacing.fieldInsets
+            if (isSmallComponent(field)) {
+                anchor = GridBagConstraints.WEST
+                fill = GridBagConstraints.NONE
+            } else {
+                fill = GridBagConstraints.HORIZONTAL
+            }
         }
-    }
     grid.add(field, fieldGbc)
 
     // Optional help text row
     if (helpText != null) {
         val helpRow = nextRow(grid)
-        val helpGbc = GridBagConstraints().apply {
-            gridx = 1
-            gridy = helpRow
-            gridwidth = 3
-            weightx = 1.0
-            insets = Insets(0, 0, DesignTokens.Spacing.xs, 0)
-        }
+        val helpGbc =
+            GridBagConstraints().apply {
+                gridx = 1
+                gridy = helpRow
+                gridwidth = 3
+                weightx = 1.0
+                insets = Insets(0, 0, DesignTokens.Spacing.xs, 0)
+            }
         grid.add(helpLabel(helpText), helpGbc)
     }
 }
@@ -180,59 +181,65 @@ fun addRowPair(
     val row = nextRow(grid)
 
     // Left label
-    val leftLabelGbc = GridBagConstraints().apply {
-        gridx = 0
-        gridy = row
-        anchor = GridBagConstraints.WEST
-        insets = DesignTokens.Spacing.rowInsets
-    }
-    val leftLbl = JLabel(leftLabel).apply {
-        font = DesignTokens.Typography.body
-        foreground = DesignTokens.Colors.onSurface
-    }
+    val leftLabelGbc =
+        GridBagConstraints().apply {
+            gridx = 0
+            gridy = row
+            anchor = GridBagConstraints.WEST
+            insets = DesignTokens.Spacing.rowInsets
+        }
+    val leftLbl =
+        JLabel(leftLabel).apply {
+            font = DesignTokens.Typography.body
+            foreground = DesignTokens.Colors.onSurface
+        }
     grid.add(leftLbl, leftLabelGbc)
 
     // Left field
-    val leftFieldGbc = GridBagConstraints().apply {
-        gridx = 1
-        gridy = row
-        weightx = 0.5
-        insets = DesignTokens.Spacing.fieldPairInsets
-        if (isSmallComponent(leftField)) {
-            anchor = GridBagConstraints.WEST
-            fill = GridBagConstraints.NONE
-        } else {
-            fill = GridBagConstraints.HORIZONTAL
+    val leftFieldGbc =
+        GridBagConstraints().apply {
+            gridx = 1
+            gridy = row
+            weightx = 0.5
+            insets = DesignTokens.Spacing.fieldPairInsets
+            if (isSmallComponent(leftField)) {
+                anchor = GridBagConstraints.WEST
+                fill = GridBagConstraints.NONE
+            } else {
+                fill = GridBagConstraints.HORIZONTAL
+            }
         }
-    }
     grid.add(leftField, leftFieldGbc)
 
     // Right label
-    val rightLabelGbc = GridBagConstraints().apply {
-        gridx = 2
-        gridy = row
-        anchor = GridBagConstraints.WEST
-        insets = DesignTokens.Spacing.rowInsets
-    }
-    val rightLbl = JLabel(rightLabel).apply {
-        font = DesignTokens.Typography.body
-        foreground = DesignTokens.Colors.onSurface
-    }
+    val rightLabelGbc =
+        GridBagConstraints().apply {
+            gridx = 2
+            gridy = row
+            anchor = GridBagConstraints.WEST
+            insets = DesignTokens.Spacing.rowInsets
+        }
+    val rightLbl =
+        JLabel(rightLabel).apply {
+            font = DesignTokens.Typography.body
+            foreground = DesignTokens.Colors.onSurface
+        }
     grid.add(rightLbl, rightLabelGbc)
 
     // Right field
-    val rightFieldGbc = GridBagConstraints().apply {
-        gridx = 3
-        gridy = row
-        weightx = 0.5
-        insets = DesignTokens.Spacing.fieldInsets
-        if (isSmallComponent(rightField)) {
-            anchor = GridBagConstraints.WEST
-            fill = GridBagConstraints.NONE
-        } else {
-            fill = GridBagConstraints.HORIZONTAL
+    val rightFieldGbc =
+        GridBagConstraints().apply {
+            gridx = 3
+            gridy = row
+            weightx = 0.5
+            insets = DesignTokens.Spacing.fieldInsets
+            if (isSmallComponent(rightField)) {
+                anchor = GridBagConstraints.WEST
+                fill = GridBagConstraints.NONE
+            } else {
+                fill = GridBagConstraints.HORIZONTAL
+            }
         }
-    }
     grid.add(rightField, rightFieldGbc)
 }
 
@@ -243,16 +250,20 @@ fun addRowPair(
 /**
  * Inserts a rigid-area spacer row spanning all 4 columns. Default [height] = [DesignTokens.Spacing.xs] (4 px).
  */
-fun addSpacerRow(grid: JPanel, height: Int = DesignTokens.Spacing.xs) {
+fun addSpacerRow(
+    grid: JPanel,
+    height: Int = DesignTokens.Spacing.xs,
+) {
     val row = nextRow(grid)
-    val gbc = GridBagConstraints().apply {
-        gridx = 0
-        gridy = row
-        gridwidth = 4
-        weightx = 1.0
-        fill = GridBagConstraints.HORIZONTAL
-        insets = Insets(0, 0, 0, 0)
-    }
+    val gbc =
+        GridBagConstraints().apply {
+            gridx = 0
+            gridy = row
+            gridwidth = 4
+            weightx = 1.0
+            fill = GridBagConstraints.HORIZONTAL
+            insets = Insets(0, 0, 0, 0)
+        }
     grid.add(Box.createRigidArea(Dimension(0, height)), gbc)
 }
 
@@ -267,21 +278,28 @@ fun addSpacerRow(grid: JPanel, height: Int = DesignTokens.Spacing.xs) {
  * [subtitle] in [DesignTokens.Typography.body] + [DesignTokens.Colors.onSurfaceVariant];
  * [DesignTokens.Spacing.xs] gap between them. Outer border: EmptyBorder([DesignTokens.Spacing.sectionPad]).
  */
-fun sectionPanel(title: String, subtitle: String, content: JComponent): JPanel {
-    val header = JPanel().apply {
-        layout = BoxLayout(this, BoxLayout.Y_AXIS)
-        background = DesignTokens.Colors.surface
-    }
+fun sectionPanel(
+    title: String,
+    subtitle: String,
+    content: JComponent,
+): JPanel {
+    val header =
+        JPanel().apply {
+            layout = BoxLayout(this, BoxLayout.Y_AXIS)
+            background = DesignTokens.Colors.surface
+        }
 
-    val titleLabel = JLabel(title).apply {
-        font = DesignTokens.Typography.sectionTitle
-        foreground = DesignTokens.Colors.onSurface
-    }
+    val titleLabel =
+        JLabel(title).apply {
+            font = DesignTokens.Typography.sectionTitle
+            foreground = DesignTokens.Colors.onSurface
+        }
 
-    val subtitleLabel = JLabel(subtitle).apply {
-        font = DesignTokens.Typography.body
-        foreground = DesignTokens.Colors.onSurfaceVariant
-    }
+    val subtitleLabel =
+        JLabel(subtitle).apply {
+            font = DesignTokens.Typography.body
+            foreground = DesignTokens.Colors.onSurfaceVariant
+        }
 
     header.add(titleLabel)
     header.add(Box.createRigidArea(Dimension(0, DesignTokens.Spacing.xs)))
@@ -289,12 +307,13 @@ fun sectionPanel(title: String, subtitle: String, content: JComponent): JPanel {
 
     return JPanel(BorderLayout()).apply {
         background = DesignTokens.Colors.surface
-        border = EmptyBorder(
-            DesignTokens.Spacing.sectionPad,
-            DesignTokens.Spacing.sectionPad,
-            DesignTokens.Spacing.sectionPad,
-            DesignTokens.Spacing.sectionPad,
-        )
+        border =
+            EmptyBorder(
+                DesignTokens.Spacing.sectionPad,
+                DesignTokens.Spacing.sectionPad,
+                DesignTokens.Spacing.sectionPad,
+                DesignTokens.Spacing.sectionPad,
+            )
         add(header, BorderLayout.NORTH)
         add(content, BorderLayout.CENTER)
     }
@@ -309,10 +328,11 @@ fun sectionPanel(title: String, subtitle: String, content: JComponent): JPanel {
  * [DesignTokens.Colors.onSurfaceVariant] foreground. For multi-line help text, use an `<html>`
  * prefix in [text].
  */
-fun helpLabel(text: String): JLabel = JLabel(text).apply {
-    font = DesignTokens.Typography.caption
-    foreground = DesignTokens.Colors.onSurfaceVariant
-}
+fun helpLabel(text: String): JLabel =
+    JLabel(text).apply {
+        font = DesignTokens.Typography.caption
+        foreground = DesignTokens.Colors.onSurfaceVariant
+    }
 
 // -------------------------------------------------------------------------------------------------
 // 7. primaryButton
@@ -324,14 +344,15 @@ fun helpLabel(text: String): JLabel = JLabel(text).apply {
  * Background: [DesignTokens.Colors.primary]. Foreground: [DesignTokens.Colors.onPrimary].
  * Font: [DesignTokens.Typography.body]. No border paint; focus ring uses L&F default.
  */
-fun primaryButton(label: String): JButton = JButton(label).apply {
-    font = DesignTokens.Typography.body
-    background = DesignTokens.Colors.primary
-    foreground = DesignTokens.Colors.onPrimary
-    isBorderPainted = false
-    isFocusPainted = true
-    isOpaque = true
-}
+fun primaryButton(label: String): JButton =
+    JButton(label).apply {
+        font = DesignTokens.Typography.body
+        background = DesignTokens.Colors.primary
+        foreground = DesignTokens.Colors.onPrimary
+        isBorderPainted = false
+        isFocusPainted = true
+        isOpaque = true
+    }
 
 // -------------------------------------------------------------------------------------------------
 // 8. secondaryButton
@@ -343,12 +364,13 @@ fun primaryButton(label: String): JButton = JButton(label).apply {
  * Background: [DesignTokens.Colors.surface]. Foreground: [DesignTokens.Colors.primary].
  * Border: [LineBorder] with [DesignTokens.Colors.border] and 1 px rounded.
  */
-fun secondaryButton(label: String): JButton = JButton(label).apply {
-    font = DesignTokens.Typography.body
-    background = DesignTokens.Colors.surface
-    foreground = DesignTokens.Colors.primary
-    border = LineBorder(DesignTokens.Colors.border, 1, true)
-}
+fun secondaryButton(label: String): JButton =
+    JButton(label).apply {
+        font = DesignTokens.Typography.body
+        background = DesignTokens.Colors.surface
+        foreground = DesignTokens.Colors.primary
+        border = LineBorder(DesignTokens.Colors.border, 1, true)
+    }
 
 // -------------------------------------------------------------------------------------------------
 // 9. buildTabPanel
@@ -362,16 +384,18 @@ fun secondaryButton(label: String): JButton = JButton(label).apply {
  * Sections are separated by 8 px ([DesignTokens.Spacing.sm]) rigid-area gaps.
  */
 fun buildTabPanel(sections: List<JComponent>): JScrollPane {
-    val content = JPanel().apply {
-        layout = BoxLayout(this, BoxLayout.Y_AXIS)
-        background = DesignTokens.Colors.surface
-        border = EmptyBorder(
-            DesignTokens.Spacing.lg,
-            DesignTokens.Spacing.lg,
-            DesignTokens.Spacing.lg,
-            DesignTokens.Spacing.lg,
-        )
-    }
+    val content =
+        JPanel().apply {
+            layout = BoxLayout(this, BoxLayout.Y_AXIS)
+            background = DesignTokens.Colors.surface
+            border =
+                EmptyBorder(
+                    DesignTokens.Spacing.lg,
+                    DesignTokens.Spacing.lg,
+                    DesignTokens.Spacing.lg,
+                    DesignTokens.Spacing.lg,
+                )
+        }
 
     sections.forEachIndexed { index, section ->
         content.add(section)
@@ -399,15 +423,20 @@ fun buildTabPanel(sections: List<JComponent>): JScrollPane {
  * Rounded rect is painted in [JLabel.paintComponent] via [Graphics2D.fillRoundRect] with 6 px arc.
  * Font: [DesignTokens.Typography.caption]. Padding: EmptyBorder(2, 6, 2, 6).
  */
-fun toolBadge(label: String, style: BadgeStyle): JLabel {
-    val bgColor = when (style) {
-        BadgeStyle.NATIVE -> DesignTokens.Colors.badgeNative
-        BadgeStyle.FULL -> DesignTokens.Colors.badgeFull
-    }
-    val fgColor = when (style) {
-        BadgeStyle.NATIVE -> DesignTokens.Colors.statusSuccess
-        BadgeStyle.FULL -> DesignTokens.Colors.onSurfaceVariant
-    }
+fun toolBadge(
+    label: String,
+    style: BadgeStyle,
+): JLabel {
+    val bgColor =
+        when (style) {
+            BadgeStyle.NATIVE -> DesignTokens.Colors.badgeNative
+            BadgeStyle.FULL -> DesignTokens.Colors.badgeFull
+        }
+    val fgColor =
+        when (style) {
+            BadgeStyle.NATIVE -> DesignTokens.Colors.statusSuccess
+            BadgeStyle.FULL -> DesignTokens.Colors.onSurfaceVariant
+        }
 
     return object : JLabel(label) {
         override fun paintComponent(g: Graphics) {
@@ -415,10 +444,11 @@ fun toolBadge(label: String, style: BadgeStyle): JLabel {
             g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
             // Re-read the current theme color at paint time so the background always reflects the
             // active Burp theme, even if the panel was created under a different theme (FLAG-10-01).
-            g2d.color = when (style) {
-                BadgeStyle.NATIVE -> DesignTokens.Colors.badgeNative
-                BadgeStyle.FULL -> DesignTokens.Colors.badgeFull
-            }
+            g2d.color =
+                when (style) {
+                    BadgeStyle.NATIVE -> DesignTokens.Colors.badgeNative
+                    BadgeStyle.FULL -> DesignTokens.Colors.badgeFull
+                }
             g2d.fillRoundRect(0, 0, width, height, 6, 6)
             super.paintComponent(g)
         }
@@ -427,10 +457,11 @@ fun toolBadge(label: String, style: BadgeStyle): JLabel {
         // The background is already resolved at paint time in paintComponent above.
         override fun updateUI() {
             super.updateUI()
-            foreground = when (style) {
-                BadgeStyle.NATIVE -> DesignTokens.Colors.statusSuccess
-                BadgeStyle.FULL -> DesignTokens.Colors.onSurfaceVariant
-            }
+            foreground =
+                when (style) {
+                    BadgeStyle.NATIVE -> DesignTokens.Colors.statusSuccess
+                    BadgeStyle.FULL -> DesignTokens.Colors.onSurfaceVariant
+                }
         }
     }.apply {
         isOpaque = false

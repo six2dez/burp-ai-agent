@@ -654,8 +654,9 @@ private fun Server.registerToolsLegacy(
         ensureAllowedProxyHistoryCount(count, context.proxyHistoryMaxItemsPerRequest)
         val includeRaw = context.allowUnpreprocessedProxyHistory && includeUnpreprocessedResponse
         val items = api.proxy().history()
-        val seq = orderedProxyHistory(items, context) { it.request()?.toString().orEmpty() }
-            .let { s -> if (listenerPort != null) s.filter { it.listenerPort() == listenerPort } else s }
+        val seq =
+            orderedProxyHistory(items, context) { it.request()?.toString().orEmpty() }
+                .let { s -> if (listenerPort != null) s.filter { it.listenerPort() == listenerPort } else s }
         val preprocess =
             context.responsePreprocessorSettings().copy(
                 preprocessProxyHistory = !includeRaw,
@@ -1867,8 +1868,17 @@ object McpToolExecutor {
                                 context.responsePreprocessorSettings().copy(
                                     preprocessProxyHistory = !includeRaw,
                                 )
-                            val seq = orderedProxyHistory(items, context) { it.request()?.toString().orEmpty() }
-                                .let { s -> if (input.listenerPort != null) s.filter { it.listenerPort() == input.listenerPort } else s }
+                            val seq =
+                                orderedProxyHistory(items, context) { it.request()?.toString().orEmpty() }
+                                    .let { s ->
+                                        if (input.listenerPort !=
+                                            null
+                                        ) {
+                                            s.filter { it.listenerPort() == input.listenerPort }
+                                        } else {
+                                            s
+                                        }
+                                    }
                             // 07-03 D-03: filter by Burp scope when mcpScopeOnly is on.
                             val scoped = McpScopeFilter.filterInScope(seq, { it.request()?.url() }, context)
                             context.limitedJoin(
@@ -2071,8 +2081,9 @@ object McpToolExecutor {
                         }
                         "ai_analyze" -> {
                             val input = decode<AiAnalyzeInput>(normalizedArgs)
-                            val supervisor = context.supervisor
-                                ?: return@runTool "AI tools not initialized."
+                            val supervisor =
+                                context.supervisor
+                                    ?: return@runTool "AI tools not initialized."
                             if (!supervisor.isAiEnabled()) {
                                 return@runTool "AI features unavailable: check that your Burp edition supports AI " +
                                     "and the 'Use AI' toggle is enabled. Non-AI backends remain usable via the chat panel."
@@ -2108,18 +2119,21 @@ object McpToolExecutor {
                                 return@runTool "AI features unavailable: check that your Burp edition supports AI " +
                                     "and the 'Use AI' toggle is enabled. Non-AI backends remain usable via the chat panel."
                             }
-                            val scanner = context.passiveScanner
-                                ?: return@runTool "Passive scanner not available."
+                            val scanner =
+                                context.passiveScanner
+                                    ?: return@runTool "Passive scanner not available."
+
                             @Suppress("UNCHECKED_CAST")
                             val allHistory: List<burp.api.montoya.http.message.HttpRequestResponse> =
                                 api.proxy().history() as List<burp.api.montoya.http.message.HttpRequestResponse>
-                            val filtered = if (input.siteMapUrl != null) {
-                                allHistory.filter { reqRes ->
-                                    runCatching { reqRes.request().url().contains(input.siteMapUrl) }.getOrDefault(false)
+                            val filtered =
+                                if (input.siteMapUrl != null) {
+                                    allHistory.filter { reqRes ->
+                                        runCatching { reqRes.request().url().contains(input.siteMapUrl) }.getOrDefault(false)
+                                    }
+                                } else {
+                                    allHistory
                                 }
-                            } else {
-                                allHistory
-                            }
                             val requests = filtered.take(input.maxRequests)
                             if (requests.isEmpty()) return@runTool "No matching requests found."
                             val count = scanner.manualScan(requests)
@@ -2127,8 +2141,9 @@ object McpToolExecutor {
                         }
                         "ai_findings_recent" -> {
                             val input = decode<AiFindingsRecentInput>(normalizedArgs)
-                            val scanner = context.passiveScanner
-                                ?: return@runTool "Passive scanner not available."
+                            val scanner =
+                                context.passiveScanner
+                                    ?: return@runTool "Passive scanner not available."
                             val findings = scanner.getLastFindings(input.n)
                             if (findings.isEmpty()) return@runTool "No findings recorded yet."
                             findings.joinToString("\n\n") { f ->
@@ -2143,8 +2158,9 @@ object McpToolExecutor {
                         }
                         "ai_audit_query" -> {
                             val input = decode<AiAuditQueryInput>(normalizedArgs)
-                            val logger = context.aiRequestLogger
-                                ?: return@runTool "Audit logging not configured."
+                            val logger =
+                                context.aiRequestLogger
+                                    ?: return@runTool "Audit logging not configured."
                             val entries = logger.entries().takeLast(input.n)
                             if (entries.isEmpty()) return@runTool "No audit entries recorded."
                             entries.joinToString("\n") { e ->

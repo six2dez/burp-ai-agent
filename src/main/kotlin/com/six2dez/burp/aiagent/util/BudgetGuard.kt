@@ -17,7 +17,6 @@ package com.six2dez.burp.aiagent.util
  * never surprise-blocks (SC4c).
  */
 object BudgetGuard {
-
     /** Budget decision returned by [evaluate]. */
     enum class State {
         /** Both thresholds are 0 (unlimited) OR usage is below the warn threshold. No action needed. */
@@ -37,7 +36,11 @@ object BudgetGuard {
      * - A threshold of 0 means "unlimited / off" — it never fires.
      * - This function has no side effects; callers handle the state transitions.
      */
-    fun evaluate(usedTokens: Long, warnThreshold: Int, hardCap: Int): State =
+    fun evaluate(
+        usedTokens: Long,
+        warnThreshold: Int,
+        hardCap: Int,
+    ): State =
         when {
             hardCap > 0 && usedTokens >= hardCap -> State.CAP
             warnThreshold > 0 && usedTokens >= warnThreshold -> State.WARN
@@ -52,6 +55,7 @@ object BudgetGuard {
      * (`TokenTracker.kt:109-110`); no additional arithmetic is needed here.
      */
     fun currentSessionTokens(): Long =
-        TokenTracker.snapshot()
+        TokenTracker
+            .snapshot()
             .sumOf { it.inputTokensEstimated + it.outputTokensEstimated }
 }

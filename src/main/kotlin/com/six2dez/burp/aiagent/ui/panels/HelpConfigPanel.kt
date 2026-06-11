@@ -30,12 +30,13 @@ class HelpConfigPanel(
         val helpPane = JEditorPane("text/html", helpHtml)
         helpPane.isEditable = false
         helpPane.isOpaque = false
-        helpPane.border = EmptyBorder(
-            DesignTokens.Spacing.sectionPad,
-            DesignTokens.Spacing.sectionPad,
-            DesignTokens.Spacing.sectionPad,
-            DesignTokens.Spacing.sectionPad,
-        )
+        helpPane.border =
+            EmptyBorder(
+                DesignTokens.Spacing.sectionPad,
+                DesignTokens.Spacing.sectionPad,
+                DesignTokens.Spacing.sectionPad,
+                DesignTokens.Spacing.sectionPad,
+            )
         helpPane.addHyperlinkListener { event ->
             if (event.eventType != javax.swing.event.HyperlinkEvent.EventType.ACTIVATED) return@addHyperlinkListener
             val urlText = event.url?.toString().orEmpty()

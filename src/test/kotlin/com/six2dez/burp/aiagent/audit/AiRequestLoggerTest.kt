@@ -1,7 +1,9 @@
 package com.six2dez.burp.aiagent.audit
 
 import com.six2dez.burp.aiagent.backends.TokenUsage
-import org.junit.jupiter.api.Assertions.*
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.nio.file.Files

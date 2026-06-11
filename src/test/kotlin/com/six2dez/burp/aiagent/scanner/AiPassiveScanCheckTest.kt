@@ -16,7 +16,6 @@ import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 
 class AiPassiveScanCheckTest {
-
     /**
      * Verifies that doCheck() returns synchronously (without blocking on AI).
      *

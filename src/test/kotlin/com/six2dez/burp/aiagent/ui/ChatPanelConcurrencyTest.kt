@@ -72,9 +72,10 @@ class ChatPanelConcurrencyTest {
     @Test
     fun sessionMaps_noDataRaceUnderEdtConfinement() {
         // Single-thread executor stands in for the AWT Event Dispatch Thread.
-        val edtExecutor = Executors.newSingleThreadExecutor { r ->
-            Thread(r, "fake-EDT").also { it.isDaemon = true }
-        }
+        val edtExecutor =
+            Executors.newSingleThreadExecutor { r ->
+                Thread(r, "fake-EDT").also { it.isDaemon = true }
+            }
 
         // The session map — confined to edtExecutor (the fake EDT).
         val sessionMap = linkedMapOf<String, String>()
@@ -174,11 +175,12 @@ class ChatPanelConcurrencyTest {
         val callerThread = Thread.currentThread()
 
         // Mirror ChatPanel.shutdown(): if off-EDT, marshal via invokeAndWait; else run inline.
-        val work = Runnable {
-            executed.set(true)
-            ranOnEdt.set(javax.swing.SwingUtilities.isEventDispatchThread())
-            ranOnCallingThread.set(Thread.currentThread() === callerThread)
-        }
+        val work =
+            Runnable {
+                executed.set(true)
+                ranOnEdt.set(javax.swing.SwingUtilities.isEventDispatchThread())
+                ranOnCallingThread.set(Thread.currentThread() === callerThread)
+            }
 
         // Sanity: this test thread is NOT the EDT, so the off-EDT branch is the one under test.
         assertFalse(javax.swing.SwingUtilities.isEventDispatchThread(), "test must run off the EDT")

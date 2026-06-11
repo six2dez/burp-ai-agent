@@ -106,7 +106,7 @@ object ContextPreviewDialog {
                 JOptionPane.PLAIN_MESSAGE,
                 null,
                 options,
-                options[1],   // Cancel = default focus, regardless of tripwire state
+                options[1], // Cancel = default focus, regardless of tripwire state
             )
         // Boolean return contract preserved (G3 / FLAG-15-03): false routes ChatPanel.kt:299 to
         // the "cancelled by user" path. The secret_tripwire_allow audit event is emitted by the

@@ -67,6 +67,7 @@ object Redaction {
                 "x-session-token|session-token|x-csrf-token|csrf-token|x-xsrf-token" +
                 "):\\s*.+$",
         )
+
     // The trailing =* captures base64/base64url padding on the token. The token char-class
     // excludes '=', so =* greedily consumes ANY run of '=' immediately after the token — including
     // '=' that merely follow the credential (WR-04). This is intentional and fail-safe: it
@@ -154,7 +155,8 @@ object Redaction {
     // eviction). Used for INNER per-salt maps only; the OUTER ConcurrentHashMap stays unbounded.
     private fun <K, V> boundedLru(maxEntries: Int): MutableMap<K, V> =
         java.util.Collections.synchronizedMap(
-            object : LinkedHashMap<K, V>(16, 0.75f, /* accessOrder = */ true) {
+            // accessOrder = true (access-ordered LRU)
+            object : LinkedHashMap<K, V>(16, 0.75f, true) {
                 override fun removeEldestEntry(eldest: Map.Entry<K, V>): Boolean = size > maxEntries
             },
         )
@@ -293,16 +295,18 @@ object Redaction {
         salt: String,
         recordMapping: Boolean = true,
     ): String {
-        val prk = hkdfExtract(
-            salt.toByteArray(StandardCharsets.UTF_8),
-            host.toByteArray(StandardCharsets.UTF_8),
-        )
-        val okm = hkdfExpand(
-            prk,
-            HKDF_INFO.toByteArray(StandardCharsets.UTF_8),
-            HKDF_OKM_LEN,
-        )
-        val short = okm.joinToString("") { "%02x".format(it) }  // 6 bytes → 12 hex chars
+        val prk =
+            hkdfExtract(
+                salt.toByteArray(StandardCharsets.UTF_8),
+                host.toByteArray(StandardCharsets.UTF_8),
+            )
+        val okm =
+            hkdfExpand(
+                prk,
+                HKDF_INFO.toByteArray(StandardCharsets.UTF_8),
+                HKDF_OKM_LEN,
+            )
+        val short = okm.joinToString("") { "%02x".format(it) } // 6 bytes → 12 hex chars
         val anon = "host-$short.local"
         if (recordMapping) {
             // REL-02/SC5b: inner map is bounded LRU (cap HOST_MAP_CAP); outer map + computeIfAbsent/

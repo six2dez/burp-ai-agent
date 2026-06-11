@@ -55,7 +55,9 @@ class MainTab(
     private val mcpStatusLabel = JLabel("MCP: -")
     private val backendStatusLabel = JLabel("AI: ?")
     private val activeScanStatsLabel = JLabel("Scans: 0 | Vulns: 0")
-    private val safetyIndicator = com.six2dez.burp.aiagent.ui.components.SafetyIndicator()
+    private val safetyIndicator =
+        com.six2dez.burp.aiagent.ui.components
+            .SafetyIndicator()
 
     private val statusLabel = JLabel("Idle")
     private val sessionLabel = JLabel("Session: -")

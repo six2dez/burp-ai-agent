@@ -8,7 +8,6 @@ import org.junit.jupiter.api.Test
 // Tests run headless (no AWT) and reference SecretTripwire + Entropy, which are created in
 // Tasks 2 and 3 (RED state until those implementations exist).
 class SecretTripwireTest {
-
     // ── SC1: known-shape detection (AKIA AWS key via SecretShapes) ────────────────────────────
 
     @Test

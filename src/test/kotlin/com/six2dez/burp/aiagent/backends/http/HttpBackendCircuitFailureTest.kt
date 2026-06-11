@@ -30,7 +30,6 @@ import java.util.concurrent.atomic.AtomicReference
  * Also includes direct unit coverage for isRetryableHttpStatus.
  */
 class HttpBackendCircuitFailureTest {
-
     // --- isRetryableHttpStatus unit tests --------------------------------------------------------
 
     @Test
@@ -89,17 +88,18 @@ class HttpBackendCircuitFailureTest {
     fun `OpenAiCompatible 429 responses open the circuit breaker after threshold`() {
         val transport = stub429Transport()
         val backend = OpenAiCompatibleBackend(id = "openai-compatible", displayName = "OpenAI-compatible")
-        val conn = backend.launch(
-            BackendLaunchConfig(
-                backendId = "openai-compatible",
-                displayName = "OpenAI-compatible",
-                baseUrl = "https://example.test/v1",
-                model = "gpt-4o",
-                headers = emptyMap(),
-                requestTimeoutSeconds = 30L,
-                transport = transport,
-            ),
-        )
+        val conn =
+            backend.launch(
+                BackendLaunchConfig(
+                    backendId = "openai-compatible",
+                    displayName = "OpenAI-compatible",
+                    baseUrl = "https://example.test/v1",
+                    model = "gpt-4o",
+                    headers = emptyMap(),
+                    requestTimeoutSeconds = 30L,
+                    transport = transport,
+                ),
+            )
         val errors = (1..6).map { sendAndAwait(conn) }
         assertTrue(
             errors.any { it?.message?.contains("circuit open") == true },
@@ -111,16 +111,17 @@ class HttpBackendCircuitFailureTest {
     fun `AnthropicBackend 429 responses open the circuit breaker after threshold`() {
         val transport = stub429Transport()
         val backend = AnthropicBackend()
-        val conn = backend.launch(
-            BackendLaunchConfig(
-                backendId = "anthropic",
-                displayName = "Anthropic",
-                model = "claude-3-5-sonnet-20241022",
-                headers = emptyMap(),
-                requestTimeoutSeconds = 30L,
-                transport = transport,
-            ),
-        )
+        val conn =
+            backend.launch(
+                BackendLaunchConfig(
+                    backendId = "anthropic",
+                    displayName = "Anthropic",
+                    model = "claude-3-5-sonnet-20241022",
+                    headers = emptyMap(),
+                    requestTimeoutSeconds = 30L,
+                    transport = transport,
+                ),
+            )
         val errors = (1..6).map { sendAndAwait(conn) }
         assertTrue(
             errors.any { it?.message?.contains("circuit open") == true },
@@ -132,17 +133,18 @@ class HttpBackendCircuitFailureTest {
     fun `OllamaBackend 429 responses open the circuit breaker after threshold`() {
         val transport = stub429Transport()
         val backend = OllamaBackend()
-        val conn = backend.launch(
-            BackendLaunchConfig(
-                backendId = "ollama",
-                displayName = "Ollama",
-                baseUrl = "http://127.0.0.1:11434",
-                model = "llama3",
-                headers = emptyMap(),
-                requestTimeoutSeconds = 30L,
-                transport = transport,
-            ),
-        )
+        val conn =
+            backend.launch(
+                BackendLaunchConfig(
+                    backendId = "ollama",
+                    displayName = "Ollama",
+                    baseUrl = "http://127.0.0.1:11434",
+                    model = "llama3",
+                    headers = emptyMap(),
+                    requestTimeoutSeconds = 30L,
+                    transport = transport,
+                ),
+            )
         val errors = (1..6).map { sendAndAwait(conn) }
         assertTrue(
             errors.any { it?.message?.contains("circuit open") == true },
@@ -154,17 +156,18 @@ class HttpBackendCircuitFailureTest {
     fun `LmStudioBackend 429 responses open the circuit breaker after threshold`() {
         val transport = stub429Transport()
         val backend = LmStudioBackend()
-        val conn = backend.launch(
-            BackendLaunchConfig(
-                backendId = "lmstudio",
-                displayName = "LM Studio",
-                baseUrl = "http://127.0.0.1:1234",
-                model = "local-model",
-                headers = emptyMap(),
-                requestTimeoutSeconds = 30L,
-                transport = transport,
-            ),
-        )
+        val conn =
+            backend.launch(
+                BackendLaunchConfig(
+                    backendId = "lmstudio",
+                    displayName = "LM Studio",
+                    baseUrl = "http://127.0.0.1:1234",
+                    model = "local-model",
+                    headers = emptyMap(),
+                    requestTimeoutSeconds = 30L,
+                    transport = transport,
+                ),
+            )
         val errors = (1..6).map { sendAndAwait(conn) }
         assertTrue(
             errors.any { it?.message?.contains("circuit open") == true },
@@ -176,17 +179,18 @@ class HttpBackendCircuitFailureTest {
     fun `400 response does NOT open the circuit breaker`() {
         val transport = stub4xxTransport(400)
         val backend = OpenAiCompatibleBackend(id = "openai-compatible", displayName = "OpenAI-compatible")
-        val conn = backend.launch(
-            BackendLaunchConfig(
-                backendId = "openai-compatible",
-                displayName = "OpenAI-compatible",
-                baseUrl = "https://example.test/v1",
-                model = "gpt-4o",
-                headers = emptyMap(),
-                requestTimeoutSeconds = 30L,
-                transport = transport,
-            ),
-        )
+        val conn =
+            backend.launch(
+                BackendLaunchConfig(
+                    backendId = "openai-compatible",
+                    displayName = "OpenAI-compatible",
+                    baseUrl = "https://example.test/v1",
+                    model = "gpt-4o",
+                    headers = emptyMap(),
+                    requestTimeoutSeconds = 30L,
+                    transport = transport,
+                ),
+            )
         val errors = (1..6).map { sendAndAwait(conn) }
         // None of the errors should be a "circuit open" message — 400 is non-transient
         assertFalse(

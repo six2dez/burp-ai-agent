@@ -3,6 +3,7 @@ package com.six2dez.burp.aiagent.ui
 import burp.api.montoya.MontoyaApi
 import com.six2dez.burp.aiagent.agents.AgentProfileLoader
 import com.six2dez.burp.aiagent.audit.ActivityType
+import com.six2dez.burp.aiagent.audit.AuditLogger
 import com.six2dez.burp.aiagent.backends.AgentConnection
 import com.six2dez.burp.aiagent.backends.ChatMessage
 import com.six2dez.burp.aiagent.backends.UsageAwareConnection
@@ -13,17 +14,15 @@ import com.six2dez.burp.aiagent.mcp.McpRequestLimiter
 import com.six2dez.burp.aiagent.mcp.McpToolCatalog
 import com.six2dez.burp.aiagent.mcp.McpToolContext
 import com.six2dez.burp.aiagent.mcp.tools.McpToolExecutor
-import com.six2dez.burp.aiagent.audit.AuditLogger
-import com.six2dez.burp.aiagent.redact.Entropy
 import com.six2dez.burp.aiagent.redact.PrivacyMode
 import com.six2dez.burp.aiagent.redact.SecretTripwire
+import com.six2dez.burp.aiagent.scanner.PassiveAiScanner
 import com.six2dez.burp.aiagent.supervisor.AgentSupervisor
 import com.six2dez.burp.aiagent.ui.components.ActionCard
 import com.six2dez.burp.aiagent.ui.components.ContextPreviewDialog
 import com.six2dez.burp.aiagent.ui.components.PrivacyPill
-import com.six2dez.burp.aiagent.ui.components.ToolInvocationDialog
-import com.six2dez.burp.aiagent.scanner.PassiveAiScanner
 import com.six2dez.burp.aiagent.ui.components.SubtleNotice
+import com.six2dez.burp.aiagent.ui.components.ToolInvocationDialog
 import com.six2dez.burp.aiagent.util.BudgetGuard
 import com.six2dez.burp.aiagent.util.GuardedBy
 import com.six2dez.burp.aiagent.util.TokenTracker
@@ -102,10 +101,18 @@ class ChatPanel(
     private val inputArea = JTextArea(3, 24)
     private val newSessionBtn = JButton("New Session")
     private val privacyPill = PrivacyPill()
-    @GuardedBy("EDT") private val sessionPanels = linkedMapOf<String, SessionPanel>()
-    @GuardedBy("EDT") private val sessionStates = linkedMapOf<String, ToolSessionState>()
-    @GuardedBy("EDT") private val sessionsById = linkedMapOf<String, ChatSession>()
-    @GuardedBy("EDT") private val sessionDrafts = linkedMapOf<String, String>()
+
+    @GuardedBy("EDT")
+    private val sessionPanels = linkedMapOf<String, SessionPanel>()
+
+    @GuardedBy("EDT")
+    private val sessionStates = linkedMapOf<String, ToolSessionState>()
+
+    @GuardedBy("EDT")
+    private val sessionsById = linkedMapOf<String, ChatSession>()
+
+    @GuardedBy("EDT")
+    private val sessionDrafts = linkedMapOf<String, String>()
     private var mcpAvailable = true
     private var activeSessionId: String? = null
     private var suppressDraftSync = false
@@ -611,12 +618,15 @@ class ChatPanel(
                             BudgetGuard.State.CAP ->
                                 budgetNotice.setMessage(
                                     SubtleNotice.Level.RISK,
-                                    "Token budget reached (${formatChars(used)}/${formatChars(cap.toLong())}). Passive scanning paused; chat is still available.",
+                                    "Token budget reached (${formatChars(
+                                        used,
+                                    )}/${formatChars(cap.toLong())}). Passive scanning paused; chat is still available.",
                                 )
-                            BudgetGuard.State.WARN -> budgetNotice.setMessage(
-                                SubtleNotice.Level.WARN,
-                                "Token budget warning: ${formatChars(used)} of ${formatChars(warn.toLong())} tokens used this session.",
-                            )
+                            BudgetGuard.State.WARN ->
+                                budgetNotice.setMessage(
+                                    SubtleNotice.Level.WARN,
+                                    "Token budget warning: ${formatChars(used)} of ${formatChars(warn.toLong())} tokens used this session.",
+                                )
                             BudgetGuard.State.OFF -> budgetNotice.hideNotice()
                         }
                     }
@@ -781,7 +791,7 @@ class ChatPanel(
                 sessionsModel.removeElement(session)
                 // Clean persisted data
                 try {
-                    projectData().setString(SESSION_MSG_KEY_PREFIX + session.id, "")
+                    projectData().setString(sessionMsgKeyPrefix + session.id, "")
                 } catch (_: Exception) {
                 }
             }
@@ -985,7 +995,7 @@ class ChatPanel(
         }
         // Remove persisted messages for this session
         try {
-            projectData().deleteString(SESSION_MSG_KEY_PREFIX + selected.id)
+            projectData().deleteString(sessionMsgKeyPrefix + selected.id)
         } catch (_: Exception) {
         }
     }
@@ -1290,10 +1300,10 @@ class ChatPanel(
 
     // ── Persistence: save/restore chat sessions via Burp preferences ──
 
-    private val SESSIONS_KEY = "chat.sessions"
-    private val SESSION_MSG_KEY_PREFIX = "chat.messages."
-    private val SESSION_DRAFTS_KEY = "chat.drafts"
-    private val MIGRATED_KEY = "chat.migrated_to_project"
+    private val sessionsKey = "chat.sessions"
+    private val sessionMsgKeyPrefix = "chat.messages."
+    private val sessionDraftsKey = "chat.drafts"
+    private val migratedKey = "chat.migrated_to_project"
 
     /** Project-scoped storage: extensionData() is saved inside the .burp project file. */
     private fun projectData(): burp.api.montoya.persistence.PersistedObject = api.persistence().extensionData()
@@ -1356,7 +1366,7 @@ class ChatPanel(
                         append(s.totalCharsOut)
                     }
                 }
-            prefs.setString(SESSIONS_KEY, sessionList.joinToString("\n"))
+            prefs.setString(sessionsKey, sessionList.joinToString("\n"))
 
             // Save messages for each session
             for (s in sessionsById.values) {
@@ -1364,14 +1374,14 @@ class ChatPanel(
                     s.messages.joinToString("\u001F") { msg ->
                         "${msg.role}\u001E${msg.content.replace("\n", "\u001D")}"
                     }
-                prefs.setString(SESSION_MSG_KEY_PREFIX + s.id, msgData)
+                prefs.setString(sessionMsgKeyPrefix + s.id, msgData)
             }
             val draftsData =
                 sessionsById.keys.map { id ->
                     val draft = sessionDrafts[id].orEmpty().replace("\n", "\u001D")
                     "$id\u001E$draft"
                 }
-            prefs.setString(SESSION_DRAFTS_KEY, draftsData.joinToString("\n"))
+            prefs.setString(sessionDraftsKey, draftsData.joinToString("\n"))
 
             api.logging().logToOutput("[ChatPanel] Saved ${sessionsById.size} sessions with messages.")
         } catch (e: Exception) {
@@ -1383,7 +1393,7 @@ class ChatPanel(
         try {
             val prefs = projectData()
             maybeMigrateGlobalToProject(prefs)
-            val raw = prefs.getString(SESSIONS_KEY) ?: return
+            val raw = prefs.getString(sessionsKey) ?: return
             if (raw.isBlank()) return
             val lines = raw.split('\n').filter { it.isNotBlank() }
             if (lines.isEmpty()) return
@@ -1412,7 +1422,7 @@ class ChatPanel(
 
                 // Restore messages
                 val messages = mutableListOf<ChatMessage>()
-                val msgRaw = prefs.getString(SESSION_MSG_KEY_PREFIX + id)
+                val msgRaw = prefs.getString(sessionMsgKeyPrefix + id)
                 if (!msgRaw.isNullOrBlank()) {
                     for (msgEntry in msgRaw.split("\u001F")) {
                         val msgParts = msgEntry.split("\u001E", limit = 2)
@@ -1460,7 +1470,7 @@ class ChatPanel(
                 }
             }
 
-            val draftsRaw = prefs.getString(SESSION_DRAFTS_KEY).orEmpty()
+            val draftsRaw = prefs.getString(sessionDraftsKey).orEmpty()
             if (draftsRaw.isNotBlank()) {
                 draftsRaw
                     .split('\n')
@@ -1487,44 +1497,44 @@ class ChatPanel(
 
     private fun maybeMigrateGlobalToProject(projectStore: burp.api.montoya.persistence.PersistedObject) {
         try {
-            val already = projectStore.getBoolean(MIGRATED_KEY) ?: false
+            val already = projectStore.getBoolean(migratedKey) ?: false
             if (already) return
 
             val globalPrefs = api.persistence().preferences()
-            val raw = globalPrefs.getString(SESSIONS_KEY).orEmpty()
+            val raw = globalPrefs.getString(sessionsKey).orEmpty()
             if (raw.isNotBlank()) {
-                projectStore.setString(SESSIONS_KEY, raw)
+                projectStore.setString(sessionsKey, raw)
                 val lines = raw.split('\n').filter { it.isNotBlank() }
                 for (line in lines) {
                     val parts = line.split('\t')
                     if (parts.isEmpty()) continue
                     val id = parts[0]
                     if (id.isBlank()) continue
-                    val msgRaw = globalPrefs.getString(SESSION_MSG_KEY_PREFIX + id)
+                    val msgRaw = globalPrefs.getString(sessionMsgKeyPrefix + id)
                     if (!msgRaw.isNullOrBlank()) {
-                        projectStore.setString(SESSION_MSG_KEY_PREFIX + id, msgRaw)
+                        projectStore.setString(sessionMsgKeyPrefix + id, msgRaw)
                     }
                 }
 
-                val draftsRaw = globalPrefs.getString(SESSION_DRAFTS_KEY)
+                val draftsRaw = globalPrefs.getString(sessionDraftsKey)
                 if (!draftsRaw.isNullOrBlank()) {
-                    projectStore.setString(SESSION_DRAFTS_KEY, draftsRaw)
+                    projectStore.setString(sessionDraftsKey, draftsRaw)
                 }
 
                 // Clear global after migration
-                globalPrefs.setString(SESSIONS_KEY, "")
-                globalPrefs.setString(SESSION_DRAFTS_KEY, "")
+                globalPrefs.setString(sessionsKey, "")
+                globalPrefs.setString(sessionDraftsKey, "")
                 for (line in lines) {
                     val parts = line.split('\t')
                     if (parts.isEmpty()) continue
                     val id = parts[0]
                     if (id.isNotBlank()) {
-                        globalPrefs.setString(SESSION_MSG_KEY_PREFIX + id, "")
+                        globalPrefs.setString(sessionMsgKeyPrefix + id, "")
                     }
                 }
             }
 
-            projectStore.setBoolean(MIGRATED_KEY, true)
+            projectStore.setBoolean(migratedKey, true)
         } catch (e: Exception) {
             api.logging().logToError("[ChatPanel] Failed to migrate global chat sessions: ${e.message}")
         }

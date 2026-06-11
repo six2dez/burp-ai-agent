@@ -94,9 +94,9 @@ class CliBackend(
         private val cliTimeoutSeconds: Int = Defaults.CLI_PROCESS_TIMEOUT_SECONDS,
     ) : SessionAwareConnection {
         private val executor = Executors.newSingleThreadExecutor()
-        private val _cliSessionId = AtomicReference<String?>(initialCliSessionId)
+        private val cliSessionIdRef = AtomicReference<String?>(initialCliSessionId)
 
-        override fun cliSessionId(): String? = _cliSessionId.get()
+        override fun cliSessionId(): String? = cliSessionIdRef.get()
 
         override fun isAlive(): Boolean = true
 
@@ -117,7 +117,8 @@ class CliBackend(
                         if (backendId == "codex-cli") {
                             // REL-02: deleteOnExit() registers a JVM shutdown hook as crash-safety net;
                             // the finally block below (:274-288) is the primary cleanup path.
-                            java.io.File.createTempFile("burp-ai-agent-codex", ".txt")
+                            java.io.File
+                                .createTempFile("burp-ai-agent-codex", ".txt")
                                 .also { it.deleteOnExit() }
                         } else {
                             null
@@ -126,7 +127,7 @@ class CliBackend(
                     // Build transcript for stateless CLIs
                     val promptToSend: String
                     val promptFile: java.io.File?
-                    val combinedText = if (_cliSessionId.get() == null) finalText else text
+                    val combinedText = if (cliSessionIdRef.get() == null) finalText else text
                     if ((backendId == "claude-cli" || backendId == "copilot-cli") &&
                         combinedText.length > Defaults.LARGE_PROMPT_THRESHOLD
                     ) {
@@ -189,8 +190,7 @@ class CliBackend(
                                     } else {
                                         ProcessBuilder.Redirect.PIPE
                                     },
-                                )
-                                .directory(java.io.File(System.getProperty("user.home")))
+                                ).directory(java.io.File(System.getProperty("user.home")))
                                 .start()
 
                         if (!stdinText.isNullOrBlank()) {
@@ -517,7 +517,7 @@ class CliBackend(
             if (!args.contains("-p") && !args.contains("--print")) {
                 args.add("-p")
             }
-            val currentSessionId = _cliSessionId.get()
+            val currentSessionId = cliSessionIdRef.get()
             if (currentSessionId != null) {
                 // Follow-up message: resume existing conversation
                 args.add("--resume")
@@ -528,14 +528,14 @@ class CliBackend(
                     java.util.UUID
                         .randomUUID()
                         .toString()
-                if (_cliSessionId.compareAndSet(null, newId)) {
+                if (cliSessionIdRef.compareAndSet(null, newId)) {
                     args.add("--session-id")
                     args.add(newId)
                 } else {
                     // Another thread won the race — resume their session
                     args.add("--resume")
                     args.add(
-                        _cliSessionId.get()
+                        cliSessionIdRef.get()
                             ?: throw IllegalStateException("CLI session ID lost between CAS and read"),
                     )
                 }

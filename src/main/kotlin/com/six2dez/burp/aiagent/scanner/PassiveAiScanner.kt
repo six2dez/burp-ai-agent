@@ -66,7 +66,10 @@ class PassiveAiScanner(
     /** CAP-04: per-process budget pause gate. Starts false each Burp run (reversible). */
     private val budgetPaused = AtomicBoolean(false)
 
-    fun setBudgetPaused(on: Boolean) { budgetPaused.set(on) }
+    fun setBudgetPaused(on: Boolean) {
+        budgetPaused.set(on)
+    }
+
     fun isBudgetPaused(): Boolean = budgetPaused.get()
 
     /**
@@ -912,7 +915,8 @@ class PassiveAiScanner(
             // PRIV-03 (Phase 15): tripwire scan on the FINAL post-redaction prompt (G1/G8).
             // Detect + audit-log on match via the single SecretTripwire helper (WR-03 — one
             // payload shape across all hooks); NEVER block — fall through to supervisor.send (SC2).
-            SecretTripwire.detectAndBuild(singlePrompt, path = "passive_scanner", sessionId = supervisor.currentSessionId())
+            SecretTripwire
+                .detectAndBuild(singlePrompt, path = "passive_scanner", sessionId = supervisor.currentSessionId())
                 ?.let { AuditLogger.emitGlobal("secret_tripwire_detect", it) }
             // NO blocking — fall through to supervisor.send (SC2 / non-interactive path).
 
@@ -1569,7 +1573,8 @@ $batchMetadata
         // PRIV-03 (Phase 15): tripwire scan on the FINAL post-redaction batch prompt (G1/G8).
         // Detect + audit-log on match via the single SecretTripwire helper (WR-03 — one payload
         // shape across all hooks); NEVER block — fall through to supervisor.send (SC2).
-        SecretTripwire.detectAndBuild(prompt, path = "passive_scanner", sessionId = supervisor.currentSessionId())
+        SecretTripwire
+            .detectAndBuild(prompt, path = "passive_scanner", sessionId = supervisor.currentSessionId())
             ?.let { AuditLogger.emitGlobal("secret_tripwire_detect", it) }
         // NO blocking — fall through to supervisor.send (SC2 / non-interactive path).
 
@@ -1662,7 +1667,8 @@ $batchMetadata
         // PRIV-03 (Phase 15): tripwire scan on the FINAL post-redaction prompt (G1/G8).
         // Detect + audit-log on match via the single SecretTripwire helper (WR-03 — one payload
         // shape across all hooks); NEVER block — fall through to supervisor.send (SC2).
-        SecretTripwire.detectAndBuild(prompt, path = "passive_scanner", sessionId = supervisor.currentSessionId())
+        SecretTripwire
+            .detectAndBuild(prompt, path = "passive_scanner", sessionId = supervisor.currentSessionId())
             ?.let { AuditLogger.emitGlobal("secret_tripwire_detect", it) }
         // NO blocking — fall through to supervisor.send (SC2 / non-interactive path).
 

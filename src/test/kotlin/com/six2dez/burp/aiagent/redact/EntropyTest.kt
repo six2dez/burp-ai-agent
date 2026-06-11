@@ -1,7 +1,6 @@
 package com.six2dez.burp.aiagent.redact
 
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -9,7 +8,6 @@ import org.junit.jupiter.api.Test
 // and truncatedScore format. All tests run headless (no AWT) and reference the not-yet-created
 // Entropy object (RED state until Task 2 creates the implementation).
 class EntropyTest {
-
     // A string of 32 identical characters has zero entropy (only one symbol, no uncertainty).
     @Test
     fun shannonOfConstantStringIsZero() {

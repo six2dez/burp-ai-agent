@@ -42,7 +42,6 @@ import org.mockito.kotlin.whenever
  *    runTool dispatch. This verifies the filter is wired end-to-end in the manual path.
  */
 class ProxyHistoryListenerPortFilterTest {
-
     // ── Fixtures ─────────────────────────────────────────────────────────────────
 
     private val host8080 = "port8080.example.com"
@@ -106,11 +105,12 @@ class ProxyHistoryListenerPortFilterTest {
 
         // The decode path uses kotlinx-serialization with camelCase field names.
         // The MCP JSON parameter name matches the Kotlin field name: listenerPort (camelCase).
-        val result = McpToolExecutor.executeTool(
-            "proxy_http_history",
-            "{\"count\":10,\"listenerPort\":8080}",
-            context,
-        )
+        val result =
+            McpToolExecutor.executeTool(
+                "proxy_http_history",
+                "{\"count\":10,\"listenerPort\":8080}",
+                context,
+            )
 
         assertTrue(result.contains(host8080), "8080 host must be present: $result")
         assertFalse(result.contains(host8081), "8081 host must be absent: $result")
@@ -122,13 +122,14 @@ class ProxyHistoryListenerPortFilterTest {
         val context = contextWith(api)
 
         // Must not throw (no-match is an empty result, NOT an error).
-        val result = assertDoesNotThrow<String> {
-            McpToolExecutor.executeTool(
-                "proxy_http_history",
-                "{\"count\":10,\"listenerPort\":9999}",
-                context,
-            )
-        }
+        val result =
+            assertDoesNotThrow<String> {
+                McpToolExecutor.executeTool(
+                    "proxy_http_history",
+                    "{\"count\":10,\"listenerPort\":9999}",
+                    context,
+                )
+            }
 
         assertFalse(result.startsWith("Error:"), "No-match must not return an error: $result")
         assertFalse(result.contains(host8080), "8080 items must not appear: $result")
@@ -140,11 +141,12 @@ class ProxyHistoryListenerPortFilterTest {
         val api = stubApi(mixedItems())
         val context = contextWith(api)
 
-        val result = McpToolExecutor.executeTool(
-            "proxy_http_history",
-            "{\"count\":10}",
-            context,
-        )
+        val result =
+            McpToolExecutor.executeTool(
+                "proxy_http_history",
+                "{\"count\":10}",
+                context,
+            )
 
         assertTrue(result.contains(host8080), "8080 host must be present: $result")
         assertTrue(result.contains(host8081), "8081 host must be present: $result")

@@ -10,7 +10,16 @@ import java.awt.FlowLayout
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import javax.swing.*
+import javax.swing.BorderFactory
+import javax.swing.JButton
+import javax.swing.JDialog
+import javax.swing.JLabel
+import javax.swing.JOptionPane
+import javax.swing.JPanel
+import javax.swing.JScrollPane
+import javax.swing.JTable
+import javax.swing.SwingUtilities
+import javax.swing.Timer
 import javax.swing.border.EmptyBorder
 import javax.swing.table.AbstractTableModel
 
@@ -48,12 +57,13 @@ object ActiveScanQueuePanel {
             layout = BorderLayout(DesignTokens.Spacing.sm + 2, DesignTokens.Spacing.sm + 2)
             minimumSize = Dimension(900, 360)
             preferredSize = Dimension(1024, 460)
-            rootPane.border = BorderFactory.createEmptyBorder(
-                DesignTokens.Spacing.md,
-                DesignTokens.Spacing.md,
-                DesignTokens.Spacing.md,
-                DesignTokens.Spacing.md,
-            )
+            rootPane.border =
+                BorderFactory.createEmptyBorder(
+                    DesignTokens.Spacing.md,
+                    DesignTokens.Spacing.md,
+                    DesignTokens.Spacing.md,
+                    DesignTokens.Spacing.md,
+                )
 
             val infoLabel = JLabel("Queued active scanner targets (snapshot). Select rows to cancel specific items.")
             infoLabel.font = DesignTokens.Typography.body
@@ -132,7 +142,8 @@ object ActiveScanQueuePanel {
             if (outlined) {
                 button.border = BorderFactory.createLineBorder(DesignTokens.Colors.border, 1, true)
             } else {
-                button.border = EmptyBorder(DesignTokens.Spacing.sm - 2, DesignTokens.Spacing.md, DesignTokens.Spacing.sm - 2, DesignTokens.Spacing.md)
+                button.border =
+                    EmptyBorder(DesignTokens.Spacing.sm - 2, DesignTokens.Spacing.md, DesignTokens.Spacing.sm - 2, DesignTokens.Spacing.md)
             }
         }
 

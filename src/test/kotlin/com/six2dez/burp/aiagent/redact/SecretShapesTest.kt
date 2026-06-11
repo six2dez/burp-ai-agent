@@ -15,7 +15,6 @@ import org.junit.jupiter.api.Test
  * exact-set equality so the tests are robust to minor wording changes in category names.
  */
 class SecretShapesTest {
-
     // ── Positive: each curated shape must be detected ────────────────────────────────────────
 
     @Test

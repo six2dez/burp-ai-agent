@@ -12,7 +12,12 @@ import com.six2dez.burp.aiagent.config.Defaults
 import com.six2dez.burp.aiagent.redact.PrivacyMode
 import com.six2dez.burp.aiagent.supervisor.AgentSupervisor
 import com.six2dez.burp.aiagent.util.IssueUtils
-import java.util.concurrent.*
+import java.util.concurrent.Callable
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
@@ -541,7 +546,9 @@ class ActiveAiScanner(
                                     originalResponse = target.originalRequest,
                                     exploitResponse = modifiedRequestResponse,
                                     confidence = 85,
-                                    evidence = "Time-based detection: baseline=${baselineTime}ms, payload=${responseTime}ms (expected delay: ${expectedDelay}ms)",
+                                    evidence =
+                                        "Time-based detection: baseline=${baselineTime}ms, " +
+                                            "payload=${responseTime}ms (expected delay: ${expectedDelay}ms)",
                                     confirmed = true,
                                 )
                             } else {
@@ -1127,7 +1134,8 @@ class ActiveAiScanner(
                 issueLock.unlock()
             }
             api.logging().logToOutput(
-                "[ActiveAiScanner] CONFIRMED: ${target.vulnHint.vulnClass.name} in '${target.injectionPoint.name}' (${confirmation.confidence}%)",
+                "[ActiveAiScanner] CONFIRMED: ${target.vulnHint.vulnClass.name} in " +
+                    "'${target.injectionPoint.name}' (${confirmation.confidence}%)",
             )
 
             // Record in knowledge base
@@ -1323,7 +1331,7 @@ class ActiveAiScanner(
 
     // ==================== 403 BYPASS ====================
 
-    private val MIN_BYPASS_BODY_DELTA = 50 // minimum body length difference to consider bypass meaningful
+    private val minBypassBodyDelta = 50 // minimum body length difference to consider bypass meaningful
 
     private val bypassHeaders =
         listOf(
@@ -1374,7 +1382,7 @@ class ActiveAiScanner(
                     // Require meaningful body length difference from baseline
                     val responseBodyLen = response.response()?.body()?.length() ?: 0
                     val lenDelta = kotlin.math.abs(responseBodyLen - baselineBodyLen)
-                    if (lenDelta < MIN_BYPASS_BODY_DELTA) continue
+                    if (lenDelta < minBypassBodyDelta) continue
 
                     val payload =
                         Payload(
@@ -1420,7 +1428,7 @@ class ActiveAiScanner(
                     // Require meaningful body length difference from baseline
                     val responseBodyLen = response.response()?.body()?.length() ?: 0
                     val lenDelta = kotlin.math.abs(responseBodyLen - baselineBodyLen)
-                    if (lenDelta < MIN_BYPASS_BODY_DELTA) continue
+                    if (lenDelta < minBypassBodyDelta) continue
 
                     val payload =
                         Payload(
@@ -1439,7 +1447,9 @@ class ActiveAiScanner(
                             originalResponse = baseline,
                             exploitResponse = modifiedRR,
                             confidence = 90,
-                            evidence = "403 bypass via path manipulation: $path -> $variation (403 -> $status, body delta: $lenDelta bytes)",
+                            evidence =
+                                "403 bypass via path manipulation: $path -> $variation " +
+                                    "(403 -> $status, body delta: $lenDelta bytes)",
                             confirmed = true,
                         ),
                     )
@@ -1470,7 +1480,7 @@ class ActiveAiScanner(
                     // Require meaningful body length difference from baseline
                     val responseBodyLen = response.response()?.body()?.length() ?: 0
                     val lenDelta = kotlin.math.abs(responseBodyLen - baselineBodyLen)
-                    if (lenDelta < MIN_BYPASS_BODY_DELTA) continue
+                    if (lenDelta < minBypassBodyDelta) continue
 
                     val payload =
                         Payload(
@@ -1489,7 +1499,9 @@ class ActiveAiScanner(
                             originalResponse = baseline,
                             exploitResponse = modifiedRR,
                             confidence = 85,
-                            evidence = "403 bypass via method switch: ${request.method()} -> $method (403 -> $status, body delta: $lenDelta bytes)",
+                            evidence =
+                                "403 bypass via method switch: ${request.method()} -> $method " +
+                                    "(403 -> $status, body delta: $lenDelta bytes)",
                             confirmed = true,
                         ),
                     )

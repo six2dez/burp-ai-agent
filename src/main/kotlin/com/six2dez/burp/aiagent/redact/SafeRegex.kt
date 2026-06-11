@@ -38,8 +38,10 @@ private class DeadlineCharSequence(
         return inner[index]
     }
 
-    override fun subSequence(startIndex: Int, endIndex: Int): CharSequence =
-        DeadlineCharSequence(inner.subSequence(startIndex, endIndex), deadlineNanos)
+    override fun subSequence(
+        startIndex: Int,
+        endIndex: Int,
+    ): CharSequence = DeadlineCharSequence(inner.subSequence(startIndex, endIndex), deadlineNanos)
 
     override fun toString(): String = inner.toString()
 }

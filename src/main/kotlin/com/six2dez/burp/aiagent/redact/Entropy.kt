@@ -28,7 +28,6 @@ import kotlin.math.ln
  * entropy-derived value that appears in audit events or the UI — never the token itself.
  */
 object Entropy {
-
     // Minimum token length to be considered for entropy qualification (inclusive).
     // Tokens shorter than this are skipped to avoid false-positives on short identifiers.
     private const val MIN_TOKEN_LEN = 20

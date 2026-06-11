@@ -6,10 +6,8 @@ import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import com.six2dez.burp.aiagent.config.CustomPromptDefinition
 import com.six2dez.burp.aiagent.config.CustomPromptTag
 import com.six2dez.burp.aiagent.ui.UiTheme
-import java.awt.CardLayout
-import javax.swing.SwingConstants
-import javax.swing.border.EmptyBorder as SwingEmptyBorder
 import java.awt.BorderLayout
+import java.awt.CardLayout
 import java.awt.Dimension
 import java.awt.GridLayout
 import java.io.File
@@ -30,9 +28,11 @@ import javax.swing.JTextArea
 import javax.swing.JTextField
 import javax.swing.ListCellRenderer
 import javax.swing.ListSelectionModel
+import javax.swing.SwingConstants
 import javax.swing.event.DocumentEvent
 import javax.swing.event.DocumentListener
 import javax.swing.filechooser.FileNameExtensionFilter
+import javax.swing.border.EmptyBorder as SwingEmptyBorder
 
 /**
  * Settings panel widget for managing the persistent custom prompt library.

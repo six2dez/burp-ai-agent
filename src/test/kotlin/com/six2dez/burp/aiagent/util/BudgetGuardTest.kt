@@ -10,9 +10,8 @@ import org.junit.jupiter.api.Test
  * currentSessionTokens(): delegation to TokenTracker.snapshot()
  */
 class BudgetGuardTest {
-
-    private val TEST_FLOW = "budget-guard-test-flow"
-    private val TEST_BACKEND = "budget-guard-test-backend"
+    private val testFlow = "budget-guard-test-flow"
+    private val testBackend = "budget-guard-test-backend"
 
     @AfterEach
     fun clearTokenTracker() {
@@ -93,13 +92,13 @@ class BudgetGuardTest {
     fun currentSessionTokens_afterRecord_matchesSummedEstimated() {
         // Record known amounts to a test-specific flow/backend so we can verify the sum
         TokenTracker.record(
-            flow = TEST_FLOW,
-            backendId = TEST_BACKEND,
-            inputChars = 400,   // 400/4.0 = 100 input tokens estimated
-            outputChars = 200,  // 200/4.0 = 50  output tokens estimated
+            flow = testFlow,
+            backendId = testBackend,
+            inputChars = 400, // 400/4.0 = 100 input tokens estimated
+            outputChars = 200, // 200/4.0 = 50  output tokens estimated
         )
 
-        val snapshot = TokenTracker.snapshot().filter { it.flow == TEST_FLOW && it.backendId == TEST_BACKEND }
+        val snapshot = TokenTracker.snapshot().filter { it.flow == testFlow && it.backendId == testBackend }
         assertEquals(1, snapshot.size, "Snapshot must include test flow entry")
         val expected = snapshot.sumOf { it.inputTokensEstimated + it.outputTokensEstimated }
         val actual = BudgetGuard.currentSessionTokens()

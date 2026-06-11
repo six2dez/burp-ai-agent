@@ -22,13 +22,12 @@ import org.junit.jupiter.api.Test
  * These are headless pure-unit tests — no AWT, no mocks needed (payload builder has no deps).
  */
 class SecretTripwireHooksTest {
-
     // A well-known AWS access key format that SecretShapes covers.
     private val awsToken = "AKIAIOSFODNN7EXAMPLE"
 
     // A high-entropy base64 string (≥ 20 chars, entropy ≥ 4.5) that trips the Entropy heuristic.
     // Uses 48 distinct base64 chars → entropy ~log2(48) ≈ 5.6 bits/char, well above the 4.5 threshold.
-    private val highEntropyB64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuv"  // len=48, all-base64, high entropy
+    private val highEntropyB64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuv" // len=48, all-base64, high entropy
 
     // A plain innocuous payload that should not match any detector.
     private val cleanPayload = "GET /api/users HTTP/1.1\nHost: example.com"

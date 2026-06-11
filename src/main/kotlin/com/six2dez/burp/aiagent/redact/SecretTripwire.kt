@@ -24,7 +24,6 @@ package com.six2dez.burp.aiagent.redact
  * redaction inside this object — the payload is already final at the call site (RESEARCH G8).
  */
 object SecretTripwire {
-
     /**
      * Result of a tripwire scan.
      *

@@ -26,14 +26,25 @@ object MarkdownRenderer {
             html.replace(CODE_BLOCK_REGEX) { m ->
                 val lang = m.groupValues[1]
                 val code = m.groupValues[2].trimEnd()
-                val langTag = if (lang.isNotBlank()) "<div style='font-size:${codeFontSize - 1}px;color:$blockquoteFg;margin-bottom:2px;'>$lang</div>" else ""
-                "$langTag<pre style='background-color:$codeBg;padding:8px 10px;font-family:Monospaced;font-size:${codeFontSize}px;border-radius:4px;overflow-x:auto;white-space:pre-wrap;word-wrap:break-word;margin:4px 0;'><code>$code</code></pre>"
+                val langTag =
+                    if (lang.isNotBlank()) {
+                        "<div style='font-size:${codeFontSize - 1}px;color:$blockquoteFg;margin-bottom:2px;'>$lang</div>"
+                    } else {
+                        ""
+                    }
+                val preStyle =
+                    "background-color:$codeBg;padding:8px 10px;font-family:Monospaced;" +
+                        "font-size:${codeFontSize}px;border-radius:4px;overflow-x:auto;" +
+                        "white-space:pre-wrap;word-wrap:break-word;margin:4px 0;"
+                "$langTag<pre style='$preStyle'><code>$code</code></pre>"
             }
 
         // Inline code (`...`)
         html =
             html.replace(INLINE_CODE_REGEX) { m ->
-                "<code style='background-color:$inlineCodeBg;padding:1px 4px;font-family:Monospaced;font-size:${codeFontSize}px;border-radius:3px;'>${m.groupValues[1]}</code>"
+                "<code style='background-color:$inlineCodeBg;padding:1px 4px;" +
+                    "font-family:Monospaced;font-size:${codeFontSize}px;border-radius:3px;'>" +
+                    "${m.groupValues[1]}</code>"
             }
 
         // Headings (### before ## before #)
@@ -53,7 +64,8 @@ object MarkdownRenderer {
         // Blockquotes (> text) — must be before line break processing
         html =
             html.replace(BLOCKQUOTE_REGEX) { m ->
-                "<div style='border-left:3px solid $blockquoteBorder;padding:2px 8px;margin:4px 0;color:$blockquoteFg;font-style:italic;'>${m.groupValues[1]}</div>"
+                "<div style='border-left:3px solid $blockquoteBorder;padding:2px 8px;" +
+                    "margin:4px 0;color:$blockquoteFg;font-style:italic;'>${m.groupValues[1]}</div>"
             }
 
         // Unordered lists (- item or * item at start of line)

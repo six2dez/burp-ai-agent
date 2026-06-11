@@ -116,7 +116,11 @@ class SecretCipherTest {
         // Build a well-formed Base64 payload but with version byte 0x02 (unknown future version).
         val fakeEnvelope = ByteArray(1 + 12 + 32)
         fakeEnvelope[0] = 0x02 // wrong version
-        val corrupted = "ENC1:" + java.util.Base64.getEncoder().encodeToString(fakeEnvelope)
+        val corrupted =
+            "ENC1:" +
+                java.util.Base64
+                    .getEncoder()
+                    .encodeToString(fakeEnvelope)
         assertEquals("", cipher.decrypt(corrupted), "unknown envelope version must fail soft to empty string")
     }
 

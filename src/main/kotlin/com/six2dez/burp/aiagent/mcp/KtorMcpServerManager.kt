@@ -11,15 +11,21 @@ import com.six2dez.burp.aiagent.scanner.PassiveAiScanner
 import com.six2dez.burp.aiagent.supervisor.AgentSupervisor
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
-import io.ktor.server.application.*
-import io.ktor.server.engine.*
+import io.ktor.server.application.ApplicationCallPipeline
+import io.ktor.server.application.install
+import io.ktor.server.application.intercept
+import io.ktor.server.engine.EmbeddedServer
 import io.ktor.server.engine.applicationEnvironment
 import io.ktor.server.engine.connector
+import io.ktor.server.engine.embeddedServer
 import io.ktor.server.engine.sslConnector
-import io.ktor.server.netty.*
-import io.ktor.server.plugins.cors.routing.*
-import io.ktor.server.response.*
-import io.ktor.server.routing.*
+import io.ktor.server.netty.Netty
+import io.ktor.server.plugins.cors.routing.CORS
+import io.ktor.server.response.respond
+import io.ktor.server.response.respondText
+import io.ktor.server.routing.get
+import io.ktor.server.routing.post
+import io.ktor.server.routing.routing
 import io.modelcontextprotocol.kotlin.sdk.Implementation
 import io.modelcontextprotocol.kotlin.sdk.ServerCapabilities
 import io.modelcontextprotocol.kotlin.sdk.server.Server
@@ -235,17 +241,18 @@ class KtorMcpServerManager(
         // Terminating the executor here would cause start() to throw RejectedExecutionException on
         // the next restart attempt (the single-thread executor is shared across start/stop cycles).
         // awaitTermination+shutdownNow is correct ONLY in the terminal shutdown() method below.
-        val future = executor.submit {
-            try {
-                server?.stop(1000, 5000)
-                server = null
-                api.logging().logToOutput("Stopped MCP server")
-                callback(McpServerState.Stopped)
-            } catch (e: Exception) {
-                api.logging().logToError(e)
-                callback(McpServerState.Failed(e))
+        val future =
+            executor.submit {
+                try {
+                    server?.stop(1000, 5000)
+                    server = null
+                    api.logging().logToOutput("Stopped MCP server")
+                    callback(McpServerState.Stopped)
+                } catch (e: Exception) {
+                    api.logging().logToError(e)
+                    callback(McpServerState.Failed(e))
+                }
             }
-        }
         try {
             future.get(10, TimeUnit.SECONDS)
         } catch (e: TimeoutException) {

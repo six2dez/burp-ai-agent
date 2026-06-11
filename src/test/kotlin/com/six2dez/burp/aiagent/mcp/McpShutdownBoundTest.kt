@@ -27,12 +27,10 @@ import java.util.concurrent.atomic.AtomicReference
  * standard suite.
  */
 class McpShutdownBoundTest {
-
     // Allow up to 15 s for stop to complete in CI (actual bound in production is ~10 s)
     private val stopTimeoutSeconds = 15L
 
-    private fun freePort(): Int =
-        ServerSocket(0).use { it.localPort }
+    private fun freePort(): Int = ServerSocket(0).use { it.localPort }
 
     private fun defaultSettings(port: Int): McpSettings =
         McpSettings(

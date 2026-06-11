@@ -86,13 +86,13 @@ object JsEndpointExtractor {
         val origin = "${base.scheme}://${base.host}${if (base.port > 0 && base.port != 443 && base.port != 80) ":${base.port}" else ""}"
 
         for (endpoint in endpoints) {
-            val resolved_url =
+            val resolvedUrl =
                 when {
                     endpoint.startsWith("http://") || endpoint.startsWith("https://") -> endpoint
                     endpoint.startsWith("/") -> "$origin$endpoint"
                     else -> "$origin/$endpoint"
                 }
-            resolved.add(resolved_url)
+            resolved.add(resolvedUrl)
         }
         return resolved
     }

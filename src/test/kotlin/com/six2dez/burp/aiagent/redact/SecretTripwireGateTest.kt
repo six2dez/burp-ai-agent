@@ -9,7 +9,6 @@ import org.junit.jupiter.api.Test
 // All tests run headless (no AWT) — no JOptionPane / JPanel / Swing instantiated here.
 // References: 15-UI-SPEC Delta 1+2, 15-VALIDATION SC5+SC3, 15-02-PLAN Task 1.
 class SecretTripwireGateTest {
-
     // ── SC5: gate decision when ScanResult.matched == true ──────────────────────────────────
 
     @Test

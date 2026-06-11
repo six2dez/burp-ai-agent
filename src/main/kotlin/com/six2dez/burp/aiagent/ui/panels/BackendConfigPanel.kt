@@ -2,16 +2,15 @@ package com.six2dez.burp.aiagent.ui.panels
 
 import com.six2dez.burp.aiagent.ui.components.ToggleSwitch
 import com.six2dez.burp.aiagent.ui.design.DesignTokens
-import com.six2dez.burp.aiagent.util.SsrfGuard
 import com.six2dez.burp.aiagent.ui.design.addRowFull
 import com.six2dez.burp.aiagent.ui.design.addSpacerRow
 import com.six2dez.burp.aiagent.ui.design.applyAreaStyle
 import com.six2dez.burp.aiagent.ui.design.applyFieldStyle
 import com.six2dez.burp.aiagent.ui.design.formGrid
+import com.six2dez.burp.aiagent.util.SsrfGuard
 import java.awt.BorderLayout
 import java.awt.CardLayout
 import java.awt.GridBagConstraints
-import java.awt.GridBagLayout
 import java.awt.Insets
 import javax.swing.JButton
 import javax.swing.JComponent
@@ -375,7 +374,13 @@ class BackendConfigPanel(
 
     private fun buildBurpAiPanel(): JPanel {
         val panel = formGrid()
-        panel.border = EmptyBorder(DesignTokens.Spacing.sectionPad, DesignTokens.Spacing.sectionPad, DesignTokens.Spacing.sectionPad, DesignTokens.Spacing.sectionPad)
+        panel.border =
+            EmptyBorder(
+                DesignTokens.Spacing.sectionPad,
+                DesignTokens.Spacing.sectionPad,
+                DesignTokens.Spacing.sectionPad,
+                DesignTokens.Spacing.sectionPad,
+            )
 
         val info =
             JTextArea(
@@ -407,7 +412,13 @@ class BackendConfigPanel(
 
     private fun buildOllamaPanel(): JPanel {
         val panel = formGrid()
-        panel.border = EmptyBorder(DesignTokens.Spacing.sectionPad, DesignTokens.Spacing.sectionPad, DesignTokens.Spacing.sectionPad, DesignTokens.Spacing.sectionPad)
+        panel.border =
+            EmptyBorder(
+                DesignTokens.Spacing.sectionPad,
+                DesignTokens.Spacing.sectionPad,
+                DesignTokens.Spacing.sectionPad,
+                DesignTokens.Spacing.sectionPad,
+            )
         addRowFull(panel, "Ollama CLI command", ollamaCliCmd)
         addRowFull(
             panel,
@@ -429,7 +440,13 @@ class BackendConfigPanel(
 
     private fun buildOpenCodePanel(): JPanel {
         val panel = formGrid()
-        panel.border = EmptyBorder(DesignTokens.Spacing.sectionPad, DesignTokens.Spacing.sectionPad, DesignTokens.Spacing.sectionPad, DesignTokens.Spacing.sectionPad)
+        panel.border =
+            EmptyBorder(
+                DesignTokens.Spacing.sectionPad,
+                DesignTokens.Spacing.sectionPad,
+                DesignTokens.Spacing.sectionPad,
+                DesignTokens.Spacing.sectionPad,
+            )
         addRowFull(panel, "OpenCode CLI command", opencodeCmd)
         addRowFull(
             panel,
@@ -444,7 +461,13 @@ class BackendConfigPanel(
 
     private fun buildLmStudioPanel(): JPanel {
         val panel = formGrid()
-        panel.border = EmptyBorder(DesignTokens.Spacing.sectionPad, DesignTokens.Spacing.sectionPad, DesignTokens.Spacing.sectionPad, DesignTokens.Spacing.sectionPad)
+        panel.border =
+            EmptyBorder(
+                DesignTokens.Spacing.sectionPad,
+                DesignTokens.Spacing.sectionPad,
+                DesignTokens.Spacing.sectionPad,
+                DesignTokens.Spacing.sectionPad,
+            )
         addRowFull(panel, "LM Studio base URL", lmStudioUrl)
         addRowFull(panel, "", buildButtonRowPanel(buildTestConnectionButton("lmstudio")))
         addRowFull(panel, "LM Studio model", lmStudioModel)
@@ -458,7 +481,13 @@ class BackendConfigPanel(
 
     private fun buildOpenAiCompatPanel(): JPanel {
         val panel = formGrid()
-        panel.border = EmptyBorder(DesignTokens.Spacing.sectionPad, DesignTokens.Spacing.sectionPad, DesignTokens.Spacing.sectionPad, DesignTokens.Spacing.sectionPad)
+        panel.border =
+            EmptyBorder(
+                DesignTokens.Spacing.sectionPad,
+                DesignTokens.Spacing.sectionPad,
+                DesignTokens.Spacing.sectionPad,
+                DesignTokens.Spacing.sectionPad,
+            )
         addRowFull(panel, "Base URL", openAiCompatUrl)
         addRowFull(panel, "", buildButtonRowPanel(buildTestConnectionButton("openai-compatible")))
         addRowFull(panel, "Model", openAiCompatModel)
@@ -471,7 +500,13 @@ class BackendConfigPanel(
 
     private fun buildNvidiaNimPanel(): JPanel {
         val panel = formGrid()
-        panel.border = EmptyBorder(DesignTokens.Spacing.sectionPad, DesignTokens.Spacing.sectionPad, DesignTokens.Spacing.sectionPad, DesignTokens.Spacing.sectionPad)
+        panel.border =
+            EmptyBorder(
+                DesignTokens.Spacing.sectionPad,
+                DesignTokens.Spacing.sectionPad,
+                DesignTokens.Spacing.sectionPad,
+                DesignTokens.Spacing.sectionPad,
+            )
         addRowFull(panel, "Base URL", nvidiaNimUrl)
         addRowFull(panel, "", buildButtonRowPanel(buildTestConnectionButton("nvidia-nim")))
         addRowFull(panel, "Model", nvidiaNimModel)
@@ -484,7 +519,13 @@ class BackendConfigPanel(
 
     private fun buildPerplexityPanel(): JPanel {
         val panel = formGrid()
-        panel.border = EmptyBorder(DesignTokens.Spacing.sectionPad, DesignTokens.Spacing.sectionPad, DesignTokens.Spacing.sectionPad, DesignTokens.Spacing.sectionPad)
+        panel.border =
+            EmptyBorder(
+                DesignTokens.Spacing.sectionPad,
+                DesignTokens.Spacing.sectionPad,
+                DesignTokens.Spacing.sectionPad,
+                DesignTokens.Spacing.sectionPad,
+            )
         addRowFull(panel, "Base URL", perplexityUrl)
         addRowFull(panel, "", buildButtonRowPanel(buildTestConnectionButton("perplexity")))
         addRowFull(panel, "Model", perplexityModel)
@@ -498,12 +539,13 @@ class BackendConfigPanel(
     /** Anthropic card — Model + masked API key + Test connection (no Base URL: FLAG-14-02). */
     private fun buildAnthropicPanel(): JPanel {
         val panel = formGrid()
-        panel.border = EmptyBorder(
-            DesignTokens.Spacing.sectionPad,
-            DesignTokens.Spacing.sectionPad,
-            DesignTokens.Spacing.sectionPad,
-            DesignTokens.Spacing.sectionPad,
-        )
+        panel.border =
+            EmptyBorder(
+                DesignTokens.Spacing.sectionPad,
+                DesignTokens.Spacing.sectionPad,
+                DesignTokens.Spacing.sectionPad,
+                DesignTokens.Spacing.sectionPad,
+            )
         addRowFull(panel, "Model", anthropicModel)
         addRowFull(panel, "API key (Bearer)", anthropicApiKey)
         addRowFull(panel, "", buildButtonRowPanel(buildTestConnectionButton("anthropic")))

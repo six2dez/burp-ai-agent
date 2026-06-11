@@ -21,7 +21,6 @@ import java.util.concurrent.atomic.AtomicReference
  * Verifies SC3: a 400 whose body contains "model" surfaces the exact user-visible error string.
  */
 class AnthropicModelErrorTest {
-
     /** Exact SC3 error string from CONTEXT.md — must not be reworded. */
     private val sc3ErrorMessage = "Anthropic rejected the model ID — check Settings > Anthropic > Model"
 

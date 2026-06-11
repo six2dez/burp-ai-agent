@@ -21,7 +21,6 @@ import org.mockito.kotlin.whenever
  * aiAnalyze_doesNotGateNonAiTool will fail red until Wave 2 implements redact_preview.
  */
 class AiGateMcpToolTest {
-
     @Test
     fun aiAnalyze_returnsErrorWhenIsEnabledFalse() {
         val api = mock<MontoyaApi>(defaultAnswer = Answers.RETURNS_DEEP_STUBS)
@@ -63,11 +62,12 @@ class AiGateMcpToolTest {
         whenever(api.burpSuite().version().edition()).thenReturn(BurpSuiteEdition.PROFESSIONAL)
 
         val context = buildContext(api, supervisor = null)
-        val result = McpToolExecutor.executeTool(
-            "redact_preview",
-            """{"text":"secret@example.com","mode":"STRICT"}""",
-            context,
-        )
+        val result =
+            McpToolExecutor.executeTool(
+                "redact_preview",
+                """{"text":"secret@example.com","mode":"STRICT"}""",
+                context,
+            )
 
         assertFalse(
             result.contains("unavailable", ignoreCase = true),

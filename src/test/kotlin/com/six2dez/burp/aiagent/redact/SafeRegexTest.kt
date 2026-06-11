@@ -68,11 +68,12 @@ class SafeRegexTest {
     // PRIV-02: replaceAllSafe on a benign pattern must apply the replacement correctly.
     @Test
     fun benignReplaceAppliesReplacement() {
-        val result = SafeRegex.replaceAllSafe(
-            "id=12345",
-            Pattern.compile("\\d+"),
-            "[REDACTED]",
-        )
+        val result =
+            SafeRegex.replaceAllSafe(
+                "id=12345",
+                Pattern.compile("\\d+"),
+                "[REDACTED]",
+            )
         assertEquals("id=[REDACTED]", result)
     }
 }

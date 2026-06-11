@@ -26,7 +26,6 @@ import javax.swing.JTextField
  * Contract reference: .planning/phases/09-design-system-foundation/09-UI-SPEC.md
  */
 class DesignComponentsTest {
-
     // -----------------------------------------------------------------------------------------
     // T1 — formGrid returns a non-null JPanel with GridBagLayout (SC5)
     // -----------------------------------------------------------------------------------------

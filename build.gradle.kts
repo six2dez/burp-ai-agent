@@ -73,7 +73,12 @@ abstract class GenerateBuildFlagsTask : DefaultTask() {
 
     @TaskAction
     fun generate() {
-        val pkgDir = outputDir.get().asFile.resolve("com/six2dez/burp/aiagent").also { it.mkdirs() }
+        val pkgDir =
+            outputDir
+                .get()
+                .asFile
+                .resolve("com/six2dez/burp/aiagent")
+                .also { it.mkdirs() }
         pkgDir.resolve("BuildFlags.kt").writeText(
             """
 package com.six2dez.burp.aiagent
@@ -177,11 +182,11 @@ ktlint {
 }
 
 detekt {
-    buildUponDefaultConfig = true          // extend defaults, not replace
-    allRules = false                        // only default ruleset rules
+    buildUponDefaultConfig = true // extend defaults, not replace
+    allRules = false // only default ruleset rules
     baseline = file("detekt-baseline.xml") // committed baseline; generate with: ./gradlew detektBaseline
     parallel = true
-    config.setFrom(files("detekt.yml"))    // project-specific overrides
+    config.setFrom(files("detekt.yml")) // project-specific overrides
 }
 
 tasks.withType<Test> {

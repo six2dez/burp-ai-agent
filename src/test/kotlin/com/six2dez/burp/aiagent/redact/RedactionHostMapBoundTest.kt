@@ -14,7 +14,6 @@ import org.junit.jupiter.api.Test
  * avoid cross-test state bleed.
  */
 class RedactionHostMapBoundTest {
-
     @BeforeEach
     fun resetMappings() {
         Redaction.clearMappings()

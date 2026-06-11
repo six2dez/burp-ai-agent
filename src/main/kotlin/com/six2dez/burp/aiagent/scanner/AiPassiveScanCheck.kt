@@ -28,7 +28,6 @@ class AiPassiveScanCheck(
     private val passiveScanner: PassiveAiScanner,
     private val getSettings: () -> AgentSettings,
 ) : PassiveScanCheck {
-
     override fun checkName(): String = "AI Passive Security Analysis"
 
     /**

@@ -18,7 +18,6 @@ import javax.swing.UIManager
  * Contract reference: `.planning/phases/09-design-system-foundation/09-UI-SPEC.md`
  */
 object DesignTokens {
-
     /**
      * Returns `true` when the active panel background has a luminance below 0.5 (dark theme).
      * Identical logic to `UiTheme.isDarkTheme`.
@@ -125,7 +124,6 @@ object DesignTokens {
      * derived values because no Burp UIManager key maps to those roles.
      */
     object Colors {
-
         /** 60% dominant — panel and form backgrounds. */
         val surface: Color get() = UIManager.getColor("Panel.background") ?: Color(0xFFFBFF)
 

@@ -9,4 +9,6 @@ package com.six2dez.burp.aiagent.util
 // @field: use-site qualifier.
 @Target(AnnotationTarget.FIELD, AnnotationTarget.PROPERTY)
 @Retention(AnnotationRetention.SOURCE)
-annotation class GuardedBy(val lock: String)
+annotation class GuardedBy(
+    val lock: String,
+)

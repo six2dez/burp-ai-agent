@@ -51,16 +51,18 @@ class PromptConfigPanel(
         addRowFull(issueGrid, "Impact & severity", JScrollPane(promptIssueImpact))
         addRowFull(issueGrid, "Full report", JScrollPane(promptIssueFull))
 
-        val requestSection = sectionPanel(
-            "Request prompts",
-            "Built-in prompts for request context-menu actions",
-            requestGrid,
-        )
-        val issueSection = sectionPanel(
-            "Issue prompts",
-            "Built-in prompts for Burp issue analysis actions",
-            issueGrid,
-        )
+        val requestSection =
+            sectionPanel(
+                "Request prompts",
+                "Built-in prompts for request context-menu actions",
+                requestGrid,
+            )
+        val issueSection =
+            sectionPanel(
+                "Issue prompts",
+                "Built-in prompts for Burp issue analysis actions",
+                issueGrid,
+            )
 
         return JPanel().apply {
             layout = BoxLayout(this, BoxLayout.Y_AXIS)

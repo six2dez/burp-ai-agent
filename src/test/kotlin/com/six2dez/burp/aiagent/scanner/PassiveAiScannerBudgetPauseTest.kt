@@ -26,7 +26,6 @@ import java.lang.reflect.Field
  * which would clear the knowledge base and change the user's visible toggle.
  */
 class PassiveAiScannerBudgetPauseTest {
-
     @AfterEach
     fun clearTokenTracker() {
         // TokenTracker is a process-wide singleton; reset its counters so per-session token sums
@@ -39,9 +38,10 @@ class PassiveAiScannerBudgetPauseTest {
     private fun makeScanner(): PassiveAiScanner =
         PassiveAiScanner(
             api = mock<MontoyaApi>(defaultAnswer = Answers.RETURNS_DEEP_STUBS),
-            supervisor = mock<AgentSupervisor>().also { sup ->
-                whenever(sup.isBlockedByBurpAiGate()).thenReturn(false)
-            },
+            supervisor =
+                mock<AgentSupervisor>().also { sup ->
+                    whenever(sup.isBlockedByBurpAiGate()).thenReturn(false)
+                },
             audit = mock<AuditLogger>(),
         ) { TestSettings.baselineSettings() }
 

@@ -18,7 +18,6 @@ import javax.swing.UIManager
  * Components.kt (Plan 02) and is covered by DesignComponentsTest.T1.
  */
 class DesignTokensTest {
-
     // Saves Panel.background before each test that mutates UIManager; restored in @AfterEach.
     private var savedPanelBackground: Color? = null
 
@@ -34,15 +33,16 @@ class DesignTokensTest {
 
     @Test
     fun spacingConstantsArePositiveMultiplesOf4() {
-        val tokens = listOf(
-            "xs" to DesignTokens.Spacing.xs,
-            "sm" to DesignTokens.Spacing.sm,
-            "md" to DesignTokens.Spacing.md,
-            "lg" to DesignTokens.Spacing.lg,
-            "xl" to DesignTokens.Spacing.xl,
-            "sectionPad" to DesignTokens.Spacing.sectionPad,
-            "formGridPad" to DesignTokens.Spacing.formGridPad,
-        )
+        val tokens =
+            listOf(
+                "xs" to DesignTokens.Spacing.xs,
+                "sm" to DesignTokens.Spacing.sm,
+                "md" to DesignTokens.Spacing.md,
+                "lg" to DesignTokens.Spacing.lg,
+                "xl" to DesignTokens.Spacing.xl,
+                "sectionPad" to DesignTokens.Spacing.sectionPad,
+                "formGridPad" to DesignTokens.Spacing.formGridPad,
+            )
         tokens.forEach { (name, value) ->
             assertTrue(value > 0, "Spacing.$name must be positive; got $value")
             assertTrue(value % 4 == 0, "Spacing.$name must be a multiple of 4; got $value")
@@ -144,11 +144,12 @@ class DesignTokensTest {
 
     @Test
     fun allTokensLoadWithoutThrowingHeadless() {
-        val result = runCatching {
-            DesignTokens.Colors.surface
-            DesignTokens.Typography.body
-            DesignTokens.Spacing.lg
-        }
+        val result =
+            runCatching {
+                DesignTokens.Colors.surface
+                DesignTokens.Typography.body
+                DesignTokens.Spacing.lg
+            }
         assertTrue(result.isSuccess, "DesignTokens must not throw in a headless JVM; error: ${result.exceptionOrNull()}")
     }
 }

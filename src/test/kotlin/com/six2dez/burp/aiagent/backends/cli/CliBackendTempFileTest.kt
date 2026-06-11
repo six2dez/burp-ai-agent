@@ -17,13 +17,13 @@ import java.lang.reflect.Field
  *     still triggers cleanup via the JVM shutdown hook (crash-safety net).
  */
 class CliBackendTempFileTest {
-
     // -------- helper: list current temp files matching a prefix --------
 
     private fun tempDir(): File = File(System.getProperty("java.io.tmpdir"))
 
     private fun tempFilesMatching(prefix: String): Set<String> =
-        tempDir().listFiles()
+        tempDir()
+            .listFiles()
             ?.filter { it.name.startsWith(prefix) }
             ?.map { it.absolutePath }
             ?.toSet()

@@ -16,7 +16,6 @@ import org.junit.jupiter.api.Test
  * CopilotCommandBuilderTest) so it can be called directly without reflection.
  */
 class CliTimeoutMessageTest {
-
     @Test
     fun blankTailMessageContainsTimedOut() {
         val msg = buildTimeoutMessage("", timeoutSeconds = 120)

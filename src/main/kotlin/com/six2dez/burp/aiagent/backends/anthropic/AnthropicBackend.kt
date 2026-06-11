@@ -56,8 +56,7 @@ class AnthropicBackend : AiBackend {
     // WR-04: like the other keyed HTTP backends, Anthropic is only "available" once an API key is
     // configured. Without this, a blank key inherits the default isAvailable()=true and the registry
     // maps Unknown + available → Healthy, masking the missing credential until the first 401.
-    override fun isAvailable(settings: com.six2dez.burp.aiagent.config.AgentSettings): Boolean =
-        settings.anthropicApiKey.isNotBlank()
+    override fun isAvailable(settings: com.six2dez.burp.aiagent.config.AgentSettings): Boolean = settings.anthropicApiKey.isNotBlank()
 
     // HealthCheckResult.Unknown = not testable without a live request; the registry calls
     // isAvailable() (now key-gated above), and surfacing a dedicated health-check endpoint would

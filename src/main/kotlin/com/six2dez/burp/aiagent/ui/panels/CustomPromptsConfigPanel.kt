@@ -37,11 +37,12 @@ class CustomPromptsConfigPanel(
 
         // ── Library section: editor + the empty-state hint that the editor renders internally
         // when its master list is empty.
-        val librarySection = sectionPanel(
-            "Custom prompt library",
-            "Manage, search, reorder and export your saved prompts",
-            customPromptLibrarySection,
-        )
+        val librarySection =
+            sectionPanel(
+                "Custom prompt library",
+                "Manage, search, reorder and export your saved prompts",
+                customPromptLibrarySection,
+            )
 
         // ── BountyPrompt integration: toggle + auto-create + threshold paired where it makes
         // sense, prompt directory + enabled IDs full-width because they need horizontal room.
@@ -61,11 +62,12 @@ class CustomPromptsConfigPanel(
             }
         addRowFull(bountyGrid, "Enabled prompt IDs", idsScroll)
 
-        val bountySection = sectionPanel(
-            "BountyPrompt integration",
-            "Auto-create issues from BountyPrompt directory results",
-            bountyGrid,
-        )
+        val bountySection =
+            sectionPanel(
+                "BountyPrompt integration",
+                "Auto-create issues from BountyPrompt directory results",
+                bountyGrid,
+            )
 
         return JPanel().apply {
             layout = BoxLayout(this, BoxLayout.Y_AXIS)

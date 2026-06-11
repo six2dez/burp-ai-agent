@@ -343,7 +343,11 @@ class OllamaBackend : AiBackend {
                             // a blank `message.content` (e.g. `{"message": {}}`) doesn't shadow a real
                             // value in the legacy `response` field.
                             val content =
-                                node.path("message").path("content").asText().takeIf { it.isNotBlank() }
+                                node
+                                    .path("message")
+                                    .path("content")
+                                    .asText()
+                                    .takeIf { it.isNotBlank() }
                                     ?: node.path("response").asText("")
                             val promptTokens = node.path("prompt_eval_count").asInt(-1)
                             val completionTokens = node.path("eval_count").asInt(-1)

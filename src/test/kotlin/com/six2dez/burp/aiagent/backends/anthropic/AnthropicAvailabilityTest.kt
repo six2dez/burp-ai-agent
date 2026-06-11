@@ -12,7 +12,6 @@ import org.junit.jupiter.api.Test
  * the first 401).
  */
 class AnthropicAvailabilityTest {
-
     @Test
     fun isAvailable_blankApiKey_returnsFalse() {
         val backend = AnthropicBackend()

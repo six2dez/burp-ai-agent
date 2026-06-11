@@ -73,8 +73,14 @@ class McpTlsInJvmTest {
     @Test
     fun source_usesEnvPasswordNotLiteralArgv() {
         val src = mcpTlsSource()
-        assertFalse(src.contains("\"-storepass\",\n                passStr") || src.contains("\"-storepass\", passStr"), "no literal -storepass passStr argv")
-        assertFalse(src.contains("\"-keypass\",\n                passStr") || src.contains("\"-keypass\", passStr"), "no literal -keypass passStr argv")
+        assertFalse(
+            src.contains("\"-storepass\",\n                passStr") || src.contains("\"-storepass\", passStr"),
+            "no literal -storepass passStr argv",
+        )
+        assertFalse(
+            src.contains("\"-keypass\",\n                passStr") || src.contains("\"-keypass\", passStr"),
+            "no literal -keypass passStr argv",
+        )
         assertTrue(src.contains("storepass:env"), "must use -storepass:env")
         assertTrue(src.contains("keypass:env"), "must use -keypass:env")
     }

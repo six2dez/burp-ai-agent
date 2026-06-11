@@ -1,6 +1,7 @@
 package com.six2dez.burp.aiagent
 
 import burp.api.montoya.MontoyaApi
+import burp.api.montoya.scanner.scancheck.ScanCheckType
 import burp.api.montoya.ui.contextmenu.AuditIssueContextMenuEvent
 import burp.api.montoya.ui.contextmenu.ContextMenuEvent
 import burp.api.montoya.ui.contextmenu.ContextMenuItemsProvider
@@ -17,7 +18,6 @@ import com.six2dez.burp.aiagent.config.toPreprocessorSettings
 import com.six2dez.burp.aiagent.context.ContextCollector
 import com.six2dez.burp.aiagent.mcp.McpSupervisor
 import com.six2dez.burp.aiagent.redact.Redaction
-import burp.api.montoya.scanner.scancheck.ScanCheckType
 import com.six2dez.burp.aiagent.scanner.ActiveAiScanner
 import com.six2dez.burp.aiagent.scanner.AiPassiveScanCheck
 import com.six2dez.burp.aiagent.scanner.AiScanCheck

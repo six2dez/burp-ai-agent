@@ -171,7 +171,13 @@ class ActiveScanConfigPanel(
             JPanel().apply {
                 layout = BoxLayout(this, BoxLayout.Y_AXIS)
                 background = DesignTokens.Colors.surface
-                border = EmptyBorder(DesignTokens.Spacing.sectionPad, DesignTokens.Spacing.sectionPad, DesignTokens.Spacing.sectionPad, DesignTokens.Spacing.sectionPad)
+                border =
+                    EmptyBorder(
+                        DesignTokens.Spacing.sectionPad,
+                        DesignTokens.Spacing.sectionPad,
+                        DesignTokens.Spacing.sectionPad,
+                        DesignTokens.Spacing.sectionPad,
+                    )
                 add(sectionA)
                 add(Box.createRigidArea(Dimension(0, DesignTokens.Spacing.sm)))
                 add(sectionB)

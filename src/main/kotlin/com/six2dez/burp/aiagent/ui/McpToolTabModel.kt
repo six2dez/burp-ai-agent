@@ -24,7 +24,6 @@ data class ToolGrouping(
  * Consumed by: Plan 02 (Swing rebuild of `buildMcpToolsPanel()`).
  */
 object McpToolTabModel {
-
     /**
      * Splits [tools] into native (extension-native, BApp Store compatible) and generic
      * (Montoya API wrappers, full build only) groups, each sorted ascending by title.
@@ -48,8 +47,7 @@ object McpToolTabModel {
      * This is the sole source of truth for badge assignment; the Swing layer in Plan 02
      * calls this and passes the result to `toolBadge()`.
      */
-    fun badgeStyle(tool: McpToolDescriptor): BadgeStyle =
-        if (tool.nativeTool) BadgeStyle.NATIVE else BadgeStyle.FULL
+    fun badgeStyle(tool: McpToolDescriptor): BadgeStyle = if (tool.nativeTool) BadgeStyle.NATIVE else BadgeStyle.FULL
 
     /**
      * Returns true when [tool] should be visible for the given [query].
@@ -57,7 +55,10 @@ object McpToolTabModel {
      * UI-05: match is case-insensitive against [McpToolDescriptor.title] or
      * [McpToolDescriptor.description]. A blank or whitespace-only [query] matches all tools.
      */
-    fun filterPredicate(query: String, tool: McpToolDescriptor): Boolean {
+    fun filterPredicate(
+        query: String,
+        tool: McpToolDescriptor,
+    ): Boolean {
         val trimmed = query.trim()
         if (trimmed.isEmpty()) return true
         return tool.title.contains(trimmed, ignoreCase = true) ||
