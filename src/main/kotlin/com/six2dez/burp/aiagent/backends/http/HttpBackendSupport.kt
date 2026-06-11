@@ -145,6 +145,18 @@ object HttpBackendSupport {
             else -> 4000
         }
 
+    /** Returns true for status codes that represent transient upstream overload or server errors.
+     *  429 (rate-limited) and 5xx (server error) are retryable signals the circuit breaker should count.
+     *  4xx config errors (400/401/403/404) are non-transient and must NOT trip the breaker. */
+    fun isRetryableHttpStatus(statusCode: Int): Boolean = statusCode == 429 || statusCode in 500..599
+
+    /** Records a circuit-breaker failure if [statusCode] is a retryable HTTP status (429 / 5xx).
+     *  Call on every non-successful HTTP response BEFORE invoking onComplete, so the breaker sees
+     *  upstream overload.  4xx config errors pass through without recording — they are not transient. */
+    fun CircuitBreaker.recordHttpFailureIfRetryable(statusCode: Int) {
+        if (isRetryableHttpStatus(statusCode)) recordFailure()
+    }
+
     fun newCircuitBreaker(): CircuitBreaker =
         CircuitBreaker(
             failureThreshold = CIRCUIT_FAILURE_THRESHOLD,
