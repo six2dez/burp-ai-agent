@@ -54,7 +54,7 @@ Phases 9–11 closed. Features: design system foundation (UI-01), MCP tools tab 
 - [x] **Phase 15: Pre-Send Secret Tripwire** — Post-redaction tripwire scanning final payload for high-entropy secrets before any send; warn-with-confirmation UI; audit-logged allowlist (completed 2026-06-11)
 - [ ] **Phase 16: External MCP Client** — Connect to external/custom MCP servers (SSE + stdio transports); auth tokens encrypted; SSRF guard; untrusted-output trust boundary
 - [x] **Phase 17: Reliability & Concurrency Hardening** — EDT confinement on ChatPanel session maps; CLI temp file cleanup via finally; bounded MCP shutdown; uniform HTTP timeouts/CircuitBreaker; fix CLI timeout bug #71 (completed 2026-06-11)
-- [ ] **Phase 18: Quality Tooling & Build Hardening** — Raise scanner/CLI/cache test coverage; add detekt + blocking ktlint with committed baseline; audit 136 exception-logging sites; fix generateBuildFlags sourceSets wiring
+- [x] **Phase 18: Quality Tooling & Build Hardening** — Raise scanner/CLI/cache test coverage; add detekt + blocking ktlint with committed baseline; audit 136 exception-logging sites; fix generateBuildFlags sourceSets wiring (completed 2026-06-11)
 - [ ] **Phase 19: Mega-File Split + Docs** — Split 3 mega-files (no behaviour change); finalize .planning reconciliation; update user-facing docs for v0.9.0 changes
 
 ## Phase Details
@@ -219,7 +219,7 @@ Plans:
 **Wave 3** *(SC4 + SC5 — both depend on Wave 2 ktlintFormat; file-disjoint, run in parallel)*
 
 - [x] 18-03-PLAN.md — Raise test coverage: PersistentPromptCacheTest, ActiveScannerDedupTest, CliSupervisionTest (SC4/QUAL-03) [wave 3]
-- [ ] 18-04-PLAN.md — Exception audit: annotate/log ~30-50 catch sites in cache/scanner/supervisor/cli; tracking note (SC5/QUAL-04) [wave 3]
+- [x] 18-04-PLAN.md — Exception audit: annotate/log ~30-50 catch sites in cache/scanner/supervisor/cli; tracking note (SC5/QUAL-04) [wave 3]
 
 ### Phase 19: Mega-File Split + Docs
 
@@ -252,5 +252,5 @@ Phase 12 (SEC) must be first. Phase 13 (Privacy) and Phase 12 are sequential (av
 | 15. Pre-Send Secret Tripwire | 3/3 | Complete    | 2026-06-11 |
 | 16. External MCP Client | 0/TBD | Not started | - |
 | 17. Reliability & Concurrency Hardening | 3/3 | Complete    | 2026-06-11 |
-| 18. Quality Tooling & Build Hardening | 3/4 | In Progress|  |
+| 18. Quality Tooling & Build Hardening | 4/4 | Complete   | 2026-06-11 |
 | 19. Mega-File Split + Docs | 0/TBD | Not started | - |
