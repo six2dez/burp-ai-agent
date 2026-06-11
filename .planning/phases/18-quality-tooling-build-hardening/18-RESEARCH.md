@@ -25,9 +25,9 @@ None — phase scope is well-bounded by the five success criteria.
 | ID | Description | Research Support |
 |----|-------------|------------------|
 | QUAL-05 | Fix `generateBuildFlags` so `./gradlew ktlintCheck` runs standalone | SC1: idiomatic Gradle 8 task-provider srcDir wiring eliminates name-match dependsOn |
-| QUAL-02 | Add detekt as blocking CI check with committed baseline | SC2: detekt 1.23.8 + `io.gitlab.arturbosch.detekt` plugin; `detektBaseline` task + `check` dependency |
-| QUAL-02 | Run ktlintFormat mass-format, then flip ktlint to strict | SC3: two-commit sequence; flip `ignoreFailures` default; escape hatch via property |
-| QUAL-03 | Raise test coverage for scanner/cache/cli modules | SC4: `PersistentPromptCacheTest` (zero coverage), scanner dedup, CLI supervision |
+| QUAL-03 | Add detekt as blocking CI check with committed baseline | SC2: detekt 1.23.8 + `io.gitlab.arturbosch.detekt` plugin; `detektBaseline` task + `check` dependency |
+| QUAL-03 | Run ktlintFormat mass-format, then flip ktlint to strict | SC3: two-commit sequence; flip `ignoreFailures` default; escape hatch via property |
+| QUAL-02 | Raise test coverage for scanner/cache/cli modules | SC4: `PersistentPromptCacheTest` (zero coverage), scanner dedup, CLI supervision |
 | QUAL-04 | Audit 183 `catch (...Exception...)` sites: log or annotate | SC5: `// INTENTIONAL:` convention; shared helper wrapping `api.logging().logToError()`; tractable audit scope |
 </phase_requirements>
 
@@ -96,7 +96,7 @@ plugins {
 | Instead of | Could Use | Tradeoff |
 |------------|-----------|----------|
 | detekt 1.23.8 | detekt 2.0.0-alpha.3 | Alpha supports Kotlin 2.3.x but REQUIRES Kotlin plugin bump — BLOCKED |
-| detekt 1.23.8 | ktlint only (no detekt) | Misses logic/complexity rules; QUAL-02 explicitly requires detekt |
+| detekt 1.23.8 | ktlint only (no detekt) | Misses logic/complexity rules; QUAL-03 explicitly requires detekt |
 
 ---
 
@@ -551,22 +551,24 @@ sourceSets.main {
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+All three questions are resolved by the Phase 18 plans; resolutions recorded inline below.
 
 1. **detekt warning severity in this project's CI**
    - What we know: The `kotlin-compiler-embeddable` warning is printed to build output; does not fail the `detekt` task itself.
    - What's unclear: Whether the project's CI configuration has `-Werror`-equivalent flags that could escalate Kotlin warnings to errors.
-   - Recommendation: Run `./gradlew detekt --info 2>&1 | grep -i "embeddable\|warning"` locally before committing, document the warning in the PR.
+   - **RESOLVED:** Plan 18-01 Task 2 runs the A1 verification (`./gradlew detekt --info 2>&1 | grep -i "embeddable\|warning\|error"`) and confirms the embeddable warning is advisory-only BEFORE wiring detekt as a blocking gate; CI workflows are read and confirmed to carry no `-Werror` escalation. A documented fallback exists if the warning is ever treated as an error.
 
 2. **detekt type-resolution scope**
    - What we know: `detekt` (default task) runs WITHOUT type resolution. `detektMain` and `detektTest` have type resolution but require `classpath` and `jvmTarget` configuration. Type-resolution rules catch more bugs but require more setup and run slower.
    - What's unclear: Whether type-resolution rules are wanted for this project.
-   - Recommendation: Start with the default non-type-resolution `detekt` task (faster, less config). Type resolution can be added later.
+   - **RESOLVED:** Use the default non-type-resolution `detekt` task (faster, less config). Type resolution is explicitly deferred out of Phase 18 scope.
 
 3. **Scope of SC5 "one phase"**
    - What we know: 183 sites in 52 files. Auditing all is risky for behavioral regressions in one phase.
    - What's unclear: How many sites the maintainer considers "sufficient" for SC5 success.
-   - Recommendation: Target the 30 highest-value sites in cache/scanner/supervisor/cli (these directly affect diagnosability per REL-04 link in QUAL-04). Document remaining 150+ in the tracking note with `// TODO-AUDIT:` markers.
+   - **RESOLVED:** Plan 18-04 targets the ~30–50 highest-value sites in cache/scanner/supervisor/cli (these directly affect diagnosability per the REL-04 link in QUAL-04). The remaining sites are enumerated in the `.planning/notes/exception-audit.md` tracking note with `// TODO-AUDIT:` markers — satisfying SC5's "audited + documented" criterion without a risky all-at-once rewrite.
 
 ---
 
@@ -597,11 +599,11 @@ sourceSets.main {
 | Req ID | Behavior | Test Type | Automated Command | File Exists? |
 |--------|----------|-----------|-------------------|-------------|
 | QUAL-05 | `ktlintCheck` passes standalone after srcDir fix | build verification | `./gradlew ktlintCheck --no-daemon` | N/A — build task |
-| QUAL-02 | `detekt` runs with baseline, new violations fail | build verification | `./gradlew detekt --no-daemon` | N/A — build task |
-| QUAL-02 | ktlint is blocking gate (strict by default) | build verification | `./gradlew ktlintCheck --no-daemon` | N/A — build task |
-| QUAL-03 | `PersistentPromptCache` get/put/evict round-trip | unit | `./gradlew test --tests "*.PersistentPromptCacheTest" --no-daemon` | No — Wave 0 |
-| QUAL-03 | Scanner dedup prevents re-queuing | unit | `./gradlew test --tests "*.ActiveScannerDedupTest" --no-daemon` | No — Wave 0 |
-| QUAL-03 | CLI supervision handles process timeout | unit | `./gradlew test --tests "*.CliSupervisionTest" --no-daemon` | No — Wave 0 |
+| QUAL-03 | `detekt` runs with baseline, new violations fail | build verification | `./gradlew detekt --no-daemon` | N/A — build task |
+| QUAL-03 | ktlint is blocking gate (strict by default) | build verification | `./gradlew ktlintCheck --no-daemon` | N/A — build task |
+| QUAL-02 | `PersistentPromptCache` get/put/evict round-trip | unit | `./gradlew test --tests "*.PersistentPromptCacheTest" --no-daemon` | No — Wave 0 |
+| QUAL-02 | Scanner dedup prevents re-queuing | unit | `./gradlew test --tests "*.ActiveScannerDedupTest" --no-daemon` | No — Wave 0 |
+| QUAL-02 | CLI supervision handles process timeout | unit | `./gradlew test --tests "*.CliSupervisionTest" --no-daemon` | No — Wave 0 |
 | QUAL-04 | Exception audit tracking note exists | manual | Review `.planning/notes/exception-audit.md` | No — Wave 0 |
 
 ### Sampling Rate
@@ -612,9 +614,9 @@ sourceSets.main {
 
 ### Wave 0 Gaps
 
-- [ ] `src/test/kotlin/com/six2dez/burp/aiagent/cache/PersistentPromptCacheTest.kt` — covers QUAL-03 (cache module)
-- [ ] `src/test/kotlin/com/six2dez/burp/aiagent/scanner/ActiveScannerDedupTest.kt` — covers QUAL-03 (scanner dedup)
-- [ ] `src/test/kotlin/com/six2dez/burp/aiagent/backends/cli/CliSupervisionTest.kt` — covers QUAL-03 (CLI supervision)
+- [ ] `src/test/kotlin/com/six2dez/burp/aiagent/cache/PersistentPromptCacheTest.kt` — covers QUAL-02 (cache module)
+- [ ] `src/test/kotlin/com/six2dez/burp/aiagent/scanner/ActiveScannerDedupTest.kt` — covers QUAL-02 (scanner dedup)
+- [ ] `src/test/kotlin/com/six2dez/burp/aiagent/backends/cli/CliSupervisionTest.kt` — covers QUAL-02 (CLI supervision)
 - [ ] `detekt-baseline.xml` — generated by `./gradlew detektBaseline`, committed before SC2 goes live
 - [ ] `.planning/notes/exception-audit.md` — SC5 tracking note
 

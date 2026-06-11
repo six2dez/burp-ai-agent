@@ -10,9 +10,9 @@
 Harden the build and test infrastructure so regressions surface quickly. Scope:
 
 - **QUAL-05 / SC1** — Fix `generateBuildFlags` Gradle wiring so `./gradlew ktlintCheck` runs standalone (no init-script workaround); the generated-source dependency must be inherited automatically by ktlint consumers.
-- **QUAL-02 / SC2** — Add `detekt` static analysis as a blocking CI check with a committed `detekt-baseline.xml` (existing violations baselined, new code must be clean).
-- **QUAL-02 / SC3** — Run `ktlintFormat` across the whole codebase in a dedicated commit that PRECEDES the `ktlintCheck` blocking-gate commit (git log ordering is a success criterion); then flip ktlint to strict (`ignoreFailures=false`).
-- **QUAL-03 / SC4** — Raise test coverage for `scanner` queue/dedup, `cli` backend supervision, and the `cache` module from the 0–3% baseline (≥1 meaningful test class per module exercising the critical path).
+- **QUAL-03 / SC2** — Add `detekt` static analysis as a blocking CI check with a committed `detekt-baseline.xml` (existing violations baselined, new code must be clean).
+- **QUAL-03 / SC3** — Run `ktlintFormat` across the whole codebase in a dedicated commit that PRECEDES the `ktlintCheck` blocking-gate commit (git log ordering is a success criterion); then flip ktlint to strict (`ignoreFailures=false`).
+- **QUAL-02 / SC4** — Raise test coverage for `scanner` queue/dedup, `cli` backend supervision, and the `cache` module from the 0–3% baseline (≥1 meaningful test class per module exercising the critical path).
 - **QUAL-04 / SC5** — Audit silently-swallowed `catch (Exception)` sites (~181 in current tree): each site either logs a contextual message via a shared helper OR carries a `// INTENTIONAL: <reason>` comment; document the audit in a short tracking note.
 
 This is a developer-facing build/quality phase. No user-facing behavior, no UI surface.
