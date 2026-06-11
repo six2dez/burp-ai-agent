@@ -1,0 +1,13 @@
+# detekt.yml — project-specific overrides on top of detekt defaults
+# This file is picked up by the detekt {} block in build.gradle.kts via config.setFrom(files("detekt.yml")).
+# All other rules use detekt's built-in defaults (buildUponDefaultConfig = true).
+
+complexity:
+  LongMethod:
+    threshold: 80      # PassiveAiScanner / McpTools have long methods by design
+  LongParameterList:
+    threshold: 10      # AgentSettings constructor has many fields
+
+naming:
+  FunctionNaming:
+    excludes: [ '**/test/**' ]

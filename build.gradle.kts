@@ -7,6 +7,7 @@ plugins {
     id("com.github.johnrengelman.shadow") version "8.1.1"
     id("org.jlleitschuh.gradle.ktlint") version "12.1.1"
     id("org.cyclonedx.bom") version "1.10.0"
+    id("io.gitlab.arturbosch.detekt") version "1.23.8"
     jacoco
 }
 
@@ -63,8 +64,6 @@ java {
 // Default (false) produces the full GitHub release artifact.
 val storeBuild = providers.gradleProperty("storeBuild").orNull == "true"
 
-val generatedSrcDir = layout.buildDirectory.dir("generated/buildflags")
-
 abstract class GenerateBuildFlagsTask : DefaultTask() {
     @get:Input
     abstract val storeBuildFlag: Property<Boolean>
@@ -91,11 +90,13 @@ val generateBuildFlags by tasks.registering(GenerateBuildFlagsTask::class) {
     group = "build"
     description = "Generates BuildFlags.kt with a compile-time store-build flag"
     storeBuildFlag.set(storeBuild)
-    outputDir.set(generatedSrcDir)
+    outputDir.set(layout.buildDirectory.dir("generated/buildflags"))
 }
 
 sourceSets.main {
-    kotlin.srcDir(generatedSrcDir)
+    // Pass the task's own outputDir through the TaskProvider — Gradle infers the dependency
+    // for any task consuming this source directory (including runKtlintCheckOverMainSourceSet).
+    kotlin.srcDir(generateBuildFlags.flatMap { it.outputDir })
 }
 
 tasks.withType<KotlinCompile> {
@@ -104,12 +105,6 @@ tasks.withType<KotlinCompile> {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
         freeCompilerArgs.addAll(listOf("-Xjsr305=strict"))
     }
-}
-
-// ktlint scans the generated BuildFlags.kt (added to sourceSets.main above), so its check/format
-// tasks must run after generateBuildFlags — otherwise Gradle's implicit-dependency validation fails the build.
-tasks.matching { it.name.startsWith("runKtlint") }.configureEach {
-    dependsOn(generateBuildFlags)
 }
 
 tasks.jar {
@@ -179,6 +174,14 @@ ktlint {
         exclude("**/build/**")
         exclude("**/generated/**")
     }
+}
+
+detekt {
+    buildUponDefaultConfig = true          // extend defaults, not replace
+    allRules = false                        // only default ruleset rules
+    baseline = file("detekt-baseline.xml") // committed baseline; generate with: ./gradlew detektBaseline
+    parallel = true
+    config.setFrom(files("detekt.yml"))    // project-specific overrides
 }
 
 tasks.withType<Test> {
