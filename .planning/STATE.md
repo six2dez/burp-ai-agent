@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v0.9.0
 milestone_name: Hardening, Quality & New Capabilities
-status: verifying
-stopped_at: Completed Phase 13 Plan 03 (PRIV-04 SecretShapes + ContextPreviewDialog WARN banner)
-last_updated: "2026-06-11T09:04:34.540Z"
+status: ready_to_plan
+stopped_at: Phase 15 complete (3/3) — ready to discuss Phase 16
+last_updated: 2026-06-11T09:38:02.115Z
 last_activity: 2026-06-11
 progress:
   total_phases: 8
   completed_phases: 4
   total_plans: 13
-  completed_plans: 14
+  completed_plans: 36
   percent: 50
 ---
 
@@ -21,20 +21,20 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-10)
 
 **Core value:** Bring modern AI to a real security workflow without leaking sensitive traffic to third-party providers — privacy controls and an audit trail are non-negotiable, AI capability is additive.
-**Current focus:** Phase 15 — Pre-Send Secret Tripwire
+**Current focus:** Phase 16 — external mcp client
 
 ## Current Position
 
-Phase: 15 (Pre-Send Secret Tripwire) — EXECUTING
-Plan: 3 of 3
-Status: Phase complete — ready for verification
+Phase: 16
+Plan: Not started
+Status: Ready to plan
 Last activity: 2026-06-11
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 11
+- Total plans completed: 14
 - Average duration: —
 - Total execution time: 0 hours
 
@@ -47,6 +47,7 @@ Last activity: 2026-06-11
 | 11 | 4 | - | - |
 | 13 | 3 | - | - |
 | 14 | 3 | - | - |
+| 15 | 3 | - | - |
 
 **Recent Trend:**
 

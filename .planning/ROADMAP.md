@@ -228,7 +228,7 @@ Phase 12 (SEC) must be first. Phase 13 (Privacy) and Phase 12 are sequential (av
 | 12. Secrets at Rest & Transport Security | 4/4 | ✅ Complete | 2026-06-10 |
 | 13. Privacy & Redaction Hardening | 3/3 | Complete    | 2026-06-10 |
 | 14. Anthropic Backend + Token Budget + Listener Port | 3/3 | Complete    | 2026-06-10 |
-| 15. Pre-Send Secret Tripwire | 3/3 | Complete   | 2026-06-11 |
+| 15. Pre-Send Secret Tripwire | 3/3 | Complete    | 2026-06-11 |
 | 16. External MCP Client | 0/TBD | Not started | - |
 | 17. Reliability & Concurrency Hardening | 0/TBD | Not started | - |
 | 18. Quality Tooling & Build Hardening | 0/TBD | Not started | - |
