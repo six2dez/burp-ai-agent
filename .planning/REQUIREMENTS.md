@@ -24,7 +24,7 @@ Research-mandated ordering: **SEC (encrypt secrets) lands before CAP-01 (Anthrop
 
 ### Reliability & Concurrency (REL)
 
-- [ ] **REL-01** (A4): ChatPanel session state is accessed safely with respect to the Swing EDT — no data races on the session maps (EDT-confined or thread-safe collections), verified by a concurrency test
+- [x] **REL-01** (A4): ChatPanel session state is accessed safely with respect to the Swing EDT — no data races on the session maps (EDT-confined or thread-safe collections), verified by a concurrency test
 - [ ] **REL-02** (A5): Sensitive CLI temp files (prompt/context) are reliably deleted via `finally`+`deleteOnExit`; MCP server shutdown is bounded (no hang); host-anonymization maps are cleared/bounded
 - [x] **REL-03** (B6): All HTTP backends apply consistent timeouts/retries and route through the `CircuitBreaker` — none can bypass `MontoyaHttpTransport`
 - [ ] **REL-04** (#71): The reported CLI-command-timeout failure (issue #71) is diagnosed and fixed or handled with an actionable error message, with a regression test
@@ -83,7 +83,7 @@ Explicitly excluded for v0.9.0. Tracked to prevent scope creep.
 | CAP-04 | Phase 14: Anthropic Backend + Token Budget + Listener Port | Complete |
 | PRIV-03 | Phase 15: Pre-Send Secret Tripwire | Complete |
 | CAP-02 | Phase 16: External MCP Client | Pending |
-| REL-01 | Phase 17: Reliability & Concurrency Hardening | Pending |
+| REL-01 | Phase 17: Reliability & Concurrency Hardening | Complete |
 | REL-02 | Phase 17: Reliability & Concurrency Hardening | Pending |
 | REL-03 | Phase 17: Reliability & Concurrency Hardening | Complete |
 | REL-04 | Phase 17: Reliability & Concurrency Hardening | Pending |
