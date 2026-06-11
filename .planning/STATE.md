@@ -4,13 +4,13 @@ milestone: v0.9.0
 milestone_name: Hardening, Quality & New Capabilities
 status: executing
 stopped_at: Completed Phase 13 Plan 03 (PRIV-04 SecretShapes + ContextPreviewDialog WARN banner)
-last_updated: "2026-06-11T10:23:41.939Z"
-last_activity: 2026-06-11 -- Phase 17 planning complete
+last_updated: "2026-06-11T10:28:58.543Z"
+last_activity: 2026-06-11
 progress:
   total_phases: 8
   completed_phases: 4
   total_plans: 16
-  completed_plans: 14
+  completed_plans: 15
   percent: 50
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-10)
 
 **Core value:** Bring modern AI to a real security workflow without leaking sensitive traffic to third-party providers — privacy controls and an audit trail are non-negotiable, AI capability is additive.
-**Current focus:** Phase 16 — external mcp client
+**Current focus:** Phase 17 — Reliability & Concurrency Hardening
 
 ## Current Position
 
-Phase: 16
-Plan: Not started
+Phase: 17 (Reliability & Concurrency Hardening) — EXECUTING
+Plan: 2 of 3
 Status: Ready to execute
-Last activity: 2026-06-11 -- Phase 17 planning complete
+Last activity: 2026-06-11
 
 ## Performance Metrics
 
@@ -68,6 +68,7 @@ Last activity: 2026-06-11 -- Phase 17 planning complete
 | Phase 13 P03 | 5 | 3 tasks | 3 files |
 | Phase 15 P01 | 4 | 3 tasks | 4 files |
 | Phase 15-pre-send-secret-tripwire P03 | 6min | 3 tasks | 4 files |
+| Phase 17-reliability-concurrency-hardening P01 | 10m | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -102,6 +103,7 @@ Recent decisions affecting current work:
 - [13-03]: SecretShapes is single AWT-free source of truth for PRIV-04 and Phase 15 tripwire reuse contract
 - [13-03]: ContextPreviewDialog banner uses Level.WARN (advisory); categories-only — raw values never interpolated (T-13-10)
 - [14-03]: listenerPort JSON key is camelCase (listenerPort) matching kotlinx-serialization field name — MCP clients send listenerPort not listener_port; GetProxyHttpHistoryRestricted also gains listenerPort for schema exposure under restricted branch
+- [Phase ?]: recordHttpFailureIfRetryable defined as top-level CircuitBreaker extension so backends can import it directly
 
 ### Roadmap Evolution
 
@@ -144,6 +146,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-11T09:04:34.534Z
+Last session: 2026-06-11T10:28:52.496Z
 Stopped at: Completed Phase 13 Plan 03 (PRIV-04 SecretShapes + ContextPreviewDialog WARN banner)
 Resume file: None

@@ -188,7 +188,7 @@ Plans:
 Plans:
 **Wave 1** *(no inter-plan dependencies; disjoint file sets — run in parallel)*
 
-- [ ] 17-01-PLAN.md — REL-03: shared 429/5xx → CircuitBreaker.recordFailure helper in HttpBackendSupport + wire all 4 HTTP backends (OpenAiCompatible/Anthropic/Ollama/LmStudio) + HttpBackendCircuitFailureTest (closes Phase 14 WR-05)
+- [x] 17-01-PLAN.md — REL-03: shared 429/5xx → CircuitBreaker.recordFailure helper in HttpBackendSupport + wire all 4 HTTP backends (OpenAiCompatible/Anthropic/Ollama/LmStudio) + HttpBackendCircuitFailureTest (closes Phase 14 WR-05)
 - [ ] 17-02-PLAN.md — REL-01: local SOURCE-retained @GuardedBy annotation + ChatPanel EDT confinement (invokeLater on off-EDT tool-result map reads + addMessage) + jvmArgs("-ea") + ChatPanelConcurrencyTest
 - [ ] 17-03-PLAN.md — REL-02 + REL-04: CLI deleteOnExit + configurable cliTimeoutSeconds + actionable buildTimeoutMessage (#71); bounded McpServerManager.stop(); LRU-capped host-anonymization maps + 4 tests
 
@@ -237,6 +237,6 @@ Phase 12 (SEC) must be first. Phase 13 (Privacy) and Phase 12 are sequential (av
 | 14. Anthropic Backend + Token Budget + Listener Port | 3/3 | Complete    | 2026-06-10 |
 | 15. Pre-Send Secret Tripwire | 3/3 | Complete    | 2026-06-11 |
 | 16. External MCP Client | 0/TBD | Not started | - |
-| 17. Reliability & Concurrency Hardening | 0/TBD | Not started | - |
+| 17. Reliability & Concurrency Hardening | 1/3 | In Progress|  |
 | 18. Quality Tooling & Build Hardening | 0/TBD | Not started | - |
 | 19. Mega-File Split + Docs | 0/TBD | Not started | - |
