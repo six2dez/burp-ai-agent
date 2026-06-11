@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v0.9.0
 milestone_name: Hardening, Quality & New Capabilities
-status: ready_to_plan
-stopped_at: Phase 15 complete (3/3) — ready to discuss Phase 16
-last_updated: 2026-06-11T09:38:02.115Z
-last_activity: 2026-06-11
+status: executing
+stopped_at: Completed Phase 13 Plan 03 (PRIV-04 SecretShapes + ContextPreviewDialog WARN banner)
+last_updated: "2026-06-11T10:23:41.939Z"
+last_activity: 2026-06-11 -- Phase 17 planning complete
 progress:
   total_phases: 8
   completed_phases: 4
-  total_plans: 13
-  completed_plans: 36
+  total_plans: 16
+  completed_plans: 14
   percent: 50
 ---
 
@@ -27,8 +27,8 @@ See: .planning/PROJECT.md (updated 2026-06-10)
 
 Phase: 16
 Plan: Not started
-Status: Ready to plan
-Last activity: 2026-06-11
+Status: Ready to execute
+Last activity: 2026-06-11 -- Phase 17 planning complete
 
 ## Performance Metrics
 
