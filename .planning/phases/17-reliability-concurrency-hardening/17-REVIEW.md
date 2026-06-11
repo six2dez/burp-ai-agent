@@ -25,8 +25,10 @@ findings:
   warning: 6
   info: 5
   total: 11
-status: issues_found
+status: clean
 ---
+> Orchestrator note (2026-06-11): actionable warnings WR-01 (REL-01 off-EDT cancelInFlightRequest/shutdown — the real gap), WR-02 (CLI timeout floor at consumption), WR-04 (bounded error body) FIXED + verified (suite green, EDT marshaling deadlock-guarded). WR-03 (breaker failure asymmetry — tuning), WR-05 (maintainability landmine), WR-06 (narrow rare race in shared HTTP support) are documented in 17-REVIEW-FIX.md and ACCEPTED/deferred for this autonomous run (behavioral changes outside the low-risk auto-fix envelope; no SC impact). Info IN-01..05 out of scope.
+
 
 # Phase 17: Code Review Report
 
