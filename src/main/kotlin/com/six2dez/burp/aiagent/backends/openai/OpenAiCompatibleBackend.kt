@@ -15,6 +15,7 @@ import com.six2dez.burp.aiagent.backends.http.CircuitBreaker
 import com.six2dez.burp.aiagent.backends.http.ConversationHistory
 import com.six2dez.burp.aiagent.backends.http.HttpBackendSupport
 import com.six2dez.burp.aiagent.backends.http.MontoyaHttpTransport
+import com.six2dez.burp.aiagent.backends.http.recordHttpFailureIfRetryable
 import com.six2dez.burp.aiagent.config.AgentSettings
 import com.six2dez.burp.aiagent.util.HeaderParser
 import java.util.concurrent.Executors
@@ -259,6 +260,7 @@ class OpenAiCompatibleBackend(
                                                 )
                                             }
                                     }
+                                circuitBreaker.recordHttpFailureIfRetryable(resp.statusCode)
                                 onComplete(IllegalStateException(message))
                                 return@submit
                             }

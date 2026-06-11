@@ -150,13 +150,6 @@ object HttpBackendSupport {
      *  4xx config errors (400/401/403/404) are non-transient and must NOT trip the breaker. */
     fun isRetryableHttpStatus(statusCode: Int): Boolean = statusCode == 429 || statusCode in 500..599
 
-    /** Records a circuit-breaker failure if [statusCode] is a retryable HTTP status (429 / 5xx).
-     *  Call on every non-successful HTTP response BEFORE invoking onComplete, so the breaker sees
-     *  upstream overload.  4xx config errors pass through without recording — they are not transient. */
-    fun CircuitBreaker.recordHttpFailureIfRetryable(statusCode: Int) {
-        if (isRetryableHttpStatus(statusCode)) recordFailure()
-    }
-
     fun newCircuitBreaker(): CircuitBreaker =
         CircuitBreaker(
             failureThreshold = CIRCUIT_FAILURE_THRESHOLD,
@@ -173,6 +166,14 @@ object HttpBackendSupport {
             "$backendDisplayName backend is temporarily unavailable (circuit open). Retry in ${retryDelay}ms.",
         )
     }
+}
+
+/** Records a circuit-breaker failure if [statusCode] is a retryable HTTP status (429 / 5xx).
+ *  Call on every non-successful HTTP response BEFORE invoking onComplete, so the breaker sees
+ *  upstream overload.  4xx config errors (400/401/403) pass through without recording —
+ *  they are non-transient config errors that must NOT trip the breaker. */
+fun CircuitBreaker.recordHttpFailureIfRetryable(statusCode: Int) {
+    if (HttpBackendSupport.isRetryableHttpStatus(statusCode)) recordFailure()
 }
 
 class ConversationHistory(

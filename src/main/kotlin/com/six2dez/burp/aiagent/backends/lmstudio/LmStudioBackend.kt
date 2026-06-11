@@ -14,6 +14,7 @@ import com.six2dez.burp.aiagent.backends.http.CircuitBreaker
 import com.six2dez.burp.aiagent.backends.http.ConversationHistory
 import com.six2dez.burp.aiagent.backends.http.HttpBackendSupport
 import com.six2dez.burp.aiagent.backends.http.MontoyaHttpTransport
+import com.six2dez.burp.aiagent.backends.http.recordHttpFailureIfRetryable
 import com.six2dez.burp.aiagent.config.AgentSettings
 import com.six2dez.burp.aiagent.util.HeaderParser
 import java.util.concurrent.Executors
@@ -192,6 +193,7 @@ class LmStudioBackend : AiBackend {
                             val resp = transport.post(endpointUrl, allHeaders, json, timeoutSeconds * 1000)
                             if (!resp.isSuccessful) {
                                 errorLog("HTTP ${resp.statusCode}: ${resp.body.take(500)}")
+                                circuitBreaker.recordHttpFailureIfRetryable(resp.statusCode)
                                 onComplete(IllegalStateException("LM Studio HTTP ${resp.statusCode}: ${resp.body}"))
                                 return@submit
                             }

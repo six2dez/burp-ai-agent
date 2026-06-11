@@ -13,6 +13,7 @@ import com.six2dez.burp.aiagent.backends.http.CircuitBreaker
 import com.six2dez.burp.aiagent.backends.http.ConversationHistory
 import com.six2dez.burp.aiagent.backends.http.HttpBackendSupport
 import com.six2dez.burp.aiagent.backends.http.MontoyaHttpTransport
+import com.six2dez.burp.aiagent.backends.http.recordHttpFailureIfRetryable
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
@@ -208,6 +209,7 @@ class AnthropicBackend : AiBackend {
                                                 )
                                             }
                                     }
+                                circuitBreaker.recordHttpFailureIfRetryable(resp.statusCode)
                                 onComplete(IllegalStateException(message))
                                 return@submit
                             }
