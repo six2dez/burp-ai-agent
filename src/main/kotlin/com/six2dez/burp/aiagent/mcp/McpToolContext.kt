@@ -7,9 +7,12 @@ import com.six2dez.burp.aiagent.backends.BackendRegistry
 import com.six2dez.burp.aiagent.config.Defaults
 import com.six2dez.burp.aiagent.mcp.tools.LimitedStringBuilder
 import com.six2dez.burp.aiagent.mcp.tools.ResponsePreprocessorSettings
+import com.six2dez.burp.aiagent.audit.AuditLogger
+import com.six2dez.burp.aiagent.redact.Entropy
 import com.six2dez.burp.aiagent.redact.PrivacyMode
 import com.six2dez.burp.aiagent.redact.Redaction
 import com.six2dez.burp.aiagent.redact.RedactionPolicy
+import com.six2dez.burp.aiagent.redact.SecretTripwire
 import com.six2dez.burp.aiagent.scanner.PassiveAiScanner
 import com.six2dez.burp.aiagent.supervisor.AgentSupervisor
 
@@ -51,9 +54,26 @@ data class McpToolContext(
     }
 
     fun redactIfNeeded(raw: String): String {
-        if (privacyMode == PrivacyMode.OFF) return raw
-        val policy = RedactionPolicy.fromMode(privacyMode)
-        return Redaction.apply(raw, policy, stableHostSalt = hostSalt)
+        // Compute the FINAL post-redaction string (two existing branches preserved).
+        val finalText =
+            if (privacyMode == PrivacyMode.OFF) raw
+            else Redaction.apply(raw, RedactionPolicy.fromMode(privacyMode), stableHostSalt = hostSalt)
+        // PRIV-03 (Phase 15): tripwire scan on the FINAL redacted MCP output (G1/G8).
+        // Detect + audit-log on match; NEVER block — return finalText regardless (SC2).
+        val tw = SecretTripwire.scan(finalText)
+        if (tw.matched) {
+            AuditLogger.emitGlobal(
+                "secret_tripwire_detect",
+                mapOf(
+                    "path" to "mcp",
+                    "sessionId" to (supervisor?.currentSessionId() ?: "none"),
+                    "shapeCategories" to tw.shapeCategories.toList().sorted(),
+                    "entropyScore" to Entropy.truncatedScore(tw.maxEntropyBitsPerChar),
+                ),
+            )
+            // NO blocking — return finalText (SC2 / non-interactive path).
+        }
+        return finalText
     }
 
     fun resolveHost(host: String): String = Redaction.deAnonymizeHost(host, hostSalt) ?: host
