@@ -104,6 +104,51 @@ object SecretTripwire {
         )
 
     /**
+     * Builds the audit payload map for a `secret_tripwire_detect` event on the non-interactive
+     * paths (PassiveAiScanner and McpToolContext). This is the SC3 payload: it carries only
+     * category names + a truncated numeric entropy score + sessionId — NEVER the raw matched token
+     * (CLAUDE.md / AGENTS.md non-negotiable).
+     *
+     * @param scan The [ScanResult] from [scan] on the FINAL post-redaction payload.
+     * @param path One of `"passive_scanner"` or `"mcp"` — identifies the outbound hook.
+     * @param sessionId The caller's `supervisor.currentSessionId() ?: "none"` (or null, in which
+     *   case `"none"` is substituted). Null-safe: a null value is stored as `"none"`.
+     */
+    fun buildDetectAuditPayload(
+        scan: ScanResult,
+        path: String,
+        sessionId: String?,
+    ): Map<String, Any?> =
+        mapOf(
+            "path" to path,
+            "sessionId" to (sessionId ?: "none"),
+            "shapeCategories" to scan.shapeCategories.toList().sorted(),
+            "entropyScore" to Entropy.truncatedScore(scan.maxEntropyBitsPerChar),
+        )
+
+    /**
+     * Convenience helper for non-interactive hook bodies: scans [payload] and, when matched,
+     * returns the audit payload map (suitable for passing to `AuditLogger.emitGlobal`). Returns
+     * `null` when the scan does not match (no event should be emitted).
+     *
+     * The caller MUST proceed regardless of the return value — a non-null result means "emit the
+     * event" but NEVER means "block the send" (SC2).
+     *
+     * @param payload The FINAL post-redaction string to scan (G1/G8 — never raw/pre-redaction).
+     * @param path One of `"passive_scanner"` or `"mcp"`.
+     * @param sessionId `supervisor.currentSessionId() ?: "none"`, or null (falls back to `"none"`).
+     * @return A detect-payload map when [ScanResult.matched] is true; null otherwise.
+     */
+    fun detectAndBuild(
+        payload: String,
+        path: String,
+        sessionId: String?,
+    ): Map<String, Any?>? {
+        val tw = scan(payload)
+        return if (tw.matched) buildDetectAuditPayload(tw, path, sessionId) else null
+    }
+
+    /**
      * Scans the FINAL post-redaction [payload] for secrets that may have survived the redaction
      * pipeline.
      *

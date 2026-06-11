@@ -27,7 +27,8 @@ class SecretTripwireHooksTest {
     private val awsToken = "AKIAIOSFODNN7EXAMPLE"
 
     // A high-entropy base64 string (≥ 20 chars, entropy ≥ 4.5) that trips the Entropy heuristic.
-    private val highEntropyB64 = "dGVzdFNlY3JldEtleVN0cmluZ0hpZ2g="  // len=32, high entropy
+    // Uses 48 distinct base64 chars → entropy ~log2(48) ≈ 5.6 bits/char, well above the 4.5 threshold.
+    private val highEntropyB64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuv"  // len=48, all-base64, high entropy
 
     // A plain innocuous payload that should not match any detector.
     private val cleanPayload = "GET /api/users HTTP/1.1\nHost: example.com"
