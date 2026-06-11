@@ -370,7 +370,9 @@ class AgentSupervisor(
             history = history,
             onChunk = { chunk ->
                 responseAccumulator.append(chunk)
-                audit.logEvent("agent_chunk", mapOf("backendId" to backendId, "chunk" to chunk))
+                if (audit.isEnabled()) {
+                    audit.logEvent("agent_chunk", mapOf("backendId" to backendId, "chunk" to chunk))
+                }
                 onChunk(chunk)
             },
             jsonMode = jsonMode,
@@ -520,7 +522,9 @@ class AgentSupervisor(
             history = history,
             onChunk = { chunk ->
                 chatResponseAccumulator.append(chunk)
-                audit.logEvent("agent_chunk", mapOf("backendId" to backendId, "chunk" to chunk))
+                if (audit.isEnabled()) {
+                    audit.logEvent("agent_chunk", mapOf("backendId" to backendId, "chunk" to chunk))
+                }
                 onChunk(chunk)
             },
             systemPrompt = systemPrompt,
