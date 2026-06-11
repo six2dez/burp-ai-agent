@@ -200,7 +200,7 @@ class AgentSupervisor(
 
         // Phase 2: Launch backend outside lock (may block for CLI processes)
         return try {
-            api.logging().logToOutput("Launching backend $backendId with config: $launchConfig")
+            api.logging().logToOutput("Launching backend $backendId with config: ${redactedConfigSummary(launchConfig)}")
             val conn = backend.launch(launchConfig)
 
             val newState =
@@ -216,7 +216,15 @@ class AgentSupervisor(
             // Uses the same instance reference set above — AtomicReference.compareAndSet
             // checks identity (===), not structural equality.
             if (stateRef.compareAndSet(startingState, newState)) {
-                audit.logEvent("session_start", mapOf("backendId" to backendId, "sessionId" to sessionId, "config" to launchConfig))
+                audit.logEvent(
+                    "session_start",
+                    mapOf(
+                        "backendId" to backendId,
+                        "sessionId" to sessionId,
+                        "model" to launchConfig.model,
+                        "displayName" to launchConfig.displayName,
+                    ),
+                )
                 true
             } else {
                 // Another thread called stop() while we were launching — clean up
@@ -1031,6 +1039,16 @@ class AgentSupervisor(
             false
         }
     }
+
+    /**
+     * Returns a safe diagnostic string for [config] that includes structural/connection details
+     * (backend ID, display name, model, base URL, header key names) but never exposes header
+     * values such as API keys or Bearer tokens. Used by logToOutput and audit session_start events.
+     */
+    private fun redactedConfigSummary(config: BackendLaunchConfig): String =
+        "BackendLaunchConfig(backendId=${config.backendId}, displayName=${config.displayName}, " +
+            "model=${config.model}, baseUrl=${config.baseUrl}, embeddedMode=${config.embeddedMode}, " +
+            "headers=[${config.headers.keys.joinToString()}])"
 
     private fun safeLogOutput(message: String) {
         try {
