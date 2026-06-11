@@ -1,6 +1,7 @@
 package com.six2dez.burp.aiagent.redact
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -82,5 +83,75 @@ class EntropyTest {
         assertEquals("0.0", Entropy.truncatedScore(0.0), "truncatedScore(0.0) must == \"0.0\"")
         assertEquals("3.0", Entropy.truncatedScore(3.0), "truncatedScore(3.0) must == \"3.0\"")
         assertEquals("4.5", Entropy.truncatedScore(4.50), "truncatedScore(4.50) must == \"4.5\"")
+    }
+
+    // ── WR-01: dot-delimited high-entropy tokens are now detected via the dot-joined pass ──────
+
+    // A dot-delimited base64url secret (e.g. a raw JWT body/signature, or a `a.b.c` API key)
+    // whose individual segments are each below MIN_TOKEN_LEN=20. Under the old single-pass
+    // tokenizer every segment was fragmented below the length gate, so this evaded the entropy
+    // detector entirely (silent false negative). The dot-joined pass evaluates the dots-removed
+    // payload (the same 41-char high-entropy base64url string used elsewhere in this suite), which
+    // clears the base64 threshold (>=4.5).
+    @Test
+    fun dottedHighEntropyBase64urlTokenIsDetected() {
+        // Segments are 12 / 11 / 18 chars — all < 20, so the segment pass cannot catch them.
+        val dotted = "xK8mN2pQrT5v.WyZ1aB3cD6e.FgHiJkLmNoPqRsT7uV"
+        assertTrue(
+            dotted.split(".").all { it.length < 20 },
+            "Pre-condition: every dot segment must be < MIN_TOKEN_LEN so only the dot-joined pass can fire",
+        )
+        val result = Entropy.maxQualifyingTokenEntropy(dotted)
+        assertTrue(
+            result >= 4.5,
+            "WR-01: a dot-delimited high-entropy base64url token must be detected via the dot-joined pass; got $result",
+        )
+    }
+
+    // FP guard: a dotted IPv4 address must NOT qualify (dots-removed length < MIN_TOKEN_LEN).
+    @Test
+    fun dottedIpv4AddressIsNotDetected() {
+        val result = Entropy.maxQualifyingTokenEntropy("connect to 192.168.100.200 now")
+        assertEquals(0.0, result, 0.001, "FP guard: an IPv4 address must not be detected; got $result")
+    }
+
+    // FP guard: a short dotted hostname must NOT qualify (dots-removed length < MIN_TOKEN_LEN).
+    @Test
+    fun shortDottedHostnameIsNotDetected() {
+        val result = Entropy.maxQualifyingTokenEntropy("see www.example.com for details")
+        assertEquals(0.0, result, 0.001, "FP guard: a short hostname must not be detected; got $result")
+    }
+
+    // FP guard: a LONG dotted hostname (dots-removed >= MIN_TOKEN_LEN) must still NOT qualify —
+    // natural-language letter distributions stay well under the base64 threshold (4.5 bits/char).
+    @Test
+    fun longDottedHostnameIsNotDetected() {
+        val host = "subdomain.example.organization.company.com" // dots-removed = 38 chars, all letters
+        assertTrue(host.replace(".", "").length >= 20, "Pre-condition: dots-removed must clear the length gate")
+        val result = Entropy.maxQualifyingTokenEntropy(host)
+        assertEquals(
+            0.0,
+            result,
+            0.001,
+            "FP guard: a long natural-language dotted hostname must stay below 4.5 bits/char; got $result",
+        )
+    }
+
+    // FP guard: a long dotted package/identifier path must NOT qualify (low entropy, repeated letters).
+    @Test
+    fun longDottedIdentifierPathIsNotDetected() {
+        val pkg = "com.example.service.controller.internal.handler" // dots-removed = 42 chars
+        assertTrue(pkg.replace(".", "").length >= 20)
+        val result = Entropy.maxQualifyingTokenEntropy(pkg)
+        assertEquals(0.0, result, 0.001, "FP guard: a dotted identifier path must not be detected; got $result")
+    }
+
+    // Regression: the dot-joined pass is ADDITIVE — a plain (dot-free) high-entropy base64 token
+    // detected by the original segment pass is still detected (and the dotted pass does not lower it).
+    @Test
+    fun dotFreeHighEntropyTokenStillDetectedAfterDotPass() {
+        val token = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuv" // 48 chars, no dots
+        val result = Entropy.maxQualifyingTokenEntropy(token)
+        assertTrue(result > 0.0, "Regression: dot-free high-entropy base64 token must remain detected; got $result")
     }
 }

@@ -50,7 +50,20 @@ object Entropy {
     // Splits on any character that is NOT a typical secret/token character.
     // The character class [^A-Za-z0-9+/=_-] is linear and ReDoS-safe — no backtracking
     // patterns are introduced, so no SafeRegex deadline wrapper is required. (RESEARCH G6)
+    // NOTE: this splitter treats '.' as a delimiter, so dot-delimited runs are evaluated
+    // segment-by-segment. The dot-aware second pass below ([DOTTED_SPLIT]) recovers the
+    // case where the individual segments are each < MIN_TOKEN_LEN but the dot-joined run is
+    // a single high-entropy secret (a raw JWT body/signature or a dot-delimited base64url key).
     private val TOKEN_SPLIT = Regex("[^A-Za-z0-9+/=_-]+")
+
+    // WR-01 dot-aware splitter: like [TOKEN_SPLIT] but ALSO keeps '.' inside the candidate so a
+    // run such as `aaaa.bbbb.cccc` survives whole. Used only to recover dot-delimited base64url
+    // secrets whose segments are individually below the length gate. The charset gate below still
+    // requires the dots-removed payload to be entirely base64url AND clear BASE64_THRESHOLD (4.5),
+    // so ordinary dotted prose (hostnames, IPs, version strings, package names) does NOT qualify:
+    // those either fall short of MIN_TOKEN_LEN once dots are removed, or stay well under 4.5
+    // bits/char. Linear and ReDoS-safe (no backtracking) — no SafeRegex wrapper required. (G6)
+    private val DOTTED_SPLIT = Regex("[^A-Za-z0-9+/=_.\\-]+")
 
     /**
      * Shannon entropy of [s] in bits per character.
@@ -72,23 +85,56 @@ object Entropy {
     }
 
     /**
-     * Returns the maximum entropy (bits/char) among all tokens in [text] that QUALIFY as suspect:
+     * Entropy (bits/char) of [token] if it QUALIFIES as a suspect token, else 0.0. A token
+     * qualifies when:
      * - length ≥ [MIN_TOKEN_LEN] (= 20), AND
-     * - the token's charset is entirely hex ([HEX_CHARS]) with entropy ≥ [HEX_THRESHOLD] (3.0), OR
-     * - the token's charset is entirely base64 ([BASE64_CHARS]) with entropy ≥ [BASE64_THRESHOLD] (4.5).
+     * - its charset is entirely hex ([HEX_CHARS]) with entropy ≥ [HEX_THRESHOLD] (3.0), OR
+     * - its charset is entirely base64 ([BASE64_CHARS]) with entropy ≥ [BASE64_THRESHOLD] (4.5).
      *
-     * Returns 0.0 if no token qualifies. Used by [SecretTripwire.scan] as the entropy half of
-     * the pre-send tripwire detector.
+     * The entropy is measured on [token] exactly as supplied. Callers that want to evaluate a
+     * dot-delimited run as a single secret pass the dots-removed payload (see [maxQualifyingTokenEntropy]).
+     */
+    private fun qualifyingEntropy(token: String): Double {
+        if (token.length < MIN_TOKEN_LEN) return 0.0
+        val h = shannon(token)
+        val isHex = token.all { it in HEX_CHARS }
+        val isB64 = token.all { it in BASE64_CHARS }
+        val qualifies = (isHex && h >= HEX_THRESHOLD) || (isB64 && h >= BASE64_THRESHOLD)
+        return if (qualifies) h else 0.0
+    }
+
+    /**
+     * Returns the maximum entropy (bits/char) among all tokens in [text] that QUALIFY as suspect
+     * (see [qualifyingEntropy] for the per-token gate). Returns 0.0 if no token qualifies. Used by
+     * [SecretTripwire.scan] as the entropy half of the pre-send tripwire detector.
+     *
+     * Two complementary passes run:
+     * 1. **Segment pass** — split on [TOKEN_SPLIT] (`.` is a delimiter) and gate each segment.
+     *    This is the original behaviour: it catches a single contiguous high-entropy run.
+     * 2. **Dot-joined pass (WR-01)** — split on [DOTTED_SPLIT] (`.` kept in-token); for any
+     *    candidate that contains a `.`, gate the dots-removed payload. This recovers dot-delimited
+     *    base64url secrets (e.g. a raw JWT body/signature `aaaa.bbbb.cccc`) whose individual
+     *    segments are each below [MIN_TOKEN_LEN] but whose joined payload is one high-entropy
+     *    secret. The [BASE64_THRESHOLD] (4.5) charset/entropy gate keeps ordinary dotted prose
+     *    (hostnames, IPs, version strings, dotted identifiers) from qualifying.
+     *
+     * The dot-joined pass is strictly additive: it can only raise the reported maximum, never
+     * suppress a detection the segment pass already made.
      */
     fun maxQualifyingTokenEntropy(text: String): Double {
         var max = 0.0
+        // Pass 1: original segment-wise gate (unchanged behaviour).
         for (token in text.split(TOKEN_SPLIT)) {
-            if (token.length < MIN_TOKEN_LEN) continue
-            val h = shannon(token)
-            val isHex = token.all { it in HEX_CHARS }
-            val isB64 = token.all { it in BASE64_CHARS }
-            val qualifies = (isHex && h >= HEX_THRESHOLD) || (isB64 && h >= BASE64_THRESHOLD)
-            if (qualifies && h > max) max = h
+            val h = qualifyingEntropy(token)
+            if (h > max) max = h
+        }
+        // Pass 2 (WR-01): dot-joined candidates — evaluate the dots-removed payload so a
+        // dot-delimited base64url secret with sub-MIN_TOKEN_LEN segments is still detected.
+        for (candidate in text.split(DOTTED_SPLIT)) {
+            if (!candidate.contains('.')) continue // pass 1 already covered dot-free runs
+            val joined = candidate.replace(".", "")
+            val h = qualifyingEntropy(joined)
+            if (h > max) max = h
         }
         return max
     }
