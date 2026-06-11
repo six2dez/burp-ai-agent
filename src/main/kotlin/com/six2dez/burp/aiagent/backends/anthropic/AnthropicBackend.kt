@@ -61,8 +61,7 @@ class AnthropicBackend : AiBackend {
     // HealthCheckResult.Unknown = not testable without a live request; the registry calls
     // isAvailable() (now key-gated above), and surfacing a dedicated health-check endpoint would
     // require a live API key — defer to the supervisor's test-connection path.
-    override fun healthCheck(settings: com.six2dez.burp.aiagent.config.AgentSettings) =
-        com.six2dez.burp.aiagent.backends.HealthCheckResult.Unknown
+    override fun healthCheck(settings: com.six2dez.burp.aiagent.config.AgentSettings) = com.six2dez.burp.aiagent.backends.HealthCheckResult.Unknown
 
     private class AnthropicConnection(
         private val mapper: ObjectMapper,

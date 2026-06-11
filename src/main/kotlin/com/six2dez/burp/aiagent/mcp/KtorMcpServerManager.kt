@@ -12,8 +12,8 @@ import com.six2dez.burp.aiagent.supervisor.AgentSupervisor
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCallPipeline
+import io.ktor.server.application.call
 import io.ktor.server.application.install
-import io.ktor.server.application.intercept
 import io.ktor.server.engine.EmbeddedServer
 import io.ktor.server.engine.applicationEnvironment
 import io.ktor.server.engine.connector

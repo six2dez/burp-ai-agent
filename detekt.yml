@@ -9,6 +9,10 @@ complexity:
     functionThreshold: 10      # AgentSettings and backend constructors have many fields
     constructorThreshold: 10   # Use new property names (threshold is deprecated in 1.23.8)
 
+style:
+  MaxLineLength:
+    maxLineLength: 250         # Matches .editorconfig max_line_length; long string literals in ScannerIssueSupport/MarkdownRenderer are intentional
+
 naming:
   FunctionNaming:
     excludes: [ '**/test/**' ]

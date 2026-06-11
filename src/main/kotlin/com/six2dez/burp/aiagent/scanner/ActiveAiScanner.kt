@@ -14,10 +14,12 @@ import com.six2dez.burp.aiagent.supervisor.AgentSupervisor
 import com.six2dez.burp.aiagent.util.IssueUtils
 import java.util.concurrent.Callable
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
@@ -1561,8 +1563,7 @@ class ActiveAiScanner(
         return variations.distinct()
     }
 
-    private fun extractInjectionPoints(requestResponse: HttpRequestResponse): List<InjectionPoint> =
-        InjectionPointExtractor.extract(requestResponse.request(), headerInjectionAllowlist)
+    private fun extractInjectionPoints(requestResponse: HttpRequestResponse): List<InjectionPoint> = InjectionPointExtractor.extract(requestResponse.request(), headerInjectionAllowlist)
 
     fun shutdown() {
         enabled.set(false)

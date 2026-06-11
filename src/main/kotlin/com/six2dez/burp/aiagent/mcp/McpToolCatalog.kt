@@ -470,8 +470,7 @@ object McpToolCatalog {
 
     fun all(): List<McpToolDescriptor> = tools
 
-    fun available(storeBuild: Boolean = BuildFlags.STORE_BUILD): List<McpToolDescriptor> =
-        if (storeBuild) tools.filter { it.nativeTool } else tools
+    fun available(storeBuild: Boolean = BuildFlags.STORE_BUILD): List<McpToolDescriptor> = if (storeBuild) tools.filter { it.nativeTool } else tools
 
     fun defaults(): Map<String, Boolean> = tools.associate { it.id to it.defaultEnabled }
 

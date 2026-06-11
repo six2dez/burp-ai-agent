@@ -153,8 +153,7 @@ object App {
                     )
 
                 // Scanner findings (Pro): use the dedicated event type
-                override fun provideMenuItems(event: AuditIssueContextMenuEvent) =
-                    UiActions.auditIssueMenuItems(api, event, ui, mcpSupervisor)
+                override fun provideMenuItems(event: AuditIssueContextMenuEvent) = UiActions.auditIssueMenuItems(api, event, ui, mcpSupervisor)
             },
         )
 

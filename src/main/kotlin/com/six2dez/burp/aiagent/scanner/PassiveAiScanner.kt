@@ -541,8 +541,7 @@ class PassiveAiScanner(
     private val manualScanCompleted = AtomicInteger(0)
     private val manualScanInProgress = AtomicBoolean(false)
 
-    fun getManualScanProgress(): Triple<Boolean, Int, Int> =
-        Triple(manualScanInProgress.get(), manualScanCompleted.get(), manualScanTotal.get())
+    fun getManualScanProgress(): Triple<Boolean, Int, Int> = Triple(manualScanInProgress.get(), manualScanCompleted.get(), manualScanTotal.get())
 
     /**
      * Manually scan a list of requests (from context menu).
@@ -2044,8 +2043,7 @@ $batchMetadata
         }
     }
 
-    private fun extractInjectionPoints(requestResponse: HttpRequestResponse): List<InjectionPoint> =
-        InjectionPointExtractor.extract(requestResponse.request(), headerInjectionAllowlist)
+    private fun extractInjectionPoints(requestResponse: HttpRequestResponse): List<InjectionPoint> = InjectionPointExtractor.extract(requestResponse.request(), headerInjectionAllowlist)
 
     private fun severityLevel(severity: String): Int =
         when (severity.uppercase()) {

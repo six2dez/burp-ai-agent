@@ -2386,8 +2386,7 @@ interface HttpServiceParams {
     val targetPort: Int
     val usesHttps: Boolean
 
-    fun toMontoyaService(resolveHost: (String) -> String = { it }): HttpService =
-        HttpService.httpService(resolveHost(targetHostname), targetPort, usesHttps)
+    fun toMontoyaService(resolveHost: (String) -> String = { it }): HttpService = HttpService.httpService(resolveHost(targetHostname), targetPort, usesHttps)
 
     fun toMontoyaServiceOrNull(resolveHost: (String) -> String = { it }): HttpService? {
         if (targetHostname.isBlank() || targetPort <= 0) return null
