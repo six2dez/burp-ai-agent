@@ -21,6 +21,8 @@ jobs:
       - name: ktlint check (non-blocking until baseline is clean)
         run: ./gradlew ktlintCheck --no-daemon
         continue-on-error: true
+      - name: detekt (blocking)
+        run: ./gradlew detekt --no-daemon
 
   pr-gate:
     needs: lint
