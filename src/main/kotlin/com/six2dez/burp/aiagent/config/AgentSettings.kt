@@ -61,6 +61,9 @@ data class AgentSettings(
     val perplexityTimeoutSeconds: Int = 60,
     // REL-04: user-configurable CLI process timeout (issue #71). Defaulted so existing
     // positional/named constructions keep compiling. Plaintext pref (not a secret — timeout integer).
+    // WR-02: clamped to [30, 3600] seconds on load and save; values below 30s are silently raised to
+    // the 30s floor (a sub-30s watchdog would kill slow-starting CLIs). CliBackend re-coerces to the
+    // same bounds at the consumption boundary, so the watchdog is robust even for directly-built configs.
     val cliTimeoutSeconds: Int = Defaults.CLI_PROCESS_TIMEOUT_SECONDS,
     // CAP-01: Anthropic Messages API backend fields (14-01).
     // All four carry defaults so existing named/positional constructions keep compiling (Planner Note 3).

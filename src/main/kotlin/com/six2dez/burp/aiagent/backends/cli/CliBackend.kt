@@ -29,8 +29,13 @@ class CliBackend(
     override fun launch(config: BackendLaunchConfig): AgentConnection {
         require(config.command.isNotEmpty()) { "CLI backend requires a command" }
         val usePty = (id == "codex-cli" || id == "gemini-cli" || id == "claude-cli" || id == "copilot-cli") && !config.embeddedMode
-        // REL-04: use the user-configured timeout if provided, otherwise fall back to the shared constant
-        val timeoutSeconds = config.cliTimeoutSeconds ?: Defaults.CLI_PROCESS_TIMEOUT_SECONDS
+        // REL-04: use the user-configured timeout if provided, otherwise fall back to the shared constant.
+        // WR-02: re-coerce at the consumption boundary. BackendLaunchConfig.cliTimeoutSeconds is a plain
+        // nullable Int with no invariant — a directly-constructed config (tests / future call sites) could
+        // inject 0 or a negative value, yielding waitFor(0) (immediate timeout) or overflow on the
+        // wall-clock break. Floor 30s / ceiling 3600s mirrors the AgentSettings persistence clamp so the
+        // watchdog never trusts an unvalidated value regardless of how the config was built.
+        val timeoutSeconds = (config.cliTimeoutSeconds ?: Defaults.CLI_PROCESS_TIMEOUT_SECONDS).coerceIn(30, 3600)
         return if (config.embeddedMode) {
             NonInteractiveCliConnection(id, config.command, config.env, config.cliSessionId, timeoutSeconds)
         } else {
