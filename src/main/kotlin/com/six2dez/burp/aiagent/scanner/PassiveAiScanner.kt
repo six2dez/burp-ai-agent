@@ -14,7 +14,6 @@ import com.six2dez.burp.aiagent.audit.AuditLogger
 import com.six2dez.burp.aiagent.audit.Hashing
 import com.six2dez.burp.aiagent.config.AgentSettings
 import com.six2dez.burp.aiagent.config.Defaults
-import com.six2dez.burp.aiagent.redact.Entropy
 import com.six2dez.burp.aiagent.redact.Redaction
 import com.six2dez.burp.aiagent.redact.RedactionPolicy
 import com.six2dez.burp.aiagent.redact.SecretTripwire
@@ -911,20 +910,11 @@ class PassiveAiScanner(
             val sendStartMs = System.currentTimeMillis()
 
             // PRIV-03 (Phase 15): tripwire scan on the FINAL post-redaction prompt (G1/G8).
-            // Detect + audit-log on match; NEVER block — fall through to supervisor.send (SC2).
-            val tw1 = SecretTripwire.scan(singlePrompt)
-            if (tw1.matched) {
-                AuditLogger.emitGlobal(
-                    "secret_tripwire_detect",
-                    mapOf(
-                        "path" to "passive_scanner",
-                        "sessionId" to (supervisor.currentSessionId() ?: "none"),
-                        "shapeCategories" to tw1.shapeCategories.toList().sorted(),
-                        "entropyScore" to Entropy.truncatedScore(tw1.maxEntropyBitsPerChar),
-                    ),
-                )
-                // NO blocking — fall through to supervisor.send (SC2 / non-interactive path).
-            }
+            // Detect + audit-log on match via the single SecretTripwire helper (WR-03 — one
+            // payload shape across all hooks); NEVER block — fall through to supervisor.send (SC2).
+            SecretTripwire.detectAndBuild(singlePrompt, path = "passive_scanner", sessionId = supervisor.currentSessionId())
+                ?.let { AuditLogger.emitGlobal("secret_tripwire_detect", it) }
+            // NO blocking — fall through to supervisor.send (SC2 / non-interactive path).
 
             supervisor.send(
                 text = singlePrompt,
@@ -1577,20 +1567,11 @@ $batchMetadata
         val sendStartMs = System.currentTimeMillis()
 
         // PRIV-03 (Phase 15): tripwire scan on the FINAL post-redaction batch prompt (G1/G8).
-        // Detect + audit-log on match; NEVER block — fall through to supervisor.send (SC2).
-        val tw2 = SecretTripwire.scan(prompt)
-        if (tw2.matched) {
-            AuditLogger.emitGlobal(
-                "secret_tripwire_detect",
-                mapOf(
-                    "path" to "passive_scanner",
-                    "sessionId" to (supervisor.currentSessionId() ?: "none"),
-                    "shapeCategories" to tw2.shapeCategories.toList().sorted(),
-                    "entropyScore" to Entropy.truncatedScore(tw2.maxEntropyBitsPerChar),
-                ),
-            )
-            // NO blocking — fall through to supervisor.send (SC2 / non-interactive path).
-        }
+        // Detect + audit-log on match via the single SecretTripwire helper (WR-03 — one payload
+        // shape across all hooks); NEVER block — fall through to supervisor.send (SC2).
+        SecretTripwire.detectAndBuild(prompt, path = "passive_scanner", sessionId = supervisor.currentSessionId())
+            ?.let { AuditLogger.emitGlobal("secret_tripwire_detect", it) }
+        // NO blocking — fall through to supervisor.send (SC2 / non-interactive path).
 
         supervisor.send(
             text = prompt,
@@ -1679,20 +1660,11 @@ $batchMetadata
         val errorRef = AtomicReference<String?>(null)
 
         // PRIV-03 (Phase 15): tripwire scan on the FINAL post-redaction prompt (G1/G8).
-        // Detect + audit-log on match; NEVER block — fall through to supervisor.send (SC2).
-        val tw3 = SecretTripwire.scan(prompt)
-        if (tw3.matched) {
-            AuditLogger.emitGlobal(
-                "secret_tripwire_detect",
-                mapOf(
-                    "path" to "passive_scanner",
-                    "sessionId" to (supervisor.currentSessionId() ?: "none"),
-                    "shapeCategories" to tw3.shapeCategories.toList().sorted(),
-                    "entropyScore" to Entropy.truncatedScore(tw3.maxEntropyBitsPerChar),
-                ),
-            )
-            // NO blocking — fall through to supervisor.send (SC2 / non-interactive path).
-        }
+        // Detect + audit-log on match via the single SecretTripwire helper (WR-03 — one payload
+        // shape across all hooks); NEVER block — fall through to supervisor.send (SC2).
+        SecretTripwire.detectAndBuild(prompt, path = "passive_scanner", sessionId = supervisor.currentSessionId())
+            ?.let { AuditLogger.emitGlobal("secret_tripwire_detect", it) }
+        // NO blocking — fall through to supervisor.send (SC2 / non-interactive path).
 
         supervisor.send(
             text = prompt,

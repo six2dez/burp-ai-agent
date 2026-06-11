@@ -8,7 +8,6 @@ import com.six2dez.burp.aiagent.config.Defaults
 import com.six2dez.burp.aiagent.mcp.tools.LimitedStringBuilder
 import com.six2dez.burp.aiagent.mcp.tools.ResponsePreprocessorSettings
 import com.six2dez.burp.aiagent.audit.AuditLogger
-import com.six2dez.burp.aiagent.redact.Entropy
 import com.six2dez.burp.aiagent.redact.PrivacyMode
 import com.six2dez.burp.aiagent.redact.Redaction
 import com.six2dez.burp.aiagent.redact.RedactionPolicy
@@ -59,20 +58,11 @@ data class McpToolContext(
             if (privacyMode == PrivacyMode.OFF) raw
             else Redaction.apply(raw, RedactionPolicy.fromMode(privacyMode), stableHostSalt = hostSalt)
         // PRIV-03 (Phase 15): tripwire scan on the FINAL redacted MCP output (G1/G8).
-        // Detect + audit-log on match; NEVER block — return finalText regardless (SC2).
-        val tw = SecretTripwire.scan(finalText)
-        if (tw.matched) {
-            AuditLogger.emitGlobal(
-                "secret_tripwire_detect",
-                mapOf(
-                    "path" to "mcp",
-                    "sessionId" to (supervisor?.currentSessionId() ?: "none"),
-                    "shapeCategories" to tw.shapeCategories.toList().sorted(),
-                    "entropyScore" to Entropy.truncatedScore(tw.maxEntropyBitsPerChar),
-                ),
-            )
-            // NO blocking — return finalText (SC2 / non-interactive path).
-        }
+        // Detect + audit-log on match via the single SecretTripwire helper (WR-03 — one payload
+        // shape across all hooks); NEVER block — return finalText regardless (SC2).
+        SecretTripwire.detectAndBuild(finalText, path = "mcp", sessionId = supervisor?.currentSessionId())
+            ?.let { AuditLogger.emitGlobal("secret_tripwire_detect", it) }
+        // NO blocking — return finalText (SC2 / non-interactive path).
         return finalText
     }
 

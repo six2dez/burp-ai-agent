@@ -79,15 +79,39 @@ object SecretTripwire {
         )
 
     /**
+     * The single SC3 audit-payload builder shared by every emit site (interactive allow event +
+     * the non-interactive detect events). Centralising here is the single source of truth for the
+     * payload shape so the no-leak contract and the key set cannot drift between paths (WR-03).
+     *
+     * The map always carries:
+     * - `"path"` — `"chat"`, `"passive_scanner"`, or `"mcp"` (identifies the outbound hook)
+     * - `"sessionId"` — the resolved session id, or `"none"` when null
+     * - `"shapeCategories"` — sorted list of category names from [ScanResult.shapeCategories]
+     *   (names only — NEVER the raw matched value, CLAUDE.md / AGENTS.md non-negotiable)
+     * - `"entropyScore"` — one-decimal-place string from [Entropy.truncatedScore] (a number —
+     *   NEVER the token)
+     *
+     * The raw matched token is NEVER a key or value here (SC3 no-leak).
+     */
+    private fun buildAuditPayload(
+        scan: ScanResult,
+        path: String,
+        sessionId: String?,
+    ): Map<String, Any?> =
+        buildMap {
+            put("path", path)
+            put("sessionId", sessionId ?: "none")
+            put("shapeCategories", scan.shapeCategories.toList().sorted())
+            put("entropyScore", Entropy.truncatedScore(scan.maxEntropyBitsPerChar))
+        }
+
+    /**
      * Builds the audit payload map for a `secret_tripwire_allow` event (SC3).
      *
-     * The map contains:
-     * - `"path"` = `"chat"` (the interactive chat send path)
-     * - `"sessionId"` = the real session id (resolved after [createSession] at the ChatPanel call site)
-     * - `"shapeCategories"` = sorted list of category names from [ScanResult.shapeCategories]
-     *   (names only — NEVER the raw matched value, CLAUDE.md / AGENTS.md non-negotiable)
-     * - `"entropyScore"` = one-decimal-place string from [Entropy.truncatedScore]
-     *   (a number — NEVER the token)
+     * Delegates to the single [buildAuditPayload] builder with `path = "chat"` (the interactive
+     * chat send path). The map carries `"path"`, `"sessionId"`, a sorted `"shapeCategories"` name
+     * list, and `"entropyScore"`. The raw matched value is NEVER present (CLAUDE.md / AGENTS.md
+     * non-negotiable).
      *
      * Consumed by [ChatPanel.startSessionFromContext] after [createSession] so the event carries
      * a real session id (RESEARCH Open Q1 Option b / G3).
@@ -95,19 +119,13 @@ object SecretTripwire {
     fun buildAllowAuditPayload(
         scan: ScanResult,
         sessionId: String,
-    ): Map<String, Any?> =
-        mapOf(
-            "path" to "chat",
-            "sessionId" to sessionId,
-            "shapeCategories" to scan.shapeCategories.toList().sorted(),
-            "entropyScore" to Entropy.truncatedScore(scan.maxEntropyBitsPerChar),
-        )
+    ): Map<String, Any?> = buildAuditPayload(scan, path = "chat", sessionId = sessionId)
 
     /**
      * Builds the audit payload map for a `secret_tripwire_detect` event on the non-interactive
-     * paths (PassiveAiScanner and McpToolContext). This is the SC3 payload: it carries only
-     * category names + a truncated numeric entropy score + sessionId — NEVER the raw matched token
-     * (CLAUDE.md / AGENTS.md non-negotiable).
+     * paths (PassiveAiScanner and McpToolContext). Delegates to the single [buildAuditPayload]
+     * builder. This is the SC3 payload: it carries only category names + sessionId + a truncated
+     * numeric entropy score — NEVER the raw matched token (CLAUDE.md / AGENTS.md non-negotiable).
      *
      * @param scan The [ScanResult] from [scan] on the FINAL post-redaction payload.
      * @param path One of `"passive_scanner"` or `"mcp"` — identifies the outbound hook.
@@ -118,13 +136,7 @@ object SecretTripwire {
         scan: ScanResult,
         path: String,
         sessionId: String?,
-    ): Map<String, Any?> =
-        mapOf(
-            "path" to path,
-            "sessionId" to (sessionId ?: "none"),
-            "shapeCategories" to scan.shapeCategories.toList().sorted(),
-            "entropyScore" to Entropy.truncatedScore(scan.maxEntropyBitsPerChar),
-        )
+    ): Map<String, Any?> = buildAuditPayload(scan, path = path, sessionId = sessionId)
 
     /**
      * Convenience helper for non-interactive hook bodies: scans [payload] and, when matched,
