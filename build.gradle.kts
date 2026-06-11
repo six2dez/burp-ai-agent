@@ -136,6 +136,7 @@ tasks.build {
 
 tasks.test {
     useJUnitPlatform()
+    jvmArgs("-ea") // Enable JVM assertions so EDT assert() fires in CI (REL-01 SC1 gate)
     val excludeHeavyTests =
         (project.findProperty("excludeHeavyTests") as? String)
             ?.trim()

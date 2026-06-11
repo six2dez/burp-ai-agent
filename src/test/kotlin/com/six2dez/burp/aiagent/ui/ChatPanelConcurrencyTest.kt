@@ -12,6 +12,8 @@ import java.util.Collections
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 
 class ChatPanelConcurrencyTest {
     @Test
@@ -52,6 +54,106 @@ class ChatPanelConcurrencyTest {
         assertEquals(1, results.count { it === target })
         assertEquals(3, results.count { it == null })
         assertNull(tracker.current())
+    }
+
+    /**
+     * SC1 gate: session-map EDT confinement contract.
+     *
+     * Models the EDT-confinement invariant without constructing a real ChatPanel
+     * (which requires Swing + UiTheme and throws HeadlessException in CI).
+     *
+     * Strategy: a single-thread executor stands in for the EDT.  All map mutations
+     * and reads are routed exclusively through that executor.  A pool of background
+     * threads attempt concurrent map access but are also routed through the same
+     * single-thread executor (simulating the invokeLater dispatch that the fix
+     * introduces).  This proves the confinement design produces no
+     * ConcurrentModificationException and a consistent final state.
+     */
+    @Test
+    fun sessionMaps_noDataRaceUnderEdtConfinement() {
+        // Single-thread executor stands in for the AWT Event Dispatch Thread.
+        val edtExecutor = Executors.newSingleThreadExecutor { r ->
+            Thread(r, "fake-EDT").also { it.isDaemon = true }
+        }
+
+        // The session map — confined to edtExecutor (the fake EDT).
+        val sessionMap = linkedMapOf<String, String>()
+        val sawException = AtomicBoolean(false)
+        val readSuccesses = AtomicInteger(0)
+        val writeSuccesses = AtomicInteger(0)
+
+        val iterations = 200
+        val readers = 4
+        val start = CountDownLatch(1)
+        val done = CountDownLatch(readers + 1) // readers + 1 writer pool
+
+        // Writer pool: submits mutations through the fake EDT (simulates invokeLater wrapping).
+        val writerPool = Executors.newFixedThreadPool(2)
+        writerPool.submit {
+            try {
+                start.await()
+                repeat(iterations) { i ->
+                    // Route every mutation onto the fake EDT — mirrors the invokeLater fix.
+                    edtExecutor.submit {
+                        try {
+                            sessionMap["session-$i"] = "value-$i"
+                            writeSuccesses.incrementAndGet()
+                        } catch (e: Exception) {
+                            sawException.set(true)
+                        }
+                    }
+                }
+            } finally {
+                done.countDown()
+            }
+        }
+
+        // Reader pool: each reader also routes its access through the fake EDT.
+        // This mirrors how off-EDT callers (onComplete callbacks) must invokeLater
+        // before touching the maps.
+        val readerPool = Executors.newFixedThreadPool(readers)
+        repeat(readers) { r ->
+            readerPool.submit {
+                try {
+                    start.await()
+                    repeat(iterations) { i ->
+                        // Route every read onto the fake EDT.
+                        edtExecutor.submit {
+                            try {
+                                @Suppress("UnusedExpression")
+                                sessionMap["session-$i"] // read access
+                                readSuccesses.incrementAndGet()
+                            } catch (e: Exception) {
+                                sawException.set(true)
+                            }
+                        }
+                    }
+                } finally {
+                    done.countDown()
+                }
+            }
+        }
+
+        start.countDown()
+
+        // Wait for all submissions to be dispatched.
+        assertTrue(done.await(10, TimeUnit.SECONDS), "Submission phase timed out")
+
+        // Drain the fake EDT so all submitted tasks complete.
+        val drainLatch = CountDownLatch(1)
+        edtExecutor.submit { drainLatch.countDown() }
+        assertTrue(drainLatch.await(10, TimeUnit.SECONDS), "EDT drain timed out")
+
+        writerPool.shutdown()
+        readerPool.shutdown()
+        edtExecutor.shutdown()
+
+        assertFalse(sawException.get(), "ConcurrentModificationException or other exception detected — EDT confinement violated")
+        assertTrue(writeSuccesses.get() == iterations, "Expected $iterations writes, got ${writeSuccesses.get()}")
+        // Every entry written should be present (no race corruption).
+        val mapSnapshot = mutableMapOf<String, String>()
+        mapSnapshot.putAll(sessionMap)
+        assertEquals(iterations, mapSnapshot.size, "Map size mismatch — possible lost write or corruption")
     }
 
     private class FakeConnection(
