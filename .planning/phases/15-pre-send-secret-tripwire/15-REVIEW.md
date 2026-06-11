@@ -2,202 +2,197 @@
 phase: 15-pre-send-secret-tripwire
 reviewed: 2026-06-11T00:00:00Z
 depth: standard
-files_reviewed: 10
+iteration: 2
+files_reviewed: 7
 files_reviewed_list:
   - src/main/kotlin/com/six2dez/burp/aiagent/redact/Entropy.kt
   - src/main/kotlin/com/six2dez/burp/aiagent/redact/SecretTripwire.kt
-  - src/main/kotlin/com/six2dez/burp/aiagent/ui/components/ContextPreviewDialog.kt
-  - src/main/kotlin/com/six2dez/burp/aiagent/ui/ChatPanel.kt
   - src/main/kotlin/com/six2dez/burp/aiagent/scanner/PassiveAiScanner.kt
   - src/main/kotlin/com/six2dez/burp/aiagent/mcp/McpToolContext.kt
   - src/test/kotlin/com/six2dez/burp/aiagent/redact/EntropyTest.kt
-  - src/test/kotlin/com/six2dez/burp/aiagent/redact/SecretTripwireTest.kt
-  - src/test/kotlin/com/six2dez/burp/aiagent/redact/SecretTripwireGateTest.kt
   - src/test/kotlin/com/six2dez/burp/aiagent/redact/SecretTripwireHooksTest.kt
+  - src/test/kotlin/com/six2dez/burp/aiagent/redact/SecretTripwireGateTest.kt
 findings:
   critical: 0
-  warning: 3
-  info: 4
-  total: 7
-status: issues_found
+  warning: 0
+  info: 2
+  total: 2
+status: clean
 ---
 
-# Phase 15: Code Review Report
+> Iteration-2 residual WARNING (dot-joined pass firing on MAC-like dotted-hex runs) resolved by the orchestrator: Pass 2 in `Entropy.maxQualifyingTokenEntropy` now requires the BASE64 threshold (4.5 bits/char) only — pure hex maxes at 4.0, so dotted-hex/MAC runs no longer qualify, while base64url/JWT recovery is preserved (entropy + tripwire suites green). Both security invariants (no-leak SC3, never-hard-block SC2) verified HOLD. The 2 INFO items are cosmetic (a `detectAndBuild` type-convention note; a test-regex `-?` that's moot since entropy is never negative) — accepted. Status: clean.
 
-**Reviewed:** 2026-06-11
+# Phase 15: Code Review Report (Iteration 2)
+
+**Reviewed:** 2026-06-11T00:00:00Z
 **Depth:** standard
-**Files Reviewed:** 10
+**Files Reviewed:** 7
 **Status:** issues_found
 
 ## Summary
 
-Phase 15 adds the PRIV-03 pre-send secret tripwire: a Shannon-entropy helper (`Entropy`),
-an orchestrating detector (`SecretTripwire`) that reuses `SecretShapes` as the single source of
-truth, an interactive warn-with-confirmation gate in `ContextPreviewDialog`, and audit-and-proceed
-hooks on the two non-interactive outbound paths (`PassiveAiScanner` ×3 sites, `McpToolContext`).
+Iteration-2 adversarial re-review of the PRIV-03 pre-send secret tripwire after the iteration-1
+fixes: WR-03 (ad8167c) centralized the SC3 audit payload into one `SecretTripwire` builder and
+routed the non-interactive hooks through `detectAndBuild`; WR-02 (134b716) omits `entropyScore` on
+shape-only matches; WR-01 (db30533) added an additive dot-joined entropy pass with FP-guard tests.
 
-**The load-bearing security invariant holds.** I traced the no-leak property (SC3) through all
-five emit sites and the persistence path (`emitGlobal` → `AuditLogger.logEvent` → `audit.jsonl`):
-every payload map carries only `path`, `sessionId`, a sorted `shapeCategories` name list, and a
-one-decimal `entropyScore` string. `ScanResult` has no raw-token field; no `emitGlobal`/banner call
-interpolates the input text. The RISK banner names categories only, and the banner HTML is built
-from hardcoded `SecretShapes.category` literals (no HTML-injection vector). The never-hard-block
-invariant (SC2) also holds: the chat gate returns a `Boolean` (Cancel = user choice), MCP returns
-`finalText` regardless, and the scanner falls through to `supervisor.send` after auditing. AWT-free,
-zero-new-deps, single-source-of-truth, and English-only/UTF-8 constraints are all satisfied, and the
-targeted test suites build and pass green via `./gradlew test`.
+**Both load-bearing security invariants were independently re-verified by full data-flow tracing and
+both HOLD.** No blocker. The iteration-1 WR-01/02/03 are confirmed resolved. One residual WARNING
+(the WR-01 dot-joined pass widens the dotted-hex false-positive surface — non-blocking, non-leaking,
+matching the fixer's "warn-only, risk-acceptable" call) and two INFO items remain.
 
-The findings below are correctness/robustness gaps in the **detector**, not the no-leak or
-no-block guarantees. The most important is WR-01: a tokenization gap in `Entropy` that lets a real
-class of high-entropy secrets (those containing `.`, e.g. a raw JWT body or a dot-delimited key)
-slip past the entropy half of the detector entirely. This weakens the advertised "catches unprefixed
-high-entropy tokens" contribution but is not a leak or a block, hence WARNING.
+### Invariant (a) — NO path logs/audits/echoes the RAW secret value: HOLD
+
+Verified at the type level and along every emit path:
+- `SecretShapes.findSurviving` (single source of truth, SecretShapes.kt:93-94) maps each matching
+  shape to `it.category` — a compile-time-constant label (e.g. "AWS access key") — and discards the
+  regex match. The matched substring is never carried out.
+- `SecretTripwire.ScanResult` (SecretTripwire.kt:38-42) has exactly three fields: `matched: Boolean`,
+  `shapeCategories: Set<String>` (labels only), `maxEntropyBitsPerChar: Double`. There is no
+  raw-token field by construction — the SC3 no-leak property is enforced structurally.
+- `buildAuditPayload` (SecretTripwire.kt:96-115) `put`s only fixed keys: `path`, `sessionId`
+  (or "none"), `shapeCategories` (sorted labels), and `entropyScore` (a `"%.1f"` string). grep
+  confirmed the only `put(...)` values are `path`, `sessionId ?: "none"`, the sorted categories, and
+  `Entropy.truncatedScore(...)` — no scanned-payload variable is ever interpolated.
+- `Entropy.truncatedScore` (Entropy.kt:149) formats a `Double` to one decimal — never the token.
+- All three emit call sites pass only the builder's map and never the scanned text:
+  `PassiveAiScanner.kt:915-916` (`detectAndBuild(singlePrompt, ...)?.let { emitGlobal(...) }`),
+  `McpToolContext.kt:63-64` (`detectAndBuild(finalText, ...)?.let { ... }`),
+  `ChatPanel.kt:324-327` (`buildAllowAuditPayload(tripwireScan, session.id)`).
+- Tests assert the no-leak property for both detector halves: `SecretTripwireHooksTest:146-168` and
+  `SecretTripwireGateTest:201-228` confirm the raw token is absent from the payload's string form.
+
+### Invariant (b) — never-hard-block (SC2): HOLD
+
+- `PassiveAiScanner.doAnalysis` (PassiveAiScanner.kt:915-933): `detectAndBuild(...)?.let { emit }`
+  then unconditionally calls `supervisor.send(...)`. The `?.let` gates only the emit, never the send.
+- `McpToolContext.redactIfNeeded` (McpToolContext.kt:55-67): emit-on-match, then `return finalText`
+  regardless — the scan result cannot suppress the return value.
+- `SecretTripwire.detectAndBuild` (SecretTripwire.kt:164-171) returns `Map?` (an emit signal), never
+  a block decision; its KDoc states the caller MUST proceed.
+- Chat gate `ContextPreviewDialog.confirm` (ContextPreviewDialog.kt:60-115) returns `choice == 0`
+  (Boolean). A tripwire match changes only the banner level + affirmative label ("Send anyway");
+  Cancel stays `options[1]` as `initialValue`, so a match never auto-blocks and Enter never silently
+  sends. The Boolean contract back to `ChatPanel.kt:302` is intact.
+
+### WR-01 dot-joined pass — entropy math, ReDoS, false-positives: verified empirically
+
+kotlinc was unavailable in-environment, so I ported the exact algorithm to a faithful Java
+reimplementation and executed it directly:
+- **Entropy math correct:** `shannon("0123456789abcdef") = 4.0`, constant string = 0.0, empty = 0.0
+  — matches `EntropyTest`. The qualifying floor is `HEX_THRESHOLD = 3.0`; I confirmed the lowest
+  entropy a qualifying token can have is exactly 3.0 (a 4-symbol token scores 2.0 and is rejected; an
+  8-symbol even token scores 3.0 and qualifies). Therefore a genuine entropy match is ALWAYS `> 0.0`,
+  making the WR-02 `> 0.0` guard (SecretTripwire.kt:112) mathematically exact: no real match is
+  silently omitted, and no shape-only match ever falsely reports a score. The comment at
+  SecretTripwire.kt:110-111 is accurate.
+- **No ReDoS / perf cliff:** both splitters (`TOKEN_SPLIT`, `DOTTED_SPLIT`) are linear negated
+  character classes with no backtracking. Pathological inputs — 100k `"a."`, 200k `"A"`, 270k mixed
+  token chars, 300k `"ab."` — all completed in ≤ 28 ms. Two strictly-linear passes, O(n).
+- **No false-positives on normal prose:** prose, version strings (`v1.2.3`, `10.15.7.20210101`), long
+  dotted hostnames, dotted package paths, GPS coordinates, dotted filenames, GUIDs, and slashy URL
+  paths all returned 0.0 — corroborating the four FP-guard tests (EntropyTest:111-147).
+- **True positives recovered (the WR-01 goal):** a raw JWT body/signature and a dot-delimited
+  base64url key now score ~4.9 bits/char where the old single pass returned 0.0.
+- **One widened FP surface** (see WR-01 below): dotted hex octet runs that join to ≥ 32 hex chars now
+  clear the 3.0 hex threshold. Non-blocking, non-leaking audit-only noise; consistent with the
+  accepted `SecretShapes` "high-entropy hex key" disposition. WARNING, not blocker.
+
+### AWT-free + single-source-of-truth + iteration-1 fix confirmation
+
+- `Entropy.kt` and `SecretTripwire.kt` import no `java.awt.*` / `javax.swing.*` (grep confirmed).
+- `SecretTripwire.scan` delegates the shape half to `SecretShapes.findSurviving` and the entropy half
+  to `Entropy.maxQualifyingTokenEntropy`; neither is re-implemented. The interactive and
+  non-interactive paths share one `scan` and one `buildAuditPayload`.
+- **WR-03 confirmed resolved:** the four hand-duplicated emit blocks are gone; `PassiveAiScanner`
+  (single-prompt path) and `McpToolContext` both route through `SecretTripwire.detectAndBuild`, and
+  `ChatPanel` uses `buildAllowAuditPayload`. There is exactly one payload shape.
+- **WR-02 confirmed resolved:** `entropyScore` is emitted only under the `> 0.0` guard; shape-only
+  matches omit the key. Asserted by `SecretTripwireHooksTest:89-104` and `SecretTripwireGateTest:111-129`.
+- **WR-01 confirmed resolved:** the additive dot-joined pass detects dot-delimited base64url secrets
+  whose segments are individually below `MIN_TOKEN_LEN`; the four FP-guard tests pass.
 
 ## Warnings
 
-### WR-01: Entropy tokenizer splits on `.` `:` `,` — high-entropy secrets containing those bytes evade the entropy detector
+### WR-01: Dot-joined entropy pass widens the dotted-hex false-positive surface
 
-**File:** `src/main/kotlin/com/six2dez/burp/aiagent/redact/Entropy.kt:53` (used at `:85`)
-**Issue:**
-`TOKEN_SPLIT = Regex("[^A-Za-z0-9+/=_-]+")` treats `.`, `:`, `,`, and whitespace as token
-delimiters. That is fine for the shape half (JWTs are caught by `SecretShapes`), but it means the
-**entropy half** never sees a contiguous high-entropy run that contains any of those characters.
-Two concrete consequences:
+**File:** `src/main/kotlin/com/six2dez/burp/aiagent/redact/Entropy.kt:131-138`
+**Issue:** The WR-01 second pass strips dots from a dotted candidate and gates the joined payload.
+For the hex charset the threshold is only `HEX_THRESHOLD = 3.0`, evaluated after dots are removed, so
+dotted runs of hex octets that individually fall below `MIN_TOKEN_LEN` but join to ≥ 32 hex chars now
+qualify where the original single pass did not. Empirically (old single-pass vs. new two-pass):
+- `ab.cd.ef.01.23.45.67.89.ab.cd.ef.01.23.45.67.89`  -> 4.000 (was 0.0) — NEW-only fire
+- `a1b2c3d4.e5f6a7b8.c9d0e1f2.a3b4c5d6`               -> 3.906 (was 0.0) — NEW-only fire
 
-1. A base64**url** value with `.` separators (a JWT body/signature that somehow lost its `eyJ`
-   header, or a dot-delimited API key like `xxxxxx.yyyyyy.zzzzzz`) is fragmented into sub-20-char
-   pieces, each of which fails the `MIN_TOKEN_LEN` gate, so the entropy detector reports `0.0`.
-2. A long unprefixed secret pasted inline with a trailing colon/comma in JSON
-   (`"key":"<46 base64 chars>",`) still tokenizes fine because `"` and `,` are delimiters and the
-   value is isolated — but a value like `Bearer.<token>` or `id:<token>` where the high-entropy
-   run abuts a `.`/`:` *inside* the run gets split.
+These shapes occur in real traffic (MAC-like sequences, dot/colon-rendered fingerprints, chunked hex
+digests). Each produces a spurious entropy-only `secret_tripwire_detect` audit event (empty
+`shapeCategories`, a numeric score).
 
-The entropy path's stated "real contribution is base64 tokens with no known prefix"
-(`Entropy.kt:13`); silently dropping the dot-containing subset of exactly that class is a
-correctness gap in the detector's advertised coverage. This is a missed-detection (false negative),
-not a leak/block, so WARNING rather than BLOCKER.
+This is correctly NON-blocking and NON-leaking: the event carries only sessionId + an (empty)
+category list + a numeric score, and every hook still proceeds with the send. It mirrors the
+already-accepted noise disposition of the broad `SecretShapes` "high-entropy hex key" shape
+(SecretShapes.kt:77-81). Per the iteration-2 directive, this is recorded as WARNING (not blocker)
+because no leak, block, or crash results — matching the fixer's "warn-only, risk-acceptable" judgment.
 
-**Fix:** Decide explicitly whether `.`/`:` are intra-token or inter-token, and document it. If the
-intent is to cover dot-delimited base64url secrets, add `.` to the token character class so the
-run stays contiguous; the per-segment hex/base64 charset check still gates qualification:
+**Fix (optional hardening, defer-acceptable — does NOT affect either invariant):** If dotted-hex
+audit noise proves bothersome, restrict the dot-joined pass to the base64url case it was designed for
+(JWT bodies / dot-delimited base64url keys), so pure-hex dotted runs do not newly qualify via this
+pass — contiguous hex is already covered by the broad hex shape:
 ```kotlin
-// Keep '.' as an intra-token char so dot-delimited base64url secrets stay contiguous;
-// charset gate below still rejects ordinary prose sentences ("a.b.c" is < MIN_TOKEN_LEN).
-private val TOKEN_SPLIT = Regex("[^A-Za-z0-9+/=_.\\-]+")
-```
-If instead the current split is intentional (rely on `SecretShapes` for all dot-delimited forms),
-add a one-line comment at `:53` stating that and a negative test asserting the chosen behavior, so
-the gap is a documented decision rather than an accident.
-
-### WR-02: `entropyScore` is emitted even when the match is shape-only, encoding a misleading `0.0`
-
-**File:** `src/main/kotlin/com/six2dez/burp/aiagent/redact/SecretTripwire.kt:103,126` (and the four
-inline emit sites: `PassiveAiScanner.kt:923,1589,1691`, `McpToolContext.kt:71`)
-**Issue:**
-`buildAllowAuditPayload` / `buildDetectAuditPayload` always write
-`"entropyScore" to Entropy.truncatedScore(scan.maxEntropyBitsPerChar)`. When a match is
-shape-only (e.g. an AWS `AKIA…` key with no qualifying high-entropy token), `maxEntropyBitsPerChar`
-is `0.0`, so the audit event records `entropyScore = "0.0"`. A reader of `audit.jsonl` cannot
-distinguish "entropy detector ran and scored 0.0" from "entropy detector did not contribute to this
-match." This is benign for the no-leak invariant (it is a number) but actively misleading for the
-audit-trail consumer this phase exists to serve. It is a recurring data-quality defect duplicated
-across five call sites, which also makes it fragile to fix later.
-
-**Fix:** Emit `entropyScore` only when the entropy half actually contributed, or tag the source.
-Centralize so all five sites stay consistent (see IN-01):
-```kotlin
-val map = buildMap<String, Any?> {
-    put("path", path)
-    put("sessionId", sessionId ?: "none")
-    put("shapeCategories", scan.shapeCategories.toList().sorted())
-    if (scan.maxEntropyBitsPerChar > 0.0) {
-        put("entropyScore", Entropy.truncatedScore(scan.maxEntropyBitsPerChar))
-    }
+for (candidate in text.split(DOTTED_SPLIT)) {
+    if (!candidate.contains('.')) continue
+    val joined = candidate.replace(".", "")
+    // Dotted recovery targets base64url secrets (JWT body/sig); a dotted run of pure
+    // hex octets is benign noise the contiguous "high-entropy hex key" shape already covers.
+    if (joined.all { it in HEX_CHARS }) continue
+    val h = qualifyingEntropy(joined)
+    if (h > max) max = h
 }
 ```
-At minimum, document at `truncatedScore` that `"0.0"` overloads "no entropy contribution."
-
-### WR-03: Four secret-tripwire emit sites are hand-duplicated instead of using the provided helpers
-
-**File:** `src/main/kotlin/com/six2dez/burp/aiagent/scanner/PassiveAiScanner.kt:915-927,1581-1593,1683-1695`
-and `src/main/kotlin/com/six2dez/burp/aiagent/mcp/McpToolContext.kt:63-75`
-**Issue:**
-`SecretTripwire` ships `detectAndBuild(payload, path, sessionId)` and `buildDetectAuditPayload(...)`
-expressly as "convenience helper[s] for non-interactive hook bodies" (`SecretTripwire.kt:129-149`),
-and `SecretTripwireHooksTest` covers them. Yet none of the four non-interactive hook sites use them:
-each re-implements the scan + `if (matched)` + inline `mapOf("path" to …, "sessionId" to …,
-"shapeCategories" to … .sorted(), "entropyScore" to Entropy.truncatedScore(…))` by hand. The
-helper is therefore dead code in `main` (only tests call it), and the four copies have already
-drifted in a way that matters: any fix for WR-01/WR-02 must now be applied in four places, and a
-miss in one path is a silent no-leak/consistency regression. The duplication is the root cause that
-makes WR-02 a five-site change.
-
-**Fix:** Route every non-interactive hook through the existing helper so there is exactly one
-payload shape:
-```kotlin
-// McpToolContext.redactIfNeeded:
-SecretTripwire.detectAndBuild(finalText, path = "mcp", sessionId = supervisor?.currentSessionId())
-    ?.let { AuditLogger.emitGlobal("secret_tripwire_detect", it) }
-
-// PassiveAiScanner (each of the three sites):
-SecretTripwire.detectAndBuild(prompt, path = "passive_scanner", sessionId = supervisor.currentSessionId())
-    ?.let { AuditLogger.emitGlobal("secret_tripwire_detect", it) }
-```
-This deletes ~36 lines, removes the dead-code helper, and collapses WR-02 to a single edit.
 
 ## Info
 
-### IN-01: `Entropy` import in `PassiveAiScanner` / `McpToolContext` only exists because the hooks bypass the helper
+### IN-01: `detectAndBuild` encodes the SC2 "proceed" guarantee by call-site convention, not in its type
 
-**File:** `src/main/kotlin/com/six2dez/burp/aiagent/scanner/PassiveAiScanner.kt:17`,
-`src/main/kotlin/com/six2dez/burp/aiagent/mcp/McpToolContext.kt:11`
-**Issue:** Both files import `com.six2dez.burp.aiagent.redact.Entropy` solely to call
-`Entropy.truncatedScore(...)` inline. Adopting WR-03 makes `truncatedScore` an internal detail of
-`SecretTripwire` and renders these two imports (and the direct `Entropy` coupling of these modules)
-unnecessary. Encapsulating the score formatting behind the payload builder is the cleaner boundary.
-**Fix:** After WR-03, drop the now-unused `Entropy` imports from both files.
+**File:** `src/main/kotlin/com/six2dez/burp/aiagent/redact/SecretTripwire.kt:164-171`
+**Issue:** `detectAndBuild` returns `Map?` where non-null means "emit." The never-block guarantee
+(SC2) is enforced only by each caller writing `detectAndBuild(...)?.let { emitGlobal(...) }` and then
+proceeding — it is not expressed in the signature. A future caller could misread a non-null return as
+"block." The two current callers (PassiveAiScanner.kt:915, McpToolContext.kt:63) are correct and the
+KDoc is explicit, so this is documentation-grade.
+**Fix:** Consider renaming to `buildDetectEventOrNull` to make clear the return is an event payload,
+not a decision. No behavioral change required.
 
-### IN-02: `Short`-typed status comparisons read awkwardly and are easy to regress
+### IN-02: SC3 score-format contract is inconsistent between the two test suites
 
-**File:** `src/main/kotlin/com/six2dez/burp/aiagent/scanner/PassiveAiScanner.kt:1158`
-**Issue:** `if (status == 204.toShort() || status == 304.toShort())` — `response.statusCode()`
-returns a `Short`, so the `.toShort()` literals are required, but the pattern is unusual and a future
-edit that drops `.toShort()` would silently always-false (Int vs Short never equal in Kotlin). Not a
-Phase 15 change per se, but it sits one line below newly-touched scanner code and is a latent
-foot-gun. (Out of strict Phase 15 scope — noted only because it is adjacent to the reviewed diff.)
-**Fix:** Introduce a typed constant or compare against `Short` vals:
-`private val SKIP_STATUSES = setOf<Short>(204, 304)` then `if (status in SKIP_STATUSES)`.
-
-### IN-03: `truncatedScore` can emit a negative-looking `"-0.0"` and the allow-builder regex anticipates a sign that the domain forbids
-
-**File:** `src/main/kotlin/com/six2dez/burp/aiagent/redact/Entropy.kt:103`;
-test `SecretTripwireGateTest.kt:176` (`Regex("-?\\d+\\.\\d")`)
-**Issue:** Shannon entropy is always ≥ 0, so a sign is never expected. `"%.1f".format(Locale.ROOT,
--0.0)` yields `"-0.0"`, and the gate-test regex tolerates a leading `-` (`-?`), implicitly admitting
-an impossible value into the contract. While `shannon` cannot currently produce `-0.0` (the sum is
-non-negative), formatting `-0.0` would still produce `"-0.0"`, and the `-?` in the test signals
-uncertainty about the invariant. Cosmetic, no leak.
-**Fix:** Normalize negative-zero and tighten the test to the real domain:
-`fun truncatedScore(b: Double) = "%.1f".format(Locale.ROOT, if (b == 0.0) 0.0 else b)` and change
-the test regex to `Regex("\\d+\\.\\d")` (matching the stricter `SecretTripwireHooksTest.kt:168`,
-which already omits the sign — the two tests are inconsistent today).
-
-### IN-04: ChatPanel re-scans the payload a second time after `confirm()` already scanned it
-
-**File:** `src/main/kotlin/com/six2dez/burp/aiagent/ui/ChatPanel.kt:322`
-**Issue:** `confirm()` runs `SecretTripwire.scan(contextJson)` to drive the gate, then
-`startSessionFromContext` runs `SecretTripwire.scan(capture.contextJson)` again to build the allow
-event (so it can carry the post-`createSession` session id). The code comments justify this ("cheap,
-same bytes"), and it is correct, but it is a redundant full scan of a payload that can be large, and
-it couples correctness to the two call sites passing the identical string (they do today:
-`contextJson = capture.contextJson` at `:307`). Acceptable as-is; flagged for awareness.
-**Fix (optional):** Have `confirm()` return the `ScanResult` (or a small result object) alongside the
-`Boolean`, or hoist the single `scan` into `startSessionFromContext` and pass it down, so the gate
-and the allow-audit share one scan. Preserves the "emit after createSession" ordering without the
-second pass.
+**File:** `src/test/kotlin/.../SecretTripwireHooksTest.kt:118` vs `.../SecretTripwireGateTest.kt:195`
+**Issue:** `truncatedScore` uses `"%.1f".format(Locale.ROOT, bitsPerChar)`, which would render a
+negative as `-1.0`. Shannon entropy is non-negative and the qualifying floor is +3.0, so a negative
+value is unreachable in practice — but the two suites disagree on the asserted contract:
+`SecretTripwireHooksTest:118` asserts `\d+\.\d` (no sign) while `SecretTripwireGateTest:195` asserts
+`-?\d+\.\d` (sign allowed). Harmless today; the divergence signals an unspecified contract.
+**Fix:** Pick one. Since the domain is non-negative here, tighten both to `\d+\.\d` and (optionally)
+document `truncatedScore`'s non-negative domain. No production change needed. (Carried over from
+iteration-1 IN-03; the production `-0.0` normalization was applied, the test divergence remains.)
 
 ---
 
-_Reviewed: 2026-06-11_
+## Disposition of iteration-1 findings
+
+- **WR-01** (entropy tokenizer dropped dot-delimited secrets) — RESOLVED by db30533 (additive
+  dot-joined pass + 4 FP-guard tests). Residual dotted-hex FP surface re-filed as the WARNING above.
+- **WR-02** (`entropyScore "0.0"` on shape-only matches) — RESOLVED by 134b716 (`> 0.0` guard;
+  mathematically exact, verified).
+- **WR-03** (four hand-duplicated emit sites) — RESOLVED by ad8167c (single builder + `detectAndBuild`).
+- **IN-01** (stray `Entropy` imports from the bypassed helper) — RESOLVED as a consequence of WR-03.
+- **IN-02** (`Short` status comparison foot-gun) — out of strict Phase 15 scope; not re-raised.
+- **IN-03** (`-0.0` normalization + test regex) — production normalization applied; test divergence
+  re-filed as IN-02 above.
+- **IN-04** (ChatPanel re-scan after `confirm()`) — accepted as-is in iteration 1 (correct, cheap,
+  same bytes); not re-raised.
+
+---
+
+_Reviewed: 2026-06-11T00:00:00Z_
 _Reviewer: Claude (gsd-code-reviewer)_
-_Depth: standard_
+_Depth: standard (iteration 2)_
