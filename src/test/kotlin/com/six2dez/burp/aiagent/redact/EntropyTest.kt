@@ -42,14 +42,16 @@ class EntropyTest {
         assertEquals(0.0, result, 0.001, "A 19-char token must not qualify (< MIN_TOKEN_LEN); got $result")
     }
 
-    // A 20-char token that meets or exceeds the base64 threshold must qualify (> 0.0).
+    // A 20-char token passes the length gate; use the hex threshold (3.0) which is reachable
+    // with a good 20-char hex token (4+ distinct hex chars each appearing ~5 times gives entropy
+    // > 3.0). Verify the gate: 19-char does NOT qualify, 20-char does qualify (hex path).
     @Test
-    fun tokenAtMinLenQualifiesWhenHighEntropy() {
-        // 20-char base64 alphabet token with good spread — should clear the base64 threshold.
-        val longToken = "ABCDEFGHIJKLMNOPQRst" // 20 chars, base64 alphabet
-        assertEquals(20, longToken.length)
-        val result = Entropy.maxQualifyingTokenEntropy(longToken)
-        assertTrue(result > 0.0, "A 20-char high-entropy base64 token must qualify; got $result")
+    fun tokenAtMinLenQualifiesViaHexThreshold() {
+        // 20-char hex token with uniform spread across 16 hex symbols → entropy ~4.0, well above 3.0.
+        val hexToken = "0123456789abcdef0123" // 20 chars, all hex, good entropy
+        assertEquals(20, hexToken.length)
+        val result = Entropy.maxQualifyingTokenEntropy(hexToken)
+        assertTrue(result > 0.0, "A 20-char high-entropy hex token must qualify via hex threshold (>=3.0); got $result")
     }
 
     // A long hex token (all hex chars, >= 20) with good entropy must clear the hex threshold.
@@ -62,14 +64,15 @@ class EntropyTest {
         assertTrue(result > 0.0, "A 32-char uniform hex token must clear the hex threshold; got $result")
     }
 
-    // A long base64 token with random-looking chars must clear the base64 threshold.
+    // A long base64 token with diverse characters must clear the base64 threshold (4.5).
     @Test
     fun longBase64TokenClearsBase64Threshold() {
-        // A 44-char base64 token with good character spread.
-        val b64Token = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnop"
-        assertEquals(44, b64Token.length)
+        // 48-char base64 token with good character spread across uppercase, lowercase, digits.
+        // Entropy of a 48-char token with 48 distinct base64 chars approaches log2(48) ~5.6 bits/char.
+        val b64Token = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuv"
+        assertEquals(48, b64Token.length)
         val result = Entropy.maxQualifyingTokenEntropy(b64Token)
-        assertTrue(result > 0.0, "A 44-char diverse base64 token must clear the base64 threshold; got $result")
+        assertTrue(result > 0.0, "A 48-char diverse base64 token must clear the base64 threshold (>=4.5); got $result")
     }
 
     // SC3: truncatedScore must format to exactly one decimal place regardless of locale.
