@@ -434,7 +434,7 @@ This is internal hardening; no external "state of the art" shift applies. The on
 | A5 | Issue #71 root cause is the 120s hardcoded CLI timeout being exceeded by `npx @google/gemini-cli` first-run download (not a different gemini-cli bug) | REL-04 analysis | The issue body had empty actual/expected fields, so this is inferred from the reproduction command + the code. SC4 permits an actionable error even if the exact root cause differs, so the fix (configurable timeout + actionable message) is robust to this assumption being partially wrong. |
 | A6 | The new `cliTimeoutSeconds` is plain-text config (prefs `getInteger`), not a secret | Runtime State Inventory | Matches the `customRedactionPatterns` precedent (config ≠ secret). No risk; it's a timeout integer. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Should `onCompleted` run on the EDT or off it after the REL-01 fix?**
    - What we know: today it runs off-EDT; the fix moves the map reads onto the EDT.
