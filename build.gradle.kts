@@ -86,7 +86,7 @@ package com.six2dez.burp.aiagent
 object BuildFlags {
     const val STORE_BUILD = ${storeBuildFlag.get()}
 }
-            """.trimIndent(),
+            """.trimIndent() + "\n",
         )
     }
 }
@@ -166,10 +166,10 @@ tasks.register<Test>("nightlyRegressionTest") {
 ktlint {
     version.set("1.5.0")
     android.set(false)
-    // Start lenient: `ktlintFormat` auto-fixes most violations, but the initial run will still
-    // surface things that need manual review. Flip to `false` once the baseline is clean.
+    // Strict by default: fails unless -PktlintLenient=true is passed as an escape hatch.
+    // Mass-format commit (style(sc3)) preceded this gate-flip — codebase is clean.
     ignoreFailures.set(
-        (project.findProperty("ktlintStrict") as? String)?.equals("true", ignoreCase = true) != true,
+        (project.findProperty("ktlintLenient") as? String)?.equals("true", ignoreCase = true) == true,
     )
     reporters {
         reporter(org.jlleitschuh.gradle.ktlint.reporter.ReporterType.PLAIN)
