@@ -183,7 +183,14 @@ Plans:
   4. Issue #71 (CLI command timeout failure) is reproduced, diagnosed, and fixed or given an actionable error message; a regression test prevents recurrence.
   5. MCP server shutdown completes within a bounded timeout (no hang on `McpSupervisor.stop()`); host-anonymization maps are bounded or cleared to prevent memory growth over long pentests.
 
-**Plans**: TBD
+**Plans**: 3 plans (all wave 1 — files_modified disjoint, fully parallel)
+
+Plans:
+**Wave 1** *(no inter-plan dependencies; disjoint file sets — run in parallel)*
+
+- [ ] 17-01-PLAN.md — REL-03: shared 429/5xx → CircuitBreaker.recordFailure helper in HttpBackendSupport + wire all 4 HTTP backends (OpenAiCompatible/Anthropic/Ollama/LmStudio) + HttpBackendCircuitFailureTest (closes Phase 14 WR-05)
+- [ ] 17-02-PLAN.md — REL-01: local SOURCE-retained @GuardedBy annotation + ChatPanel EDT confinement (invokeLater on off-EDT tool-result map reads + addMessage) + jvmArgs("-ea") + ChatPanelConcurrencyTest
+- [ ] 17-03-PLAN.md — REL-02 + REL-04: CLI deleteOnExit + configurable cliTimeoutSeconds + actionable buildTimeoutMessage (#71); bounded McpServerManager.stop(); LRU-capped host-anonymization maps + 4 tests
 
 ### Phase 18: Quality Tooling & Build Hardening
 
