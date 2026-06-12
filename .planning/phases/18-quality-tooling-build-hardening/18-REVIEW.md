@@ -20,7 +20,11 @@ findings:
   warning: 4
   info: 2
   total: 8
-status: issues_found
+status: fixed
+resolution:
+  fixed: [CR-01, CR-02, WR-01, WR-02, WR-03]
+  deferred: [WR-04, IN-01, IN-02]
+  fixed_at: 2026-06-12
 ---
 
 # Phase 18: Code Review Report
@@ -28,7 +32,22 @@ status: issues_found
 **Reviewed:** 2026-06-11
 **Depth:** standard
 **Files Reviewed:** 11
-**Status:** issues_found
+**Status:** fixed (5 of 8 resolved; 3 deferred)
+
+## Resolution Log (2026-06-12)
+
+| Finding | Severity | Disposition | Commit |
+|---------|----------|-------------|--------|
+| CR-01 — API keys leaked via `launchConfig` in log + audit | Critical | **Fixed** — `redactedConfigSummary()` masks header values; audit logs only non-sensitive fields | `3e2687a` |
+| CR-02 — `agent_chunk` audit fires outside `isEnabled()` gate | Critical | **Fixed** — both onChunk callbacks guarded by `if (audit.isEnabled())` | `78f1db4` |
+| WR-01 — `file.delete()` under read lock in cache `get()` | Warning | **Fixed** — deletion moved to a write-locked, re-validated cleanup path | `d272e59` |
+| WR-02 — brittle absolute-byte assertion in cache test | Warning | **Fixed** — asserts eviction occurred (`entryCount() < 20`) | `2b02e2d` |
+| WR-03 — `CliSupervisionTest` adds 30s to fast PR gate | Warning | **Fixed** — excluded from `excludeHeavyTests`, retained in nightly | `8e4a35e` |
+| WR-04 — dead `buildMetadataSection()` (Markdown variant) | Warning | **Deferred** — pre-existing dead code, out of Phase 18 scope (not a regression) |
+| IN-01 — detekt runs without type resolution | Info | **Deferred** — type-resolution scope explicitly out of Phase 18 (RESEARCH Q2 RESOLVED) |
+| IN-02 — dedup test assertion could be vacuous | Info | **Deferred** — reviewer confirmed logic is sound; non-blocking |
+
+Post-fix gate: `./gradlew check --no-daemon` BUILD SUCCESSFUL (detekt + strict ktlint + full test suite).
 
 ## Summary
 
