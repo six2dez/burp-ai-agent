@@ -74,6 +74,9 @@ class PersistentPromptCacheTest {
                 ),
             )
         }
+        // Assert eviction actually occurred rather than a tight absolute byte bound (WR-02): with a
+        // 200-byte budget, not all 20 entries can survive regardless of CachedIssue's serialized size.
+        assertTrue(cache.entryCount() < 20, "eviction must have removed entries to honor the disk limit")
         assertTrue(cache.diskSizeBytes() <= 200L, "disk size must be within the limit after eviction")
     }
 }
