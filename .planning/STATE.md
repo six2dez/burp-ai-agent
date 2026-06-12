@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v0.9.0
 milestone_name: Hardening, Quality & New Capabilities
 status: ready_to_plan
-stopped_at: Phase 18 complete (4/4). Autonomous run (--from 18) stopped — Phase 19 BLOCKED on deferred Phase 16 (kotlin-sdk/Kotlin-plugin bump + Burp-JVM gate, maintainer-only). Resume with /gsd-autonomous --from 16 after the Burp-JVM test.
+stopped_at: Phase 16 in progress (autonomous --from 16). Kotlin-bump blocker RESOLVED — compile spike proved kotlin-sdk 0.5.0 already ships the MCP client (Client/SseClientTransport/StdioClientTransport) and compiles under Kotlin 2.1.21 (Path A, no bump, no Burp-JVM gate).
 last_updated: 2026-06-12T06:44:13.185Z
 last_activity: 2026-06-11
 progress:
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-10)
 
 **Core value:** Bring modern AI to a real security workflow without leaking sensitive traffic to third-party providers — privacy controls and an audit trail are non-negotiable, AI capability is additive.
-**Current focus:** Phase 19 — mega file split + docs
+**Current focus:** Phase 16 — External MCP Client (unblocked; Path A, no Kotlin bump)
 
 ## Current Position
 
-Phase: 19
+Phase: 16
 Plan: Not started
-Status: Blocked — depends on deferred Phase 16 (External MCP Client). Cannot plan/execute until Phase 16 lands.
+Status: In progress — research complete (Path A proven via compile spike); discuss → ui → plan → execute next
 Last activity: 2026-06-12
 
 ## Performance Metrics
@@ -134,7 +134,7 @@ Recent decisions affecting current work:
 
 [Issues that affect future work]
 
-- **Phase 16 (CAP-02) DEFERRED — gated on a kotlin-sdk 0.13.0 toolchain bump (maintainer decision, 2026-06-11).** Build-time spike (reverted, repo clean) confirmed the bump is NOT a simple dependency change: `io.modelcontextprotocol:kotlin-sdk:0.13.0` forces Ktor 3.1.3→3.4.3 (all `ktor-*` pins must align) AND kotlin-stdlib 2.1.21→2.3.21. Ktor 3.4.3 metadata is compiled with **Kotlin 2.3.0**, so `compileKotlin` FAILS under the project's Kotlin 2.1.21 plugin ("binary version of its metadata is 2.3.0, expected version is 2.1.0"). Doing Phase 16 therefore requires: (1) bump the Kotlin plugin 2.1.21→2.3.x, (2) align all Ktor to 3.4.3, (3) re-verify the whole codebase + full test suite under the new compiler, (4) build the fat JAR and **load it in a live Burp to confirm no ClassLoader conflict** (Burp bundles its own Kotlin runtime — the original, human-only gate). Autonomous run SKIPPED Phase 16 and proceeded with Phases 17+18 (neither needs the bump). **Phase 19 depends on Phase 16**, so it is also deferred until 16 lands. Resume Phase 16 with `/gsd-autonomous --from 16` after the Burp-JVM test. (Worth checking whether a kotlin-sdk version between 0.6.0–0.12.0 offers MCP-client support while still built against Kotlin 2.1.x — would avoid the compiler bump; investigate at Phase 16 research.)
+- **✅ RESOLVED 2026-06-12 — Phase 16 blocker dissolved (Path A, NO Kotlin bump).** A compile spike proved the already-present `kotlin-sdk:0.5.0` ships the full MCP client (`Client`/`SseClientTransport`/`StdioClientTransport`, Kotlin metadata `mv=[2,1,0]`) and compiles under Kotlin 2.1.21 with only `ktor-client-core/cio:3.1.3` added (`./gradlew compileKotlin` BUILD SUCCESSFUL, then reverted clean). No Kotlin/Ktor bump → the human-only Burp ClassLoader gate does NOT apply (it was only triggered by a Kotlin runtime bump). Phase 16 is executing now via `/gsd-autonomous --from 16`. _Original 0.13.0-bump analysis retained below for history but moot:_ **(SUPERSEDED) Phase 16 (CAP-02) was deferred — gated on a kotlin-sdk 0.13.0 toolchain bump (maintainer decision, 2026-06-11).** Build-time spike (reverted, repo clean) confirmed the bump is NOT a simple dependency change: `io.modelcontextprotocol:kotlin-sdk:0.13.0` forces Ktor 3.1.3→3.4.3 (all `ktor-*` pins must align) AND kotlin-stdlib 2.1.21→2.3.21. Ktor 3.4.3 metadata is compiled with **Kotlin 2.3.0**, so `compileKotlin` FAILS under the project's Kotlin 2.1.21 plugin ("binary version of its metadata is 2.3.0, expected version is 2.1.0"). Doing Phase 16 therefore requires: (1) bump the Kotlin plugin 2.1.21→2.3.x, (2) align all Ktor to 3.4.3, (3) re-verify the whole codebase + full test suite under the new compiler, (4) build the fat JAR and **load it in a live Burp to confirm no ClassLoader conflict** (Burp bundles its own Kotlin runtime — the original, human-only gate). Autonomous run SKIPPED Phase 16 and proceeded with Phases 17+18 (neither needs the bump). **Phase 19 depends on Phase 16**, so it is also deferred until 16 lands. Resume Phase 16 with `/gsd-autonomous --from 16` after the Burp-JVM test. (Worth checking whether a kotlin-sdk version between 0.6.0–0.12.0 offers MCP-client support while still built against Kotlin 2.1.x — would avoid the compiler bump; investigate at Phase 16 research.)
 - GitHub issue #62 (release pipeline publishes stale code) gates the v0.7.0 release; Phase 4 must close before Phase 6 can ship.
 - Phase 8 code + resubmission artifacts complete and verified (v0.8.0, 308 tests green); maintainer is performing the manual Burp smoke test and posting /reopen on issue #231. 08-REOPEN-REPLY.md is ready to paste.
 
