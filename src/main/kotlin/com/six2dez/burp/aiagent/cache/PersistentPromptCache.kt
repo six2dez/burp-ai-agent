@@ -35,21 +35,34 @@ class PersistentPromptCache(
 
     fun get(promptHash: String): CachedEntry? {
         val file = fileFor(promptHash)
-        return lock.read {
-            try {
-                val entry = mapper.readValue(file, CachedEntry::class.java)
-                val age = System.currentTimeMillis() - entry.createdAtMs
-                if (age > ttlMs) {
-                    file.delete()
-                    return null
+        val hit: CachedEntry? =
+            lock.read {
+                try {
+                    val entry = mapper.readValue(file, CachedEntry::class.java)
+                    if (System.currentTimeMillis() - entry.createdAtMs <= ttlMs) entry else null
+                } catch (_: Exception) {
+                    // INTENTIONAL: cache read failures are best-effort; corrupt/missing files are
+                    // cleaned up under the write lock below; must not crash scanner pipeline.
+                    null
                 }
-                entry
-            } catch (_: Exception) {
-                // INTENTIONAL: cache read failures are best-effort; corrupt files are deleted; must not crash scanner pipeline
-                if (file.exists()) file.delete()
-                null
+            }
+        if (hit != null) return hit
+
+        // Expired or corrupt entry: remove the stale file under the WRITE lock. Never mutate the
+        // filesystem while holding only the read lock (WR-01). Re-validate under the write lock so a
+        // concurrent put() that refreshed this entry between locks is not discarded.
+        if (file.exists()) {
+            lock.write {
+                try {
+                    val current = mapper.readValue(file, CachedEntry::class.java)
+                    if (System.currentTimeMillis() - current.createdAtMs > ttlMs) file.delete()
+                } catch (_: Exception) {
+                    // INTENTIONAL: corrupt/unreadable cache file — best-effort delete; ignore failures.
+                    if (file.exists()) file.delete()
+                }
             }
         }
+        return null
     }
 
     fun put(
