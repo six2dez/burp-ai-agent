@@ -147,6 +147,7 @@ tasks.test {
             excludeTestsMatching("*ConcurrencyTest")
             excludeTestsMatching("*BackpressureTest")
             excludeTestsMatching("*RestartPolicyTest")
+            excludeTestsMatching("*SupervisionTest") // WR-03: 30s coerced-timeout floor — excluded from fast PR gate
         }
     }
 }
@@ -160,6 +161,7 @@ tasks.register<Test>("nightlyRegressionTest") {
         includeTestsMatching("*ConcurrencyTest")
         includeTestsMatching("*BackpressureTest")
         includeTestsMatching("*RestartPolicyTest")
+        includeTestsMatching("*SupervisionTest") // WR-03: still runs in nightly regression
     }
 }
 
