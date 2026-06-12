@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v0.9.0
 milestone_name: Hardening, Quality & New Capabilities
 status: ready_to_plan
-stopped_at: Phase 18 complete (4/4) — ready to discuss Phase 19
+stopped_at: Phase 18 complete (4/4). Autonomous run (--from 18) stopped — Phase 19 BLOCKED on deferred Phase 16 (kotlin-sdk/Kotlin-plugin bump + Burp-JVM gate, maintainer-only). Resume with /gsd-autonomous --from 16 after the Burp-JVM test.
 last_updated: 2026-06-12T06:44:13.185Z
 last_activity: 2026-06-11
 progress:
@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-06-10)
 
 Phase: 19
 Plan: Not started
-Status: Ready to plan
+Status: Blocked — depends on deferred Phase 16 (External MCP Client). Cannot plan/execute until Phase 16 lands.
 Last activity: 2026-06-12
 
 ## Performance Metrics
