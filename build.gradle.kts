@@ -39,6 +39,11 @@ dependencies {
     implementation("io.ktor:ktor-server-sse:3.1.3")
     implementation("io.ktor:ktor-server-content-negotiation:3.1.3")
     implementation("io.ktor:ktor-serialization-kotlinx-json:3.1.3")
+    // Phase 16: Ktor CLIENT modules (pin to 3.1.3 to match server-side Ktor family)
+    implementation("io.ktor:ktor-client-core:3.1.3")
+    implementation("io.ktor:ktor-client-cio:3.1.3")
+    // kotlin-logging: transitive via kotlin-sdk:0.5.0 StdioClientTransport; declared explicitly to pin version
+    implementation("io.github.oshai:kotlin-logging-jvm:7.0.7")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
     implementation("org.jetbrains.kotlinx:kotlinx-io-core:0.5.4")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
