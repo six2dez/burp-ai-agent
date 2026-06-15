@@ -121,6 +121,18 @@ class ExternalMcpClientManager(
     private val auditLogger: AuditLogger? = null,
     private val clientFactory: (Implementation, ClientOptions) -> Client = { impl, opts -> Client(impl, opts) },
     private val scheduler: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor(),
+    /**
+     * Factory for spawning stdio subprocess — overridden in tests to inject a mock [Process].
+     * Default implementation uses [ProcessBuilder] with a List (no shell expansion).
+     */
+    private val processFactory: (command: List<String>, envVars: Map<String, String>) -> Process = { cmd, env ->
+        val pb = ProcessBuilder(cmd)
+        pb.redirectErrorStream(true)
+        pb.redirectInput(ProcessBuilder.Redirect.PIPE)
+        pb.redirectOutput(ProcessBuilder.Redirect.PIPE)
+        env.forEach { (k, v) -> pb.environment()[k] = v }
+        pb.start()
+    },
 ) {
     // Shared scope with SupervisorJob: one child-job failure does not cancel siblings.
     private val managerScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -183,18 +195,12 @@ class ExternalMcpClientManager(
                     connection.transport = transport
                 }
                 ExternalMcpTransport.STDIO -> {
-                    // Security: use ProcessBuilder(List) — prevents shell expansion (T-16-03-CMD).
-                    // Do NOT call Runtime.exec(String) or ProcessBuilder(String).
+                    // Security: processFactory uses ProcessBuilder(List) — prevents shell expansion (T-16-03-CMD).
+                    // Do NOT call Runtime.exec(String) or ProcessBuilder(String) directly.
                     val command = config.command + config.extraArgs
-                    val pb = ProcessBuilder(command)
-                    pb.redirectErrorStream(true)
-                    pb.redirectInput(ProcessBuilder.Redirect.PIPE)
-                    pb.redirectOutput(ProcessBuilder.Redirect.PIPE)
                     // Inject only user-configured env vars — do NOT inherit Burp's environment
                     // (prevents secret leakage via ANTHROPIC_API_KEY etc.).
-                    config.envVars.forEach { (k, v) -> pb.environment()[k] = v }
-
-                    val process = pb.start()
+                    val process = processFactory(command, config.envVars)
                     connection.process = process
 
                     transport =
@@ -231,6 +237,10 @@ class ExternalMcpClientManager(
             connection.cachedTools.addAll(descriptors)
             connection.retryCount = 0
             connection.stateRef.set(ExternalMcpConnectionState.Connected(descriptors.size))
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            // Re-throw CancellationException — coroutine was cancelled intentionally (e.g. stop()).
+            // Do NOT schedule reconnect on cancellation.
+            throw e
         } catch (e: Exception) {
             scheduleReconnect(connection, e)
         }
@@ -387,8 +397,20 @@ class ExternalMcpClientManager(
             connection.process = null
 
             runBlocking {
-                withTimeoutOrNull(SHUTDOWN_TIMEOUT_MS) { currentTransport?.close() }
-                withTimeoutOrNull(SHUTDOWN_TIMEOUT_MS) { currentClient?.close() }
+                withTimeoutOrNull(SHUTDOWN_TIMEOUT_MS) {
+                    try {
+                        currentTransport?.close()
+                    } catch (_: Exception) {
+                        // Suppress "already closed" or similar cleanup errors — destroyForcibly follows.
+                    }
+                }
+                withTimeoutOrNull(SHUTDOWN_TIMEOUT_MS) {
+                    try {
+                        currentClient?.close()
+                    } catch (_: Exception) {
+                        // Suppress close errors — connection is being torn down.
+                    }
+                }
             }
 
             // destroyForcibly must be called AFTER close() to prevent zombie processes.
