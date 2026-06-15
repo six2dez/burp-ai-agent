@@ -130,6 +130,10 @@ class ExternalMcpClientManager(
         pb.redirectErrorStream(true)
         pb.redirectInput(ProcessBuilder.Redirect.PIPE)
         pb.redirectOutput(ProcessBuilder.Redirect.PIPE)
+        // CR-01: ProcessBuilder seeds environment() with a copy of Burp's parent environment.
+        // Clear it so secrets in Burp's env (e.g. ANTHROPIC_API_KEY) are NEVER forwarded to the
+        // stdio subprocess; inject ONLY the user-configured vars below (honors the no-inherit contract).
+        pb.environment().clear()
         env.forEach { (k, v) -> pb.environment()[k] = v }
         pb.start()
     },
@@ -360,7 +364,12 @@ class ExternalMcpClientManager(
     internal fun wrapWithTrustBoundary(
         serverName: String,
         rawResult: String,
-    ): String = "$TRUST_BOUNDARY_OPEN$serverName]\n$rawResult\n$TRUST_BOUNDARY_CLOSE"
+    ): String {
+        // WR-01: neutralize any close-marker the (untrusted) server embedded in its result, so it
+        // cannot terminate the boundary early and smuggle content out as trusted text.
+        val safeResult = rawResult.replace(TRUST_BOUNDARY_CLOSE, "[/EXTERNAL-TOOL-RESULT-ESCAPED]")
+        return "$TRUST_BOUNDARY_OPEN$serverName]\n$safeResult\n$TRUST_BOUNDARY_CLOSE"
+    }
 
     /**
      * Returns the current connection state for [serverName], or [ExternalMcpConnectionState.Disconnected]
