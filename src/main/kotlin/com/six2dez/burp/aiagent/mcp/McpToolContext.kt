@@ -6,6 +6,7 @@ import com.six2dez.burp.aiagent.audit.AiRequestLogger
 import com.six2dez.burp.aiagent.audit.AuditLogger
 import com.six2dez.burp.aiagent.backends.BackendRegistry
 import com.six2dez.burp.aiagent.config.Defaults
+import com.six2dez.burp.aiagent.mcp.external.ExternalMcpClientManager
 import com.six2dez.burp.aiagent.mcp.tools.LimitedStringBuilder
 import com.six2dez.burp.aiagent.mcp.tools.ResponsePreprocessorSettings
 import com.six2dez.burp.aiagent.redact.PrivacyMode
@@ -41,6 +42,9 @@ data class McpToolContext(
     // 07-03 D-03: when true, McpScopeFilter restricts every scope-aware MCP tool to
     // in-scope hosts. Default false preserves bytewise behaviour for legacy call sites.
     val scopeOnly: Boolean = false,
+    // Phase 16 (CAP-02): optional external MCP client manager. Null when no external servers
+    // are configured. Defaults to null so all existing construction sites compile unchanged.
+    val externalClientManager: ExternalMcpClientManager? = null,
 ) {
     fun isToolEnabled(name: String): Boolean = toolToggles[name] ?: false
 
