@@ -526,6 +526,17 @@ class ExternalServersPanel(
         duplicateNameLabel.isVisible = false
     }
 
+    /**
+     * WR-03: tokenizes a command/args string on whitespace while preserving "double-quoted"
+     * segments, so paths containing spaces survive. No shell is invoked — this is the only tokenizer.
+     */
+    private fun tokenizeArgs(input: String): List<String> =
+        Regex("\"([^\"]*)\"|(\\S+)")
+            .findAll(input)
+            .map { m -> m.groupValues[1].ifEmpty { m.groupValues[2] } }
+            .filter { it.isNotBlank() }
+            .toList()
+
     private fun onSaveClicked() {
         clearValidationErrors()
         var valid = true
@@ -537,6 +548,14 @@ class ExternalServersPanel(
 
         if (name.isBlank()) {
             nameField.border = LineBorder(DesignTokens.Colors.statusError, 2, true)
+            nameErrorLabel.text = "Display name is required"
+            nameErrorLabel.isVisible = true
+            valid = false
+        } else if (name.contains(":")) {
+            // WR-02: the server name is the routing key in ext:<server>:<tool> (split on ':'),
+            // so a colon in the name misparses every external tool call. Reject it.
+            nameField.border = LineBorder(DesignTokens.Colors.statusError, 2, true)
+            nameErrorLabel.text = "Display name cannot contain a colon (:)"
             nameErrorLabel.isVisible = true
             valid = false
         }
@@ -571,13 +590,10 @@ class ExternalServersPanel(
 
         val transport = if (isStdio) ExternalMcpTransport.STDIO else ExternalMcpTransport.SSE
 
-        // Parse command list for stdio
-        val commandList = if (isStdio) command.split(" ").filter { it.isNotBlank() } else emptyList()
-        val extraArgsList =
-            argsField.text
-                .trim()
-                .split(" ")
-                .filter { it.isNotBlank() }
+        // Parse command list for stdio. WR-03: quote-aware tokenizer keeps "double-quoted" segments
+        // intact so paths containing spaces survive (no shell, so the UI must tokenize correctly).
+        val commandList = if (isStdio) tokenizeArgs(command) else emptyList()
+        val extraArgsList = tokenizeArgs(argsField.text.trim())
         val envMap =
             envVarsArea.text
                 .lines()
