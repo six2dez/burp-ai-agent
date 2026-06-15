@@ -18,7 +18,11 @@ findings:
   warning: 3
   info: 3
   total: 7
-status: issues_found
+status: fixed
+resolution:
+  fixed: [CR-01, WR-01, WR-02, WR-03]
+  deferred: [IN-01, IN-02, IN-03]
+  fixed_at: 2026-06-15
 ---
 
 # Phase 16: Code Review Report
@@ -26,7 +30,21 @@ status: issues_found
 **Reviewed:** 2026-06-15T00:00:00Z
 **Depth:** standard
 **Files Reviewed:** 9
-**Status:** issues_found
+**Status:** fixed (4 of 7 resolved; 3 Info deferred)
+
+## Resolution Log (2026-06-15)
+
+| Finding | Severity | Disposition | Commit |
+|---------|----------|-------------|--------|
+| CR-01 — stdio subprocess inherits Burp's parent env (secret leakage) | Critical | **Fixed** — `pb.environment().clear()` before injecting only user vars | `2dba51c` |
+| WR-01 — trust-boundary close-marker not escaped (injection bypass) | Warning | **Fixed** — embedded close-marker escaped before wrap; +regression test | `2dba51c` |
+| WR-02 — colon in server name breaks `ext:<server>:<tool>` dispatch | Warning | **Fixed** — colon rejected in server-name validation | `2501102` |
+| WR-03 — naive space-split breaks command paths with spaces | Warning | **Fixed** — quote-aware `tokenizeArgs()` keeps `"quoted"` segments | `2501102` |
+| IN-01 — `junit-jupiter:6.0.3` unconventional version | Info | **Deferred** — pre-existing dep (not a Phase 16 change); JUnit 6.x is valid; suite green |
+| IN-02 — `stdioEnabled` is a stale panel snapshot (needs restart) | Info | **Deferred** — minor UX; non-blocking |
+| IN-03 — `scheduler.shutdown()` vs `shutdownNow()` in `stop()` | Info | **Deferred** — harmless (scope already cancelled); cosmetic |
+
+Post-fix gate: `./gradlew check --no-daemon` BUILD SUCCESSFUL (detekt + strict ktlint + full suite).
 
 ## Summary
 
