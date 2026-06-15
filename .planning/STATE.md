@@ -4,13 +4,13 @@ milestone: v0.9.0
 milestone_name: Hardening, Quality & New Capabilities
 status: executing
 stopped_at: Completed 16-01-PLAN.md
-last_updated: "2026-06-15T13:15:20.251Z"
+last_updated: "2026-06-15T13:29:41.598Z"
 last_activity: 2026-06-15
 progress:
   total_phases: 8
   completed_phases: 6
   total_plans: 26
-  completed_plans: 22
+  completed_plans: 23
   percent: 75
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-06-10)
 ## Current Position
 
 Phase: 16 (External MCP Client) — EXECUTING
-Plan: 2 of 6
+Plan: 3 of 6
 Status: Ready to execute
 Last activity: 2026-06-15
 
@@ -76,6 +76,7 @@ Last activity: 2026-06-15
 | Phase 18 P02 | multi-session | 2 tasks | 40 files |
 | Phase 18 P04 | 10m | 2 tasks | 5 files |
 | Phase 16-external-mcp-client P01 | 5min | 2 tasks | 3 files |
+| Phase 16-external-mcp-client P02 | 615 | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -160,6 +161,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-15T13:15:20.244Z
+Last session: 2026-06-15T13:29:41.591Z
 Stopped at: Completed 16-01-PLAN.md
 Resume file: None
