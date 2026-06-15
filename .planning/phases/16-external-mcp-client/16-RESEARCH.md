@@ -766,29 +766,27 @@ if (SsrfGuard.isPrivateOrLinkLocal(config.url)) {
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+All three are resolved by the locked CONTEXT decisions, the UI-SPEC, and the plans.
 
 1. **Tool name disambiguation strategy**
    - What we know: external tools must not shadow built-in tool IDs.
    - What's unclear: should the prefix be `ext:<server-name>:` (verbose, safe) or just use the
      external tool name if no collision exists (simpler, fragile)?
-   - Recommendation: use `ext:<server-name>:` prefix unconditionally in the AI preamble to
-     make provenance clear; strip prefix when calling the remote server's `callTool`.
+   - **RESOLVED:** Use `ext:<server-name>:<tool>` UNCONDITIONALLY (CONTEXT.md decision D-04) in the AI preamble to make provenance clear; strip the prefix when calling the remote server's `callTool`. Built-in tools always win on collision.
 
 2. **SSE reconnect UI feedback**
    - What we know: `SseClientTransport` may disconnect silently.
    - What's unclear: should a connection status indicator appear in the MCP Tools tab, or is
      a log-to-output message sufficient?
-   - Recommendation: add a small status column (Connected / Disconnected / Retrying) in the
-     external servers CRUD table — consistent with the Phase 11 Settings UI patterns.
+   - **RESOLVED:** Add a status column (Connected / Connecting / Error / Disabled) in the external-servers CRUD table per `16-UI-SPEC.md` (the approved Swing contract), consistent with the Phase 11 Settings UI patterns.
 
 3. **Multiple concurrent external servers — coroutine scope design**
    - What we know: each server needs independent connect/reconnect lifecycle.
    - What's unclear: should each server have its own `CoroutineScope`, or share one with
      `SupervisorJob()` children?
-   - Recommendation: one `CoroutineScope(Dispatchers.IO + SupervisorJob())` per manager
-     instance; each server connection is a child job. `SupervisorJob` ensures one server's
-     failure doesn't cancel others. This mirrors the `AgentSupervisor` pattern.
+   - **RESOLVED:** One `CoroutineScope(Dispatchers.IO + SupervisorJob())` per `ExternalMcpClientManager` instance; each server connection is a child job (mirrors `McpStdioBridge`/`AgentSupervisor`). `SupervisorJob` ensures one server's failure doesn't cancel others. Implemented in Plan 16-03.
 
 ---
 
