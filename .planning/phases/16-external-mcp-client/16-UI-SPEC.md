@@ -1,7 +1,9 @@
 ---
 phase: 16
 slug: external-mcp-client
-status: draft
+status: approved
+reviewed_at: 2026-06-15
+ui_check: 5 PASS / 1 FLAG (copywriting — non-blocking Swing idioms)
 shadcn_initialized: false
 preset: not applicable
 created: 2026-06-15
