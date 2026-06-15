@@ -40,7 +40,8 @@ class AgentSettingsSecretEncryptionTest {
 
         val repo = AgentSettingsRepository(apiWith(prefs.mock))
         val loaded = repo.load()
-        assertEquals(4, prefs.integers["settings.schema.version"], "schema must advance to 4")
+        // PHASE 16: schema v5 is now current (bumped 4→5 in plan 16-02); v4 migration still runs
+        assertEquals(5, prefs.integers["settings.schema.version"], "schema must advance to 5")
         assertEquals("sk-oldkey", loaded.ollamaApiKey, "migrated value must decrypt to original plaintext")
         val afterFirst = prefs.strings["ollama.apiKey"] ?: ""
         assertTrue(afterFirst.startsWith("ENC1:"), "pref must be encrypted after migration")
@@ -48,7 +49,8 @@ class AgentSettingsSecretEncryptionTest {
         // Re-run migration on a fresh repo (cache cleared) — must not double-encrypt.
         val repo2 = AgentSettingsRepository(apiWith(prefs.mock))
         val loaded2 = repo2.load()
-        assertEquals(4, prefs.integers["settings.schema.version"])
+        // PHASE 16: schema v5 is now current (bumped 4→5 in plan 16-02)
+        assertEquals(5, prefs.integers["settings.schema.version"])
         assertEquals("sk-oldkey", loaded2.ollamaApiKey, "value still decrypts to original after re-run")
         assertEquals(afterFirst, prefs.strings["ollama.apiKey"], "ciphertext unchanged — no double-encrypt")
     }

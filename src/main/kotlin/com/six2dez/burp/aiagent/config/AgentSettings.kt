@@ -3,7 +3,10 @@ package com.six2dez.burp.aiagent.config
 import burp.api.montoya.MontoyaApi
 import burp.api.montoya.persistence.Preferences
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.databind.json.JsonMapper
 import com.fasterxml.jackson.module.kotlin.KotlinModule
+import com.fasterxml.jackson.module.kotlin.registerKotlinModule
+import com.six2dez.burp.aiagent.mcp.external.ExternalMcpServerConfig
 import com.six2dez.burp.aiagent.mcp.tools.ResponsePreprocessorSettings
 import com.six2dez.burp.aiagent.prompts.bountyprompt.BountyPromptCatalog
 import com.six2dez.burp.aiagent.redact.PrivacyMode
@@ -732,6 +735,15 @@ class AgentSettingsRepository(
             effectiveVersion = 4
         }
 
+        if (effectiveVersion < 5) {
+            // v5 (PHASE 16 Plan 16-02): adds externalMcpServers encrypted blob under
+            // KEY_EXT_MCP_SERVERS. New key; no existing data to migrate. Existing installs
+            // get an empty list on first load — no action needed. Idempotent: re-running this
+            // branch on a v5 store is a no-op (the empty-list default is written by save(), not
+            // here). The schema bump itself prevents double-entry on subsequent loads.
+            effectiveVersion = 5
+        }
+
         if (storedVersion != effectiveVersion) {
             prefs.setInteger(KEY_SETTINGS_SCHEMA_VERSION, effectiveVersion)
         }
@@ -885,6 +897,13 @@ class AgentSettingsRepository(
         // 07-03 D-03: global "Restrict MCP tools to in-scope hosts" toggle. Stored on the
         // McpSettings sub-object via this key. Default false on absence.
         private const val KEY_MCP_SCOPE_ONLY = "mcp.scope.only"
+
+        // PHASE 16: external MCP server list blob. Per-field token encryption — each server's
+        // bearerToken is encrypted before serializing into the JSON blob; decrypted after parsing.
+        // The blob itself is not encrypted at the blob level; only the per-field bearerToken values
+        // carry the ENC1: prefix at rest.
+        private const val KEY_EXT_MCP_SERVERS = "mcp.external.servers.v1"
+
         private const val KEY_PREPROCESS_PROXY_HISTORY = "mcp.preprocess.proxy.history"
         private const val KEY_PREPROCESS_MAX_RESPONSE_SIZE_KB = "mcp.preprocess.max.response.size.kb"
         private const val KEY_PREPROCESS_FILTER_BINARY_CONTENT = "mcp.preprocess.filter.binary.content"
@@ -939,7 +958,10 @@ class AgentSettingsRepository(
         // Versioned key so future renames are detectable. Absent key → empty list (no migration).
         private const val KEY_CUSTOM_REDACTION_PATTERNS = "privacy.custom.redaction.patterns.v1"
         private const val KEY_SETTINGS_SCHEMA_VERSION = "settings.schema.version"
-        private const val CURRENT_SETTINGS_SCHEMA_VERSION = 4
+
+        // PHASE 16 (Plan 16-02): bumped 4→5; adds externalMcpServers blob with per-field
+        // bearerToken encryption. Atomic with the if (effectiveVersion < 5) migration branch.
+        private const val CURRENT_SETTINGS_SCHEMA_VERSION = 5
 
         private fun defaultCodexCmd(): String = "codex chat"
 
@@ -1224,6 +1246,12 @@ Response Language: English.
             if (lib.isEmpty()) return ""
             return customPromptMapper.writeValueAsString(lib.filter { it.isValid() })
         }
+
+        // PHASE 16: Jackson mapper for ExternalMcpServerConfig list serialization.
+        // Registered with Kotlin module so data class defaults and named params work correctly.
+        internal val externalServerMapper: ObjectMapper by lazy {
+            JsonMapper.builder().build().registerKotlinModule()
+        }
     }
 
     private fun loadMcpSettings(): McpSettings {
@@ -1296,6 +1324,9 @@ Response Language: English.
             unsafeEnabled = prefs.getBoolean(KEY_MCP_UNSAFE) ?: false,
             // 07-03 D-03: absent → false preserves bytewise behaviour for legacy installs.
             scopeOnly = prefs.getBoolean(KEY_MCP_SCOPE_ONLY) ?: false,
+            // PHASE 16: load external server list with per-field bearerToken decryption.
+            // Absent key → empty list (schema v5 migration adds the key on first save).
+            externalMcpServers = loadExternalMcpServers(),
         )
     }
 
@@ -1329,5 +1360,70 @@ Response Language: English.
         prefs.setBoolean(KEY_MCP_UNSAFE, settings.unsafeEnabled)
         // 07-03 D-03: persist the global MCP scope toggle.
         prefs.setBoolean(KEY_MCP_SCOPE_ONLY, settings.scopeOnly)
+        // PHASE 16: persist external server list with per-field bearerToken encryption.
+        saveExternalMcpServers(settings.externalMcpServers)
+    }
+
+    /**
+     * Persists the external MCP server list with per-field [bearerToken] encryption (Plan 16-02).
+     *
+     * Encryption contract: each server's [bearerToken] is encrypted individually via
+     * [SecretCipher.encrypt] before the list is serialized to JSON. The JSON blob itself
+     * is NOT encrypted at the blob level — only the per-field bearerToken values carry the
+     * ENC1: prefix at rest. Blank tokens are stored as-is (no encryption overhead for blank).
+     *
+     * Logging contract: on serialization failure, only [KEY_EXT_MCP_SERVERS] is logged —
+     * never the token value (T-16-02-LOG).
+     */
+    private fun saveExternalMcpServers(configs: List<ExternalMcpServerConfig>) {
+        val encryptedList =
+            configs.map { config ->
+                val storedToken =
+                    if (config.bearerToken.isBlank()) {
+                        ""
+                    } else {
+                        cipher.encrypt(config.bearerToken, KEY_EXT_MCP_SERVERS)
+                    }
+                config.copy(bearerToken = storedToken)
+            }
+        try {
+            val json = externalServerMapper.writeValueAsString(encryptedList)
+            prefs.setString(KEY_EXT_MCP_SERVERS, json)
+        } catch (e: Exception) {
+            // Never log the token value — log only the key name (T-16-02-LOG).
+            api.logging().logToError("saveExternalMcpServers: serialization failed for key: $KEY_EXT_MCP_SERVERS")
+        }
+    }
+
+    /**
+     * Loads the external MCP server list with per-field [bearerToken] decryption (Plan 16-02).
+     *
+     * Decryption contract: each server's stored [bearerToken] (ENC1:-prefixed) is decrypted
+     * individually via [SecretCipher.decrypt] after JSON parsing. The returned
+     * [ExternalMcpServerConfig] instances carry PLAINTEXT [bearerToken] values — callers
+     * MUST NOT call [SecretCipher.decrypt] on them again.
+     *
+     * On any parse exception: logs only [KEY_EXT_MCP_SERVERS] (never the value) and returns
+     * an empty list (fail-soft per D-01).
+     */
+    private fun loadExternalMcpServers(): List<ExternalMcpServerConfig> {
+        val json = prefs.getString(KEY_EXT_MCP_SERVERS)
+        if (json.isNullOrBlank()) return emptyList()
+        return try {
+            val stored = externalServerMapper.readValue(json, Array<ExternalMcpServerConfig>::class.java).toList()
+            stored.map { config ->
+                val plainToken =
+                    if (config.bearerToken.isBlank()) {
+                        ""
+                    } else {
+                        cipher.decrypt(config.bearerToken, KEY_EXT_MCP_SERVERS)
+                    }
+                config.copy(bearerToken = plainToken)
+            }
+        } catch (e: Exception) {
+            // Fail-soft per D-01: log only the key name, never the raw value (T-16-02-LOG).
+            api.logging().logToError("loadExternalMcpServers: parse failed for key: $KEY_EXT_MCP_SERVERS")
+            emptyList()
+        }
     }
 }

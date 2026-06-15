@@ -1460,6 +1460,7 @@
     <ID>TooGenericExceptionThrown:McpTls.kt$McpTls$throw RuntimeException("keytool failed (exit $exitCode): $output")</ID>
     <ID>TooManyFunctions:ActiveAiScanner.kt$ActiveAiScanner</ID>
     <ID>TooManyFunctions:AgentProfileLoader.kt$AgentProfileLoader</ID>
+    <ID>TooManyFunctions:AgentSettings.kt$AgentSettingsRepository</ID>
     <ID>TooManyFunctions:AgentSettings.kt$AgentSettingsRepository$Companion</ID>
     <ID>TooManyFunctions:AgentSupervisor.kt$AgentSupervisor</ID>
     <ID>TooManyFunctions:AiRequestLogger.kt$AiRequestLogger</ID>

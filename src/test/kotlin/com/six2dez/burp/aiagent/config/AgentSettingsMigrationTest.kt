@@ -26,7 +26,8 @@ class AgentSettingsMigrationTest {
             listOf("https://ops.example.com", "http://127.0.0.1"),
             loaded.mcpSettings.allowedOrigins,
         )
-        assertEquals(4, prefs.integers["settings.schema.version"])
+        // PHASE 16: schema v5 is now current (bumped 4→5 in plan 16-02)
+        assertEquals(5, prefs.integers["settings.schema.version"])
         assertTrue((prefs.strings["mcp.allowed.origins"] ?: "").contains("\n"))
     }
 
@@ -37,7 +38,8 @@ class AgentSettingsMigrationTest {
 
         repo.save(repo.defaultSettings())
 
-        assertEquals(4, prefs.integers["settings.schema.version"])
+        // PHASE 16: schema v5 is now current (bumped 4→5 in plan 16-02)
+        assertEquals(5, prefs.integers["settings.schema.version"])
     }
 
     @Test
@@ -49,7 +51,8 @@ class AgentSettingsMigrationTest {
         val loaded = repo.load()
 
         assertEquals(emptyList<CustomPromptDefinition>(), loaded.customPromptLibrary)
-        assertEquals(4, prefs.integers["settings.schema.version"])
+        // PHASE 16: schema v5 is now current (bumped 4→5 in plan 16-02)
+        assertEquals(5, prefs.integers["settings.schema.version"])
     }
 
     @Test
@@ -66,7 +69,8 @@ class AgentSettingsMigrationTest {
         assertEquals("", loaded.perplexityApiKey)
         assertEquals("", loaded.perplexityHeaders)
         assertEquals(120, loaded.perplexityTimeoutSeconds)
-        assertEquals(4, prefs.integers["settings.schema.version"])
+        // PHASE 16: schema v5 is now current (bumped 4→5 in plan 16-02)
+        assertEquals(5, prefs.integers["settings.schema.version"])
     }
 
     @Test
