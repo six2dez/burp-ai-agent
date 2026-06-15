@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v0.9.0
 milestone_name: Hardening, Quality & New Capabilities
-status: ready_to_plan
-stopped_at: Phase 16 in progress (autonomous --from 16). Kotlin-bump blocker RESOLVED — compile spike proved kotlin-sdk 0.5.0 already ships the MCP client (Client/SseClientTransport/StdioClientTransport) and compiles under Kotlin 2.1.21 (Path A, no bump, no Burp-JVM gate).
-last_updated: 2026-06-12T06:44:13.185Z
-last_activity: 2026-06-11
+status: executing
+stopped_at: Phase 16 UI-SPEC approved
+last_updated: "2026-06-15T13:05:35.694Z"
+last_activity: 2026-06-15 -- Phase 16 planning complete
 progress:
   total_phases: 8
   completed_phases: 6
-  total_plans: 20
-  completed_plans: 43
+  total_plans: 26
+  completed_plans: 21
   percent: 75
 ---
 
@@ -27,8 +27,8 @@ See: .planning/PROJECT.md (updated 2026-06-10)
 
 Phase: 16
 Plan: Not started
-Status: In progress — research complete (Path A proven via compile spike); discuss → ui → plan → execute next
-Last activity: 2026-06-12
+Status: Ready to execute
+Last activity: 2026-06-15 -- Phase 16 planning complete
 
 ## Performance Metrics
 
@@ -157,6 +157,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-11T13:11:39.449Z
-Stopped at: Completed Phase 18 Plan 04 (SC5/QUAL-04: exception-audit — 45 sites annotated)
-Resume file: None
+Last session: 2026-06-15T12:19:45.154Z
+Stopped at: Phase 16 UI-SPEC approved
+Resume file: .planning/phases/16-external-mcp-client/16-UI-SPEC.md

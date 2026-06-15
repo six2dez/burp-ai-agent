@@ -61,7 +61,7 @@ data class ExternalMcpServerConfig(
     val command: List<String> = emptyList(), // stdio only
     val extraArgs: List<String> = emptyList(),
     val envVars: Map<String, String> = emptyMap(),
-    val encryptedToken: String = "", // SSE only; stored via SecretCipher.encrypt()
+    val bearerToken: String = "", // SSE only; PLAINTEXT in memory — encrypted per-field at the AgentSettings persistence boundary (see Plan 16-02)
     val enabled: Boolean = true,
 )
 ```
@@ -310,11 +310,13 @@ prefs.setString(KEY_OLLAMA_API_KEY, cipher.encrypt(settings.ollamaApiKey, KEY_OL
 // New pref key constant:
 private const val KEY_EXT_MCP_SERVERS = "mcp.external.servers.v1"
 
-// In load():
-externalMcpServers = loadExternalMcpServers()  // decrypt blob + parse JSON
+// CONTRACT (per Plan 16-02): PER-FIELD encryption at the persistence boundary, NOT blob-level.
+// In load(): parse JSON, then decrypt each server's bearerToken field -> in-memory config carries PLAINTEXT bearerToken
+externalMcpServers = loadExternalMcpServers()  // parse JSON + per-field cipher.decrypt(bearerToken)
 
-// In save():
-prefs.setString(KEY_EXT_MCP_SERVERS, cipher.encrypt(serializeExternalServers(settings.mcpSettings.externalMcpServers), KEY_EXT_MCP_SERVERS))
+// In save(): encrypt each server's bearerToken field (ENC1: at rest), then serialize
+//   settings.mcpSettings.externalMcpServers.map { it.copy(bearerToken = cipher.encrypt(it.bearerToken, KEY_EXT_MCP_SERVERS)) }
+prefs.setString(KEY_EXT_MCP_SERVERS, serializeExternalServers(/* per-field-encrypted list */))
 ```
 
 **Versioned constant bump** (line 942):
@@ -591,7 +593,7 @@ private fun apiWith(preferences: Preferences): MontoyaApi {
 fun externalMcpServers_roundTripsThroughSaveLoad() {
     val prefs = InMemoryPrefs()
     val writer = AgentSettingsRepository(apiWith(prefs.mock))
-    val testConfig = ExternalMcpServerConfig(name = "test", transport = SSE, url = "https://example.com/sse", encryptedToken = "")
+    val testConfig = ExternalMcpServerConfig(name = "test", transport = SSE, url = "https://example.com/sse", bearerToken = "")
     writer.save(writer.defaultSettings().copy(mcpSettings = defaults.mcpSettings.copy(externalMcpServers = listOf(testConfig))))
 
     val reader = AgentSettingsRepository(apiWith(prefs.mock))
@@ -628,7 +630,7 @@ SsrfGuard.isPrivateOrLinkLocal(url)  // returns Boolean
 
 ### SecretCipher Encrypt/Decrypt
 **Source:** `config/AgentSettings.kt` lines 243, 554; `config/SecretCipher.kt` lines 52-73, 84-110
-**Apply to:** `AgentSettingsRepository.loadExternalMcpServers()` and `saveExternalMcpServers()`, `ExternalMcpClientManager` when decrypting token before injecting into `SseClientTransport` requestBuilder
+**Apply to:** `AgentSettingsRepository.loadExternalMcpServers()` and `saveExternalMcpServers()` ONLY (per-field encrypt-on-save / decrypt-on-load). `ExternalMcpClientManager` must NOT call SecretCipher — it receives a plaintext `bearerToken` and uses it directly (see Plan 16-03).
 ```kotlin
 // Encrypt on save:
 cipher.encrypt(plaintext, KEY_EXT_MCP_SERVERS)
