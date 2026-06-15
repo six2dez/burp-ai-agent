@@ -2,6 +2,7 @@ package com.six2dez.burp.aiagent.config
 
 import com.fasterxml.jackson.databind.json.JsonMapper
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
+import com.six2dez.burp.aiagent.mcp.external.ExternalMcpServerConfig
 import java.security.SecureRandom
 import java.util.Base64
 
@@ -30,6 +31,9 @@ data class McpSettings(
     // 07-03 D-03: restrict every scope-aware MCP tool to in-scope hosts when true.
     // Default false so existing serialised preferences (no `mcp.scope.only` key) load unchanged.
     val scopeOnly: Boolean = false,
+    // PHASE 16: external MCP server list. JSON-serialized blob stored encrypted via SecretCipher.
+    // Default empty list; schema v5 migration adds the Preferences key.
+    val externalMcpServers: List<ExternalMcpServerConfig> = emptyList(),
 ) {
     companion object {
         private val mapper =
