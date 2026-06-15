@@ -181,7 +181,7 @@ Plans:
 
 **Wave 3** *(parallel — disjoint file sets)*
 
-- [ ] 16-04-PLAN.md — McpToolContext.externalClientManager field + McpTools describeTools fan-out + ext: routing + outbound arg redaction (D-03) [wave 3]
+- [x] 16-04-PLAN.md — McpToolContext.externalClientManager field + McpTools describeTools fan-out + ext: routing + outbound arg redaction (D-03) [wave 3]
 - [x] 16-05-PLAN.md — ExternalServersPanel CRUD UI (16-UI-SPEC.md) + SettingsPanel MCP section wiring [wave 3]
 
 **Wave 4** *(blocking UAT checkpoint)*
@@ -270,7 +270,7 @@ Phase 12 (SEC) must be first. Phase 13 (Privacy) and Phase 12 are sequential (av
 | 13. Privacy & Redaction Hardening | 3/3 | Complete    | 2026-06-10 |
 | 14. Anthropic Backend + Token Budget + Listener Port | 3/3 | Complete    | 2026-06-10 |
 | 15. Pre-Send Secret Tripwire | 3/3 | Complete    | 2026-06-11 |
-| 16. External MCP Client | 4/6 | In Progress|  |
+| 16. External MCP Client | 5/6 | In Progress|  |
 | 17. Reliability & Concurrency Hardening | 3/3 | Complete    | 2026-06-11 |
 | 18. Quality Tooling & Build Hardening | 4/4 | Complete    | 2026-06-12 |
 | 19. Mega-File Split + Docs | 0/TBD | Not started | - |
