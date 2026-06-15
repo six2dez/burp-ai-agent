@@ -15,6 +15,8 @@
     <ID>CyclomaticComplexMethod:AgentSupervisor.kt$AgentSupervisor$private fun buildLaunchConfig( backendId: String, sessionId: String, embeddedMode: Boolean, cliSessionId: String? = null, ): BackendLaunchConfig</ID>
     <ID>CyclomaticComplexMethod:AgentSupervisor.kt$AgentSupervisor.Companion$internal fun tokenizeCommand( command: String, isWindows: Boolean = System.getProperty("os.name").lowercase(java.util.Locale.ROOT).contains("win"), ): List&lt;String></ID>
     <ID>CyclomaticComplexMethod:AiLoggerPanel.kt$AiLoggerPanel$private fun applyFilter()</ID>
+    <ID>CyclomaticComplexMethod:ExternalServersPanel.kt$ExternalServersPanel$private fun onSaveClicked()</ID>
+    <ID>CyclomaticComplexMethod:ExternalServersPanel.kt$ExternalServersPanel.StatusDotRenderer$override fun getTableCellRendererComponent( table: JTable, value: Any?, isSelected: Boolean, hasFocus: Boolean, row: Int, column: Int, ): Component</ID>
     <ID>CyclomaticComplexMethod:AiLoggerPanel.kt$AiLoggerPanel.AiLogTableModel$override fun getValueAt( rowIndex: Int, columnIndex: Int, ): Any</ID>
     <ID>CyclomaticComplexMethod:AiScanCheck.kt$AiScanCheck$private fun determineVulnClasses(insertionPoint: AuditInsertionPoint): List&lt;VulnClass></ID>
     <ID>CyclomaticComplexMethod:AnthropicBackend.kt$AnthropicBackend.AnthropicConnection$override fun send( text: String, history: List&lt;com.six2dez.burp.aiagent.backends.ChatMessage>?, onChunk: (String) -> Unit, onComplete: (Throwable?) -> Unit, systemPrompt: String?, jsonMode: Boolean, maxOutputTokens: Int?, )</ID>
@@ -486,6 +488,26 @@
     <ID>MagicNumber:DesignTokens.kt$DesignTokens.Typography$0.9f</ID>
     <ID>MagicNumber:DesignTokens.kt$DesignTokens.Typography$1.2f</ID>
     <ID>MagicNumber:DesignTokens.kt$DesignTokens.Typography$14</ID>
+    <ID>MagicNumber:ExternalServersPanel.kt$ExternalServersPanel$108</ID>
+    <ID>MagicNumber:ExternalServersPanel.kt$ExternalServersPanel$120</ID>
+    <ID>MagicNumber:ExternalServersPanel.kt$ExternalServersPanel$160</ID>
+    <ID>MagicNumber:ExternalServersPanel.kt$ExternalServersPanel$20</ID>
+    <ID>MagicNumber:ExternalServersPanel.kt$ExternalServersPanel$24</ID>
+    <ID>MagicNumber:ExternalServersPanel.kt$ExternalServersPanel$3</ID>
+    <ID>MagicNumber:ExternalServersPanel.kt$ExternalServersPanel$30</ID>
+    <ID>MagicNumber:ExternalServersPanel.kt$ExternalServersPanel$40</ID>
+    <ID>MagicNumber:ExternalServersPanel.kt$ExternalServersPanel$4</ID>
+    <ID>MagicNumber:ExternalServersPanel.kt$ExternalServersPanel$56</ID>
+    <ID>MagicNumber:ExternalServersPanel.kt$ExternalServersPanel$72</ID>
+    <ID>MagicNumber:ExternalServersPanel.kt$ExternalServersPanel$8</ID>
+    <ID>MagicNumber:ExternalServersPanel.kt$ExternalServersPanel.ActionsCellRenderer$0</ID>
+    <ID>MagicNumber:ExternalServersPanel.kt$ExternalServersPanel.ActionsCellEditor$0</ID>
+    <ID>MagicNumber:ExternalServersPanel.kt$ExternalServersPanel.StatusDotRenderer$0</ID>
+    <ID>MagicNumber:ExternalServersPanel.kt$ExternalServersPanel.StatusDotRenderer$2</ID>
+    <ID>MagicNumber:ExternalServersPanel.kt$ExternalServersPanel.StatusDotRenderer$4</ID>
+    <ID>MagicNumber:ExternalServersPanel.kt$ExternalServersPanel.StatusDotRenderer$8</ID>
+    <ID>MagicNumber:ExternalServersPanel.kt$ExternalServersPanel.TransportBadgeRenderer$2</ID>
+    <ID>MagicNumber:ExternalServersPanel.kt$ExternalServersPanel.TransportBadgeRenderer$4</ID>
     <ID>MagicNumber:HttpBackendSupport.kt$HttpBackendSupport$10</ID>
     <ID>MagicNumber:HttpBackendSupport.kt$HttpBackendSupport$1000</ID>
     <ID>MagicNumber:HttpBackendSupport.kt$HttpBackendSupport$1500</ID>
@@ -1461,6 +1483,7 @@
     <ID>TooManyFunctions:ActiveAiScanner.kt$ActiveAiScanner</ID>
     <ID>TooManyFunctions:AgentProfileLoader.kt$AgentProfileLoader</ID>
     <ID>TooManyFunctions:AgentSettings.kt$AgentSettingsRepository</ID>
+    <ID>TooManyFunctions:ExternalServersPanel.kt$ExternalServersPanel</ID>
     <ID>TooManyFunctions:AgentSettings.kt$AgentSettingsRepository$Companion</ID>
     <ID>TooManyFunctions:AgentSupervisor.kt$AgentSupervisor</ID>
     <ID>TooManyFunctions:AiRequestLogger.kt$AiRequestLogger</ID>

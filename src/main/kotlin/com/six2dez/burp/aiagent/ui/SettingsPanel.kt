@@ -39,6 +39,7 @@ import com.six2dez.burp.aiagent.ui.panels.ActiveScanQueuePanel
 import com.six2dez.burp.aiagent.ui.panels.BackendConfigPanel
 import com.six2dez.burp.aiagent.ui.panels.BackendConfigState
 import com.six2dez.burp.aiagent.ui.panels.CustomPromptsConfigPanel
+import com.six2dez.burp.aiagent.ui.panels.ExternalServersPanel
 import com.six2dez.burp.aiagent.ui.panels.HelpConfigPanel
 import com.six2dez.burp.aiagent.ui.panels.McpConfigPanel
 import com.six2dez.burp.aiagent.ui.panels.PassiveScanConfigPanel
@@ -230,6 +231,14 @@ class SettingsPanel(
             it.font = DesignTokens.Typography.caption
             it.isVisible = false
         }
+
+    // Phase 16-05: External MCP server CRUD panel. Receives plaintext bearerToken values from
+    // AgentSettings.loadExternalMcpServers(); returns plaintext on getServers() for persistence.
+    private val externalServersPanel =
+        ExternalServersPanel(
+            initialServers = settings.mcpSettings.externalMcpServers,
+            stdioEnabled = settings.mcpSettings.stdioEnabled,
+        )
     private val mcpEnabled = ToggleSwitch(settings.mcpSettings.enabled)
     private val mcpHost =
         JTextField(settings.mcpSettings.host, 15).apply {
@@ -1091,6 +1100,9 @@ class SettingsPanel(
                 unsafeEnabled = mcpUnsafe.isSelected,
                 // 07-03 D-03: persist the global MCP scope toggle on the McpSettings sub-object.
                 scopeOnly = mcpScopeOnly.isSelected,
+                // Phase 16-05: external server list; bearerToken values are PLAINTEXT here —
+                // AgentSettingsRepository.saveExternalMcpServers() encrypts per-field at persist time.
+                externalMcpServers = externalServersPanel.getServers(),
             )
         val backendState = backendConfigPanel.currentBackendSettings()
         val ollamaTimeoutSeconds =
@@ -1393,6 +1405,9 @@ class SettingsPanel(
         mcpUnsafe.isSelected = updated.mcpSettings.unsafeEnabled
         // 07-03 D-03: keep the scope-only toggle in sync with persisted state.
         mcpScopeOnly.isSelected = updated.mcpSettings.scopeOnly
+        // Phase 16-05: refresh external server list; bearerToken values are PLAINTEXT (decrypted
+        // by AgentSettingsRepository.loadExternalMcpServers() before reaching here).
+        externalServersPanel.setServers(updated.mcpSettings.externalMcpServers)
         preprocessProxyHistory.isSelected = updated.preprocessProxyHistory
         preprocessMaxResponseSizeKb.value = updated.preprocessMaxResponseSizeKb
         preprocessFilterBinaryContent.isSelected = updated.preprocessFilterBinaryContent
@@ -2007,46 +2022,57 @@ class SettingsPanel(
             bountyPromptEnabledIds = bountyPromptEnabledIds,
         ).build()
 
-    private fun mcpSection(): JPanel =
-        McpConfigPanel(
-            mcpEnabled = mcpEnabled,
-            mcpHost = mcpHost,
-            mcpPort = mcpPort,
-            mcpExternal = mcpExternal,
-            mcpStdio = mcpStdio,
-            // 07-03 D-03: pass the new scope-only checkbox into McpConfigPanel.
-            mcpScopeOnlyCheckbox = mcpScopeOnly,
-            mcpTlsEnabled = mcpTlsEnabled,
-            mcpTlsAuto = mcpTlsAuto,
-            mcpKeystorePath = mcpKeystorePath,
-            mcpKeystorePassword = mcpKeystorePassword,
-            mcpAllowedOrigins =
-                JScrollPane(mcpAllowedOrigins).apply {
-                    border = LineBorder(DesignTokens.Colors.border, 1, true)
-                    verticalScrollBarPolicy = JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED
-                    horizontalScrollBarPolicy = JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
-                },
-            mcpNotice = mcpNotice,
-            mcpMaxConcurrent = mcpMaxConcurrent,
-            // 07-02 D-02: McpConfigPanel constructor param name is preserved to minimise the
-            // refactor; only the bound variable changes to the KB-denominated spinner.
-            mcpMaxBodyMb = mcpMaxBodyKb,
-            mcpProxyHistoryMaxItems = mcpProxyHistoryMaxItems,
-            mcpProxyHistorySortOrder = mcpProxyHistorySortOrder,
-            mcpAllowUnpreprocessedProxyHistory = mcpAllowUnpreprocessedProxyHistory,
-            mcpUnsafe = mcpUnsafe,
-            preprocessProxyHistory = preprocessProxyHistory,
-            preprocessMaxResponseSizeKb = preprocessMaxResponseSizeKb,
-            preprocessFilterBinaryContent = preprocessFilterBinaryContent,
-            preprocessAllowedContentTypes =
-                JScrollPane(preprocessAllowedContentTypes).apply {
-                    border = LineBorder(DesignTokens.Colors.border, 1, true)
-                    verticalScrollBarPolicy = JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED
-                    horizontalScrollBarPolicy = JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
-                },
-            tokenPanelFactory = ::tokenPanel,
-            quickActionsFactory = ::mcpQuickActions,
-        ).build()
+    private fun mcpSection(): JPanel {
+        val mcpPanel =
+            McpConfigPanel(
+                mcpEnabled = mcpEnabled,
+                mcpHost = mcpHost,
+                mcpPort = mcpPort,
+                mcpExternal = mcpExternal,
+                mcpStdio = mcpStdio,
+                // 07-03 D-03: pass the new scope-only checkbox into McpConfigPanel.
+                mcpScopeOnlyCheckbox = mcpScopeOnly,
+                mcpTlsEnabled = mcpTlsEnabled,
+                mcpTlsAuto = mcpTlsAuto,
+                mcpKeystorePath = mcpKeystorePath,
+                mcpKeystorePassword = mcpKeystorePassword,
+                mcpAllowedOrigins =
+                    JScrollPane(mcpAllowedOrigins).apply {
+                        border = LineBorder(DesignTokens.Colors.border, 1, true)
+                        verticalScrollBarPolicy = JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED
+                        horizontalScrollBarPolicy = JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
+                    },
+                mcpNotice = mcpNotice,
+                mcpMaxConcurrent = mcpMaxConcurrent,
+                // 07-02 D-02: McpConfigPanel constructor param name is preserved to minimise the
+                // refactor; only the bound variable changes to the KB-denominated spinner.
+                mcpMaxBodyMb = mcpMaxBodyKb,
+                mcpProxyHistoryMaxItems = mcpProxyHistoryMaxItems,
+                mcpProxyHistorySortOrder = mcpProxyHistorySortOrder,
+                mcpAllowUnpreprocessedProxyHistory = mcpAllowUnpreprocessedProxyHistory,
+                mcpUnsafe = mcpUnsafe,
+                preprocessProxyHistory = preprocessProxyHistory,
+                preprocessMaxResponseSizeKb = preprocessMaxResponseSizeKb,
+                preprocessFilterBinaryContent = preprocessFilterBinaryContent,
+                preprocessAllowedContentTypes =
+                    JScrollPane(preprocessAllowedContentTypes).apply {
+                        border = LineBorder(DesignTokens.Colors.border, 1, true)
+                        verticalScrollBarPolicy = JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED
+                        horizontalScrollBarPolicy = JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
+                    },
+                tokenPanelFactory = ::tokenPanel,
+                quickActionsFactory = ::mcpQuickActions,
+            ).build()
+
+        // Phase 16-05: append ExternalServersPanel accordion below the McpConfigPanel section.
+        val externalPanel = externalServersPanel.buildPanel()
+        return JPanel().apply {
+            layout = BoxLayout(this, BoxLayout.Y_AXIS)
+            background = DesignTokens.Colors.surface
+            add(mcpPanel)
+            add(externalPanel)
+        }
+    }
 
     private fun tokenPanel(): JPanel {
         val panel = JPanel()

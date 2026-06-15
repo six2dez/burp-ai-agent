@@ -645,6 +645,18 @@ class ExternalServersPanel(
         const val COL_TRANSPORT = 2
         const val COL_STATUS = 3
         const val COL_ACTIONS = 4
+
+        /** Diameter of the status-indicator oval in pixels. */
+        private const val STATUS_DOT_SIZE = 8
+
+        /** Left-edge x-offset for the status-indicator oval paint position. */
+        private const val STATUS_DOT_X_OFFSET = 4
+
+        /** Horizontal gap in FlowLayout for status/badge cells. */
+        private const val STATUS_CELL_HGAP = 4
+
+        /** Vertical gap in FlowLayout for badge cells. */
+        private const val BADGE_CELL_VGAP = 2
     }
 
     // ── Table model ──────────────────────────────────────────────────────────────────────────────
@@ -721,7 +733,7 @@ class ExternalServersPanel(
                     else -> sseBadge
                 }
             badge.background = if (isSelected) table.selectionBackground else table.background
-            return JPanel(FlowLayout(FlowLayout.LEFT, 4, 2)).apply {
+            return JPanel(FlowLayout(FlowLayout.LEFT, STATUS_CELL_HGAP, BADGE_CELL_VGAP)).apply {
                 background = if (isSelected) table.selectionBackground else table.background
                 add(badge)
             }
@@ -757,7 +769,7 @@ class ExternalServersPanel(
                     else -> DesignTokens.Colors.onSurfaceVariant
                 }
 
-            return object : JPanel(FlowLayout(FlowLayout.LEFT, 4, 0)) {
+            return object : JPanel(FlowLayout(FlowLayout.LEFT, STATUS_CELL_HGAP, 0)) {
                 override fun paintComponent(g: Graphics) {
                     super.paintComponent(g)
                     val g2 = g as Graphics2D
@@ -766,9 +778,8 @@ class ExternalServersPanel(
                         RenderingHints.VALUE_ANTIALIAS_ON,
                     )
                     g2.color = dotColor
-                    val dotSize = 8
-                    val yOff = (height - dotSize) / 2
-                    g2.fillOval(4, yOff, dotSize, dotSize)
+                    val yOff = (height - STATUS_DOT_SIZE) / 2
+                    g2.fillOval(STATUS_DOT_X_OFFSET, yOff, STATUS_DOT_SIZE, STATUS_DOT_SIZE)
                 }
             }.apply {
                 isOpaque = true
