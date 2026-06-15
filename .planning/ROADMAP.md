@@ -157,7 +157,7 @@ Plans:
 ### Phase 16: External MCP Client
 
 **Goal**: Users can register external/custom MCP servers and the agent can call their tools — the highest-novelty phase of the milestone; external server auth tokens are encrypted (Phase 12 dependency); untrusted tool output is wrapped before entering the AI context to prevent prompt injection; SSRF warning covers external MCP URLs.
-**Depends on**: Phase 12 (external MCP bearer tokens must be encrypted from day one); kotlin-sdk 0.5.0→0.13.0 bump (Ktor 3.4.3, kotlin-stdlib 2.3.21) requires a Burp-JVM test-run gate before this phase begins
+**Depends on**: Phase 12 (external MCP bearer tokens must be encrypted from day one). NOTE: Path A confirmed — kotlin-sdk 0.5.0 already ships the full MCP client; no Kotlin/Ktor bump required; Burp-JVM ClassLoader gate is a standard smoke test only
 **Requirements**: CAP-02
 **Success Criteria** (what must be TRUE):
 
@@ -167,7 +167,27 @@ Plans:
   4. External server auth tokens are stored encrypted (Phase 12 SecretStore); they are never logged or exposed in the Settings UI in plaintext (show/hide toggle, same as other API key fields).
   5. The extension loads, the embedded MCP server starts, and the UI is responsive after the kotlin-sdk 0.13.0 bump — no `ClassLoader` conflicts or `NoClassDefFoundError` on Burp's JVM (verified in CI).
 
-**Plans**: TBD
+**Plans**: 6 plans
+
+Plans:
+**Wave 1** *(parallel — disjoint file sets)*
+
+- [ ] 16-01-PLAN.md — Add 3 Ktor client deps to build.gradle.kts + Wave 0 test scaffolds (ExternalMcpClientManagerTest, ExternalMcpSettingsMigrationTest) [wave 1]
+
+**Wave 2** *(parallel — disjoint file sets)*
+
+- [ ] 16-02-PLAN.md — ExternalMcpServerConfig data model + McpSettings.externalMcpServers field + AgentSettings schema v5 migration (encrypted blob) [wave 2]
+- [ ] 16-03-PLAN.md — ExternalMcpClientManager: SSE+stdio transport lifecycle, trust-boundary wrap, AuditLogger [wave 2]
+
+**Wave 3** *(parallel — disjoint file sets)*
+
+- [ ] 16-04-PLAN.md — McpToolContext.externalClientManager field + McpTools describeTools fan-out + ext: routing + outbound arg redaction (D-03) [wave 3]
+- [ ] 16-05-PLAN.md — ExternalServersPanel CRUD UI (16-UI-SPEC.md) + SettingsPanel MCP section wiring [wave 3]
+
+**Wave 4** *(blocking UAT checkpoint)*
+
+- [ ] 16-06-PLAN.md — Pre-flight check gate + Human UAT: SC1 real-server connect + SC5 Burp fat-JAR smoke test [wave 4]
+
 **UI hint**: yes
 
 ### Phase 17: Reliability & Concurrency Hardening
@@ -250,7 +270,7 @@ Phase 12 (SEC) must be first. Phase 13 (Privacy) and Phase 12 are sequential (av
 | 13. Privacy & Redaction Hardening | 3/3 | Complete    | 2026-06-10 |
 | 14. Anthropic Backend + Token Budget + Listener Port | 3/3 | Complete    | 2026-06-10 |
 | 15. Pre-Send Secret Tripwire | 3/3 | Complete    | 2026-06-11 |
-| 16. External MCP Client | 0/TBD | Not started | - |
+| 16. External MCP Client | 0/6 | In progress | - |
 | 17. Reliability & Concurrency Hardening | 3/3 | Complete    | 2026-06-11 |
 | 18. Quality Tooling & Build Hardening | 4/4 | Complete    | 2026-06-12 |
 | 19. Mega-File Split + Docs | 0/TBD | Not started | - |
