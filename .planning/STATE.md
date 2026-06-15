@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v0.9.0
 milestone_name: Hardening, Quality & New Capabilities
 status: executing
-stopped_at: Completed 16-01-PLAN.md
-last_updated: "2026-06-15T14:17:00.940Z"
+stopped_at: "Phase 16 (External MCP Client) CODE-COMPLETE + automated-verified (5/5 SC, ./gradlew check green, fat JAR bundles client). HUMAN-UAT PENDING: SC1 real-server connect + SC5 live-Burp load (see 16-HUMAN-UAT.md). Phase 19 depends on this UAT. Resume: run the 2 smoke tests, then /gsd-autonomous --from 19 (fresh session)."
+last_updated: "2026-06-15T14:44:21.603Z"
 last_activity: 2026-06-15
 progress:
   total_phases: 8
@@ -162,6 +162,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-15T14:17:00.933Z
-Stopped at: Completed 16-01-PLAN.md
-Resume file: None
+Last session: 2026-06-15T14:44:21.595Z
+Stopped at: Phase 16 (External MCP Client) CODE-COMPLETE + automated-verified (5/5 SC, ./gradlew check green, fat JAR bundles client). HUMAN-UAT PENDING: SC1 real-server connect + SC5 live-Burp load (see 16-HUMAN-UAT.md). Phase 19 depends on this UAT. Resume: run the 2 smoke tests, then /gsd-autonomous --from 19 (fresh session).
+Resume file: .planning/phases/16-external-mcp-client/16-HUMAN-UAT.md
