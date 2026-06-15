@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v0.9.0
 milestone_name: Hardening, Quality & New Capabilities
 status: executing
-stopped_at: Phase 16 UI-SPEC approved
-last_updated: "2026-06-15T13:05:35.694Z"
-last_activity: 2026-06-15 -- Phase 16 planning complete
+stopped_at: Completed 16-01-PLAN.md
+last_updated: "2026-06-15T13:15:20.251Z"
+last_activity: 2026-06-15
 progress:
   total_phases: 8
   completed_phases: 6
   total_plans: 26
-  completed_plans: 21
+  completed_plans: 22
   percent: 75
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-10)
 
 **Core value:** Bring modern AI to a real security workflow without leaking sensitive traffic to third-party providers — privacy controls and an audit trail are non-negotiable, AI capability is additive.
-**Current focus:** Phase 16 — External MCP Client (unblocked; Path A, no Kotlin bump)
+**Current focus:** Phase 16 — External MCP Client
 
 ## Current Position
 
-Phase: 16
-Plan: Not started
+Phase: 16 (External MCP Client) — EXECUTING
+Plan: 2 of 6
 Status: Ready to execute
-Last activity: 2026-06-15 -- Phase 16 planning complete
+Last activity: 2026-06-15
 
 ## Performance Metrics
 
@@ -75,6 +75,7 @@ Last activity: 2026-06-15 -- Phase 16 planning complete
 | Phase 18 P01 | 15m | 2 tasks | 4 files |
 | Phase 18 P02 | multi-session | 2 tasks | 40 files |
 | Phase 18 P04 | 10m | 2 tasks | 5 files |
+| Phase 16-external-mcp-client P01 | 5min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -115,6 +116,8 @@ Recent decisions affecting current work:
 - [Phase ?]: detekt-formatting NOT added to detekt plugins to avoid double-gating style rules with ktlint
 - [Phase ?]: SC5 scope: 45 catch sites in focused modules fully annotated; 138 remaining get TODO-AUDIT markers for future plan
 - [Phase ?]: Module prefix convention: [ModuleName] added to AgentSupervisor logToError calls
+- [Phase ?]: Path A confirmed: kotlin-sdk stays at 0.5.0; only 3 explicit dep pins needed (no SDK or Kotlin plugin bump)
+- [Phase ?]: Wave 0 scaffold pattern: @Disabled stubs with commented production code document plan N+1 implementation contract
 
 ### Roadmap Evolution
 
@@ -157,6 +160,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-15T12:19:45.154Z
-Stopped at: Phase 16 UI-SPEC approved
-Resume file: .planning/phases/16-external-mcp-client/16-UI-SPEC.md
+Last session: 2026-06-15T13:15:20.244Z
+Stopped at: Completed 16-01-PLAN.md
+Resume file: None

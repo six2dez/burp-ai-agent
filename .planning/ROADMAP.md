@@ -172,7 +172,7 @@ Plans:
 Plans:
 **Wave 1** *(parallel — disjoint file sets)*
 
-- [ ] 16-01-PLAN.md — Add 3 Ktor client deps to build.gradle.kts + Wave 0 test scaffolds (ExternalMcpClientManagerTest, ExternalMcpSettingsMigrationTest) [wave 1]
+- [x] 16-01-PLAN.md — Add 3 Ktor client deps to build.gradle.kts + Wave 0 test scaffolds (ExternalMcpClientManagerTest, ExternalMcpSettingsMigrationTest) [wave 1]
 
 **Wave 2** *(parallel — disjoint file sets)*
 
@@ -270,7 +270,7 @@ Phase 12 (SEC) must be first. Phase 13 (Privacy) and Phase 12 are sequential (av
 | 13. Privacy & Redaction Hardening | 3/3 | Complete    | 2026-06-10 |
 | 14. Anthropic Backend + Token Budget + Listener Port | 3/3 | Complete    | 2026-06-10 |
 | 15. Pre-Send Secret Tripwire | 3/3 | Complete    | 2026-06-11 |
-| 16. External MCP Client | 0/6 | In progress | - |
+| 16. External MCP Client | 1/6 | In Progress|  |
 | 17. Reliability & Concurrency Hardening | 3/3 | Complete    | 2026-06-11 |
 | 18. Quality Tooling & Build Hardening | 4/4 | Complete    | 2026-06-12 |
 | 19. Mega-File Split + Docs | 0/TBD | Not started | - |
