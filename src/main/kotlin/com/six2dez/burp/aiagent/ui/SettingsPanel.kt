@@ -76,16 +76,16 @@ import javax.swing.event.DocumentEvent
 import javax.swing.event.DocumentListener
 
 class SettingsPanel(
-    private val api: MontoyaApi,
+    internal val api: MontoyaApi,
     private val backends: BackendRegistry,
     private val supervisor: AgentSupervisor,
     private val audit: AuditLogger,
     private val mcpSupervisor: McpSupervisor,
-    private val passiveAiScanner: com.six2dez.burp.aiagent.scanner.PassiveAiScanner,
-    private val activeAiScanner: com.six2dez.burp.aiagent.scanner.ActiveAiScanner,
+    internal val passiveAiScanner: com.six2dez.burp.aiagent.scanner.PassiveAiScanner,
+    internal val activeAiScanner: com.six2dez.burp.aiagent.scanner.ActiveAiScanner,
 ) {
     private val settingsRepo = AgentSettingsRepository(api)
-    private var settings: AgentSettings = settingsRepo.load()
+    internal var settings: AgentSettings = settingsRepo.load()
     private val customPromptLibraryEditor =
         CustomPromptLibraryEditor().apply {
             load(settings.customPromptLibrary)
@@ -94,7 +94,7 @@ class SettingsPanel(
     var onPassiveAiEnabledChanged: ((Boolean) -> Unit)? = null
     var onActiveAiEnabledChanged: ((Boolean) -> Unit)? = null
     var onSettingsChanged: ((AgentSettings) -> Unit)? = null
-    private var dialogParent: JComponent? = null
+    internal var dialogParent: JComponent? = null
     private var saveFeedbackResetTimer: javax.swing.Timer? = null
     private var statusRefreshTimer: javax.swing.Timer? = null
     private lateinit var generalTab: JComponent
@@ -149,12 +149,12 @@ class SettingsPanel(
                 copilotCmd = settings.copilotCmd,
             ),
         )
-    private val profilePicker =
+    internal val profilePicker =
         JComboBox<String>().apply {
             preferredSize = java.awt.Dimension(140, preferredSize.height)
             maximumSize = java.awt.Dimension(140, preferredSize.height)
         }
-    private val profileWarningLabel =
+    internal val profileWarningLabel =
         JLabel().apply {
             isVisible = false
         }
@@ -166,7 +166,7 @@ class SettingsPanel(
             maximumSize = java.awt.Dimension(140, preferredSize.height)
         }
 
-    private val privacyMode =
+    internal val privacyMode =
         JComboBox(PrivacyMode.entries.toTypedArray()).apply {
             selectedItem = settings.privacyMode
             preferredSize = java.awt.Dimension(120, preferredSize.height)
@@ -174,7 +174,7 @@ class SettingsPanel(
         }
     private val determinism = ToggleSwitch(settings.determinismMode)
     private val autoRestart = ToggleSwitch(settings.autoRestart)
-    private val auditEnabled = ToggleSwitch(settings.auditEnabled)
+    internal val auditEnabled = ToggleSwitch(settings.auditEnabled)
 
     // 07-02 D-02: caps chat context to 1500/750 chars when ON (BUG-69-02 / issue #69).
     private val chatSmallModelMode = ToggleSwitch(settings.smallModelMode)
@@ -215,10 +215,10 @@ class SettingsPanel(
             preferredSize = java.awt.Dimension(80, preferredSize.height)
             maximumSize = java.awt.Dimension(80, preferredSize.height)
         }
-    private val privacyNotice =
+    internal val privacyNotice =
         com.six2dez.burp.aiagent.ui.components
             .SubtleNotice()
-    private val saveFeedbackLabel = JLabel("No recent save activity.")
+    internal val saveFeedbackLabel = JLabel("No recent save activity.")
 
     // PRIV-02: custom-pattern text area (one regex per line) + inline validation-feedback label.
     // Both are injected into PrivacyConfigPanel; validation runs on Save via SafeRegex.isPatternSafe.
@@ -235,43 +235,43 @@ class SettingsPanel(
 
     // Phase 16-05: External MCP server CRUD panel. Receives plaintext bearerToken values from
     // AgentSettings.loadExternalMcpServers(); returns plaintext on getServers() for persistence.
-    private val externalServersPanel =
+    internal val externalServersPanel =
         ExternalServersPanel(
             initialServers = settings.mcpSettings.externalMcpServers,
             stdioEnabled = settings.mcpSettings.stdioEnabled,
         )
-    private val mcpEnabled = ToggleSwitch(settings.mcpSettings.enabled)
-    private val mcpHost =
+    internal val mcpEnabled = ToggleSwitch(settings.mcpSettings.enabled)
+    internal val mcpHost =
         JTextField(settings.mcpSettings.host, 15).apply {
             preferredSize = java.awt.Dimension(140, preferredSize.height)
             maximumSize = java.awt.Dimension(140, preferredSize.height)
         }
-    private val mcpPort =
+    internal val mcpPort =
         JSpinner(SpinnerNumberModel(settings.mcpSettings.port, 1, 65535, 1)).apply {
             preferredSize = java.awt.Dimension(80, preferredSize.height)
             maximumSize = java.awt.Dimension(80, preferredSize.height)
         }
-    private val mcpExternal = JCheckBox("Allow external access (requires TLS)", settings.mcpSettings.externalEnabled)
-    private val mcpStdio = JCheckBox("Enable stdio bridge", settings.mcpSettings.stdioEnabled)
-    private val mcpTlsEnabled = JCheckBox("Enable TLS", settings.mcpSettings.tlsEnabled)
-    private val mcpTlsAuto = JCheckBox("Auto-generate TLS certificate", settings.mcpSettings.tlsAutoGenerate)
-    private val mcpKeystorePath = JTextField(settings.mcpSettings.tlsKeystorePath)
-    private val mcpKeystorePassword =
+    internal val mcpExternal = JCheckBox("Allow external access (requires TLS)", settings.mcpSettings.externalEnabled)
+    internal val mcpStdio = JCheckBox("Enable stdio bridge", settings.mcpSettings.stdioEnabled)
+    internal val mcpTlsEnabled = JCheckBox("Enable TLS", settings.mcpSettings.tlsEnabled)
+    internal val mcpTlsAuto = JCheckBox("Auto-generate TLS certificate", settings.mcpSettings.tlsAutoGenerate)
+    internal val mcpKeystorePath = JTextField(settings.mcpSettings.tlsKeystorePath)
+    internal val mcpKeystorePassword =
         JPasswordField(settings.mcpSettings.tlsKeystorePassword).apply {
             preferredSize = java.awt.Dimension(200, preferredSize.height)
         }
-    private val mcpToken = JTextField(settings.mcpSettings.token)
-    private val mcpAllowedOrigins =
+    internal val mcpToken = JTextField(settings.mcpSettings.token)
+    internal val mcpAllowedOrigins =
         JTextArea(
             settings.mcpSettings.allowedOrigins.joinToString("\n"),
             3,
             20,
         )
-    private val mcpNotice =
+    internal val mcpNotice =
         com.six2dez.burp.aiagent.ui.components
             .SubtleNotice()
-    private val mcpTokenRegenerate = JButton("Regenerate token")
-    private val mcpMaxConcurrent =
+    internal val mcpTokenRegenerate = JButton("Regenerate token")
+    internal val mcpMaxConcurrent =
         JSpinner(
             SpinnerNumberModel(settings.mcpSettings.maxConcurrentRequests, 1, 64, 1),
         ).apply {
@@ -282,7 +282,7 @@ class SettingsPanel(
     // 07-02 D-02: spinner is denominated in KB so users with 1278-token-class local models
     // can configure tight MCP body caps below the previous 1 MB minimum. Range 32 KB – 100 MB,
     // step 32 KB. Legacy stored values below 32 KB are clamped up by AgentSettings.loadMcpSettings.
-    private val mcpMaxBodyKb =
+    internal val mcpMaxBodyKb =
         JSpinner(
             SpinnerNumberModel(
                 (settings.mcpSettings.maxBodyBytes / 1024).coerceAtLeast(32),
@@ -294,244 +294,244 @@ class SettingsPanel(
             preferredSize = java.awt.Dimension(90, preferredSize.height)
             maximumSize = java.awt.Dimension(90, preferredSize.height)
         }
-    private val mcpProxyHistoryMaxItems =
+    internal val mcpProxyHistoryMaxItems =
         JSpinner(
             SpinnerNumberModel(settings.mcpSettings.proxyHistoryMaxItemsPerRequest, 1, 500, 1),
         ).apply {
             preferredSize = java.awt.Dimension(70, preferredSize.height)
             maximumSize = java.awt.Dimension(70, preferredSize.height)
         }
-    private val mcpProxyHistorySortOrder =
+    internal val mcpProxyHistorySortOrder =
         JComboBox(arrayOf("Newest first", "Oldest first")).apply {
             selectedItem = if (settings.mcpSettings.proxyHistoryNewestFirst) "Newest first" else "Oldest first"
             preferredSize = java.awt.Dimension(120, preferredSize.height)
             maximumSize = java.awt.Dimension(120, preferredSize.height)
         }
-    private val mcpAllowUnpreprocessedProxyHistory =
+    internal val mcpAllowUnpreprocessedProxyHistory =
         JCheckBox(
             "Allow AI to request unpreprocessed proxy responses",
             settings.mcpSettings.allowUnpreprocessedProxyHistory,
         )
-    private val mcpUnsafe = JCheckBox("Unsafe mode (allow write/mutation tools)", settings.mcpSettings.unsafeEnabled)
+    internal val mcpUnsafe = JCheckBox("Unsafe mode (allow write/mutation tools)", settings.mcpSettings.unsafeEnabled)
 
     // 07-03 D-03: global "Restrict MCP tools to in-scope hosts" toggle. Mirrors the JCheckBox
     // pattern used by mcpExternal / mcpUnsafe / passiveAiScopeOnly / activeAiScopeOnly so it stays
     // consistent with the rest of the MCP section. Closes GitHub issue #69 sub-concern 4.
-    private val mcpScopeOnly =
+    internal val mcpScopeOnly =
         JCheckBox(
             "Restrict MCP tools to in-scope hosts",
             settings.mcpSettings.scopeOnly,
         )
-    private val preprocessProxyHistory = ToggleSwitch(settings.preprocessProxyHistory)
-    private val preprocessMaxResponseSizeKb =
+    internal val preprocessProxyHistory = ToggleSwitch(settings.preprocessProxyHistory)
+    internal val preprocessMaxResponseSizeKb =
         JSpinner(
             SpinnerNumberModel(settings.preprocessMaxResponseSizeKb, 1, 10_240, 1),
         ).apply {
             preferredSize = java.awt.Dimension(80, preferredSize.height)
             maximumSize = java.awt.Dimension(80, preferredSize.height)
         }
-    private val preprocessFilterBinaryContent =
+    internal val preprocessFilterBinaryContent =
         JCheckBox(
             "Filter binary content (images, video, audio)",
             settings.preprocessFilterBinaryContent,
         )
-    private val preprocessAllowedContentTypes =
+    internal val preprocessAllowedContentTypes =
         JTextArea(
             settings.preprocessAllowedContentTypes.joinToString(","),
             3,
             20,
         )
-    private val mcpToolCheckboxes = mutableMapOf<String, JCheckBox>()
-    private val mcpUnsafeApprovalCheckboxes = mutableMapOf<String, JCheckBox>()
+    internal val mcpToolCheckboxes = mutableMapOf<String, JCheckBox>()
+    internal val mcpUnsafeApprovalCheckboxes = mutableMapOf<String, JCheckBox>()
 
     // Passive AI Scanner UI components
-    private val passiveAiEnabled = ToggleSwitch(settings.passiveAiEnabled)
-    private val passiveAiScopeOnly = JCheckBox("In-scope only", settings.passiveAiScopeOnly)
-    private val passiveAiRateSpinner =
+    internal val passiveAiEnabled = ToggleSwitch(settings.passiveAiEnabled)
+    internal val passiveAiScopeOnly = JCheckBox("In-scope only", settings.passiveAiScopeOnly)
+    internal val passiveAiRateSpinner =
         JSpinner(SpinnerNumberModel(settings.passiveAiRateSeconds, 1, 60, 1)).apply {
             preferredSize = java.awt.Dimension(70, preferredSize.height)
             maximumSize = java.awt.Dimension(70, preferredSize.height)
         }
-    private val passiveAiMaxSizeSpinner =
+    internal val passiveAiMaxSizeSpinner =
         JSpinner(SpinnerNumberModel(settings.passiveAiMaxSizeKb, 16, 1024, 1)).apply {
             preferredSize = java.awt.Dimension(80, preferredSize.height)
             maximumSize = java.awt.Dimension(80, preferredSize.height)
         }
-    private val passiveAiExcludedExtensionsField =
+    internal val passiveAiExcludedExtensionsField =
         JTextField(settings.passiveAiExcludedExtensions, 30).apply {
             toolTipText = "Comma-separated file extensions to skip (e.g. css,js,png,woff). Leave empty to disable."
         }
-    private val passiveAiBatchSizeSpinner =
+    internal val passiveAiBatchSizeSpinner =
         JSpinner(
             SpinnerNumberModel(settings.passiveAiBatchSize, 1, 5, 1),
         ).apply {
             preferredSize = java.awt.Dimension(60, preferredSize.height)
             maximumSize = java.awt.Dimension(60, preferredSize.height)
         }
-    private val passiveAiPersistentCacheEnabled = JCheckBox("Enable persistent cache", settings.passiveAiPersistentCacheEnabled)
-    private val passiveAiPersistentCacheTtlSpinner =
+    internal val passiveAiPersistentCacheEnabled = JCheckBox("Enable persistent cache", settings.passiveAiPersistentCacheEnabled)
+    internal val passiveAiPersistentCacheTtlSpinner =
         JSpinner(
             SpinnerNumberModel(settings.passiveAiPersistentCacheTtlHours, 1, 168, 1),
         ).apply {
             preferredSize = java.awt.Dimension(80, preferredSize.height)
             maximumSize = java.awt.Dimension(80, preferredSize.height)
         }
-    private val passiveAiPersistentCacheMaxMbSpinner =
+    internal val passiveAiPersistentCacheMaxMbSpinner =
         JSpinner(
             SpinnerNumberModel(settings.passiveAiPersistentCacheMaxMb, 10, 500, 10),
         ).apply {
             preferredSize = java.awt.Dimension(80, preferredSize.height)
             maximumSize = java.awt.Dimension(80, preferredSize.height)
         }
-    private val passiveAiMinSeverityCombo =
+    internal val passiveAiMinSeverityCombo =
         JComboBox(arrayOf("LOW", "MEDIUM", "HIGH", "CRITICAL")).apply {
             selectedItem = settings.passiveAiMinSeverity.name
             preferredSize = java.awt.Dimension(100, preferredSize.height)
             maximumSize = java.awt.Dimension(100, preferredSize.height)
         }
-    private val passiveAiEndpointDedupSpinner =
+    internal val passiveAiEndpointDedupSpinner =
         JSpinner(
             SpinnerNumberModel(settings.passiveAiEndpointDedupMinutes, 1, 240, 1),
         ).apply {
             preferredSize = java.awt.Dimension(80, preferredSize.height)
             maximumSize = java.awt.Dimension(80, preferredSize.height)
         }
-    private val passiveAiFingerprintDedupSpinner =
+    internal val passiveAiFingerprintDedupSpinner =
         JSpinner(
             SpinnerNumberModel(settings.passiveAiResponseFingerprintDedupMinutes, 1, 240, 1),
         ).apply {
             preferredSize = java.awt.Dimension(80, preferredSize.height)
             maximumSize = java.awt.Dimension(80, preferredSize.height)
         }
-    private val passiveAiPromptCacheTtlSpinner =
+    internal val passiveAiPromptCacheTtlSpinner =
         JSpinner(
             SpinnerNumberModel(settings.passiveAiPromptCacheTtlMinutes, 1, 240, 1),
         ).apply {
             preferredSize = java.awt.Dimension(80, preferredSize.height)
             maximumSize = java.awt.Dimension(80, preferredSize.height)
         }
-    private val passiveAiEndpointCacheEntriesSpinner =
+    internal val passiveAiEndpointCacheEntriesSpinner =
         JSpinner(
             SpinnerNumberModel(settings.passiveAiEndpointCacheEntries, 100, 50_000, 100),
         ).apply {
             preferredSize = java.awt.Dimension(95, preferredSize.height)
             maximumSize = java.awt.Dimension(95, preferredSize.height)
         }
-    private val passiveAiFingerprintCacheEntriesSpinner =
+    internal val passiveAiFingerprintCacheEntriesSpinner =
         JSpinner(
             SpinnerNumberModel(settings.passiveAiResponseFingerprintCacheEntries, 100, 50_000, 100),
         ).apply {
             preferredSize = java.awt.Dimension(95, preferredSize.height)
             maximumSize = java.awt.Dimension(95, preferredSize.height)
         }
-    private val passiveAiPromptCacheEntriesSpinner =
+    internal val passiveAiPromptCacheEntriesSpinner =
         JSpinner(
             SpinnerNumberModel(settings.passiveAiPromptCacheEntries, 50, 5_000, 50),
         ).apply {
             preferredSize = java.awt.Dimension(95, preferredSize.height)
             maximumSize = java.awt.Dimension(95, preferredSize.height)
         }
-    private val passiveAiRequestBodyMaxCharsSpinner =
+    internal val passiveAiRequestBodyMaxCharsSpinner =
         JSpinner(
             SpinnerNumberModel(settings.passiveAiRequestBodyMaxChars, 256, 20_000, 256),
         ).apply {
             preferredSize = java.awt.Dimension(95, preferredSize.height)
             maximumSize = java.awt.Dimension(95, preferredSize.height)
         }
-    private val passiveAiResponseBodyMaxCharsSpinner =
+    internal val passiveAiResponseBodyMaxCharsSpinner =
         JSpinner(
             SpinnerNumberModel(settings.passiveAiResponseBodyMaxChars, 512, 40_000, 256),
         ).apply {
             preferredSize = java.awt.Dimension(95, preferredSize.height)
             maximumSize = java.awt.Dimension(95, preferredSize.height)
         }
-    private val passiveAiHeaderMaxCountSpinner =
+    internal val passiveAiHeaderMaxCountSpinner =
         JSpinner(
             SpinnerNumberModel(settings.passiveAiHeaderMaxCount, 5, 120, 1),
         ).apply {
             preferredSize = java.awt.Dimension(80, preferredSize.height)
             maximumSize = java.awt.Dimension(80, preferredSize.height)
         }
-    private val passiveAiParamMaxCountSpinner =
+    internal val passiveAiParamMaxCountSpinner =
         JSpinner(
             SpinnerNumberModel(settings.passiveAiParamMaxCount, 5, 100, 1),
         ).apply {
             preferredSize = java.awt.Dimension(80, preferredSize.height)
             maximumSize = java.awt.Dimension(80, preferredSize.height)
         }
-    private val contextRequestBodyMaxCharsSpinner =
+    internal val contextRequestBodyMaxCharsSpinner =
         JSpinner(
             SpinnerNumberModel(settings.contextRequestBodyMaxChars, 256, 40_000, 256),
         ).apply {
             preferredSize = java.awt.Dimension(95, preferredSize.height)
             maximumSize = java.awt.Dimension(95, preferredSize.height)
         }
-    private val contextResponseBodyMaxCharsSpinner =
+    internal val contextResponseBodyMaxCharsSpinner =
         JSpinner(
             SpinnerNumberModel(settings.contextResponseBodyMaxChars, 512, 80_000, 256),
         ).apply {
             preferredSize = java.awt.Dimension(95, preferredSize.height)
             maximumSize = java.awt.Dimension(95, preferredSize.height)
         }
-    private val contextCompactJson = JCheckBox("Compact context JSON (manual actions)", settings.contextCompactJson)
-    private val passiveAiStatusLabel = JLabel()
-    private val passiveAiViewFindings = JButton("View findings")
-    private val passiveAiResetStats = JButton("Reset stats")
+    internal val contextCompactJson = JCheckBox("Compact context JSON (manual actions)", settings.contextCompactJson)
+    internal val passiveAiStatusLabel = JLabel()
+    internal val passiveAiViewFindings = JButton("View findings")
+    internal val passiveAiResetStats = JButton("Reset stats")
 
     // Active AI Scanner UI components
-    private val activeAiEnabled = ToggleSwitch(settings.activeAiEnabled)
-    private val activeAiScopeOnly = JCheckBox("In-scope only", settings.activeAiScopeOnly)
-    private val activeAiAutoFromPassive = JCheckBox("Auto-queue passive findings", settings.activeAiAutoFromPassive)
-    private val activeAiMaxConcurrentSpinner =
+    internal val activeAiEnabled = ToggleSwitch(settings.activeAiEnabled)
+    internal val activeAiScopeOnly = JCheckBox("In-scope only", settings.activeAiScopeOnly)
+    internal val activeAiAutoFromPassive = JCheckBox("Auto-queue passive findings", settings.activeAiAutoFromPassive)
+    internal val activeAiMaxConcurrentSpinner =
         JSpinner(SpinnerNumberModel(settings.activeAiMaxConcurrent, 1, 10, 1)).apply {
             preferredSize = java.awt.Dimension(70, preferredSize.height)
             maximumSize = java.awt.Dimension(70, preferredSize.height)
         }
-    private val activeAiMaxPayloadsSpinner =
+    internal val activeAiMaxPayloadsSpinner =
         JSpinner(SpinnerNumberModel(settings.activeAiMaxPayloadsPerPoint, 1, 50, 5)).apply {
             preferredSize = java.awt.Dimension(70, preferredSize.height)
             maximumSize = java.awt.Dimension(70, preferredSize.height)
         }
-    private val activeAiTimeoutSpinner =
+    internal val activeAiTimeoutSpinner =
         JSpinner(SpinnerNumberModel(settings.activeAiTimeoutSeconds, 5, 120, 5)).apply {
             preferredSize = java.awt.Dimension(70, preferredSize.height)
             maximumSize = java.awt.Dimension(70, preferredSize.height)
         }
-    private val activeAiDelaySpinner =
+    internal val activeAiDelaySpinner =
         JSpinner(SpinnerNumberModel(settings.activeAiRequestDelayMs, 0, 5000, 100)).apply {
             preferredSize = java.awt.Dimension(80, preferredSize.height)
             maximumSize = java.awt.Dimension(80, preferredSize.height)
         }
-    private val activeAiRiskLevelCombo =
+    internal val activeAiRiskLevelCombo =
         JComboBox(arrayOf("SAFE", "MODERATE", "DANGEROUS")).apply {
             selectedItem = settings.activeAiMaxRiskLevel.name
             preferredSize = java.awt.Dimension(110, preferredSize.height)
             maximumSize = java.awt.Dimension(110, preferredSize.height)
         }
-    private val activeAiScanModeCombo =
+    internal val activeAiScanModeCombo =
         JComboBox(arrayOf("BUG_BOUNTY", "PENTEST", "FULL")).apply {
             selectedItem = settings.activeAiScanMode.name
             preferredSize = java.awt.Dimension(120, preferredSize.height)
             maximumSize = java.awt.Dimension(120, preferredSize.height)
         }
-    private val activeAiUseCollaborator = JCheckBox("Use Collaborator for SSRF OAST", settings.activeAiUseCollaborator)
-    private val activeAiAdaptivePayloads = JCheckBox("AI adaptive payloads", settings.activeAiAdaptivePayloads)
-    private val activeAiRiskDescription = JLabel()
-    private val activeAiStatusLabel = JLabel()
-    private val activeAiViewFindings = JButton("View findings")
-    private val activeAiViewQueue = JButton("View queue")
-    private val activeAiClearQueue = JButton("Clear queue")
-    private val activeAiResetStats = JButton("Reset stats")
+    internal val activeAiUseCollaborator = JCheckBox("Use Collaborator for SSRF OAST", settings.activeAiUseCollaborator)
+    internal val activeAiAdaptivePayloads = JCheckBox("AI adaptive payloads", settings.activeAiAdaptivePayloads)
+    internal val activeAiRiskDescription = JLabel()
+    internal val activeAiStatusLabel = JLabel()
+    internal val activeAiViewFindings = JButton("View findings")
+    internal val activeAiViewQueue = JButton("View queue")
+    internal val activeAiClearQueue = JButton("Clear queue")
+    internal val activeAiResetStats = JButton("Reset stats")
 
-    private val scannerTriageButton = JButton("Open triage")
+    internal val scannerTriageButton = JButton("Open triage")
 
     // CAP-04: token-budget threshold fields; displayed in PassiveScanConfigPanel Section F
-    private val tokenBudgetWarnField =
+    internal val tokenBudgetWarnField =
         JTextField(
             if (settings.tokenBudgetWarnThreshold > 0) settings.tokenBudgetWarnThreshold.toString() else "",
             10,
         )
-    private val tokenBudgetHardCapField =
+    internal val tokenBudgetHardCapField =
         JTextField(
             if (settings.tokenBudgetHardCap > 0) settings.tokenBudgetHardCap.toString() else "",
             10,
