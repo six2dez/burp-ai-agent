@@ -9,6 +9,16 @@
 
 Custom AI Agent is an extension for Burp Suite that integrates AI into your security workflow. Use local models or cloud providers, connect external AI agents via MCP, and let passive/active scanners find vulnerabilities while you focus on manual testing.
 
+## What's new in v0.9.0
+
+- **Native [Anthropic](docs/anthropic-backend.md) backend** (CAP-01) — direct Anthropic Messages API via Burp's HTTP transport; all traffic appears in Proxy history.
+- **AES-256-GCM secrets at rest** (SEC-01) — all stored API keys and tokens are encrypted with a per-install key using `javax.crypto`; no plaintext in preferences.
+- **Real HKDF host anonymization** (PRIV-01) — STRICT mode now uses genuine HMAC-SHA256 extract/expand (not salted SHA-256) for host anonymization.
+- **Request/response body redaction + custom patterns** (PRIV-02) — redaction pipeline covers body fields and user-configurable regex patterns validated against ReDoS.
+- **Pre-send secret tripwire** (PRIV-03) — warns before high-entropy values leave Burp; allowlist actions are audit-logged.
+- **[External MCP servers](docs/external-mcp-servers.md)** (CAP-02) — connect to external/custom MCP servers (SSE or stdio) so AI agents can call their tools alongside Burp's built-in tools.
+- **Per-session token-budget guardrails** (CAP-04) — `BudgetGuard` caps passive-scanner spend with WARN/CAP/OFF states; passive scanner pauses automatically at the hard cap.
+
 ## Highlights
 
 - **11 AI Backends** — Burp AI (built-in), Ollama, LM Studio, NVIDIA NIM, Perplexity, Generic OpenAI-compatible, Gemini CLI, Claude CLI, Codex CLI, OpenCode CLI, Copilot CLI.
@@ -74,6 +84,7 @@ Open the **AI Agent** tab and go to **Settings**. Pick a backend:
 | **Codex CLI** | Cloud CLI | Install `codex`, set `OPENAI_API_KEY`. |
 | **OpenCode CLI** | Cloud CLI | Install `opencode`, configure provider credentials. |
 | **Copilot CLI** | Cloud CLI | Install `copilot` and sign in with your GitHub account. |
+| **Anthropic** | Cloud API | Enter your Anthropic API key in Settings. API traffic routes through Burp's proxy. See [docs/anthropic-backend.md](docs/anthropic-backend.md). |
 
 For **NVIDIA NIM**, the backend expects the same chat-completions style flow as the NVIDIA hosted endpoint. A working configuration is:
 
@@ -120,6 +131,8 @@ Enable the MCP server in **Settings > MCP Server** and add this to your Claude D
 ```
 
 > Requires Node.js 18+. If you enable **External Access**, the MCP client must send `Authorization: Bearer <token>` on every request.
+
+You can also register external or custom MCP servers in **Settings > MCP > External Servers** (SSE or stdio transports). External server auth tokens are stored encrypted at rest. See [docs/external-mcp-servers.md](docs/external-mcp-servers.md) for setup details and security notes.
 
 ## Burp Scan Skill (Terminal AI Scanning)
 
@@ -190,6 +203,14 @@ Full documentation is available at **[burp-ai-agent.six2dez.com](https://burp-ai
 - [MCP Hardening](docs/mcp-hardening.md)
 - [UI Safety Guide](docs/ui-safety-guide.md)
 - [Backend Troubleshooting](docs/backend-troubleshooting.md)
+- [Anthropic Backend Setup](docs/anthropic-backend.md)
+- [External MCP Servers](docs/external-mcp-servers.md)
+
+### Privacy and Security Notes
+
+- All stored API keys and tokens (Anthropic, MCP bearer token, TLS keystore password, etc.) are encrypted at rest with AES-256-GCM using a per-install master key.
+- STRICT privacy mode anonymizes hosts using real HKDF (HMAC-SHA256 extract/expand). BALANCED mode redacts cookies, tokens, and auth headers. OFF mode sends traffic as-is.
+- External MCP server outputs are wrapped in a trust-boundary marker before entering the AI prompt, preventing prompt injection from untrusted server responses.
 
 Settings are schema-versioned internally (`settings.schema.version`) and migrated additively on load for safe upgrades.
 
