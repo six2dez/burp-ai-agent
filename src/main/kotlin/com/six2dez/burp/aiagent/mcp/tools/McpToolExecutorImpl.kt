@@ -1,10 +1,10 @@
+@file:Suppress("ktlint:standard:filename")
+
 package com.six2dez.burp.aiagent.mcp.tools
 
-import burp.api.montoya.MontoyaApi
 import burp.api.montoya.burpsuite.TaskExecutionEngine.TaskExecutionEngineState.PAUSED
 import burp.api.montoya.burpsuite.TaskExecutionEngine.TaskExecutionEngineState.RUNNING
 import burp.api.montoya.core.BurpSuiteEdition
-import burp.api.montoya.core.HighlightColor
 import burp.api.montoya.core.Range
 import burp.api.montoya.http.HttpMode
 import burp.api.montoya.http.RequestOptions
@@ -25,8 +25,6 @@ import com.six2dez.burp.aiagent.mcp.schema.toSiteMapEntry
 import com.six2dez.burp.aiagent.redact.PrivacyMode
 import com.six2dez.burp.aiagent.redact.Redaction
 import com.six2dez.burp.aiagent.redact.RedactionPolicy
-import com.six2dez.burp.aiagent.util.IssueText
-import com.six2dez.burp.aiagent.util.IssueUtils
 import io.modelcontextprotocol.kotlin.sdk.CallToolResult
 import io.modelcontextprotocol.kotlin.sdk.TextContent
 import io.modelcontextprotocol.kotlin.sdk.Tool
@@ -38,7 +36,6 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.decodeFromJsonElement
 import java.security.MessageDigest
-import java.util.Base64
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
@@ -1291,4 +1288,3 @@ object McpToolExecutor {
         return "{\"properties\":$props,\"required\":$required}"
     }
 }
-

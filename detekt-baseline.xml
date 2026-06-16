@@ -53,10 +53,10 @@
     <ID>CyclomaticComplexMethod:ResponseAnalyzer.kt$ResponseAnalyzer$fun analyzeBooleanBasedDual( original: HttpRequestResponse, trueResponse: HttpRequestResponse, falseResponse: HttpRequestResponse, truePayload: Payload, falsePayload: Payload, vulnClass: VulnClass, ): VulnConfirmation?</ID>
     <ID>CyclomaticComplexMethod:ResponseAnalyzer.kt$ResponseAnalyzer$private fun analyzeContentBased( original: HttpRequestResponse, modified: HttpRequestResponse, payload: Payload, vulnClass: VulnClass, fullResponse: String, originalFull: String, ): VulnConfirmation?</ID>
     <ID>CyclomaticComplexMethod:ScannerIssueSupport.kt$ScannerIssueSupport$fun remediation(vulnClass: VulnClass): String</ID>
-    <ID>CyclomaticComplexMethod:SettingsPanel.kt$SettingsPanel$@Suppress("LongMethod") private fun buildMcpToolsPanel(): JScrollPane</ID>
-    <ID>CyclomaticComplexMethod:SettingsPanel.kt$SettingsPanel$fun currentSettings(): AgentSettings</ID>
-    <ID>CyclomaticComplexMethod:SettingsPanel.kt$SettingsPanel$private fun refreshPrivacyNotice()</ID>
-    <ID>CyclomaticComplexMethod:SettingsPanel.kt$SettingsPanel$private fun updateUnsafeToolStates()</ID>
+    <ID>CyclomaticComplexMethod:SettingsPanel.kt$SettingsPanel$internal fun refreshPrivacyNotice()</ID>
+    <ID>CyclomaticComplexMethod:SettingsPanelMcpTabs.kt$@Suppress("LongMethod") internal fun SettingsPanel.buildMcpToolsPanel(): JScrollPane</ID>
+    <ID>CyclomaticComplexMethod:SettingsPanelMcpTabs.kt$internal fun SettingsPanel.updateUnsafeToolStates()</ID>
+    <ID>CyclomaticComplexMethod:SettingsPanelSettingsIO.kt$internal fun SettingsPanel.currentSettings(): AgentSettings</ID>
     <ID>CyclomaticComplexMethod:SsrfGuard.kt$SsrfGuard$fun isPrivateOrLinkLocal(url: String): Boolean</ID>
     <ID>CyclomaticComplexMethod:ToolCallParser.kt$ToolCallParser$private fun extractJsonObjectCandidates(text: String): List&lt;String></ID>
     <ID>CyclomaticComplexMethod:UiActions.kt$UiActions$fun requestResponseMenuItems( api: MontoyaApi, event: ContextMenuEvent, tab: MainTab, mcpSupervisor: McpSupervisor, passiveAiScanner: PassiveAiScanner, activeAiScanner: ActiveAiScanner? = null, audit: AuditLogger? = null, ): List&lt;JMenuItem></ID>
@@ -125,9 +125,9 @@
     <ID>LongMethod:PassiveAiScannerFinding.kt$internal fun PassiveAiScanner.handleFinding( requestResponse: HttpRequestResponse, title: String, rawSeverity: String, detail: String, confidence: Int, minSeverity: String, settings: AgentSettings, source: String, )</ID>
     <ID>LongMethod:PassiveAiScannerFinding.kt$internal fun PassiveAiScanner.mapTitleToVulnClass(title: String): VulnClass?</ID>
     <ID>LongMethod:PassiveScanConfigPanel.kt$PassiveScanConfigPanel$override fun build(): JPanel</ID>
-    <ID>LongMethod:SettingsPanel.kt$SettingsPanel$fun currentSettings(): AgentSettings</ID>
-    <ID>LongMethod:SettingsPanel.kt$SettingsPanel$private fun applySettingsToUi(updated: AgentSettings)</ID>
-    <ID>LongMethod:SettingsPanel.kt$SettingsPanel$private fun showScannerTriageDialog()</ID>
+    <ID>LongMethod:SettingsPanelScannerTabs.kt$internal fun SettingsPanel.showScannerTriageDialog()</ID>
+    <ID>LongMethod:SettingsPanelSettingsIO.kt$internal fun SettingsPanel.applySettingsToUi(updated: AgentSettings)</ID>
+    <ID>LongMethod:SettingsPanelSettingsIO.kt$internal fun SettingsPanel.currentSettings(): AgentSettings</ID>
     <ID>LongMethod:TestSettings.kt$TestSettings$fun baselineSettings(preferredBackendId: String = "codex-cli"): AgentSettings</ID>
     <ID>LongMethod:UiActions.kt$UiActions$fun requestResponseMenuItems( api: MontoyaApi, event: ContextMenuEvent, tab: MainTab, mcpSupervisor: McpSupervisor, passiveAiScanner: PassiveAiScanner, activeAiScanner: ActiveAiScanner? = null, audit: AuditLogger? = null, ): List&lt;JMenuItem></ID>
     <ID>LongMethod:UiActions.kt$UiActions$private fun buildBountyPromptMenu( api: MontoyaApi, tab: MainTab, mcpSupervisor: McpSupervisor, targets: List&lt;HttpRequestResponse>, audit: AuditLogger?, ): JMenu</ID>
@@ -683,21 +683,16 @@
     <ID>MagicNumber:SettingsPanel.kt$SettingsPanel$168</ID>
     <ID>MagicNumber:SettingsPanel.kt$SettingsPanel$20</ID>
     <ID>MagicNumber:SettingsPanel.kt$SettingsPanel$200</ID>
-    <ID>MagicNumber:SettingsPanel.kt$SettingsPanel$2000</ID>
     <ID>MagicNumber:SettingsPanel.kt$SettingsPanel$20_000</ID>
     <ID>MagicNumber:SettingsPanel.kt$SettingsPanel$24</ID>
     <ID>MagicNumber:SettingsPanel.kt$SettingsPanel$240</ID>
     <ID>MagicNumber:SettingsPanel.kt$SettingsPanel$256</ID>
-    <ID>MagicNumber:SettingsPanel.kt$SettingsPanel$2_000</ID>
     <ID>MagicNumber:SettingsPanel.kt$SettingsPanel$3</ID>
     <ID>MagicNumber:SettingsPanel.kt$SettingsPanel$30</ID>
     <ID>MagicNumber:SettingsPanel.kt$SettingsPanel$32</ID>
     <ID>MagicNumber:SettingsPanel.kt$SettingsPanel$320</ID>
-    <ID>MagicNumber:SettingsPanel.kt$SettingsPanel$3600</ID>
     <ID>MagicNumber:SettingsPanel.kt$SettingsPanel$4</ID>
-    <ID>MagicNumber:SettingsPanel.kt$SettingsPanel$40</ID>
     <ID>MagicNumber:SettingsPanel.kt$SettingsPanel$40_000</ID>
-    <ID>MagicNumber:SettingsPanel.kt$SettingsPanel$4_000</ID>
     <ID>MagicNumber:SettingsPanel.kt$SettingsPanel$5</ID>
     <ID>MagicNumber:SettingsPanel.kt$SettingsPanel$50</ID>
     <ID>MagicNumber:SettingsPanel.kt$SettingsPanel$500</ID>
@@ -705,18 +700,43 @@
     <ID>MagicNumber:SettingsPanel.kt$SettingsPanel$50_000</ID>
     <ID>MagicNumber:SettingsPanel.kt$SettingsPanel$512</ID>
     <ID>MagicNumber:SettingsPanel.kt$SettingsPanel$5_000</ID>
-    <ID>MagicNumber:SettingsPanel.kt$SettingsPanel$6</ID>
     <ID>MagicNumber:SettingsPanel.kt$SettingsPanel$60</ID>
     <ID>MagicNumber:SettingsPanel.kt$SettingsPanel$64</ID>
     <ID>MagicNumber:SettingsPanel.kt$SettingsPanel$65535</ID>
     <ID>MagicNumber:SettingsPanel.kt$SettingsPanel$70</ID>
-    <ID>MagicNumber:SettingsPanel.kt$SettingsPanel$8</ID>
     <ID>MagicNumber:SettingsPanel.kt$SettingsPanel$80</ID>
     <ID>MagicNumber:SettingsPanel.kt$SettingsPanel$80_000</ID>
     <ID>MagicNumber:SettingsPanel.kt$SettingsPanel$90</ID>
     <ID>MagicNumber:SettingsPanel.kt$SettingsPanel$95</ID>
-    <ID>MagicNumber:SettingsPanel.kt$SettingsPanel$96</ID>
-    <ID>MagicNumber:SettingsPanel.kt$SettingsPanel$9876</ID>
+    <ID>MagicNumber:SettingsPanelInit.kt$2000</ID>
+    <ID>MagicNumber:SettingsPanelInit.kt$6</ID>
+    <ID>MagicNumber:SettingsPanelInit.kt$8</ID>
+    <ID>MagicNumber:SettingsPanelMcpTabs.kt$8</ID>
+    <ID>MagicNumber:SettingsPanelMcpTabs.kt$9876</ID>
+    <ID>MagicNumber:SettingsPanelScannerTabs.kt$10</ID>
+    <ID>MagicNumber:SettingsPanelScannerTabs.kt$100</ID>
+    <ID>MagicNumber:SettingsPanelScannerTabs.kt$120</ID>
+    <ID>MagicNumber:SettingsPanelScannerTabs.kt$15</ID>
+    <ID>MagicNumber:SettingsPanelScannerTabs.kt$20</ID>
+    <ID>MagicNumber:SettingsPanelScannerTabs.kt$24</ID>
+    <ID>MagicNumber:SettingsPanelScannerTabs.kt$2_000</ID>
+    <ID>MagicNumber:SettingsPanelScannerTabs.kt$3</ID>
+    <ID>MagicNumber:SettingsPanelScannerTabs.kt$30</ID>
+    <ID>MagicNumber:SettingsPanelScannerTabs.kt$4</ID>
+    <ID>MagicNumber:SettingsPanelScannerTabs.kt$40</ID>
+    <ID>MagicNumber:SettingsPanelScannerTabs.kt$4_000</ID>
+    <ID>MagicNumber:SettingsPanelScannerTabs.kt$5</ID>
+    <ID>MagicNumber:SettingsPanelScannerTabs.kt$50</ID>
+    <ID>MagicNumber:SettingsPanelScannerTabs.kt$500</ID>
+    <ID>MagicNumber:SettingsPanelScannerTabs.kt$5_000</ID>
+    <ID>MagicNumber:SettingsPanelScannerTabs.kt$60</ID>
+    <ID>MagicNumber:SettingsPanelScannerTabs.kt$70</ID>
+    <ID>MagicNumber:SettingsPanelScannerTabs.kt$96</ID>
+    <ID>MagicNumber:SettingsPanelSettingsIO.kt$1024</ID>
+    <ID>MagicNumber:SettingsPanelSettingsIO.kt$30</ID>
+    <ID>MagicNumber:SettingsPanelSettingsIO.kt$32</ID>
+    <ID>MagicNumber:SettingsPanelSettingsIO.kt$3600</ID>
+    <ID>MagicNumber:SettingsPanelSettingsIO.kt$500</ID>
     <ID>MagicNumber:SsrfGuard.kt$SsrfGuard$0xFC</ID>
     <ID>MagicNumber:SsrfGuard.kt$SsrfGuard$0xFE</ID>
     <ID>MagicNumber:SsrfGuard.kt$SsrfGuard$0xFF</ID>
@@ -942,7 +962,7 @@
     <ID>ReturnCount:ScannerTaskRegistry.kt$ScannerTaskRegistry$fun get(id: String): ScanTask?</ID>
     <ID>ReturnCount:SecretCipher.kt$SecretCipher$fun decrypt( ciphertext: String, prefKeyName: String = "", ): String</ID>
     <ID>ReturnCount:SecurityExcerpts.kt$SecurityExcerpts$fun extract( fullBody: String, includedLen: Int, maxChars: Int = MAX_CHARS, ): String?</ID>
-    <ID>ReturnCount:SettingsPanel.kt$SettingsPanel$private fun shellQuote(value: String): String</ID>
+    <ID>ReturnCount:SettingsPanel.kt$SettingsPanel$internal fun shellQuote(value: String): String</ID>
     <ID>ReturnCount:SsrfGuard.kt$SsrfGuard$fun isPrivateOrLinkLocal(url: String): Boolean</ID>
     <ID>ReturnCount:SsrfGuard.kt$SsrfGuard$private fun extractAuthorityHost(url: String): String?</ID>
     <ID>ReturnCount:ToolCallParser.kt$ToolCallParser$private fun firstNestedToolCallObject(obj: JsonObject): JsonObject?</ID>
@@ -1042,6 +1062,8 @@
     <ID>TooManyFunctions:ResponseAnalyzer.kt$ResponseAnalyzer</ID>
     <ID>TooManyFunctions:ScanKnowledgeBase.kt$ScanKnowledgeBase</ID>
     <ID>TooManyFunctions:SettingsPanel.kt$SettingsPanel</ID>
+    <ID>TooManyFunctions:SettingsPanelMcpTabs.kt$com.six2dez.burp.aiagent.ui.SettingsPanelMcpTabs.kt</ID>
+    <ID>TooManyFunctions:SettingsPanelScannerTabs.kt$com.six2dez.burp.aiagent.ui.SettingsPanelScannerTabs.kt</ID>
     <ID>TooManyFunctions:ToolCallParser.kt$ToolCallParser</ID>
     <ID>TooManyFunctions:UiActions.kt$UiActions</ID>
     <ID>UnusedParameter:AiScanCheck.kt$AiScanCheck$vulnClass: VulnClass</ID>
@@ -1050,7 +1072,6 @@
     <ID>UnusedPrivateMember:ActiveAiScanner.kt$ActiveAiScanner$private fun buildMetadataSection( backendInfo: AgentSupervisor.BackendInfo?, scanType: String, confidence: Int, ): String</ID>
     <ID>UnusedPrivateMember:BackendConfigPanel.kt$BackendConfigPanel$private fun buildSingleFieldPanel( labelText: String, field: JComponent, ): JPanel</ID>
     <ID>UnusedPrivateMember:ChatPanel.kt$ChatPanel$private fun cancelCurrentRequest()</ID>
-    <ID>UnusedPrivateMember:SettingsPanel.kt$SettingsPanel$private fun availableMcpTools(): Set&lt;String></ID>
     <ID>UnusedPrivateProperty:AdaptivePayloadEngine.kt$AdaptivePayloadEngine$val safeHost = if (privacyMode != PrivacyMode.OFF) "[REDACTED_HOST]" else host</ID>
     <ID>UnusedPrivateProperty:AiRequestLoggerTest.kt$AiRequestLoggerTest$j</ID>
     <ID>UnusedPrivateProperty:Components.kt$val bgColor = when (style) { BadgeStyle.NATIVE -> DesignTokens.Colors.badgeNative BadgeStyle.FULL -> DesignTokens.Colors.badgeFull }</ID>
