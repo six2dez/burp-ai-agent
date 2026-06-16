@@ -55,7 +55,7 @@ Phases 9–11 closed. Features: design system foundation (UI-01), MCP tools tab 
 - [ ] **Phase 16: External MCP Client** — Connect to external/custom MCP servers (SSE + stdio transports); auth tokens encrypted; SSRF guard; untrusted-output trust boundary
 - [x] **Phase 17: Reliability & Concurrency Hardening** — EDT confinement on ChatPanel session maps; CLI temp file cleanup via finally; bounded MCP shutdown; uniform HTTP timeouts/CircuitBreaker; fix CLI timeout bug #71 (completed 2026-06-11)
 - [x] **Phase 18: Quality Tooling & Build Hardening** — Raise scanner/CLI/cache test coverage; add detekt + blocking ktlint with committed baseline; audit 136 exception-logging sites; fix generateBuildFlags sourceSets wiring (completed 2026-06-11)
-- [ ] **Phase 19: Mega-File Split + Docs** — Split 3 mega-files (no behaviour change); finalize .planning reconciliation; update user-facing docs for v0.9.0 changes
+- [x] **Phase 19: Mega-File Split + Docs** — Split 3 mega-files (no behaviour change); finalize .planning reconciliation; update user-facing docs for v0.9.0 changes (completed 2026-06-16)
 
 ## Phase Details
 
@@ -263,7 +263,7 @@ Plans:
 - [x] 19-02-PLAN.md — PassiveAiScanner.kt split: Models + Heuristics + Parsing + Prompts (QUAL-01) [wave 1]
 - [x] 19-03-PLAN.md — SettingsPanel.kt split: ScannerTabs + McpTabs as internal extensions (QUAL-01) [wave 1]
 - [x] 19-04-PLAN.md — .planning/ reconciliation: prune stale blockers/todos, update traceability (DOC-01) [wave 1]
-- [ ] 19-05-PLAN.md — User-facing docs: README + DECISIONS + SPEC + 2 docs/ pages (DOC-02) [wave 1]
+- [x] 19-05-PLAN.md — User-facing docs: README + DECISIONS + SPEC + 2 docs/ pages (DOC-02) [wave 1]
 
 ---
 
@@ -282,4 +282,4 @@ Phase 12 (SEC) must be first. Phase 13 (Privacy) and Phase 12 are sequential (av
 | 16. External MCP Client | 5/6 | In Progress|  |
 | 17. Reliability & Concurrency Hardening | 3/3 | Complete    | 2026-06-11 |
 | 18. Quality Tooling & Build Hardening | 4/4 | Complete    | 2026-06-12 |
-| 19. Mega-File Split + Docs | 4/5 | In Progress|  |
+| 19. Mega-File Split + Docs | 5/5 | Complete   | 2026-06-16 |

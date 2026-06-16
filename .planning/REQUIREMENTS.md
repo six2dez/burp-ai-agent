@@ -47,7 +47,7 @@ Research-mandated ordering: **SEC (encrypt secrets) lands before CAP-01 (Anthrop
 ### Planning & Docs Reconciliation (DOC)
 
 - [x] **DOC-01** (A7): `.planning/` (PROJECT, STATE, ROADMAP, REQUIREMENTS) reflects shipped v0.7.0/v0.8.0 and closed issues #62/#66/#67/#68/#69; stale carryover removed *(partially completed at milestone start; finalized when phases close)*
-- [ ] **DOC-02**: User-facing docs (`README.md`, `SPEC.md`, `DECISIONS.md`, `burp-ai-agent.six2dez.com`) are updated for the v0.9.0 changes (Anthropic backend, secret encryption, redaction changes, external MCP, token budgets)
+- [x] **DOC-02**: User-facing docs (`README.md`, `SPEC.md`, `DECISIONS.md`, `burp-ai-agent.six2dez.com`) are updated for the v0.9.0 changes (Anthropic backend, secret encryption, redaction changes, external MCP, token budgets)
 
 ## Deferred (v2 / future)
 
@@ -93,7 +93,7 @@ Explicitly excluded for v0.9.0. Tracked to prevent scope creep.
 | QUAL-05 | Phase 18: Quality Tooling & Build Hardening | Complete |
 | QUAL-01 | Phase 19: Mega-File Split + Docs | Complete |
 | DOC-01 | Phase 19: Mega-File Split + Docs | Complete |
-| DOC-02 | Phase 19: Mega-File Split + Docs | Pending |
+| DOC-02 | Phase 19: Mega-File Split + Docs | Complete |
 
 **Coverage:**
 - v0.9.0 requirements: 22 total (PRIV 4, SEC 3, REL 4, QUAL 5, CAP 4, DOC 2)
