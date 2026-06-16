@@ -13,8 +13,6 @@ import com.six2dez.burp.aiagent.supervisor.AgentSupervisor
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.mock
-import java.lang.reflect.Method
-
 class PassiveAiScannerConfidenceTest {
     @Test
     fun aiFindingBelowThreshold_isSkippedAndNotRecorded() {
@@ -25,8 +23,8 @@ class PassiveAiScannerConfidenceTest {
                 audit = mock<AuditLogger>(),
             ) { baselineSettings() }
 
-        invokeHandleFinding(
-            scanner = scanner,
+        // handleFinding is now an internal extension function in the same package; call directly.
+        scanner.handleFinding(
             requestResponse = mock<HttpRequestResponse>(),
             title = "Potential issue",
             rawSeverity = "High",
@@ -38,33 +36,6 @@ class PassiveAiScannerConfidenceTest {
         )
 
         assertTrue(scanner.getLastFindings(10).isEmpty())
-    }
-
-    private fun invokeHandleFinding(
-        scanner: PassiveAiScanner,
-        requestResponse: HttpRequestResponse,
-        title: String,
-        rawSeverity: String,
-        detail: String,
-        confidence: Int,
-        minSeverity: String,
-        settings: AgentSettings,
-        source: String,
-    ) {
-        val method: Method =
-            scanner.javaClass.getDeclaredMethod(
-                "handleFinding",
-                HttpRequestResponse::class.java,
-                String::class.java,
-                String::class.java,
-                String::class.java,
-                Int::class.javaPrimitiveType,
-                String::class.java,
-                AgentSettings::class.java,
-                String::class.java,
-            )
-        method.isAccessible = true
-        method.invoke(scanner, requestResponse, title, rawSeverity, detail, confidence, minSeverity, settings, source)
     }
 
     private fun baselineSettings(): AgentSettings =
