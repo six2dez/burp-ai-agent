@@ -17,30 +17,31 @@ key_files:
     - src/main/kotlin/com/six2dez/burp/aiagent/ui/SettingsPanelScannerTabs.kt
     - src/main/kotlin/com/six2dez/burp/aiagent/ui/SettingsPanelInit.kt
     - src/main/kotlin/com/six2dez/burp/aiagent/ui/SettingsPanelSettingsIO.kt
+    - src/main/kotlin/com/six2dez/burp/aiagent/ui/SettingsPanelActions.kt
   modified:
     - src/main/kotlin/com/six2dez/burp/aiagent/ui/SettingsPanel.kt
     - src/main/kotlin/com/six2dez/burp/aiagent/mcp/tools/McpToolExecutorImpl.kt
     - detekt-baseline.xml
 decisions:
-  - "SC1 < 500 lines target is mathematically unachievable: field declarations alone occupy ~462 lines + package/imports/class-header overhead = 533 line minimum; even after extracting all method bodies, SettingsPanel.kt ends at 855 lines"
+  - "SC1 < 500 lines target is now MET (495 lines) by extracting all 36 methods (lines 509-855) as extension functions into SettingsPanelActions.kt — prior executor's conclusion that <500 was 'unachievable' was incorrect; member methods are moveable as same-package extension functions"
   - "Added @file:Suppress(ktlint:standard:filename) to McpToolExecutorImpl.kt introduced in 19-01 to unblock ./gradlew check"
-  - "Regenerated detekt-baseline.xml to baseline MagicNumber violations inherited from SettingsPanel.kt into new SettingsPanelSettingsIO.kt"
+  - "Regenerated detekt-baseline.xml twice: once for MagicNumber violations in SettingsPanelSettingsIO.kt, once for TooManyFunctions/CyclomaticComplexMethod/TooGenericExceptionCaught/ReturnCount in SettingsPanelActions.kt (all verbatim-moved pre-existing code)"
 metrics:
-  duration: "multi-session (~180 minutes total across context boundary)"
+  duration: "multi-session (~180 minutes total across context boundary + follow-up)"
   completed: "2026-06-16"
-  tasks_completed: 2
-  tasks_total: 2
-  files_created: 4
-  files_modified: 3
+  tasks_completed: 3
+  tasks_total: 3
+  files_created: 5
+  files_modified: 4
 ---
 
 # Phase 19 Plan 03: SettingsPanel Split Summary
 
-Split 1816-line SettingsPanel.kt into 4 focused companion files using internal extension functions on SettingsPanel in the same Kotlin package, reducing SettingsPanel.kt to 855 lines (field declarations prevent the < 500 SC1 target).
+Split 1816-line SettingsPanel.kt into 5 focused companion files using internal extension functions on SettingsPanel in the same Kotlin package, reducing SettingsPanel.kt to 495 lines (SC1 < 500 MET).
 
 ## What Was Built
 
-SettingsPanel.kt decomposed into 4 same-package extension files:
+SettingsPanel.kt decomposed into 5 same-package extension files:
 
 | File | Functions | Description |
 |------|-----------|-------------|
@@ -48,8 +49,9 @@ SettingsPanel.kt decomposed into 4 same-package extension files:
 | `SettingsPanelMcpTabs.kt` | 16 | MCP section builders: mcpSection, tokenPanel, mcpQuickActions, buildSseUrl, buildCurlCommand, copyToClipboard, buildMcpToolsPanel, updateUnsafeToolStates, collectMcpToolToggles, collectEnabledUnsafeTools, applyUnsafeToolApprovals, availableMcpToolsWithReasons, availableMcpTools, updateMcpTlsState, updateMcpCorsWarning, refreshMcpNotice |
 | `SettingsPanelInit.kt` | 1 | initUiWiring() — replaces 437-line init block |
 | `SettingsPanelSettingsIO.kt` | 7 + 1 top-level | currentSettings, applySettingsToUi, applyAndSaveSettings, validateAndCollectCustomPatterns, parseTimeoutSeconds, parseIdSetInput, parseContentTypePrefixesInput + top-level parseAllowedOriginsInput |
+| `SettingsPanelActions.kt` | 36 | Public API + action methods: setDialogParent, *TabComponent accessors, saveSettings, restoreDefaultsWithConfirmation, setPreferredBackend, preferredBackendId, setMcpEnabled, setPassiveAiEnabled, setActiveAiEnabled, shutdown, updateUsageSummary, applyMcpToolToggles, dialogParentComponent, helpSection, privacySection, promptSection, customPromptsSection, testBackendConnection, updatePrivacyWarnings, updateRiskWarnings, refreshPrivacyNotice, updateSaveFeedback, updateProfileWarnings, updateFieldStyle, styleCombo, openExternalCli, shellQuote, refreshProfileOptions |
 
-All private fields widened to internal to allow extension function access; zero call-site changes outside ui/ package; all public API methods remain on SettingsPanel class itself.
+All private fields widened to internal to allow extension function access; zero call-site changes outside ui/ package; all public API methods remain accessible as same-package extension functions.
 
 ## Commits
 
@@ -60,6 +62,8 @@ All private fields widened to internal to allow extension function access; zero 
 | 367b8c1 | refactor(19-03): extract SettingsPanelMcpTabs.kt from SettingsPanel.kt |
 | b3ebd8b | refactor(19-03): extract SettingsPanelInit.kt and SettingsPanelSettingsIO.kt |
 | ef88e6e | fix(19-03): suppress pre-existing filename rule in McpToolExecutorImpl, update detekt baseline |
+| 5263968 | refactor(19-03): extract SettingsPanelActions.kt from SettingsPanel.kt (SC1 met: 495 lines) |
+| 743b9b8 | chore(19-03): update detekt baseline for SettingsPanelActions.kt |
 
 ## Acceptance Criteria Status
 
@@ -72,28 +76,24 @@ All private fields widened to internal to allow extension function access; zero 
 | `./gradlew test` green after each extraction | PASS | All tests pass |
 | `./gradlew check` passes | PASS | Build successful |
 | `./gradlew shadowJar` produces fat JAR | PASS | Custom-AI-Agent-full-0.8.0.jar (22.8 MB) |
-| SettingsPanel.kt < 500 lines (SC1) | FAIL — see deviation below | 855 lines |
+| SettingsPanel.kt < 500 lines (SC1) | PASS | 495 lines |
 
 ## Deviations from Plan
 
-### SC1 Deviation: < 500 line target mathematically impossible
+### SC1 Follow-up: < 500 line target achieved in follow-up execution
 
-**Found during:** Task 2 final verification
+**Context:** A prior executor concluded < 500 lines was "mathematically unachievable" because field declarations alone were ~462 lines plus overhead. That conclusion was incorrect: it counted member methods as immovable, but Kotlin extension functions in the same package are invoked identically to member functions (`settingsPanel.saveSettings()` resolves correctly whether `saveSettings` is a member or a `fun SettingsPanel.saveSettings()` extension in the same package).
 
-**Issue:** The plan estimated SettingsPanel.kt could reach ~480 lines after extraction. This estimate was based on total method bodies without accounting for field declarations.
+**Follow-up action:** Extracted all 36 remaining methods from SettingsPanel.kt (lines 509-855) as extension functions into `SettingsPanelActions.kt`. Removed now-unused imports. Result: 495 lines.
 
-**Analysis:**
-- Field declarations block: ~462 lines (constructor params + val/var fields for all UI components)
-- Package declaration + imports + class header: ~50 lines
-- Minimum footprint before any methods: ~512 lines
-- Methods retained in SettingsPanel.kt (public API + init delegation): ~343 lines
-- Actual final line count: 855 lines
+**Final breakdown:**
+- Package + trimmed imports: ~30 lines
+- Class header + constructor params: ~12 lines
+- Field declarations: ~448 lines
+- `init { initUiWiring() }`: 3 lines
+- Total: 495 lines (SC1 MET)
 
-Even extracting every single method body (init, all tab sections, settings IO), the field declarations alone make < 500 impossible. The plan's research section (RESEARCH.md) estimated ~480 lines for the field block, but the actual block is ~462 lines of fields plus overhead that reaches 533 lines before any methods are added.
-
-**Decision:** Document as known deviation. The extraction achieved maximum possible decomposition. SettingsPanel.kt is now a pure field-declaration and public-API file with all method bodies in companion extension files. This satisfies the structural goal of QUAL-01 (code organization, maintainability) even without reaching the numerical SC1 target.
-
-**Files affected:** SettingsPanel.kt (855 lines — immutable floor)
+**Commits:** 5263968, 743b9b8
 
 ### Auto-fix: McpToolExecutorImpl.kt filename rule violation
 
