@@ -30,10 +30,10 @@ import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
 class PassiveAiScanner(
-    private val api: MontoyaApi,
-    private val supervisor: AgentSupervisor,
-    private val audit: AuditLogger,
-    private val getSettings: () -> AgentSettings,
+    internal val api: MontoyaApi,
+    internal val supervisor: AgentSupervisor,
+    internal val audit: AuditLogger,
+    internal val getSettings: () -> AgentSettings,
 ) {
     var aiRequestLogger: AiRequestLogger? = null
 
@@ -191,8 +191,8 @@ class PassiveAiScanner(
             "script",
         )
     private val headerInjectionAllowlist = ScannerUtils.HEADER_INJECTION_ALLOWLIST
-    private val cacheBustingParamRegex = Regex("^(?:_|t|ts|timestamp|cachebust|cb|rnd|nonce)$", RegexOption.IGNORE_CASE)
-    private val dynamicValueStripRegex =
+    internal val cacheBustingParamRegex = Regex("^(?:_|t|ts|timestamp|cachebust|cb|rnd|nonce)$", RegexOption.IGNORE_CASE)
+    internal val dynamicValueStripRegex =
         Regex(
             listOf(
                 """\b[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}\b""", // UUID
@@ -203,12 +203,12 @@ class PassiveAiScanner(
             ).joinToString("|"),
             RegexOption.IGNORE_CASE,
         )
-    private val staticAssetPathRegex =
+    internal val staticAssetPathRegex =
         Regex(
             "\\.(?:css|js|map|png|jpg|jpeg|gif|svg|ico|woff2?|ttf|eot)(?:\\?|$)",
             RegexOption.IGNORE_CASE,
         )
-    private val requestHeaderAllowlist =
+    internal val requestHeaderAllowlist =
         setOf(
             "authorization",
             "cookie",
@@ -223,7 +223,7 @@ class PassiveAiScanner(
             "x-forwarded-host",
             "x-requested-with",
         )
-    private val responseHeaderAllowlist =
+    internal val responseHeaderAllowlist =
         setOf(
             "set-cookie",
             "www-authenticate",
@@ -244,7 +244,7 @@ class PassiveAiScanner(
             "access-control-allow-headers",
             "access-control-expose-headers",
         )
-    private val headerNoiseDenylist =
+    internal val headerNoiseDenylist =
         setOf(
             "accept-encoding",
             "accept-language",
@@ -261,21 +261,21 @@ class PassiveAiScanner(
             "via",
         )
 
-    private val endpointRecentCache =
+    internal val endpointRecentCache =
         object : LinkedHashMap<String, Long>(1024, 0.75f, true) {
             override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Long>?): Boolean = size > endpointCacheEntries
         }
-    private val responseFingerprintCache =
+    internal val responseFingerprintCache =
         object : LinkedHashMap<String, Long>(2048, 0.75f, true) {
             override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Long>?): Boolean = size > responseFingerprintCacheEntries
         }
-    private val promptResultCache =
+    internal val promptResultCache =
         object : LinkedHashMap<String, CachedAiIssues>(512, 0.75f, true) {
             override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, CachedAiIssues>?): Boolean = size > promptCacheEntries
         }
 
-    private val batchQueue = BatchAnalysisQueue()
-    private var persistentCache: com.six2dez.burp.aiagent.cache.PersistentPromptCache? = null
+    internal val batchQueue = BatchAnalysisQueue()
+    internal var persistentCache: com.six2dez.burp.aiagent.cache.PersistentPromptCache? = null
 
     fun setEnabled(on: Boolean) {
         val wasEnabled = enabled.getAndSet(on)
@@ -1036,231 +1036,6 @@ class PassiveAiScanner(
                     "jsUrl" to jsUrl,
                     "endpoints" to newEndpoints.take(20).joinToString(", "),
                 ),
-        )
-    }
-
-    private fun endpointDedupWindowMs(): Long = endpointDedupMinutes.toLong().coerceAtLeast(1L) * 60_000L
-
-    private fun responseFingerprintDedupWindowMs(): Long = responseFingerprintDedupMinutes.toLong().coerceAtLeast(1L) * 60_000L
-
-    private fun promptCacheTtlMs(): Long = promptCacheTtlMinutes.toLong().coerceAtLeast(1L) * 60_000L
-
-    private fun <K, V> trimLruCache(
-        cache: LinkedHashMap<K, V>,
-        maxEntries: Int,
-    ) {
-        while (cache.size > maxEntries) {
-            val iterator = cache.entries.iterator()
-            if (!iterator.hasNext()) return
-            iterator.next()
-            iterator.remove()
-        }
-    }
-
-    private fun shouldSkipAiAfterLocalFindings(
-        localFindings: List<LocalFinding>,
-        request: burp.api.montoya.http.message.requests.HttpRequest,
-        requestBody: String,
-    ): Boolean {
-        if (localFindings.isEmpty()) return false
-        val hasHighConfidenceLocal = localFindings.any { it.confidence >= LOCAL_FINDING_SKIP_CONFIDENCE }
-        if (!hasHighConfidenceLocal) return false
-        val hasInterestingInput =
-            request.parameters().isNotEmpty() ||
-                requestBody.length > MIN_BODY_SIZE_FOR_AI ||
-                request.method().uppercase() in setOf("POST", "PUT", "PATCH", "DELETE")
-        return !hasInterestingInput
-    }
-
-    private fun shouldSkipUninterestingTraffic(
-        request: burp.api.montoya.http.message.requests.HttpRequest,
-        response: burp.api.montoya.http.message.responses.HttpResponse?,
-        responseBody: String,
-    ): Boolean {
-        val status = response?.statusCode() ?: return false
-        if (status == 204.toShort() || status == 304.toShort()) return true
-        val path = runCatching { URI(request.url()).path.orEmpty().lowercase() }.getOrDefault("")
-        if (path.isNotBlank() && staticAssetPathRegex.containsMatchIn(path)) return true
-        if (responseBody.length < MIN_RESPONSE_BODY_CHARS && !hasInterestingResponseHeaders(response)) return true
-        return false
-    }
-
-    private fun hasInterestingResponseHeaders(response: burp.api.montoya.http.message.responses.HttpResponse): Boolean =
-        response.headers().any { header ->
-            val name = header.name().lowercase()
-            responseHeaderAllowlist.contains(name) || name.startsWith("x-")
-        }
-
-    private fun shouldSkipRecentlyAnalyzedEndpoint(request: burp.api.montoya.http.message.requests.HttpRequest): Boolean {
-        val key = buildEndpointCacheKey(request)
-        val now = System.currentTimeMillis()
-        synchronized(endpointRecentCache) {
-            val previous = endpointRecentCache[key]
-            if (previous != null && now - previous < endpointDedupWindowMs()) {
-                return true
-            }
-            endpointRecentCache[key] = now
-        }
-        return false
-    }
-
-    private fun buildEndpointCacheKey(request: burp.api.montoya.http.message.requests.HttpRequest): String {
-        val method = request.method().uppercase()
-        val uri = runCatching { URI(request.url()) }.getOrNull()
-        val normalizedPath =
-            runCatching {
-                normalizePathSegments(uri?.path.orEmpty())
-            }.getOrElse { normalizePathSegments(request.url()) }
-        val host = uri?.host.orEmpty().lowercase()
-        val sortedParamNames =
-            uri
-                ?.query
-                .orEmpty()
-                .split('&')
-                .mapNotNull {
-                    it
-                        .split('=')
-                        .firstOrNull()
-                        ?.lowercase()
-                        ?.ifBlank { null }
-                }.filter { !cacheBustingParamRegex.matches(it) }
-                .sorted()
-                .joinToString(",")
-        return "$method:$host:$normalizedPath:$sortedParamNames"
-    }
-
-    private fun normalizePathSegments(path: String): String = IssueUtils.normalizePathSegments(path)
-
-    private fun shouldSkipKnownResponseFingerprint(
-        request: burp.api.montoya.http.message.requests.HttpRequest,
-        response: burp.api.montoya.http.message.responses.HttpResponse?,
-        responseBody: String,
-    ): Boolean {
-        val fingerprint = buildResponseFingerprint(request, response, responseBody) ?: return false
-        val now = System.currentTimeMillis()
-        synchronized(responseFingerprintCache) {
-            val previous = responseFingerprintCache[fingerprint]
-            if (previous != null && now - previous < responseFingerprintDedupWindowMs()) {
-                return true
-            }
-            responseFingerprintCache[fingerprint] = now
-        }
-        return false
-    }
-
-    private fun buildResponseFingerprint(
-        request: burp.api.montoya.http.message.requests.HttpRequest,
-        response: burp.api.montoya.http.message.responses.HttpResponse?,
-        responseBody: String,
-    ): String? {
-        if (response == null) return null
-        val headers =
-            sanitizeHeadersForPrompt(response.headers(), isRequest = false)
-                .take(10)
-                .joinToString("\n")
-        val bodyPrefix = stripDynamicValues(responseBody.take(RESPONSE_FINGERPRINT_BODY_PREFIX_CHARS))
-        val raw =
-            buildString {
-                append(request.method()).append('\n')
-                append(IssueUtils.normalizeUrl(request.url())).append('\n')
-                append(response.statusCode()).append('\n')
-                append(headers).append('\n')
-                append(bodyPrefix)
-            }
-        return sha256Hex(raw)
-    }
-
-    private fun stripDynamicValues(text: String): String = dynamicValueStripRegex.replace(text, "{DYN}")
-
-    private fun sanitizeHeadersForPrompt(
-        headers: List<burp.api.montoya.http.message.HttpHeader>,
-        isRequest: Boolean,
-    ): List<String> {
-        return headers
-            .asSequence()
-            .filter { header ->
-                val name = header.name().lowercase()
-                if (name in headerNoiseDenylist) return@filter false
-                if (name.startsWith("x-")) return@filter true
-                if (name.contains("auth") || name.contains("token") || name.contains("cookie")) return@filter true
-                if (isRequest) {
-                    name in requestHeaderAllowlist
-                } else {
-                    name in responseHeaderAllowlist
-                }
-            }.take(headerMaxCount)
-            .map { header ->
-                val value = truncateWithEllipsis(header.value(), HEADER_VALUE_MAX_CHARS)
-                "${header.name()}: $value"
-            }.toList()
-    }
-
-    private fun promptResultCacheValue(promptHash: String): List<AiIssueItem>? {
-        val now = System.currentTimeMillis()
-        // Check in-memory cache first
-        synchronized(promptResultCache) {
-            val cached = promptResultCache[promptHash]
-            if (cached != null) {
-                if (now - cached.createdAtMs > promptCacheTtlMs()) {
-                    promptResultCache.remove(promptHash)
-                } else {
-                    return cached.issues
-                }
-            }
-        }
-        // Fall back to persistent cache
-        val diskEntry = persistentCache?.get(promptHash) ?: return null
-        val issues =
-            diskEntry.issues.map { ci ->
-                AiIssueItem(
-                    reasoning = ci.reasoning,
-                    title = ci.title,
-                    severity = ci.severity,
-                    detail = ci.detail,
-                    confidence = ci.confidence,
-                    requestIndex = ci.requestIndex,
-                )
-            }
-        // Promote to in-memory cache
-        synchronized(promptResultCache) {
-            promptResultCache[promptHash] =
-                CachedAiIssues(
-                    createdAtMs = diskEntry.createdAtMs,
-                    issues = issues,
-                )
-        }
-        return issues
-    }
-
-    private fun putPromptResultCacheValue(
-        promptHash: String,
-        issues: List<AiIssueItem>,
-    ) {
-        val now = System.currentTimeMillis()
-        synchronized(promptResultCache) {
-            promptResultCache[promptHash] =
-                CachedAiIssues(
-                    createdAtMs = now,
-                    issues = issues,
-                )
-        }
-        // Write to persistent cache
-        persistentCache?.put(
-            promptHash,
-            com.six2dez.burp.aiagent.cache.CachedEntry(
-                createdAtMs = now,
-                issues =
-                    issues.map { ai ->
-                        com.six2dez.burp.aiagent.cache.CachedIssue(
-                            reasoning = ai.reasoning,
-                            title = ai.title,
-                            severity = ai.severity,
-                            detail = ai.detail,
-                            confidence = ai.confidence,
-                            requestIndex = ai.requestIndex,
-                        )
-                    },
-            ),
         )
     }
 
