@@ -53,7 +53,7 @@
     <ID>CyclomaticComplexMethod:ResponseAnalyzer.kt$ResponseAnalyzer$fun analyzeBooleanBasedDual( original: HttpRequestResponse, trueResponse: HttpRequestResponse, falseResponse: HttpRequestResponse, truePayload: Payload, falsePayload: Payload, vulnClass: VulnClass, ): VulnConfirmation?</ID>
     <ID>CyclomaticComplexMethod:ResponseAnalyzer.kt$ResponseAnalyzer$private fun analyzeContentBased( original: HttpRequestResponse, modified: HttpRequestResponse, payload: Payload, vulnClass: VulnClass, fullResponse: String, originalFull: String, ): VulnConfirmation?</ID>
     <ID>CyclomaticComplexMethod:ScannerIssueSupport.kt$ScannerIssueSupport$fun remediation(vulnClass: VulnClass): String</ID>
-    <ID>CyclomaticComplexMethod:SettingsPanel.kt$SettingsPanel$internal fun refreshPrivacyNotice()</ID>
+    <ID>CyclomaticComplexMethod:SettingsPanelActions.kt$internal fun SettingsPanel.refreshPrivacyNotice()</ID>
     <ID>CyclomaticComplexMethod:SettingsPanelMcpTabs.kt$@Suppress("LongMethod") internal fun SettingsPanel.buildMcpToolsPanel(): JScrollPane</ID>
     <ID>CyclomaticComplexMethod:SettingsPanelMcpTabs.kt$internal fun SettingsPanel.updateUnsafeToolStates()</ID>
     <ID>CyclomaticComplexMethod:SettingsPanelSettingsIO.kt$internal fun SettingsPanel.currentSettings(): AgentSettings</ID>
@@ -89,7 +89,6 @@
     <ID>LargeClass:McpToolExecutorImpl.kt$McpToolExecutor</ID>
     <ID>LargeClass:PayloadGenerator.kt$PayloadGenerator</ID>
     <ID>LargeClass:ResponseAnalyzer.kt$ResponseAnalyzer</ID>
-    <ID>LargeClass:SettingsPanel.kt$SettingsPanel</ID>
     <ID>LargeClass:UiActions.kt$UiActions</ID>
     <ID>LongMethod:ActiveAiScanner.kt$ActiveAiScanner$private fun createConfirmedIssue(confirmation: VulnConfirmation)</ID>
     <ID>LongMethod:ActiveAiScanner.kt$ActiveAiScanner$private fun execute403Bypass( target: ActiveScanTarget, baseline: HttpRequestResponse, ): ActiveScanResult</ID>
@@ -962,7 +961,7 @@
     <ID>ReturnCount:ScannerTaskRegistry.kt$ScannerTaskRegistry$fun get(id: String): ScanTask?</ID>
     <ID>ReturnCount:SecretCipher.kt$SecretCipher$fun decrypt( ciphertext: String, prefKeyName: String = "", ): String</ID>
     <ID>ReturnCount:SecurityExcerpts.kt$SecurityExcerpts$fun extract( fullBody: String, includedLen: Int, maxChars: Int = MAX_CHARS, ): String?</ID>
-    <ID>ReturnCount:SettingsPanel.kt$SettingsPanel$internal fun shellQuote(value: String): String</ID>
+    <ID>ReturnCount:SettingsPanelActions.kt$internal fun SettingsPanel.shellQuote(value: String): String</ID>
     <ID>ReturnCount:SsrfGuard.kt$SsrfGuard$fun isPrivateOrLinkLocal(url: String): Boolean</ID>
     <ID>ReturnCount:SsrfGuard.kt$SsrfGuard$private fun extractAuthorityHost(url: String): String?</ID>
     <ID>ReturnCount:ToolCallParser.kt$ToolCallParser$private fun firstNestedToolCallObject(obj: JsonObject): JsonObject?</ID>
@@ -1028,7 +1027,7 @@
     <ID>TooGenericExceptionCaught:PassiveAiScannerParsing.kt$e: Exception</ID>
     <ID>TooGenericExceptionCaught:PerplexityBackendFactory.kt$PerplexityBackendFactory.Companion$e: Exception</ID>
     <ID>TooGenericExceptionCaught:SecretCipher.kt$SecretCipher$e: Exception</ID>
-    <ID>TooGenericExceptionCaught:SettingsPanel.kt$SettingsPanel$e: Exception</ID>
+    <ID>TooGenericExceptionCaught:SettingsPanelActions.kt$e: Exception</ID>
     <ID>TooGenericExceptionCaught:SsrfGuard.kt$SsrfGuard$e: Exception</ID>
     <ID>TooGenericExceptionCaught:ToolInvocationDialog.kt$ToolInvocationDialog$e: Exception</ID>
     <ID>TooGenericExceptionThrown:CliBackendTempFileTest.kt$CliBackendTempFileTest$throw RuntimeException("simulated processing failure")</ID>
@@ -1061,14 +1060,13 @@
     <ID>TooManyFunctions:Redaction.kt$Redaction</ID>
     <ID>TooManyFunctions:ResponseAnalyzer.kt$ResponseAnalyzer</ID>
     <ID>TooManyFunctions:ScanKnowledgeBase.kt$ScanKnowledgeBase</ID>
-    <ID>TooManyFunctions:SettingsPanel.kt$SettingsPanel</ID>
+    <ID>TooManyFunctions:SettingsPanelActions.kt$com.six2dez.burp.aiagent.ui.SettingsPanelActions.kt</ID>
     <ID>TooManyFunctions:SettingsPanelMcpTabs.kt$com.six2dez.burp.aiagent.ui.SettingsPanelMcpTabs.kt</ID>
     <ID>TooManyFunctions:SettingsPanelScannerTabs.kt$com.six2dez.burp.aiagent.ui.SettingsPanelScannerTabs.kt</ID>
     <ID>TooManyFunctions:ToolCallParser.kt$ToolCallParser</ID>
     <ID>TooManyFunctions:UiActions.kt$UiActions</ID>
     <ID>UnusedParameter:AiScanCheck.kt$AiScanCheck$vulnClass: VulnClass</ID>
     <ID>UnusedParameter:ResponseAnalyzer.kt$ResponseAnalyzer$truePayload: Payload</ID>
-    <ID>UnusedParameter:SettingsPanel.kt$SettingsPanel$stats: ChatPanel.UsageStats</ID>
     <ID>UnusedPrivateMember:ActiveAiScanner.kt$ActiveAiScanner$private fun buildMetadataSection( backendInfo: AgentSupervisor.BackendInfo?, scanType: String, confidence: Int, ): String</ID>
     <ID>UnusedPrivateMember:BackendConfigPanel.kt$BackendConfigPanel$private fun buildSingleFieldPanel( labelText: String, field: JComponent, ): JPanel</ID>
     <ID>UnusedPrivateMember:ChatPanel.kt$ChatPanel$private fun cancelCurrentRequest()</ID>
