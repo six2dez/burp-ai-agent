@@ -4,12 +4,12 @@ milestone: v0.9.0
 milestone_name: Hardening, Quality & New Capabilities
 status: executing
 stopped_at: "Phase 16 (External MCP Client) CODE-COMPLETE + automated-verified (5/5 SC, ./gradlew check green, fat JAR bundles client). HUMAN-UAT PENDING: SC1 real-server connect + SC5 live-Burp load (see 16-HUMAN-UAT.md). Phase 19 depends on this UAT. Resume: run the 2 smoke tests, then /gsd-autonomous --from 19 (fresh session)."
-last_updated: "2026-06-15T14:44:21.603Z"
-last_activity: 2026-06-15
+last_updated: "2026-06-16T09:08:06.081Z"
+last_activity: 2026-06-16 -- Phase 19 planning complete
 progress:
   total_phases: 8
   completed_phases: 6
-  total_plans: 26
+  total_plans: 31
   completed_plans: 26
   percent: 75
 ---
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-06-10)
 Phase: 16 (External MCP Client) — EXECUTING
 Plan: 6 of 6
 Status: Ready to execute
-Last activity: 2026-06-15
+Last activity: 2026-06-16 -- Phase 19 planning complete
 
 ## Performance Metrics
 

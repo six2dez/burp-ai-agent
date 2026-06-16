@@ -496,17 +496,19 @@ The doc pages (DOC-02) must correctly describe v0.9.0 security features as-shipp
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Phase 12 completion status**
    - What we know: STATE.md velocity table does not list Phase 12 with completed plans; REQUIREMENTS.md Traceability shows SEC-01/02/03 as "Pending" with Phase 12 as the assigned phase.
    - What's unclear: Did Phase 12 execute but its completion not update STATE.md, or is it truly pending?
    - Recommendation: DOC-01 plan task should read `.planning/phases/12-*/` to check for a SUMMARY or completed PLAN files before updating the traceability table.
+   - RESOLVED: Plan 19-04 Task 1 reads `.planning/phases/12-*/` for SUMMARY/completed PLAN files and confirms Phase 12 completion status before Task 2 edits the REQUIREMENTS.md traceability table.
 
 2. **SettingsPanel `private` → `internal` field widening — ktlint/detekt objections**
    - What we know: ktlint does not flag visibility changes. detekt has a baseline committed (Phase 18).
    - What's unclear: Does the detekt baseline include any rules that would flag `internal` vs `private` field declarations?
    - Recommendation: Run `./gradlew check` after the first SettingsPanel visibility change to surface any detekt rule violation; add to baseline if needed (it would be a pre-existing pattern by the time the baseline was set).
+   - RESOLVED: Plan 19-03 Task 1 runs `JAVA_HOME=$(/usr/libexec/java_home -v 21) ./gradlew check` after the visibility widening and adds to the detekt baseline if any rule fires.
 
 ---
 
