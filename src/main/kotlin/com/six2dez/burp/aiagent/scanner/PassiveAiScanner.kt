@@ -5,13 +5,9 @@ import burp.api.montoya.http.message.HttpRequestResponse
 import burp.api.montoya.scanner.audit.issues.AuditIssue
 import burp.api.montoya.scanner.audit.issues.AuditIssueConfidence
 import burp.api.montoya.scanner.audit.issues.AuditIssueSeverity
-import com.fasterxml.jackson.databind.JsonNode
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import com.six2dez.burp.aiagent.audit.ActivityType
 import com.six2dez.burp.aiagent.audit.AiRequestLogger
 import com.six2dez.burp.aiagent.audit.AuditLogger
-import com.six2dez.burp.aiagent.audit.Hashing
 import com.six2dez.burp.aiagent.config.AgentSettings
 import com.six2dez.burp.aiagent.config.Defaults
 import com.six2dez.burp.aiagent.redact.Redaction
@@ -101,7 +97,6 @@ class PassiveAiScanner(
             Thread(r, "PassiveAiScanner").apply { isDaemon = true }
         }
     private val findings = ArrayDeque<PassiveAiFinding>(Defaults.FINDINGS_BUFFER_SIZE)
-    private val jsonMapper = ObjectMapper().registerKotlinModule()
 
     // Reference to active scanner for auto-queueing
     var activeScanner: ActiveAiScanner? = null
@@ -944,7 +939,7 @@ class PassiveAiScanner(
                         ),
                 )
             } else if (responseBuffer.isNotEmpty()) {
-                val issues = parseIssuesFromAiResponse(responseBuffer.toString())
+                val issues = parseIssuesFromAiResponse(responseBuffer.toString(), api)
                 putPromptResultCacheValue(singlePromptHash, issues)
                 handleParsedAiIssues(issues, requestResponse, settings.passiveAiMinSeverity.name)
                 aiRequestLogger?.log(
@@ -1394,8 +1389,6 @@ class PassiveAiScanner(
         )
     }
 
-    private fun sha256Hex(text: String): String = Hashing.sha256Hex(text)
-
     private fun buildAnalysisPrompt(
         metadata: String,
         minSeverity: String,
@@ -1556,7 +1549,7 @@ $batchMetadata
             lastAnalysisTime.set(System.currentTimeMillis())
 
             if (responseBuffer.isNotEmpty()) {
-                val allIssues = parseIssuesFromAiResponse(responseBuffer.toString())
+                val allIssues = parseIssuesFromAiResponse(responseBuffer.toString(), api)
                 putPromptResultCacheValue(promptHash, allIssues)
 
                 // Dispatch issues to their respective requests by request_index
@@ -1636,7 +1629,7 @@ $batchMetadata
         lastAnalysisTime.set(System.currentTimeMillis())
 
         if (completed && errorRef.get() == null && responseBuffer.isNotEmpty()) {
-            val issues = parseIssuesFromAiResponse(responseBuffer.toString())
+            val issues = parseIssuesFromAiResponse(responseBuffer.toString(), api)
             putPromptResultCacheValue(promptHash, issues)
             handleParsedAiIssues(issues, requestResponse, minSeverity)
         }
@@ -1647,7 +1640,7 @@ $batchMetadata
         requestResponse: HttpRequestResponse,
         minSeverity: String,
     ) {
-        val issues = parseIssuesFromAiResponse(aiText)
+        val issues = parseIssuesFromAiResponse(aiText, api)
         handleParsedAiIssues(issues, requestResponse, minSeverity)
     }
 
@@ -1998,143 +1991,6 @@ $batchMetadata
             else -> 0
         }
 
-    internal fun parseIssuesJson(json: String): List<AiIssueItem> {
-        val root = jsonMapper.readTree(json)
-        return parseIssuesNode(root)
-    }
-
-    internal fun parseIssuesFromAiResponse(text: String): List<AiIssueItem> {
-        if (text.isBlank()) return emptyList()
-        val cleaned = cleanJsonResponse(text)
-        if (cleaned.isBlank() || cleaned == "[]") return emptyList()
-        return try {
-            parseIssuesJson(cleaned)
-        } catch (e: Exception) {
-            val preview = text.replace(Regex("\\s+"), " ").take(160)
-            api.logging().logToError("[PassiveAiScanner] Failed to parse AI response after cleanup: ${e.message} | preview=$preview")
-            emptyList()
-        }
-    }
-
-    internal fun cleanJsonResponse(text: String): String {
-        if (text.isBlank()) return ""
-        val cleaned = stripCodeFences(text.trim())
-        if (cleaned.isBlank()) return ""
-
-        // Fast path: whole payload is already valid JSON.
-        parseNodeIfValid(cleaned)?.let { node ->
-            return when {
-                node.isArray -> cleaned
-                node.isObject && (node.has("issues") || node.has("findings") || node.has("results")) -> cleaned
-                else -> ""
-            }
-        }
-
-        // Fallback: extract the first balanced JSON array/object from mixed CLI output.
-        for (candidate in extractBalancedJsonCandidates(cleaned)) {
-            val node = parseNodeIfValid(candidate) ?: continue
-            if (node.isArray) return candidate
-            if (node.isObject && (node.has("issues") || node.has("findings") || node.has("results"))) return candidate
-        }
-        return ""
-    }
-
-    private fun parseIssuesNode(root: JsonNode): List<AiIssueItem> {
-        val issueArray =
-            when {
-                root.isArray -> root
-                root.isObject && root.path("issues").isArray -> root.path("issues")
-                root.isObject && root.path("findings").isArray -> root.path("findings")
-                root.isObject && root.path("results").isArray -> root.path("results")
-                else -> return emptyList()
-            }
-        return issueArray.mapNotNull { node ->
-            runCatching {
-                AiIssueItem(
-                    reasoning = node.path("reasoning").takeIf { !it.isMissingNode && !it.isNull }?.asText(),
-                    title = node.path("title").takeIf { !it.isMissingNode && !it.isNull }?.asText(),
-                    severity = node.path("severity").takeIf { !it.isMissingNode && !it.isNull }?.asText(),
-                    detail = node.path("detail").takeIf { !it.isMissingNode && !it.isNull }?.asText(),
-                    confidence = node.path("confidence").takeIf { !it.isMissingNode && !it.isNull }?.asInt(),
-                    requestIndex = node.path("request_index").takeIf { !it.isMissingNode && !it.isNull }?.asInt(),
-                )
-            }.getOrNull()
-        }
-    }
-
-    private fun parseNodeIfValid(candidate: String): JsonNode? = runCatching { jsonMapper.readTree(candidate) }.getOrNull()
-
-    private fun stripCodeFences(text: String): String =
-        text
-            .replace(Regex("^```(?:json)?\\s*", setOf(RegexOption.IGNORE_CASE, RegexOption.MULTILINE)), "")
-            .replace(CODE_FENCE_END_REGEX, "")
-            .trim()
-
-    private fun extractBalancedJsonCandidates(text: String): Sequence<String> =
-        sequence {
-            val openers = setOf('[', '{')
-            var start = -1
-            var stack = ArrayDeque<Char>()
-            var inString = false
-            var escaped = false
-
-            for (i in text.indices) {
-                val ch = text[i]
-                if (inString) {
-                    if (escaped) {
-                        escaped = false
-                        continue
-                    }
-                    if (ch == '\\') {
-                        escaped = true
-                        continue
-                    }
-                    if (ch == '"') {
-                        inString = false
-                    }
-                    continue
-                }
-
-                if (ch == '"') {
-                    inString = true
-                    continue
-                }
-
-                if (start < 0 && ch in openers) {
-                    start = i
-                    stack = ArrayDeque()
-                    stack.addLast(ch)
-                    continue
-                }
-
-                if (start >= 0) {
-                    when (ch) {
-                        '[', '{' -> stack.addLast(ch)
-                        ']' -> {
-                            if (stack.isNotEmpty() && stack.last() == '[') {
-                                stack.removeLast()
-                            } else {
-                                start = -1
-                                stack.clear()
-                            }
-                        }
-                        '}' -> {
-                            if (stack.isNotEmpty() && stack.last() == '{') {
-                                stack.removeLast()
-                            } else {
-                                start = -1
-                                stack.clear()
-                            }
-                        }
-                    }
-                    if (start >= 0 && stack.isEmpty()) {
-                        yield(text.substring(start, i + 1).trim())
-                        start = -1
-                    }
-                }
-            }
-        }
-
     private fun mapSeverity(raw: String): AuditIssueSeverity =
         when (raw.lowercase()) {
             "critical", "high" -> AuditIssueSeverity.HIGH
@@ -2306,7 +2162,6 @@ $batchMetadata
 
         // Pre-compiled Regex patterns (avoid recompilation in hot paths)
         val POTENTIAL_IDS_REGEX = Regex("\\b([0-9]+|[a-f0-9-]{36}|[a-f0-9]{24})\\b", RegexOption.IGNORE_CASE)
-        val CODE_FENCE_END_REGEX = Regex("\\s*```$", RegexOption.MULTILINE)
         val SENSITIVE_KEY_REGEX = Regex("(token|key|auth|session|jwt|cookie|password|secret)", RegexOption.IGNORE_CASE)
     }
 

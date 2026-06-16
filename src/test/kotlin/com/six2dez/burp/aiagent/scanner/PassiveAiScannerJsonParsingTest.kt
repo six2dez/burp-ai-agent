@@ -1,26 +1,12 @@
 package com.six2dez.burp.aiagent.scanner
 
-import burp.api.montoya.MontoyaApi
-import com.six2dez.burp.aiagent.audit.AuditLogger
-import com.six2dez.burp.aiagent.supervisor.AgentSupervisor
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
-import org.mockito.kotlin.mock
 
 class PassiveAiScannerJsonParsingTest {
-    private fun scanner(): PassiveAiScanner {
-        val api = mock<MontoyaApi>()
-        val supervisor = mock<AgentSupervisor>()
-        val audit = mock<AuditLogger>()
-        return PassiveAiScanner(api, supervisor, audit) {
-            throw IllegalStateException("Not needed for JSON parsing tests")
-        }
-    }
-
     @Test
     fun cleanJsonResponse_extractsArrayFromMarkdownCodeFence() {
-        val scanner = scanner()
         val raw =
             """
             ```json
@@ -28,7 +14,7 @@ class PassiveAiScannerJsonParsingTest {
             ```
             """.trimIndent()
 
-        val cleaned = scanner.cleanJsonResponse(raw)
+        val cleaned = cleanJsonResponse(raw)
 
         assertTrue(cleaned.startsWith("["))
         assertTrue(cleaned.endsWith("]"))
@@ -36,7 +22,6 @@ class PassiveAiScannerJsonParsingTest {
 
     @Test
     fun parseIssuesJson_supportsNestedContentAndEscapedQuotes() {
-        val scanner = scanner()
         val cleaned =
             """
             [
@@ -50,7 +35,7 @@ class PassiveAiScannerJsonParsingTest {
             ]
             """.trimIndent()
 
-        val issues = scanner.parseIssuesJson(cleaned)
+        val issues = parseIssuesJson(cleaned)
 
         assertEquals(1, issues.size)
         assertEquals("SQL Injection", issues.first().title)
@@ -61,7 +46,6 @@ class PassiveAiScannerJsonParsingTest {
 
     @Test
     fun cleanJsonResponse_extractsJsonFromMixedCliNoise() {
-        val scanner = scanner()
         val raw =
             """
             [PassiveAiScanner] Analyzing [1/3]: https://example.test/login
@@ -71,8 +55,8 @@ class PassiveAiScannerJsonParsingTest {
             ```
             """.trimIndent()
 
-        val cleaned = scanner.cleanJsonResponse(raw)
-        val issues = scanner.parseIssuesJson(cleaned)
+        val cleaned = cleanJsonResponse(raw)
+        val issues = parseIssuesJson(cleaned)
 
         assertEquals(1, issues.size)
         assertEquals("Missing Security Header", issues.first().title)
@@ -81,7 +65,6 @@ class PassiveAiScannerJsonParsingTest {
 
     @Test
     fun parseIssuesJson_supportsObjectWrapperWithIssuesArray() {
-        val scanner = scanner()
         val cleaned =
             """
             {
@@ -96,7 +79,7 @@ class PassiveAiScannerJsonParsingTest {
             }
             """.trimIndent()
 
-        val issues = scanner.parseIssuesJson(cleaned)
+        val issues = parseIssuesJson(cleaned)
 
         assertEquals(1, issues.size)
         assertEquals("Debug Endpoint Exposed", issues.first().title)
