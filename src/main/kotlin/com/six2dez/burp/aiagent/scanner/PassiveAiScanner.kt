@@ -34,25 +34,6 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
-data class PassiveAiFinding(
-    val timestamp: Long,
-    val url: String,
-    val title: String,
-    val severity: String,
-    val detail: String,
-    val confidence: Int,
-    val source: String = "ai",
-    val issueCreated: Boolean = true,
-)
-
-data class PassiveAiScannerStatus(
-    val enabled: Boolean,
-    val requestsAnalyzed: Int,
-    val issuesFound: Int,
-    val lastAnalysisTime: Long,
-    val queueSize: Int,
-)
-
 class PassiveAiScanner(
     private val api: MontoyaApi,
     private val supervisor: AgentSupervisor,
@@ -317,11 +298,6 @@ class PassiveAiScanner(
             "age",
             "via",
         )
-
-    private data class CachedAiIssues(
-        val createdAtMs: Long,
-        val issues: List<AiIssueItem>,
-    )
 
     private val endpointRecentCache =
         object : LinkedHashMap<String, Long>(1024, 0.75f, true) {
@@ -2054,13 +2030,6 @@ $batchMetadata
             else -> 0
         }
 
-    internal data class LocalFinding(
-        val title: String,
-        val severity: String,
-        val detail: String,
-        val confidence: Int,
-    )
-
     private fun runLocalChecks(
         request: burp.api.montoya.http.message.requests.HttpRequest,
         response: burp.api.montoya.http.message.responses.HttpResponse?,
@@ -2211,15 +2180,6 @@ $batchMetadata
             confidence = 90,
         )
     }
-
-    internal data class AiIssueItem(
-        val reasoning: String? = null,
-        val title: String? = null,
-        val severity: String? = null,
-        val detail: String? = null,
-        val confidence: Int? = null,
-        val requestIndex: Int? = null,
-    )
 
     internal fun parseIssuesJson(json: String): List<AiIssueItem> {
         val root = jsonMapper.readTree(json)
