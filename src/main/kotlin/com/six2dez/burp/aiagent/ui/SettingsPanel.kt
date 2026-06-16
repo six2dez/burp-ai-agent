@@ -42,6 +42,7 @@ import com.six2dez.burp.aiagent.ui.panels.CustomPromptsConfigPanel
 import com.six2dez.burp.aiagent.ui.panels.ExternalServersPanel
 import com.six2dez.burp.aiagent.ui.panels.HelpConfigPanel
 import com.six2dez.burp.aiagent.ui.panels.McpConfigPanel
+import com.six2dez.burp.aiagent.scanner.applyOptimizationSettings
 import com.six2dez.burp.aiagent.ui.panels.PassiveScanConfigPanel
 import com.six2dez.burp.aiagent.ui.panels.PrivacyConfigPanel
 import com.six2dez.burp.aiagent.ui.panels.PromptConfigPanel

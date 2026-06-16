@@ -22,6 +22,7 @@ import com.six2dez.burp.aiagent.scanner.ActiveAiScanner
 import com.six2dez.burp.aiagent.scanner.AiPassiveScanCheck
 import com.six2dez.burp.aiagent.scanner.AiScanCheck
 import com.six2dez.burp.aiagent.scanner.PassiveAiScanner
+import com.six2dez.burp.aiagent.scanner.applyOptimizationSettings
 import com.six2dez.burp.aiagent.supervisor.AgentSupervisor
 import com.six2dez.burp.aiagent.ui.MainTab
 import com.six2dez.burp.aiagent.ui.UiActions

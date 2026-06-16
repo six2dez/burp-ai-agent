@@ -9,6 +9,10 @@ import com.six2dez.burp.aiagent.util.IssueUtils
 import java.net.URI
 import java.util.LinkedHashMap
 
+import com.six2dez.burp.aiagent.config.AgentSettings
+import com.six2dez.burp.aiagent.cache.PersistentPromptCache
+import java.io.File
+
 // AWT-free contract: MUST NOT import java.awt.* or javax.swing.*
 
 private const val RESPONSE_FINGERPRINT_BODY_PREFIX_CHARS = 2_000
@@ -253,3 +257,79 @@ internal fun PassiveAiScanner.putPromptResultCacheValue(
     )
 }
 
+// ---- optimization settings ----
+
+/**
+ * Synchronizes scanner operational parameters from [AgentSettings].
+ * Called from the scanner itself before each analysis, and from the UI / settings-apply paths.
+ * Stays AWT-free.
+ */
+fun PassiveAiScanner.applyOptimizationSettings(settings: AgentSettings) {
+    if (endpointDedupMinutes != settings.passiveAiEndpointDedupMinutes) {
+        endpointDedupMinutes = settings.passiveAiEndpointDedupMinutes
+    }
+    if (responseFingerprintDedupMinutes != settings.passiveAiResponseFingerprintDedupMinutes) {
+        responseFingerprintDedupMinutes = settings.passiveAiResponseFingerprintDedupMinutes
+    }
+    if (promptCacheTtlMinutes != settings.passiveAiPromptCacheTtlMinutes) {
+        promptCacheTtlMinutes = settings.passiveAiPromptCacheTtlMinutes
+    }
+    if (endpointCacheEntries != settings.passiveAiEndpointCacheEntries) {
+        endpointCacheEntries = settings.passiveAiEndpointCacheEntries
+    }
+    if (responseFingerprintCacheEntries != settings.passiveAiResponseFingerprintCacheEntries) {
+        responseFingerprintCacheEntries = settings.passiveAiResponseFingerprintCacheEntries
+    }
+    if (promptCacheEntries != settings.passiveAiPromptCacheEntries) {
+        promptCacheEntries = settings.passiveAiPromptCacheEntries
+    }
+    if (requestBodyPromptMaxChars != settings.passiveAiRequestBodyMaxChars) {
+        requestBodyPromptMaxChars = settings.passiveAiRequestBodyMaxChars
+    }
+    if (responseBodyPromptMaxChars != settings.passiveAiResponseBodyMaxChars) {
+        responseBodyPromptMaxChars = settings.passiveAiResponseBodyMaxChars
+    }
+    if (headerMaxCount != settings.passiveAiHeaderMaxCount) {
+        headerMaxCount = settings.passiveAiHeaderMaxCount
+    }
+    if (paramMaxCount != settings.passiveAiParamMaxCount) {
+        paramMaxCount = settings.passiveAiParamMaxCount
+    }
+    val newExcluded =
+        settings.passiveAiExcludedExtensions
+            .split(",")
+            .map { it.trim().lowercase().removePrefix(".") }
+            .filter { it.isNotEmpty() }
+            .toSet()
+    if (excludedExtensions != newExcluded) {
+        excludedExtensions = newExcluded
+    }
+    // Apply batch size
+    val newBatchSize = settings.passiveAiBatchSize.coerceIn(1, 5)
+    if (batchQueue.maxBatchSize != newBatchSize) {
+        batchQueue.maxBatchSize = newBatchSize
+    }
+    // Initialize or update persistent cache (project-namespaced)
+    if (settings.passiveAiPersistentCacheEnabled) {
+        val wantMaxBytes = settings.passiveAiPersistentCacheMaxMb.toLong() * 1024 * 1024
+        val wantTtlMs = settings.passiveAiPersistentCacheTtlHours.toLong() * 60 * 60 * 1000
+        val current = persistentCache
+        if (current == null || current.maxDiskBytes != wantMaxBytes || current.ttlMs != wantTtlMs) {
+            val projectSlug =
+                try {
+                    api.project().id().take(8)
+                } catch (_: Exception) {
+                    "default"
+                }
+            val cacheDir = File(System.getProperty("user.home"), ".burp-ai-agent/cache/$projectSlug")
+            persistentCache =
+                PersistentPromptCache(
+                    cacheDir = cacheDir,
+                    maxDiskBytes = wantMaxBytes,
+                    ttlMs = wantTtlMs,
+                )
+        }
+    } else {
+        persistentCache = null
+    }
+}
