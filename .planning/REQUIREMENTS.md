@@ -31,7 +31,7 @@ Research-mandated ordering: **SEC (encrypt secrets) lands before CAP-01 (Anthrop
 
 ### Quality & Maintainability (QUAL)
 
-- [ ] **QUAL-01** (B1): The three mega-files (`McpTools.kt` 2770, `SettingsPanel.kt` 2596, `PassiveAiScanner.kt` 2480) are split into focused files with **no behaviour change** — full test suite green before/after; ServiceLoader/registration intact
+- [x] **QUAL-01** (B1): The three mega-files (`McpTools.kt` 2770, `SettingsPanel.kt` 2596, `PassiveAiScanner.kt` 2480) are split into focused files with **no behaviour change** — full test suite green before/after; ServiceLoader/registration intact
 - [x] **QUAL-02** (B2): Test coverage is raised for the scanner queue/dedup, CLI backend supervision, and the `cache` module (currently 0–3%)
 - [x] **QUAL-03** (B3): `detekt` is added to the build and `ktlint` is enforced as a **blocking** check, each with a committed baseline so existing code does not break CI
 - [x] **QUAL-04** (B4): Silently-swallowed `catch (Exception)` sites are audited and replaced with logged, contextual handling via a shared logging helper (ties to REL-04 diagnosability)
@@ -91,7 +91,7 @@ Explicitly excluded for v0.9.0. Tracked to prevent scope creep.
 | QUAL-03 | Phase 18: Quality Tooling & Build Hardening | Complete |
 | QUAL-04 | Phase 18: Quality Tooling & Build Hardening | Complete |
 | QUAL-05 | Phase 18: Quality Tooling & Build Hardening | Complete |
-| QUAL-01 | Phase 19: Mega-File Split + Docs | Pending |
+| QUAL-01 | Phase 19: Mega-File Split + Docs | Complete |
 | DOC-01 | Phase 19: Mega-File Split + Docs | Pending |
 | DOC-02 | Phase 19: Mega-File Split + Docs | Pending |
 
