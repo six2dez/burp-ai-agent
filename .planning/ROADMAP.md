@@ -254,7 +254,16 @@ Plans:
   4. `README.md`, `SPEC.md`, and `DECISIONS.md` are updated to document the Anthropic backend, secret encryption (AES-256-GCM), redaction changes (real HKDF, body patterns, custom patterns), external MCP client, and token-budget guardrails.
   5. The public docs site (`burp-ai-agent.six2dez.com`) has pages or sections for the Anthropic backend and external MCP servers, so v0.9.0 ships with no doc drift on the two highest-novelty features.
 
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+**Wave 1** *(all parallel — disjoint file sets)*
+
+- [ ] 19-01-PLAN.md — McpTools.kt split: McpToolModels + McpToolHelpers + McpToolExecutorImpl (QUAL-01) [wave 1]
+- [ ] 19-02-PLAN.md — PassiveAiScanner.kt split: Models + Heuristics + Parsing + Prompts (QUAL-01) [wave 1]
+- [ ] 19-03-PLAN.md — SettingsPanel.kt split: ScannerTabs + McpTabs as internal extensions (QUAL-01) [wave 1]
+- [ ] 19-04-PLAN.md — .planning/ reconciliation: prune stale blockers/todos, update traceability (DOC-01) [wave 1]
+- [ ] 19-05-PLAN.md — User-facing docs: README + DECISIONS + SPEC + 2 docs/ pages (DOC-02) [wave 1]
 
 ---
 
@@ -273,4 +282,4 @@ Phase 12 (SEC) must be first. Phase 13 (Privacy) and Phase 12 are sequential (av
 | 16. External MCP Client | 5/6 | In Progress|  |
 | 17. Reliability & Concurrency Hardening | 3/3 | Complete    | 2026-06-11 |
 | 18. Quality Tooling & Build Hardening | 4/4 | Complete    | 2026-06-12 |
-| 19. Mega-File Split + Docs | 0/TBD | Not started | - |
+| 19. Mega-File Split + Docs | 0/5 | In Progress | - |
