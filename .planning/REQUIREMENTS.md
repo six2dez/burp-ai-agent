@@ -18,9 +18,9 @@ Research-mandated ordering: **SEC (encrypt secrets) lands before CAP-01 (Anthrop
 
 ### Secrets at Rest & Transport Security (SEC)
 
-- [ ] **SEC-01** (C2): The 7+ stored secrets (all backend API keys, `mcp.token`, `mcp.tls.keystore.password`) are **encrypted at rest** (AES-256-GCM via `javax.crypto`); a one-time idempotent migration encrypts existing plaintext values; decryption is transparent at runtime and secrets never appear in logs. *[key-bootstrap mechanism — per-install key vs passphrase vs OS keychain — resolved at this item's plan-phase]*
-- [ ] **SEC-02** (A3): The TLS keystore password is never exposed on a process command line (no `keytool -storepass` argv) — generated in-JVM or via `-storepass:file`/`:env`
-- [ ] **SEC-03** (A6): The user is warned when a configured backend base-URL resolves to a non-loopback internal/link-local address (soft SSRF guard) without blocking deliberate advanced use
+- [x] **SEC-01** (C2): The 7+ stored secrets (all backend API keys, `mcp.token`, `mcp.tls.keystore.password`) are **encrypted at rest** (AES-256-GCM via `javax.crypto`); a one-time idempotent migration encrypts existing plaintext values; decryption is transparent at runtime and secrets never appear in logs. *[key-bootstrap mechanism — per-install random key, resolved Phase 12]*
+- [x] **SEC-02** (A3): The TLS keystore password is never exposed on a process command line (no `keytool -storepass` argv) — generated in-JVM or via `-storepass:file`/`:env`
+- [x] **SEC-03** (A6): The user is warned when a configured backend base-URL resolves to a non-loopback internal/link-local address (soft SSRF guard) without blocking deliberate advanced use
 
 ### Reliability & Concurrency (REL)
 
@@ -72,9 +72,9 @@ Explicitly excluded for v0.9.0. Tracked to prevent scope creep.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SEC-01 | Phase 12: Secrets at Rest & Transport Security | Pending |
-| SEC-02 | Phase 12: Secrets at Rest & Transport Security | Pending |
-| SEC-03 | Phase 12: Secrets at Rest & Transport Security | Pending |
+| SEC-01 | Phase 12: Secrets at Rest & Transport Security | Complete |
+| SEC-02 | Phase 12: Secrets at Rest & Transport Security | Complete |
+| SEC-03 | Phase 12: Secrets at Rest & Transport Security | Complete |
 | PRIV-01 | Phase 13: Privacy & Redaction Hardening | Complete |
 | PRIV-02 | Phase 13: Privacy & Redaction Hardening | Complete |
 | PRIV-04 | Phase 13: Privacy & Redaction Hardening | Complete |
