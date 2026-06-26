@@ -2,7 +2,7 @@ import org.gradle.api.tasks.testing.Test
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
-    kotlin("jvm") version "2.1.21"
+    kotlin("jvm") version "2.3.21"
     kotlin("plugin.serialization") version "2.1.21"
     id("com.github.johnrengelman.shadow") version "8.1.1"
     id("org.jlleitschuh.gradle.ktlint") version "12.1.1"
