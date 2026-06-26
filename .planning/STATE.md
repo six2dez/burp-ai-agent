@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.9.0
 milestone_name: Hardening, Quality & New Capabilities
-status: milestone_complete
-stopped_at: Milestone complete (Phase 19 was final phase)
-last_updated: 2026-06-26T08:36:28.840Z
-last_activity: 2026-06-16
+status: milestone_code_complete
+stopped_at: "v0.9.0 — all 8 phases (12–19) complete and verified; version bumped to 0.9.0 + CHANGELOG promoted. Pending release: Phase 19 SC5 live docs-site render (post-push human-UAT), push (main ahead of origin/main), then /gsd-complete-milestone v0.9.0 + /gsd-cleanup."
+last_updated: 2026-06-26T09:03:37.949Z
+last_activity: 2026-06-26
 progress:
   total_phases: 8
-  completed_phases: 7
+  completed_phases: 8
   total_plans: 31
-  completed_plans: 53
-  percent: 88
+  completed_plans: 31
+  percent: 100
 ---
 
 # Project State
@@ -21,20 +21,20 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-10)
 
 **Core value:** Bring modern AI to a real security workflow without leaking sensitive traffic to third-party providers — privacy controls and an audit trail are non-negotiable, AI capability is additive.
-**Current focus:** Milestone complete
+**Current focus:** v0.9.0 code-complete (all 8 phases verified) — pending release: Phase 19 live docs-site UAT, push, then milestone archive
 
 ## Current Position
 
-Phase: 19
-Plan: Not started
-Status: Milestone complete
+Phase: 19 (last) complete — milestone v0.9.0 code-complete
+Plan: 5/5 (Phase 19)
+Status: Milestone code-complete — pending release (Phase 19 live-render UAT + push + /gsd-complete-milestone v0.9.0 + /gsd-cleanup)
 Last activity: 2026-06-26
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 26
+- Total plans completed: 32
 - Average duration: —
 - Total execution time: 0 hours
 
@@ -51,6 +51,7 @@ Last activity: 2026-06-26
 | 17 | 3 | - | - |
 | 18 | 4 | - | - |
 | 19 | 5 | - | - |
+| 16 | 6 | - | - |
 
 **Recent Trend:**
 

@@ -52,7 +52,7 @@ Phases 9–11 closed. Features: design system foundation (UI-01), MCP tools tab 
 - [x] **Phase 13: Privacy & Redaction Hardening** — Fix host-anonymization algorithm (real HKDF), broaden redaction to request/response bodies with user-configurable patterns, add redaction-coverage UI (completed 2026-06-10)
 - [x] **Phase 14: Anthropic Backend + Token Budget + Listener Port** — Native Anthropic Messages API backend with streaming/tool-use/prompt-caching; per-session token-budget guardrails; MCP proxy-history listener port filter (completed 2026-06-10)
 - [x] **Phase 15: Pre-Send Secret Tripwire** — Post-redaction tripwire scanning final payload for high-entropy secrets before any send; warn-with-confirmation UI; audit-logged allowlist (completed 2026-06-11)
-- [ ] **Phase 16: External MCP Client** — Connect to external/custom MCP servers (SSE + stdio transports); auth tokens encrypted; SSRF guard; untrusted-output trust boundary
+- [x] **Phase 16: External MCP Client** — Connect to external/custom MCP servers (SSE + stdio transports); auth tokens encrypted; SSRF guard; untrusted-output trust boundary (completed 2026-06-26)
 - [x] **Phase 17: Reliability & Concurrency Hardening** — EDT confinement on ChatPanel session maps; CLI temp file cleanup via finally; bounded MCP shutdown; uniform HTTP timeouts/CircuitBreaker; fix CLI timeout bug #71 (completed 2026-06-11)
 - [x] **Phase 18: Quality Tooling & Build Hardening** — Raise scanner/CLI/cache test coverage; add detekt + blocking ktlint with committed baseline; audit 136 exception-logging sites; fix generateBuildFlags sourceSets wiring (completed 2026-06-11)
 - [x] **Phase 19: Mega-File Split + Docs** — Split 3 mega-files (no behaviour change); finalize .planning reconciliation; update user-facing docs for v0.9.0 changes (completed 2026-06-16)
@@ -186,7 +186,7 @@ Plans:
 
 **Wave 4** *(blocking UAT checkpoint)*
 
-- [ ] 16-06-PLAN.md — Pre-flight check gate + Human UAT: SC1 real-server connect + SC5 Burp fat-JAR smoke test [wave 4]
+- [x] 16-06-PLAN.md — Pre-flight check gate + Human UAT: SC1 real-server connect + SC5 Burp fat-JAR smoke test [wave 4]
 
 **UI hint**: yes
 
@@ -279,7 +279,7 @@ Phase 12 (SEC) must be first. Phase 13 (Privacy) and Phase 12 are sequential (av
 | 13. Privacy & Redaction Hardening | 3/3 | Complete    | 2026-06-10 |
 | 14. Anthropic Backend + Token Budget + Listener Port | 3/3 | Complete    | 2026-06-10 |
 | 15. Pre-Send Secret Tripwire | 3/3 | Complete    | 2026-06-11 |
-| 16. External MCP Client | 5/6 | In Progress|  |
+| 16. External MCP Client | 6/6 | Complete    | 2026-06-26 |
 | 17. Reliability & Concurrency Hardening | 3/3 | Complete    | 2026-06-11 |
 | 18. Quality Tooling & Build Hardening | 4/4 | Complete    | 2026-06-12 |
 | 19. Mega-File Split + Docs | 5/5 | Complete    | 2026-06-26 |
