@@ -6,6 +6,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-06-26
+
+### Added
+
+- **Native Anthropic backend (CAP-01)**: a new **Anthropic** option in Settings > Backend that calls the Anthropic Messages API (`/v1/messages`) through Burp's `MontoyaHttpTransport` — not a vendored SDK — so all Anthropic traffic appears in **Proxy > HTTP history**. Includes an editable model field (defaults to a current Claude alias), token counting, and an API key encrypted at rest. Streaming is single-chunk/proxy-visible (matching the other HTTP backends); native tool-use and prompt caching are deferred to a future release.
+- **External MCP client (closes #41, CAP-02)**: register external/custom MCP servers over **SSE** or **stdio** in Settings > MCP > External Servers; their tools appear alongside Burp's built-in tools in the agent's tool preamble. Auth tokens are encrypted at rest, external tool output is wrapped in an explicit **trust-boundary marker** before entering the AI context (prompt-injection guard), every external invocation is audit-logged, and a soft SSRF warning covers external MCP URLs.
+- **Per-session token-budget guardrails (CAP-04)**: configurable warn threshold and hard cap; the passive scanner pauses when the cap fires and the chat shows a warning banner when the threshold is crossed.
+- **MCP proxy-history listener-port filter (closes #70, CAP-03)**: filter `proxy_http_history` tool output by Burp listener port.
+- **Secrets encrypted at rest (SEC-01)**: all stored secrets (backend API keys, `mcp.token`, the TLS keystore password, and external-MCP bearer tokens) are encrypted with **AES-256-GCM** (`javax.crypto`) using a per-install master key; a one-time idempotent migration encrypts existing plaintext values; secrets never appear in logs.
+- **Pre-send secret tripwire (PRIV-03)**: a post-redaction tripwire scans the final outbound payload for high-entropy secrets and warns the user (warn-with-confirmation, non-blocking) before anything leaves Burp; "send anyway" decisions are audit-logged and flagged in the preview dialog; fires on all three outbound paths (chat, passive scanner, MCP tool output).
+- **Redaction-coverage indicator (PRIV-04)** and **user-configurable custom redaction patterns (PRIV-02)**: the context-preview dialog flags when a known secret shape survived redaction; users can add custom regex patterns, validated against a ReDoS-timeout guard before being accepted.
+- **Documentation**: new `docs/anthropic-backend.md` and `docs/external-mcp-servers.md` guide pages.
+
+### Changed
+
+- **Host anonymization now uses real HKDF (PRIV-01)**: STRICT-mode host anonymization uses HMAC-SHA256 (HKDF extract/expand) instead of salted SHA-256, matching the documented privacy guarantee.
+- **Redaction covers request/response bodies (PRIV-02)**: `x-www-form-urlencoded` (including the leading field) and JSON bodies are redacted in STRICT/BALANCED modes — not just header lines — with a ReDoS/performance guard on large bodies.
+- **TLS keystore password no longer exposed on the process command line (SEC-02)**: the MCP TLS keystore is generated in-JVM, removing the `keytool -storepass` subprocess.
+- **Soft SSRF guard on backend and MCP URLs (SEC-03)**: a non-blocking warning when a configured base URL resolves to a non-loopback private/link-local address.
+- **All HTTP backends route through the `CircuitBreaker` with consistent timeouts (REL-03)**: no backend can bypass `MontoyaHttpTransport`.
+- **Reliability hardening (REL-01, REL-02)**: ChatPanel session state is EDT-confined (verified by a concurrency test); CLI temp files are deleted via `finally` + `deleteOnExit`; MCP server shutdown is bounded; host-anonymization maps are LRU-bounded.
+- **Build and quality hardening (QUAL-02/03/04/05)**: detekt static analysis and a blocking ktlint gate were added with committed baselines; `generateBuildFlags` is wired via `sourceSets` so `./gradlew ktlintCheck` runs standalone; scanner/CLI/cache test coverage was raised; silently-swallowed exception sites were audited.
+- **Internal refactor (QUAL-01)**: the three largest files — `McpTools.kt`, `SettingsPanel.kt`, and `PassiveAiScanner.kt` — were split into focused, same-package files with **no behaviour change** (full test suite green before and after each extraction; ServiceLoader registration intact).
+
+### Fixed
+
+- **CLI command-timeout failure (#71, REL-04)**: diagnosed and fixed with a configurable timeout and an actionable error message, plus a regression test.
+
 ## [0.8.0] - 2026-06-02
 
 ### Added
