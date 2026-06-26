@@ -5,13 +5,12 @@ import burp.api.montoya.http.message.requests.HttpRequest
 import burp.api.montoya.http.message.responses.HttpResponse
 import com.six2dez.burp.aiagent.cache.CachedEntry
 import com.six2dez.burp.aiagent.cache.CachedIssue
+import com.six2dez.burp.aiagent.cache.PersistentPromptCache
+import com.six2dez.burp.aiagent.config.AgentSettings
 import com.six2dez.burp.aiagent.util.IssueUtils
+import java.io.File
 import java.net.URI
 import java.util.LinkedHashMap
-
-import com.six2dez.burp.aiagent.config.AgentSettings
-import com.six2dez.burp.aiagent.cache.PersistentPromptCache
-import java.io.File
 
 // AWT-free contract: MUST NOT import java.awt.* or javax.swing.*
 
@@ -25,14 +24,11 @@ private const val MIN_BODY_SIZE_FOR_AI = 80
 
 // ---- time-window helpers ----
 
-internal fun PassiveAiScanner.endpointDedupWindowMs(): Long =
-    endpointDedupMinutes.toLong().coerceAtLeast(1L) * 60_000L
+internal fun PassiveAiScanner.endpointDedupWindowMs(): Long = endpointDedupMinutes.toLong().coerceAtLeast(1L) * 60_000L
 
-internal fun PassiveAiScanner.responseFingerprintDedupWindowMs(): Long =
-    responseFingerprintDedupMinutes.toLong().coerceAtLeast(1L) * 60_000L
+internal fun PassiveAiScanner.responseFingerprintDedupWindowMs(): Long = responseFingerprintDedupMinutes.toLong().coerceAtLeast(1L) * 60_000L
 
-internal fun PassiveAiScanner.promptCacheTtlMs(): Long =
-    promptCacheTtlMinutes.toLong().coerceAtLeast(1L) * 60_000L
+internal fun PassiveAiScanner.promptCacheTtlMs(): Long = promptCacheTtlMinutes.toLong().coerceAtLeast(1L) * 60_000L
 
 // ---- LRU trim helper ----
 
@@ -161,8 +157,7 @@ internal fun PassiveAiScanner.buildResponseFingerprint(
     return sha256Hex(raw)
 }
 
-internal fun PassiveAiScanner.stripDynamicValues(text: String): String =
-    dynamicValueStripRegex.replace(text, "{DYN}")
+internal fun PassiveAiScanner.stripDynamicValues(text: String): String = dynamicValueStripRegex.replace(text, "{DYN}")
 
 internal fun PassiveAiScanner.sanitizeHeadersForPrompt(
     headers: List<HttpHeader>,

@@ -361,8 +361,7 @@ internal fun PassiveAiScanner.mapTitleToVulnClass(title: String): VulnClass? {
     }
 }
 
-internal fun PassiveAiScanner.extractInjectionPoints(requestResponse: HttpRequestResponse): List<InjectionPoint> =
-    InjectionPointExtractor.extract(requestResponse.request(), headerInjectionAllowlist)
+internal fun PassiveAiScanner.extractInjectionPoints(requestResponse: HttpRequestResponse): List<InjectionPoint> = InjectionPointExtractor.extract(requestResponse.request(), headerInjectionAllowlist)
 
 internal fun PassiveAiScanner.severityLevel(severity: String): Int =
     when (severity.uppercase()) {

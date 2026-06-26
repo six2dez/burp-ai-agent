@@ -21,12 +21,9 @@ import com.six2dez.burp.aiagent.mcp.schema.toSerializableForm
 import com.six2dez.burp.aiagent.mcp.schema.toSiteMapEntry
 import com.six2dez.burp.aiagent.redact.PrivacyMode
 import com.six2dez.burp.aiagent.redact.Redaction
-import com.six2dez.burp.aiagent.util.IssueText
-import com.six2dez.burp.aiagent.util.IssueUtils
 import io.modelcontextprotocol.kotlin.sdk.server.Server
 import kotlinx.serialization.encodeToString
 import java.security.MessageDigest
-import java.util.Base64
 import java.util.regex.Pattern
 
 @Suppress("unused")

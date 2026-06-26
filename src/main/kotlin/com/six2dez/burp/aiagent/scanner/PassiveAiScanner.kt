@@ -441,5 +441,4 @@ class PassiveAiScanner(
 
         val DEFAULT_EXCLUDED_EXTENSIONS = Defaults.DEFAULT_EXCLUDED_EXTENSIONS
     }
-
 }

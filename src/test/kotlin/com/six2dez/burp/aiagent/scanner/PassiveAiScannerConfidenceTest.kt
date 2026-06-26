@@ -13,6 +13,7 @@ import com.six2dez.burp.aiagent.supervisor.AgentSupervisor
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.mock
+
 class PassiveAiScannerConfidenceTest {
     @Test
     fun aiFindingBelowThreshold_isSkippedAndNotRecorded() {

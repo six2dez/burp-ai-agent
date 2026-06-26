@@ -313,8 +313,18 @@ internal fun PassiveAiScanner.doAnalysis(requestResponse: HttpRequestResponse) {
                 .toList()
 
         // Extract JS endpoints from JavaScript responses
-        val mime = response?.statedMimeType()?.name?.lowercase().orEmpty()
-        val inferredMime = response?.inferredMimeType()?.name?.lowercase().orEmpty()
+        val mime =
+            response
+                ?.statedMimeType()
+                ?.name
+                ?.lowercase()
+                .orEmpty()
+        val inferredMime =
+            response
+                ?.inferredMimeType()
+                ?.name
+                ?.lowercase()
+                .orEmpty()
         val isJsResponse = mime == "javascript" || mime == "script" || inferredMime == "javascript" || inferredMime == "script"
         if (isJsResponse) {
             extractAndLogJsEndpoints(request, responseBodyRaw)
