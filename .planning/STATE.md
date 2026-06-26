@@ -2,8 +2,8 @@
 gsd_state_version: 1.0
 milestone: v0.9.0
 milestone_name: Hardening, Quality & New Capabilities
-status: milestone_code_complete
-stopped_at: "v0.9.0 — all 8 phases (12–19) complete and verified; version bumped to 0.9.0 + CHANGELOG promoted. Pending release: Phase 19 SC5 live docs-site render (post-push human-UAT), push (main ahead of origin/main), then /gsd-complete-milestone v0.9.0 + /gsd-cleanup."
+status: milestone_verified
+stopped_at: "v0.9.0 — all 8 phases (12–19) complete and FULLY verified incl. both human-UATs (Phase 16 live SSE+stdio connect + fat-JAR load; Phase 19 SC5 live docs render at /backends/anthropic + /mcp-server/external-servers). Version 0.9.0 + CHANGELOG cut; burp-ai-agent and burp-ai-agent-docs both pushed. READY TO ARCHIVE: /gsd-complete-milestone v0.9.0 + /gsd-cleanup."
 last_updated: 2026-06-26T09:03:37.949Z
 last_activity: 2026-06-26
 progress:
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-10)
 
 **Core value:** Bring modern AI to a real security workflow without leaking sensitive traffic to third-party providers — privacy controls and an audit trail are non-negotiable, AI capability is additive.
-**Current focus:** v0.9.0 code-complete (all 8 phases verified) — pending release: Phase 19 live docs-site UAT, push, then milestone archive
+**Current focus:** v0.9.0 fully verified (all 8 phases + both human-UATs passed; both repos pushed) — ready to archive (/gsd-complete-milestone v0.9.0 + /gsd-cleanup)
 
 ## Current Position
 
-Phase: 19 (last) complete — milestone v0.9.0 code-complete
+Phase: 19 (last) complete — milestone v0.9.0 fully verified
 Plan: 5/5 (Phase 19)
-Status: Milestone code-complete — pending release (Phase 19 live-render UAT + push + /gsd-complete-milestone v0.9.0 + /gsd-cleanup)
+Status: Milestone fully verified — ready to archive (/gsd-complete-milestone v0.9.0 + /gsd-cleanup)
 Last activity: 2026-06-26
 
 ## Performance Metrics
