@@ -29,7 +29,7 @@ dependencies {
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.21.2")
 
     // HTTP client (Ollama + webhooks)
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.squareup.okhttp3:okhttp:5.3.2")
 
     // MCP Server (Ktor + MCP SDK)
     implementation("io.modelcontextprotocol:kotlin-sdk:0.5.0")
