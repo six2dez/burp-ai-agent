@@ -198,10 +198,10 @@ object App {
             passiveAiScanner.setEnabled(false)
             passiveAiScanner.shutdown()
         }
-        safeShutdownStep("Active scanner") {
-            activeAiScanner.setEnabled(false)
-            activeAiScanner.shutdown()
-        }
+        // Split so a throw in setEnabled(false) can't skip shutdown() — shutdown() is the only
+        // place the per-request requestExecutor (a cached thread pool) is terminated on unload.
+        safeShutdownStep("Active scanner disable") { activeAiScanner.setEnabled(false) }
+        safeShutdownStep("Active scanner") { activeAiScanner.shutdown() }
         safeShutdownStep("Supervisor") { supervisor.shutdown() }
         safeShutdownStep("MCP supervisor") { mcpSupervisor.shutdown() }
         safeShutdownStep("Backend registry") { backendRegistry.shutdown() }
