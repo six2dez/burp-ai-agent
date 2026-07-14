@@ -55,6 +55,11 @@ class AiScanCheck(
         // Determine which vulnerability classes to test based on insertion point
         val vulnClasses = determineVulnClasses(insertionPoint)
 
+        // Rate-limit pacing: timestamp when the last request finished, so we sleep only the
+        // remaining interval before the next request instead of the full delay on top of the
+        // round-trip (avoids idling a Burp scanner thread longer than necessary).
+        var lastRequestEndMs = 0L
+
         for (vulnClass in vulnClasses) {
             val payloads =
                 payloadGenerator
@@ -63,16 +68,21 @@ class AiScanCheck(
 
             for (payload in payloads) {
                 try {
+                    // Rate limiting: honour a minimum interval between requests, counting the
+                    // request round-trip toward that interval rather than sleeping the full
+                    // delay on top of it (keeps the scanner thread from idling unnecessarily).
+                    val delayMs = settings.activeAiRequestDelayMs.toLong()
+                    if (delayMs > 0 && lastRequestEndMs > 0L) {
+                        val remaining = delayMs - (System.currentTimeMillis() - lastRequestEndMs)
+                        if (remaining > 0L) Thread.sleep(remaining)
+                    }
+
                     val issue = testPayload(baseRequestResponse, insertionPoint, payload, vulnClass)
+                    lastRequestEndMs = System.currentTimeMillis()
                     if (issue != null) {
                         issues.add(issue)
                         // Found a confirmed vuln for this class, move to next
                         break
-                    }
-
-                    // Rate limiting
-                    if (settings.activeAiRequestDelayMs > 0) {
-                        Thread.sleep(settings.activeAiRequestDelayMs.toLong())
                     }
                 } catch (e: Exception) {
                     api.logging().logToError("[AiScanCheck] Error testing payload: ${e.message}")
