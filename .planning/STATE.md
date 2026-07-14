@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-06-10)
 Phase: 19 (last) complete — milestone v0.9.0 fully verified
 Plan: 5/5 (Phase 19)
 Status: Milestone fully verified — ready to archive (/gsd-complete-milestone v0.9.0 + /gsd-cleanup)
-Last activity: 2026-06-26
+Last activity: 2026-07-14 - Completed quick task 260714-dp1: BApp Store code-review quick-wins (findings 3, 4, 6, 8 + verify 5)
 
 ## Performance Metrics
 
@@ -154,6 +154,7 @@ Recent decisions affecting current work:
 | 260527-f7q | Fix bugs 66, 67, 68: CLI tokenizer, Copilot CLI hang, OpenAI-compatible diagnostics | 2026-05-27 | 8a6af50 | [260527-f7q-fix-bugs-66-67-68-cli-tokenizer-copilot-](./quick/260527-f7q-fix-bugs-66-67-68-cli-tokenizer-copilot-/) |
 | 260602-v08 | Bump version to 0.8.0 + promote CHANGELOG [Unreleased] → [0.8.0] | 2026-06-02 | 55f0b28 | — |
 | 260602-cl8 | Complete CHANGELOG [0.8.0]: Phase 07 (#69) scope hardening/transport + backend fixes #66/67/68 | 2026-06-02 | 8caf0cb | — |
+| 260714-dp1 | BApp Store code-review quick-wins (findings 3, 4, 6, 8 + verify 5) | 2026-07-14 | 72dcd34..e9333b4 | [260714-dp1-bapp-store-code-review-quick-wins-findin](./quick/260714-dp1-bapp-store-code-review-quick-wins-findin/) |
 
 ## Deferred Items
 
