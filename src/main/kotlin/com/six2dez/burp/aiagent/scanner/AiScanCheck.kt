@@ -1,14 +1,15 @@
 package com.six2dez.burp.aiagent.scanner
 
 import burp.api.montoya.MontoyaApi
+import burp.api.montoya.http.Http
 import burp.api.montoya.http.RequestOptions
 import burp.api.montoya.http.message.HttpRequestResponse
 import burp.api.montoya.scanner.AuditResult
 import burp.api.montoya.scanner.ConsolidationAction
-import burp.api.montoya.scanner.ScanCheck
 import burp.api.montoya.scanner.audit.insertionpoint.AuditInsertionPoint
 import burp.api.montoya.scanner.audit.issues.AuditIssue
 import burp.api.montoya.scanner.audit.issues.AuditIssueConfidence
+import burp.api.montoya.scanner.scancheck.ActiveScanCheck
 import com.six2dez.burp.aiagent.config.AgentSettings
 import com.six2dez.burp.aiagent.util.IssueUtils
 
@@ -21,17 +22,20 @@ import com.six2dez.burp.aiagent.util.IssueUtils
 class AiScanCheck(
     private val api: MontoyaApi,
     private val getSettings: () -> AgentSettings,
-) : ScanCheck {
+) : ActiveScanCheck {
     private val payloadGenerator = PayloadGenerator()
     private val responseAnalyzer = ResponseAnalyzer()
+
+    override fun checkName(): String = "AI Active Security Analysis"
 
     /**
      * Called by Burp Scanner for each insertion point.
      * We test relevant payloads based on the insertion point context.
      */
-    override fun activeAudit(
+    override fun doCheck(
         baseRequestResponse: HttpRequestResponse,
         insertionPoint: AuditInsertionPoint,
+        http: Http,
     ): AuditResult {
         val settings = getSettings()
 
@@ -77,15 +81,6 @@ class AiScanCheck(
         }
 
         return AuditResult.auditResult(issues)
-    }
-
-    /**
-     * Passive audit - analyze response without sending requests
-     */
-    override fun passiveAudit(baseRequestResponse: HttpRequestResponse): AuditResult {
-        // Passive scanning is handled by PassiveAiScanner
-        // Return empty here to avoid duplication
-        return AuditResult.auditResult(emptyList())
     }
 
     /**

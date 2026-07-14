@@ -162,7 +162,7 @@ object App {
         // This integrates with Burp's native active scanner
         try {
             val aiScanCheck = AiScanCheck(api) { settingsRepo.load() }
-            api.scanner().registerScanCheck(aiScanCheck)
+            api.scanner().registerActiveScanCheck(aiScanCheck, ScanCheckType.PER_INSERTION_POINT)
             api.logging().logToOutput("AI ScanCheck registered with Burp Scanner (Pro feature)")
         } catch (e: Exception) {
             // Expected to fail on Community edition
