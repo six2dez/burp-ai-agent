@@ -77,7 +77,16 @@ class AgentSupervisor(
 
     init {
         monitorExec.scheduleAtFixedRate(
-            { checkHealth() },
+            {
+                // scheduleAtFixedRate silently cancels the recurring task if any run throws an
+                // uncaught exception — guard so a transient checkHealth() failure can't stop the
+                // health monitor (and with it auto-restart) for the rest of the session.
+                try {
+                    checkHealth()
+                } catch (e: Throwable) {
+                    api.logging().logToError("[AgentSupervisor] health check failed: ${e.message}")
+                }
+            },
             Defaults.HEALTH_CHECK_INTERVAL_MS,
             Defaults.HEALTH_CHECK_INTERVAL_MS,
             TimeUnit.MILLISECONDS,
