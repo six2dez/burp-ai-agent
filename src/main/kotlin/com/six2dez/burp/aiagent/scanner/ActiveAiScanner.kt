@@ -1,6 +1,7 @@
 package com.six2dez.burp.aiagent.scanner
 
 import burp.api.montoya.MontoyaApi
+import burp.api.montoya.collaborator.CollaboratorClient
 import burp.api.montoya.http.RequestOptions
 import burp.api.montoya.http.message.HttpRequestResponse
 import burp.api.montoya.http.message.requests.HttpRequest
@@ -35,6 +36,18 @@ data class ActiveAiFinding(
     val confidence: Int,
 )
 
+// Finding #7 (BApp #231): a Collaborator payload awaiting an out-of-band interaction. A single
+// shared poller matches interactions against these and creates the confirmed issue asynchronously.
+private data class PendingOast(
+    val target: ActiveScanTarget,
+    val baseline: HttpRequestResponse,
+    val exploitRequestResponse: HttpRequestResponse,
+    val oastUrl: String,
+    val registeredAtMs: Long,
+)
+
+private const val OAST_POLL_INTERVAL_SECONDS = 60L
+
 /**
  * AI-powered Active Scanner that confirms vulnerabilities by sending test payloads
  */
@@ -58,6 +71,14 @@ class ActiveAiScanner(
     private val adaptivePayloadEngine = AdaptivePayloadEngine(supervisor)
     private val responseAnalyzer = ResponseAnalyzer()
     private val requestExecutor = Executors.newCachedThreadPool()
+
+    // Finding #7 (BApp #231): SSRF out-of-band confirmation is asynchronous. A single shared
+    // Collaborator client + one scheduled poller replace the old per-target client that blocked a
+    // scanner thread polling getAllInteractions() every 500 ms for up to 30 s.
+    private val oastLock = ReentrantLock()
+    private var collaboratorClient: CollaboratorClient? = null
+    private val pendingOast = ConcurrentHashMap<String, PendingOast>()
+    private var oastPoller: ScheduledExecutorService? = null
 
     private val headerInjectionAllowlist = ScannerUtils.HEADER_INJECTION_ALLOWLIST
     private val authHeaderNames =
@@ -319,12 +340,24 @@ class ActiveAiScanner(
         scheduledExecutor?.scheduleWithFixedDelay({
             processQueue()
         }, 0, 500, TimeUnit.MILLISECONDS)
+
+        // Single poller for out-of-band (Collaborator) confirmations — polls every 60 s and matches
+        // interactions against pending payloads, so no scanner thread blocks waiting (BApp #231).
+        oastPoller = Executors.newSingleThreadScheduledExecutor()
+        oastPoller?.scheduleWithFixedDelay({
+            try {
+                pollOastInteractions()
+            } catch (e: Throwable) {
+                api.logging().logToError("[ActiveAiScanner] OAST poll failed: ${e.message}")
+            }
+        }, OAST_POLL_INTERVAL_SECONDS, OAST_POLL_INTERVAL_SECONDS, TimeUnit.SECONDS)
     }
 
     private fun stopProcessing() {
         scanning.set(false)
         executor?.shutdownNow()
         scheduledExecutor?.shutdownNow()
+        oastPoller?.shutdownNow()
         try {
             executor?.awaitTermination(5, TimeUnit.SECONDS)
             scheduledExecutor?.awaitTermination(5, TimeUnit.SECONDS)
@@ -334,6 +367,15 @@ class ActiveAiScanner(
         }
         executor = null
         scheduledExecutor = null
+        oastPoller = null
+        // Abandon any pending OOB confirmations and drop the shared client for a clean restart.
+        pendingOast.clear()
+        oastLock.lock()
+        try {
+            collaboratorClient = null
+        } finally {
+            oastLock.unlock()
+        }
         currentTarget.set(null)
     }
 
@@ -581,10 +623,10 @@ class ActiveAiScanner(
         }
 
         if (vulnClass == VulnClass.SSRF) {
-            val oastConfirmation = confirmSsrfoob(target, baselineRequestResponse, settings)
-            if (oastConfirmation != null && oastConfirmation.confirmed) {
-                return ActiveScanResult(target, allPayloads.size, oastConfirmation)
-            }
+            // OOB confirmation is asynchronous: register the Collaborator payload and let the shared
+            // poller create the issue if an interaction arrives, instead of blocking this scanner
+            // thread polling for up to 30 s (BApp #231, finding 7).
+            registerSsrfoob(target, baselineRequestResponse, settings)
         }
 
         return ActiveScanResult(target, allPayloads.size, null)
@@ -928,13 +970,13 @@ class ActiveAiScanner(
             ?.firstOrNull { it.name().equals(name, ignoreCase = true) }
             ?.value()
 
-    private fun confirmSsrfoob(
+    private fun registerSsrfoob(
         target: ActiveScanTarget,
         baseline: HttpRequestResponse,
         settings: AgentSettings,
-    ): VulnConfirmation? {
-        if (!useCollaborator) return null
-        if (settings.privacyMode != PrivacyMode.OFF) return null
+    ) {
+        if (!useCollaborator) return
+        if (settings.privacyMode != PrivacyMode.OFF) return
         if (target.injectionPoint.type !in
             setOf(
                 InjectionType.URL_PARAM,
@@ -944,23 +986,17 @@ class ActiveAiScanner(
                 InjectionType.PATH_SEGMENT,
             )
         ) {
-            return null
+            return
         }
 
-        val client =
-            try {
-                api.collaborator().createClient()
-            } catch (e: Exception) {
-                api.logging().logToError("[ActiveAiScanner] Collaborator unavailable: ${e.message}")
-                return null
-            }
+        val client = obtainCollaboratorClient() ?: return
 
         val collaboratorPayload =
             try {
                 client.generatePayload()
             } catch (e: Exception) {
                 api.logging().logToError("[ActiveAiScanner] Collaborator payload error: ${e.message}")
-                return null
+                return
             }
 
         val oastUrl = "http://$collaboratorPayload"
@@ -970,37 +1006,79 @@ class ActiveAiScanner(
                 target.injectionPoint,
                 oastUrl,
             )
-        val oastResponse = sendRequestWithTimeout(oastRequest) ?: return null
+        val oastResponse = sendRequestWithTimeout(oastRequest) ?: return
         val oastRequestResponse = HttpRequestResponse.httpRequestResponse(oastRequest, oastResponse.response())
 
-        val timeoutMs = maxOf(5000L, timeoutSeconds.toLong() * 1000L)
-        val start = System.currentTimeMillis()
-        while (System.currentTimeMillis() - start < timeoutMs) {
-            val interactions = client.getAllInteractions()
-            if (interactions.isNotEmpty()) {
-                val types = interactions.joinToString(", ") { it.type().toString() }
-                val payload =
-                    Payload(
-                        value = oastUrl,
-                        vulnClass = VulnClass.SSRF,
-                        detectionMethod = DetectionMethod.OUT_OF_BAND,
-                        risk = PayloadRisk.SAFE,
-                        expectedEvidence = "Collaborator interaction",
-                    )
-                return VulnConfirmation(
-                    target = target,
-                    payload = payload,
-                    originalResponse = baseline,
-                    exploitResponse = oastRequestResponse,
-                    confidence = 95,
-                    evidence = "Collaborator interaction received ($types) for $oastUrl",
-                    confirmed = true,
-                )
-            }
-            Thread.sleep(500)
-        }
+        // Register the payload; the shared poller matches interactions against it and creates the
+        // confirmed issue asynchronously, so no scanner thread blocks waiting for an interaction.
+        pendingOast[collaboratorPayload.id().toString()] =
+            PendingOast(
+                target = target,
+                baseline = baseline,
+                exploitRequestResponse = oastRequestResponse,
+                oastUrl = oastUrl,
+                registeredAtMs = System.currentTimeMillis(),
+            )
+    }
 
-        return null
+    private fun obtainCollaboratorClient(): CollaboratorClient? {
+        oastLock.lock()
+        try {
+            collaboratorClient?.let { return it }
+            val client =
+                try {
+                    api.collaborator().createClient()
+                } catch (e: Exception) {
+                    api.logging().logToError("[ActiveAiScanner] Collaborator unavailable: ${e.message}")
+                    return null
+                }
+            collaboratorClient = client
+            return client
+        } finally {
+            oastLock.unlock()
+        }
+    }
+
+    private fun pollOastInteractions() {
+        val client = collaboratorClient ?: return
+        if (pendingOast.isEmpty()) return
+        val interactions =
+            try {
+                client.getAllInteractions()
+            } catch (e: Exception) {
+                api.logging().logToError("[ActiveAiScanner] Collaborator poll error: ${e.message}")
+                return
+            }
+        for (interaction in interactions) {
+            val pending = pendingOast.remove(interaction.id().toString()) ?: continue
+            val payload =
+                Payload(
+                    value = pending.oastUrl,
+                    vulnClass = VulnClass.SSRF,
+                    detectionMethod = DetectionMethod.OUT_OF_BAND,
+                    risk = PayloadRisk.SAFE,
+                    expectedEvidence = "Collaborator interaction",
+                )
+            confirmFinding(
+                VulnConfirmation(
+                    target = pending.target,
+                    payload = payload,
+                    originalResponse = pending.baseline,
+                    exploitResponse = pending.exploitRequestResponse,
+                    confidence = 95,
+                    evidence = "Collaborator interaction received (${interaction.type()}) for ${pending.oastUrl}",
+                    confirmed = true,
+                ),
+            )
+        }
+        expireStaleOast()
+    }
+
+    private fun expireStaleOast() {
+        if (pendingOast.isEmpty()) return
+        val ttlMs = maxOf(300_000L, timeoutSeconds.toLong() * 1000L)
+        val now = System.currentTimeMillis()
+        pendingOast.entries.removeIf { now - it.value.registeredAtMs > ttlMs }
     }
 
     private val tlsRequestOptions by lazy { RequestOptions.requestOptions().withUpstreamTLSVerification() }
@@ -1029,45 +1107,51 @@ class ActiveAiScanner(
     private fun handleResult(result: ActiveScanResult) {
         val confirmation = result.confirmation
         if (confirmation != null && confirmation.confirmed) {
-            vulnsConfirmed.incrementAndGet()
-            createConfirmedIssue(confirmation)
+            confirmFinding(confirmation)
+        }
+    }
 
-            // Record error patterns as tech hints for adaptive payloads
-            val host =
-                runCatching {
-                    java.net
-                        .URI(
-                            confirmation.target.originalRequest
-                                .request()
-                                .url(),
-                        ).host
-                        .orEmpty()
-                }.getOrDefault("")
-            if (host.isNotBlank()) {
-                val evidence = confirmation.evidence.lowercase()
-                val dbHints = mutableSetOf<String>()
-                if (evidence.contains("mysql") || evidence.contains("mariadb")) dbHints.add("MySQL")
-                if (evidence.contains("postgresql") || evidence.contains("pg_query")) dbHints.add("PostgreSQL")
-                if (evidence.contains("mssql") || evidence.contains("sql server")) dbHints.add("MSSQL")
-                if (evidence.contains("oracle") || evidence.contains("ora-")) dbHints.add("Oracle")
-                if (evidence.contains("sqlite")) dbHints.add("SQLite")
-                if (dbHints.isNotEmpty()) ScanKnowledgeBase.recordTechStack(host, dbHints)
-                ScanKnowledgeBase.recordErrorPattern(host, confirmation.evidence.take(100))
-            }
+    // Shared by the synchronous scan path and the async OOB poller: record a confirmed finding
+    // (issue creation + adaptive-payload tech hints + audit).
+    private fun confirmFinding(confirmation: VulnConfirmation) {
+        vulnsConfirmed.incrementAndGet()
+        createConfirmedIssue(confirmation)
 
-            audit.logEvent(
-                "active_scan_confirmed",
-                mapOf(
-                    "vuln_class" to confirmation.target.vulnHint.vulnClass.name,
-                    "url" to
+        // Record error patterns as tech hints for adaptive payloads
+        val host =
+            runCatching {
+                java.net
+                    .URI(
                         confirmation.target.originalRequest
                             .request()
                             .url(),
-                    "payload" to confirmation.payload.value.take(100),
-                    "confidence" to confirmation.confidence.toString(),
-                ),
-            )
+                    ).host
+                    .orEmpty()
+            }.getOrDefault("")
+        if (host.isNotBlank()) {
+            val evidence = confirmation.evidence.lowercase()
+            val dbHints = mutableSetOf<String>()
+            if (evidence.contains("mysql") || evidence.contains("mariadb")) dbHints.add("MySQL")
+            if (evidence.contains("postgresql") || evidence.contains("pg_query")) dbHints.add("PostgreSQL")
+            if (evidence.contains("mssql") || evidence.contains("sql server")) dbHints.add("MSSQL")
+            if (evidence.contains("oracle") || evidence.contains("ora-")) dbHints.add("Oracle")
+            if (evidence.contains("sqlite")) dbHints.add("SQLite")
+            if (dbHints.isNotEmpty()) ScanKnowledgeBase.recordTechStack(host, dbHints)
+            ScanKnowledgeBase.recordErrorPattern(host, confirmation.evidence.take(100))
         }
+
+        audit.logEvent(
+            "active_scan_confirmed",
+            mapOf(
+                "vuln_class" to confirmation.target.vulnHint.vulnClass.name,
+                "url" to
+                    confirmation.target.originalRequest
+                        .request()
+                        .url(),
+                "payload" to confirmation.payload.value.take(100),
+                "confidence" to confirmation.confidence.toString(),
+            ),
+        )
     }
 
     private fun createConfirmedIssue(confirmation: VulnConfirmation) {
