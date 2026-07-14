@@ -684,7 +684,8 @@ internal fun Server.registerToolsLegacy(
             val response = item.response()?.toString().orEmpty()
             if (response.isBlank()) return@forEach
             val body = response.substringAfter("\r\n\r\n", "")
-            val matcher = compiledRegex.matcher(body)
+            val boundedBody = boundForRegexScan(body)
+            val matcher = compiledRegex.matcher(boundedBody)
             var count = 0
             while (matcher.find()) count++
             if (count > 0) {

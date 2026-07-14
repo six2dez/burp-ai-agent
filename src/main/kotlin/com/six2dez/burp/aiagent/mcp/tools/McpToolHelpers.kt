@@ -23,6 +23,14 @@ import javax.swing.JTextArea
 
 internal val toolJson = Json { encodeDefaults = true }
 
+// Upper bound (~64 KB) on the response-body slice fed to a user-supplied regex in the
+// response_body_search MCP tools. Caps worst-case matching cost (ReDoS) on large bodies.
+internal const val MAX_REGEX_SCAN_CHARS = 64 * 1024
+
+// Bounds a response body to MAX_REGEX_SCAN_CHARS before it is matched against a user-supplied
+// regex, so a catastrophic pattern on a large body cannot stall local processing.
+internal fun boundForRegexScan(body: String): String = if (body.length > MAX_REGEX_SCAN_CHARS) body.substring(0, MAX_REGEX_SCAN_CHARS) else body
+
 internal fun executeIssueCreate(
     input: CreateAuditIssue,
     api: MontoyaApi,
