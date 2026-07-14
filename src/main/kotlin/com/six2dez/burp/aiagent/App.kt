@@ -158,6 +158,10 @@ object App {
             },
         )
 
+        // Prime the BountyPrompt definition cache off-thread so the first right-click doesn't parse
+        // the prompt directory on the EDT (BApp #231, finding 2).
+        UiActions.refreshBountyPromptCache(settings)
+
         // Register AI ScanCheck with Burp Scanner (Burp Pro only - Option A)
         // This integrates with Burp's native active scanner
         try {

@@ -456,6 +456,8 @@ internal fun SettingsPanel.parseContentTypePrefixesInput(
 internal fun SettingsPanel.applyAndSaveSettings(updated: AgentSettings) {
     settings = updated
     settingsRepo.save(updated)
+    // Re-prime the BountyPrompt cache off-thread so menu builds never touch disk (BApp #231, finding 2).
+    UiActions.refreshBountyPromptCache(updated)
     AgentProfileLoader.setActiveProfile(updated.agentProfile)
     backends.reload()
     supervisor.applySettings(updated)
