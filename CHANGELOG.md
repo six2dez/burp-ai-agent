@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-07-15
+
+### Fixed
+
+- **BApp Store code-review remediation ([extension-portal#231](https://github.com/PortSwigger/extension-portal/issues/231))** — addressed every finding from PortSwigger's automated code reviewer ahead of resubmission:
+  - **Active scan check on the modern API**: `AiScanCheck` now implements `ActiveScanCheck` (`doCheck` + `checkName`) and registers via `registerActiveScanCheck(..., PER_INSERTION_POINT)` instead of the deprecated `ScanCheck` / `registerScanCheck()`.
+  - **Context menu no longer blocks the UI thread**: right-clicking from the site-map tree no longer scans the entire site map on the EDT (the subtree expansion is deferred until an action runs), and BountyPrompt definitions are cached off-thread — primed at startup and re-primed on settings save — instead of listing the prompt directory and parsing JSON on every right-click.
+  - **Scanner threads no longer block**: the active-scan throttle sleeps only the remaining interval rather than the full delay on top of each request, and SSRF out-of-band confirmation is now asynchronous (a single shared Collaborator client plus one 60-second poller) instead of holding a scanner thread for up to 30 seconds per target.
+  - **Robustness**: the agent health monitor guards against uncaught exceptions so auto-restart can't silently stop; the `response_body_search` MCP tool caps user-supplied-regex input to 64 KB (ReDoS bound); and the active scanner's request-executor shutdown on extension unload was hardened.
+
 ## [0.9.0] - 2026-06-26
 
 ### Added
