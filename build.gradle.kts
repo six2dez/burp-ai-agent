@@ -25,8 +25,8 @@ dependencies {
     compileOnly("net.portswigger.burp.extensions:montoya-api:2026.2")
 
     // JSON
-    implementation("com.fasterxml.jackson.core:jackson-databind:2.22.0")
-    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.22.0")
+    implementation("com.fasterxml.jackson.core:jackson-databind:2.22.1")
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.22.1")
 
     // HTTP client (Ollama + webhooks)
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
