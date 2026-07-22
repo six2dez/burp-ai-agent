@@ -10,8 +10,9 @@ import org.junit.jupiter.api.Test
  * dropped into its interactive selection menu and the supervisor's 60-second wall-clock timeout
  * was the only way the call ever returned.
  *
- * The fix builds the argv with `--no-color --quiet -p <prompt>` (idempotent if the user already
- * supplied any of those flags via `BackendLaunchConfig.command`). These tests pin that contract.
+ * The fix builds the argv with `--no-color --silent -p <prompt>` and strips legacy `--quiet`
+ * from extras, because newer Copilot CLI versions no longer support `--quiet`.
+ * These tests pin that contract.
  *
  * Visibility note (per PLAN.md `output` block): `buildCopilotCommand` was extracted from the
  * private inner class `NonInteractiveCliConnection` to a top-level `internal fun` in the same
@@ -19,22 +20,22 @@ import org.junit.jupiter.api.Test
  */
 class CopilotCommandBuilderTest {
     @Test
-    fun bareCopilotCommandGetsNoColorQuietAndPromptFlag() {
+    fun bareCopilotCommandGetsNoColorSilentAndPromptFlag() {
         val argv = buildCopilotCommand(listOf("copilot"), "analyze this")
         assertEquals(
-            listOf("copilot", "--no-color", "--quiet", "-p", "analyze this"),
+            listOf("copilot", "--no-color", "--silent", "-p", "analyze this"),
             argv,
         )
     }
 
     @Test
-    fun noColorAndQuietAppearBeforeDashP() {
+    fun noColorAndSilentAppearBeforeDashP() {
         val argv = buildCopilotCommand(listOf("copilot"), "analyze this")
         val pIndex = argv.indexOf("-p")
         val noColorIndex = argv.indexOf("--no-color")
-        val quietIndex = argv.indexOf("--quiet")
+        val silentIndex = argv.indexOf("--silent")
         assertTrue(noColorIndex in 0 until pIndex, "--no-color must precede -p in $argv")
-        assertTrue(quietIndex in 0 until pIndex, "--quiet must precede -p in $argv")
+        assertTrue(silentIndex in 0 until pIndex, "--silent must precede -p in $argv")
     }
 
     @Test
@@ -44,15 +45,28 @@ class CopilotCommandBuilderTest {
     }
 
     @Test
-    fun userSuppliedQuietIsNotDuplicated() {
+    fun userSuppliedLegacyQuietIsRemoved() {
         val argv = buildCopilotCommand(listOf("copilot", "--quiet"), "x")
-        assertEquals(1, argv.count { it == "--quiet" }, "no duplicate --quiet in $argv")
+        assertFalse(argv.contains("--quiet"), "legacy --quiet must be stripped from $argv")
     }
 
     @Test
     fun userSuppliedNoColorIsNotDuplicated() {
         val argv = buildCopilotCommand(listOf("copilot", "--no-color"), "x")
         assertEquals(1, argv.count { it == "--no-color" }, "no duplicate --no-color in $argv")
+    }
+
+    @Test
+    fun userSuppliedSilentIsNotDuplicated() {
+        val argv = buildCopilotCommand(listOf("copilot", "--silent"), "x")
+        assertEquals(1, argv.count { it == "--silent" }, "no duplicate --silent in $argv")
+    }
+
+    @Test
+    fun userSuppliedShortSilentIsNotDuplicated() {
+        val argv = buildCopilotCommand(listOf("copilot", "-s"), "x")
+        assertEquals(1, argv.count { it == "-s" }, "no duplicate -s in $argv")
+        assertEquals(0, argv.count { it == "--silent" }, "must not auto-add --silent when -s already exists in $argv")
     }
 
     @Test

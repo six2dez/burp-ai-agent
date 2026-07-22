@@ -864,10 +864,11 @@ internal fun buildTimeoutMessage(
  *
  * Guarantees:
  *  - argv[0] is `base` (the user-supplied executable, defaults to `copilot`).
- *  - `--no-color` and `--quiet` appear BEFORE any auto-injected `-p <prompt>`.
+ *  - `--no-color` and `--silent` appear BEFORE any auto-injected `-p <prompt>`.
  *  - The prompt is appended as `-p <prompt>` only when the user did not already supply `-p` or
  *    `--prompt` in their `extras`; in that case the helper does NOT add a second prompt flag.
- *  - User-supplied `--no-color` and `--quiet` are NOT duplicated (each appears at most once).
+ *  - Legacy `--quiet` is stripped from extras to avoid passing an unsupported Copilot CLI flag.
+ *  - User-supplied `--no-color` and `--silent`/`-s` are NOT duplicated.
  *  - User-supplied extras flow through in their original relative order, after the auto-injected
  *    flags and before the auto-injected `-p` value.
  *
@@ -879,11 +880,11 @@ internal fun buildCopilotCommand(
     prompt: String,
 ): List<String> {
     val base = cmd.firstOrNull() ?: "copilot"
-    val extras = cmd.drop(1)
+    val extras = cmd.drop(1).filterNot { it == "--quiet" }
     val args = mutableListOf<String>()
     args.add(base)
     if (!extras.contains("--no-color")) args.add("--no-color")
-    if (!extras.contains("--quiet")) args.add("--quiet")
+    if (!extras.contains("--silent") && !extras.contains("-s")) args.add("--silent")
     args.addAll(extras)
     if (!extras.contains("-p") && !extras.contains("--prompt")) {
         args.add("-p")
