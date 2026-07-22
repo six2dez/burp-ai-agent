@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Fixed
+
+- **Copilot CLI backend**: removed automatic `--quiet` injection from Copilot command building (and strips legacy `--quiet` from saved Copilot extras) because current Copilot CLI versions no longer support that flag. To preserve clean non-interactive output, the backend now uses supported `--silent` by default.
+
 ## [0.9.1] - 2026-07-15
 
 ### Fixed
