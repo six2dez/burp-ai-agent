@@ -8,7 +8,7 @@ plugins {
     kotlin("plugin.serialization") version "2.1.21"
     id("com.github.johnrengelman.shadow") version "8.1.1"
     id("org.jlleitschuh.gradle.ktlint") version "12.1.1"
-    id("org.cyclonedx.bom") version "1.10.0"
+    id("org.cyclonedx.bom") version "3.3.0"
     id("io.gitlab.arturbosch.detekt") version "1.23.8"
     jacoco
 }
