@@ -25,7 +25,7 @@ class PerplexityBackendFactory : AiBackendFactory {
             headersSelector = { it.perplexityHeaders },
             timeoutSelector = { it.perplexityTimeoutSeconds },
             streaming = true,
-            defaultHeaders = mapOf("Accept" to "text/event-stream"),
+            defaultHeaders = mapOf("Accept" to "text/event-stream", INTEGRATION_HEADER to INTEGRATION_SLUG),
             healthCheckProvider = ::perplexityHealthCheck,
             // Perplexity's chat-completions endpoint is at the root, no /v1 prefix.
             chatCompletionsBasePath = "/chat/completions",
@@ -37,6 +37,10 @@ class PerplexityBackendFactory : AiBackendFactory {
     companion object {
         const val DEFAULT_BASE_URL: String = "https://api.perplexity.ai"
 
+        // Identifies requests made through this extension to Perplexity.
+        const val INTEGRATION_HEADER: String = "X-Pplx-Integration"
+        const val INTEGRATION_SLUG: String = "burp-ai-agent"
+
         private val mapper = ObjectMapper().registerKotlinModule()
 
         private fun perplexityHealthCheck(settings: AgentSettings): HealthCheckResult {
@@ -47,7 +51,7 @@ class PerplexityBackendFactory : AiBackendFactory {
             }
 
             val headers =
-                withDefaultAcceptHeader(
+                withDefaultHeaders(
                     HeaderParser.withBearerToken(
                         settings.perplexityApiKey,
                         HeaderParser.parse(settings.perplexityHeaders),
@@ -95,11 +99,14 @@ class PerplexityBackendFactory : AiBackendFactory {
             return "$trimmed/chat/completions"
         }
 
-        private fun withDefaultAcceptHeader(headers: Map<String, String>): Map<String, String> {
+        private fun withDefaultHeaders(headers: Map<String, String>): Map<String, String> {
             val merged = LinkedHashMap<String, String>()
             merged.putAll(headers)
             if (merged.keys.none { it.equals("accept", ignoreCase = true) }) {
                 merged["Accept"] = "text/event-stream"
+            }
+            if (merged.keys.none { it.equals(INTEGRATION_HEADER, ignoreCase = true) }) {
+                merged[INTEGRATION_HEADER] = INTEGRATION_SLUG
             }
             return merged
         }

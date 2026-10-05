@@ -373,7 +373,8 @@ class OpenAiCompatibleBackend(
         ): Map<String, String> {
             if (defaults.isEmpty()) return overrides
             val merged = LinkedHashMap<String, String>()
-            merged.putAll(defaults)
+            // Caller-provided headers win, matching names case-insensitively so none are duplicated.
+            merged.putAll(defaults.filterKeys { name -> overrides.keys.none { it.equals(name, ignoreCase = true) } })
             merged.putAll(overrides)
             return merged
         }

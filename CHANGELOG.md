@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Changed
+
+- Perplexity requests now send an `X-Pplx-Integration: burp-ai-agent` header so Perplexity can identify
+  traffic from this extension. A header with the same name set in the Perplexity custom headers
+  setting takes precedence.
+
 ## [1.0.0] - 2026-08-22
 
 First stable release. The whole line is a security-correctness milestone: an external review of

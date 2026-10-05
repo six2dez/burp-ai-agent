@@ -220,6 +220,47 @@ class PerplexityBackendFactoryTest {
         assertEquals("POST", recorded.method)
     }
 
+    @Test
+    fun sendsIntegrationHeaderUnlessCallerOverridesIt() {
+        server.enqueue(nonStreamingJsonResponse())
+        server.enqueue(nonStreamingJsonResponse())
+        val baseUrl = server.url("/").toString().trimEnd('/')
+
+        sendHello(baseUrl, mapOf("Authorization" to "Bearer pplx-test"))
+        val defaultRequest = server.takeRequest(1, TimeUnit.SECONDS) ?: error("no request")
+        assertEquals("burp-ai-agent", defaultRequest.getHeader("X-Pplx-Integration"))
+
+        sendHello(baseUrl, mapOf("Authorization" to "Bearer pplx-test", "x-pplx-integration" to "custom"))
+        val overriddenRequest = server.takeRequest(1, TimeUnit.SECONDS) ?: error("no request")
+        assertEquals(listOf("custom"), overriddenRequest.headers.values("X-Pplx-Integration"))
+    }
+
+    private fun sendHello(
+        baseUrl: String,
+        headers: Map<String, String>,
+    ) {
+        val connection =
+            PerplexityBackendFactory().create().launch(
+                BackendLaunchConfig(
+                    backendId = "perplexity",
+                    displayName = "Perplexity",
+                    baseUrl = baseUrl,
+                    model = "sonar",
+                    headers = headers,
+                    requestTimeoutSeconds = 30L,
+                    transport = mockWebServerProxyTransport(),
+                ),
+            )
+        val done = CountDownLatch(1)
+        connection.send(
+            text = "hello",
+            onChunk = {},
+            onComplete = { done.countDown() },
+            jsonMode = false,
+        )
+        assertTrue(done.await(5, TimeUnit.SECONDS))
+    }
+
     /**
      * Non-streaming JSON response — production code (transport != null) parses the body as a
      * single JSON document. The pre-BUG-69-01 OkHttp branch handled SSE; that branch is now
