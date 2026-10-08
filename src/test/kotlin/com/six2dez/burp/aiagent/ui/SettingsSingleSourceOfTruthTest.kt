@@ -17,9 +17,11 @@ import com.six2dez.burp.aiagent.supervisor.AgentSupervisor
 import com.six2dez.burp.aiagent.ui.components.PrivacyPill
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import org.junit.jupiter.api.assertTimeoutPreemptively
 import org.mockito.Answers
 import org.mockito.kotlin.any
 import org.mockito.kotlin.clearInvocations
@@ -29,8 +31,15 @@ import org.mockito.kotlin.never
 import org.mockito.kotlin.spy
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
+import java.awt.Container
+import java.awt.event.ActionEvent
 import java.io.File
+import java.lang.reflect.InvocationTargetException
+import java.time.Duration
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import javax.swing.JLabel
 import javax.swing.SwingUtilities
 
 /**
@@ -226,9 +235,164 @@ class SettingsSingleSourceOfTruthTest {
         assertEquals(applied, repo.load(), "A chat send must leave the applied snapshot untouched.")
     }
 
+    /**
+     * MARKER — the Unsaved changes label follows on-screen edits (an edit shows it, reverting hides it)
+     * and clears once Save settings has applied the on-screen values.
+     */
+    @Test
+    fun theUnsavedMarkerFollowsOnScreenEditsAndClearsOnSave() {
+        val f = markerFixture()
+        var original: Any? = null
+        onEdt {
+            original = f.panel.privacyMode.selectedItem
+            assertMarker(f.panel, false, "A fresh panel has no unsaved changes.")
+            f.panel.privacyMode.selectedItem = PrivacyMode.OFF
+            assertMarker(f.panel, true, "An on-screen edit must show the marker.")
+            f.panel.privacyMode.selectedItem = original
+            assertMarker(f.panel, false, "Reverting the edit must hide the marker.")
+            f.panel.privacyMode.selectedItem = PrivacyMode.OFF
+            assertMarker(f.panel, true, "A second edit must show the marker again.")
+        }
+
+        saveAndSettle { f.panel.saveSettings() }
+
+        onEdt { assertFalse(f.panel.unsavedChangesLabel.isVisible, "Save settings must clear the marker.") }
+        assertEquals(PrivacyMode.OFF, f.repo.load().privacyMode, "The edit must be the applied snapshot.")
+    }
+
+    /** MARKER — an edit made while a save is in flight was not saved, so it stays marked. */
+    @Test
+    fun anEditMadeDuringTheSaveFlightStaysMarkedUnsaved() {
+        val f = markerFixture()
+        val workerEntered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        whenever(f.supervisor.applySettings(any())).thenAnswer {
+            workerEntered.countDown()
+            release.await(FAILSAFE_SECONDS, TimeUnit.SECONDS)
+            null
+        }
+        val settle =
+            dispatchSave {
+                f.panel.privacyMode.selectedItem = PrivacyMode.OFF
+                f.panel.saveSettings()
+            }
+        assertTrue(workerEntered.await(FAILSAFE_SECONDS, TimeUnit.SECONDS), "The save never reached the worker.")
+        onEdt { f.panel.privacyMode.selectedItem = PrivacyMode.STRICT }
+        release.countDown()
+        settle()
+
+        onEdt { assertTrue(f.panel.unsavedChangesLabel.isVisible, "STRICT is on screen but OFF was saved.") }
+        assertEquals(PrivacyMode.OFF, f.repo.load().privacyMode, "The flight saved its dispatch-time snapshot.")
+    }
+
+    /** MARKER — Restore defaults applies what it puts on screen, so it leaves no unsaved marker. */
+    @Test
+    fun restoreDefaultsLeavesNoUnsavedMarker() {
+        val f = markerFixture()
+        onEdt {
+            f.panel.privacyMode.selectedItem = PrivacyMode.OFF
+            assertMarker(f.panel, true, "Anti-vacuity: the edit must show the marker.")
+        }
+
+        saveAndSettle { f.panel.restoreDefaultsConfirmed() }
+
+        onEdt { assertFalse(f.panel.unsavedChangesLabel.isVisible, "Restore defaults must leave no marker.") }
+    }
+
+    /** MARKER / R1 — a header write persists the on-screen snapshot, so the marker clears once it is saved. */
+    @Test
+    fun aHeaderWriteClearsTheMarkerOnceItIsSaved() {
+        val f = markerFixture()
+        var snapshot: AgentSettings? = null
+        onEdt {
+            f.panel.passiveAiEnabled.isSelected = !f.panel.passiveAiEnabled.isSelected
+            snapshot = f.panel.currentSettings()
+            assertMarker(f.panel, true, "Anti-vacuity: the toggle must show the marker.")
+        }
+
+        // MainTab's persist-queue shape: the save runs on a background worker.
+        val saver = Thread { f.repo.save(snapshot!!) }
+        saver.start()
+        saver.join()
+        onEdt { }
+
+        onEdt { assertFalse(f.panel.unsavedChangesLabel.isVisible, "A saved header write must clear the marker.") }
+    }
+
+    /** MARKER — the label sits in the Settings button row and the existing 2 s status timer refreshes it. */
+    @Test
+    fun theMarkerSitsInTheSettingsButtonRowAndTheRefreshTimerDrivesIt() {
+        val f = markerFixture()
+        onEdt {
+            val tabs = BottomTabsPanel(f.panel, null)
+            val found =
+                ChatPanelTestHarness.find(tabs.root as Container, JLabel::class.java) {
+                    it === f.panel.unsavedChangesLabel
+                }
+            assertTrue(found != null, "The Unsaved changes label must sit in the Settings button row.")
+            f.panel.privacyMode.selectedItem = PrivacyMode.OFF
+            val timer = requireNotNull(f.panel.statusRefreshTimer) { "The status refresh timer is missing." }
+            timer.actionListeners.forEach { it.actionPerformed(ActionEvent(timer, ActionEvent.ACTION_PERFORMED, null)) }
+            assertTrue(f.panel.unsavedChangesLabel.isVisible, "The status refresh tick must refresh the marker.")
+        }
+    }
+
     // ---------------------------------------------------------------------------------------------
     // Fixture
     // ---------------------------------------------------------------------------------------------
+
+    private class MarkerFixture(
+        val panel: SettingsPanel,
+        val repo: AgentSettingsRepository,
+        val supervisor: AgentSupervisor,
+    )
+
+    private fun markerFixture(): MarkerFixture {
+        val api = newApi()
+        val repo = AgentSettingsRepository(api)
+        val supervisor: AgentSupervisor = mock(defaultAnswer = Answers.RETURNS_DEEP_STUBS)
+        val panel = newPanel(api, repo, supervisor, mock(defaultAnswer = Answers.RETURNS_DEEP_STUBS))
+        return MarkerFixture(panel, repo, supervisor)
+    }
+
+    /** Runs [block] on the EDT and rethrows its own failure rather than the invocation wrapper. */
+    private fun onEdt(block: () -> Unit) {
+        try {
+            SwingUtilities.invokeAndWait(block)
+        } catch (wrapped: InvocationTargetException) {
+            throw wrapped.cause ?: wrapped
+        }
+    }
+
+    /** EDT only: refreshes the marker and asserts its visibility. */
+    private fun assertMarker(
+        panel: SettingsPanel,
+        visible: Boolean,
+        message: String,
+    ) {
+        panel.refreshUnsavedMarker()
+        assertEquals(visible, panel.unsavedChangesLabel.isVisible, message)
+    }
+
+    /**
+     * Runs [dispatch] on the EDT and returns a function that waits for that save to settle, then drains
+     * the EDT once. The wait is a deadlock failsafe inside [assertTimeoutPreemptively], never a duration
+     * assertion.
+     */
+    private fun dispatchSave(dispatch: () -> Unit): () -> Unit {
+        val settled = CountDownLatch(1)
+        OffEdtDispatch.registerSettledObserver { settled.countDown() }
+        onEdt(dispatch)
+        return {
+            assertTimeoutPreemptively(Duration.ofSeconds(FAILSAFE_SECONDS)) {
+                assertTrue(settled.await(FAILSAFE_SECONDS, TimeUnit.SECONDS), "The save never settled.")
+            }
+            onEdt { }
+        }
+    }
+
+    /** [dispatchSave], then wait for it to settle. */
+    private fun saveAndSettle(dispatch: () -> Unit) = dispatchSave(dispatch)()
 
     private fun newApi(): MontoyaApi {
         // Built BEFORE the whenever() below, or Mockito reports UnfinishedStubbingException.
@@ -298,5 +462,6 @@ class SettingsSingleSourceOfTruthTest {
         const val MAIN_SOURCE_ROOT = "src/main/kotlin"
         const val SEND_CHAT_BACKEND_INDEX = 1
         const val SEND_CHAT_PRIVACY_INDEX = 5
+        const val FAILSAFE_SECONDS = 20L
     }
 }

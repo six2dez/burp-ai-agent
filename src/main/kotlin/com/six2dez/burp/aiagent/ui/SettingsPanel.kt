@@ -526,6 +526,14 @@ class SettingsPanel(
             10,
         )
 
+    /** Declaration only (quick 261008-n0c RED): never shown yet. */
+    internal val unsavedChangesLabel = JLabel("Unsaved changes").apply { isVisible = false }
+
+    /** Declaration only (quick 261008-n0c RED): refreshes nothing yet. */
+    internal fun refreshUnsavedMarker() {
+        // Intentionally empty until the GREEN commit.
+    }
+
     init {
         initUiWiring()
     }
