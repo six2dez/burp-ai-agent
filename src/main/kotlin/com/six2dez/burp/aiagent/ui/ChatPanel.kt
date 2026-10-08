@@ -389,7 +389,7 @@ class ChatPanel(
         onCompleted: ((String, Throwable?) -> Unit)? = null,
     ) {
         updatePrivacyPill()
-        val prompt = spec.promptText.trim().ifBlank { "Analyze the provided context." }
+        val prompt = launchPrompt(spec)
         if (!ContextPreviewDialog.confirm(
                 parent = root,
                 privacyMode = getSettings().privacyMode,
@@ -404,6 +404,28 @@ class ChatPanel(
             onCompleted?.invoke("", InterruptedException("Context preview cancelled by user"))
             return
         }
+        startConfirmedSessionFromContext(capture, spec, onCompleted)
+    }
+
+    /** The prompt a context launch sends: the spec's text, or the default when it is blank. */
+    private fun launchPrompt(spec: PromptLaunchSpec): String = spec.promptText.trim().ifBlank { "Analyze the provided context." }
+
+    /**
+     * Everything a context launch does once the user has confirmed the context preview.
+     *
+     * **Split from [startSessionFromContext] so this half is reachable without the modal.**
+     * `ContextPreviewDialog.confirm` builds a `JDialog`, which throws `HeadlessException` under
+     * `-Djava.awt.headless=true`, so a headless test driving [startSessionFromContext] never reaches the
+     * session it creates or the send it starts. The dialog is not removed and nothing a user can observe
+     * changes: the dialog is the user clicking Send, and this is what that click does. EDT-confined like
+     * its caller; `internal` (module-scoped) for the same reason [clearChatState] is.
+     */
+    internal fun startConfirmedSessionFromContext(
+        capture: ContextCapture,
+        spec: PromptLaunchSpec,
+        onCompleted: ((String, Throwable?) -> Unit)? = null,
+    ) {
+        val prompt = launchPrompt(spec)
         val uri = extractUriFromContext(capture)
         val baseTitle = spec.customPromptTitle ?: spec.actionName
         val title = if (uri.isNullOrBlank()) baseTitle else "$baseTitle: $uri"
