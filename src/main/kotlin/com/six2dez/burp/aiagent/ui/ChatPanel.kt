@@ -112,8 +112,11 @@ internal class RunningToolTracker {
 class ChatPanel(
     private val api: MontoyaApi,
     private val supervisor: AgentSupervisor,
+    /**
+     * The applied settings snapshot (`AgentSettingsRepository.load()`). ChatPanel never saves or applies
+     * settings (quick 261008-n0c, H10).
+     */
     private val getSettings: () -> AgentSettings,
-    private val applySettings: (AgentSettings) -> Unit,
     private val validateBackend: (AgentSettings) -> String?,
     private val ensureBackendReady: (AgentSettings) -> Boolean,
     private val showError: (String) -> Unit,
@@ -601,7 +604,6 @@ class ChatPanel(
             return
         }
 
-        applySettings(settings)
         setSendingState(true)
         val session = sessionsById[sessionId]
         val backendId = settings.preferredBackendId

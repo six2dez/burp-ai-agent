@@ -25,9 +25,11 @@ import kotlin.concurrent.withLock
  * [applyIfCurrent] runs each apply body to completion under one [ReentrantLock], so two writes
  * submitted through this queue cannot interleave.
  *
- * **Scope of that claim, stated honestly.** It covers writes submitted THROUGH this queue. `MainTab`
- * still calls `settingsRepo.save` on the EDT from the `applySettings` lambda it hands `ChatPanel`,
- * outside this lock — recorded as residual `D-23-06-1` and threat `T-23-06-08`, not silently absorbed.
+ * **Scope of that claim, stated honestly.** It covers writes submitted THROUGH this queue. No settings
+ * write runs on the EDT any more: the chat stopped saving settings on every send in quick 261008-n0c.
+ * The Settings tab's Save and Restore defaults run on their own `burp-ai-settings-save` worker,
+ * outside this lock; D-10 stops two of those overlapping, but not one of those and a header write
+ * submitted here, so those two can still interleave inside `save()`.
  *
  * **Ordering.** [submit] mints its generation on the CALLING thread as its first statement, so
  * submission order is click order rather than thread-start order — the same placement rule, and the

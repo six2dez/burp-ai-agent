@@ -133,19 +133,8 @@ class MainTab(
             ChatPanel(
                 api = api,
                 supervisor = supervisor,
-                getSettings = { settingsPanel.currentSettings() },
-                applySettings = { settings ->
-                    settingsRepo.save(settings)
-                    aiRequestLogger?.enabled = settings.aiRequestLoggerEnabled
-                    aiRequestLogger?.maxEntries = settings.aiRequestLoggerMaxEntries
-                    supervisor.applySettings(settings)
-                    mcpSupervisor.applySettings(
-                        settings.mcpSettings,
-                        settings.privacyMode,
-                        settings.determinismMode,
-                        settings.toPreprocessorSettings(),
-                    )
-                },
+                // Quick 261008-n0c (H10): the chat reads the applied snapshot and never saves or applies.
+                getSettings = { settingsRepo.load() },
                 validateBackend = { validateBackendCommand(it) },
                 ensureBackendReady = { ensureBackendReady(it) },
                 showError = { showError(it) },
@@ -594,7 +583,7 @@ class MainTab(
      * ahead of its callers would fail that task's own static-analysis gate with no sanctioned exit.
      *
      * **Mention ledger (structural gate).** `everyMainTabSettingsWriteGoesThroughThePersistQueue` reads
-     * this file from disk, strips comment lines — block comments included, which is why these four
+     * this file from disk, strips comment lines — block comments included, which is why these six
      * tokens can be named here at all — and asserts these counts as EQUALITIES. An eighth write site,
      * or a seventh regressing to an inline save, moves a count and turns that test red. Update this
      * ledger deliberately; do not relax the assertions to `>=`.
@@ -603,8 +592,10 @@ class MainTab(
      * |---|---|---|
      * | `persistSettings(` | 6 | 1 declaration + 5 call sites (backend picker, passive/active host callbacks, passive/active header toggles) |
      * | `persistSettingsAndApplyMcp(` | 3 | 1 declaration + 2 call sites (the MCP host callback and the header mcpToggle) |
-     * | `settingsRepo.save(` | 3 | 1 in each helper's apply lambda + 1 in the ChatPanel `applySettings` lambda, the residual recorded as D-23-06-1 |
-     * | `mcpSupervisor.applySettings(` | 2 | 1 in the MCP-applying helper + 1 in that same ChatPanel lambda |
+     * | `settingsRepo.save(` | 2 | 1 in each persist helper's apply lambda |
+     * | `mcpSupervisor.applySettings(` | 1 | persistSettingsAndApplyMcp only |
+     * | `supervisor.applySettings(` | 0 | App's repository listener (`mirrorAppliedSettingsInto`) owns that |
+     * | `getSettings = { settingsRepo.load() }` | 1 | the ChatPanel construction: the chat reads the applied snapshot |
      */
     private fun persistSettings(
         label: String,
@@ -627,11 +618,10 @@ class MainTab(
      * instead of by the Burp UI. [renderStatus] runs from the queue's EDT tail, so the badge reports
      * the state AFTER the apply rather than before it.
      *
-     * **Why this phase ends with TWO persist helpers rather than one flag-taking helper.** Five of the
-     * eight `settingsRepo.save` sites in this file do not apply MCP settings at all: the two that do
-     * are the MCP-enabled host callback and the header `mcpToggle`; the other five are the backend
-     * picker, the passive and active host callbacks and the passive and active header toggles (the
-     * eighth, in the `ChatPanel` `applySettings` lambda in `init`, is recorded residual `D-23-06-1`).
+     * **Why this phase ends with TWO persist helpers rather than one flag-taking helper.** This file has
+     * seven settings writes; two apply MCP, five do not. The two that do are the MCP-enabled host
+     * callback and the header `mcpToggle`; the other five are the backend picker, the passive and active
+     * host callbacks and the passive and active header toggles.
      * `McpSupervisor.stop()` also clears `ScannerTaskRegistry` and `CollaboratorRegistry`, so applying
      * MCP settings on every passive/active toggle would drop live scanner tasks — a behaviour change,
      * not a harmless no-op (`T-23-06-07`). Two narrow helpers keep that impossible by construction.
@@ -735,7 +725,10 @@ class MainTab(
     }
 
     private fun updateSafetySummary() {
-        val settings = settingsPanel.currentSettings()
+        // Quick 261008-n0c: the header indicator states what is in effect, the same rule as the chat
+        // pill. Reading the applied snapshot also means this 1 Hz tick no longer re-runs every custom
+        // pattern's SafeRegex probe on the EDT.
+        val settings = settingsRepo.load()
         val privacy = settings.privacyMode.name
         val mcpExposure =
             when {

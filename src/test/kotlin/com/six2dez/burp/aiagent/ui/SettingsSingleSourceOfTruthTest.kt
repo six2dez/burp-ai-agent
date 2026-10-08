@@ -6,7 +6,6 @@ import com.six2dez.burp.aiagent.audit.AuditLogger
 import com.six2dez.burp.aiagent.backends.BackendRegistry
 import com.six2dez.burp.aiagent.config.AgentSettings
 import com.six2dez.burp.aiagent.config.AgentSettingsRepository
-import com.six2dez.burp.aiagent.config.toPreprocessorSettings
 import com.six2dez.burp.aiagent.mcp.McpSupervisor
 import com.six2dez.burp.aiagent.mirrorAppliedSettingsInto
 import com.six2dez.burp.aiagent.redact.PrivacyMode
@@ -205,17 +204,8 @@ class SettingsSingleSourceOfTruthTest {
         }
         clearInvocations(repo, appSupervisor, mcpSupervisor)
 
-        // ---- MainTab composition (RED: today's MainTab.kt ChatPanel lambdas) ----
-        val h =
-            ChatPanelTestHarness.create(
-                "ok",
-                getSettings = { panel.currentSettings() },
-                applySettings = { s ->
-                    repo.save(s)
-                    appSupervisor.applySettings(s)
-                    mcpSupervisor.applySettings(s.mcpSettings, s.privacyMode, s.determinismMode, s.toPreprocessorSettings())
-                },
-            )
+        // ---- MainTab composition (MainTab.kt: `getSettings = { settingsRepo.load() }`, no apply hook) ----
+        val h = ChatPanelTestHarness.create("ok", getSettings = { repo.load() })
         // ---- end of MainTab composition ----
 
         ChatPanelTestHarness.sendUserMessage(h, "hello")
