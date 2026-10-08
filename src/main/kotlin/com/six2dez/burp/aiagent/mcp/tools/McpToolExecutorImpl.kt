@@ -211,7 +211,8 @@ object McpToolExecutor {
                                 )
                             McpScopeFilter.rejectIfOutOfScope(scopeUrl, context)?.let { return@runTool it }
                             val request = HttpRequest.httpRequest(input.toMontoyaService(context::resolveHost), fixedContent)
-                            val response = api.http().sendRequest(request, RequestOptions.requestOptions().withUpstreamTLSVerification())
+                            // Target traffic follows Burp's own TLS settings so self-signed targets work; only the AI-provider transport requires verification.
+                            val response = api.http().sendRequest(request, RequestOptions.requestOptions())
                             response?.toString() ?: "<no response>"
                         }
                         "http2_request" -> {
@@ -256,10 +257,11 @@ object McpToolExecutor {
                                     headerList,
                                     input.requestBody,
                                 )
+                            // Target traffic follows Burp's own TLS settings so self-signed targets work; only the AI-provider transport requires verification.
                             val response =
                                 api.http().sendRequest(
                                     request,
-                                    RequestOptions.requestOptions().withUpstreamTLSVerification().withHttpMode(HttpMode.HTTP_2),
+                                    RequestOptions.requestOptions().withHttpMode(HttpMode.HTTP_2),
                                 )
                             response?.toString() ?: "<no response>"
                         }

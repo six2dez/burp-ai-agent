@@ -2,7 +2,6 @@ package com.six2dez.burp.aiagent.scanner
 
 import burp.api.montoya.MontoyaApi
 import burp.api.montoya.http.Http
-import burp.api.montoya.http.RequestOptions
 import burp.api.montoya.http.message.HttpRequestResponse
 import burp.api.montoya.scanner.AuditResult
 import burp.api.montoya.scanner.ConsolidationAction
@@ -262,7 +261,7 @@ class AiScanCheck(
         val baselineTime =
             if (payload.detectionMethod == DetectionMethod.BLIND_TIME) {
                 val start = System.currentTimeMillis()
-                api.http().sendRequest(baseRequestResponse.request(), RequestOptions.requestOptions().withUpstreamTLSVerification())
+                api.http().sendRequest(baseRequestResponse.request())
                 System.currentTimeMillis() - start
             } else {
                 0L
@@ -270,7 +269,7 @@ class AiScanCheck(
 
         // Send attack request
         val startTime = System.currentTimeMillis()
-        val attackResponse = api.http().sendRequest(attackRequest, RequestOptions.requestOptions().withUpstreamTLSVerification())
+        val attackResponse = api.http().sendRequest(attackRequest)
         val responseTime = System.currentTimeMillis() - startTime
 
         val attackRequestResponse = HttpRequestResponse.httpRequestResponse(attackRequest, attackResponse.response())

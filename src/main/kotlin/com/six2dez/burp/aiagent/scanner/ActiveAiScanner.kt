@@ -2,7 +2,6 @@ package com.six2dez.burp.aiagent.scanner
 
 import burp.api.montoya.MontoyaApi
 import burp.api.montoya.collaborator.CollaboratorClient
-import burp.api.montoya.http.RequestOptions
 import burp.api.montoya.http.message.HttpRequestResponse
 import burp.api.montoya.http.message.requests.HttpRequest
 import burp.api.montoya.scanner.audit.issues.AuditIssue
@@ -1138,8 +1137,6 @@ class ActiveAiScanner(
         pendingOast.entries.removeIf { now - it.value.registeredAtMs > ttlMs }
     }
 
-    private val tlsRequestOptions by lazy { RequestOptions.requestOptions().withUpstreamTLSVerification() }
-
     private fun sendRequestWithTimeout(request: HttpRequest): HttpRequestResponse? {
         val timeout = timeoutSeconds.coerceAtLeast(5).toLong()
         // REL-07 / SC6: the submit lives INSIDE the try, and the handle is a nullable local so the
@@ -1152,7 +1149,7 @@ class ActiveAiScanner(
             future =
                 requestExecutor.submit(
                     Callable {
-                        api.http().sendRequest(request, tlsRequestOptions)
+                        api.http().sendRequest(request)
                     },
                 )
             future.get(timeout, TimeUnit.SECONDS)
