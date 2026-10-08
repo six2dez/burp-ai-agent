@@ -87,6 +87,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
   back to the startup one (possibly a cloud backend after a local one was picked), and the active
   scan check kept the startup risk level, scope and delay. They now read the last saved settings on
   every use.
+- **Audit logging wrote the MCP token, API credentials and full prompts to disk in clear** (shipped
+  in 1.0.0) - with audit logging on, every prompt record in `audit.jsonl` and `bundles/` carried the
+  MCP server token and custom header values such as `X-Custom-Auth` or `apikey`, and the prompt, the
+  captured context, every response chunk and provider error text were written in clear, contrary to
+  the documented hashes-only default. The files were created with the default umask (typically 0644
+  files and 0755 directories), so other local accounts could read them wherever the home directory
+  allows it, and the folders were created even with audit logging off. Records now keep only header
+  names and environment variable names, never their values, and the backend URL without credentials
+  or query; prompts, context, responses, error messages and active-scan payloads are recorded as a
+  SHA-256 and a byte length unless the new Verbose audit switch (next to Audit logging, off by
+  default) is on; scanner records keep target URLs without their query string; files are created
+  owner-only on macOS and Linux and older ones are tightened on the next write; nothing is created
+  until audit logging writes something; the Audit logging tooltip no longer claims that changes to
+  the log are detected. Files written by earlier versions are left as they are: if audit logging was
+  on, they may hold the MCP token and full prompts, so regenerate the MCP token and delete them if
+  needed.
 
 ## [1.0.0] - 2026-08-22
 
