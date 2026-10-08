@@ -1,5 +1,6 @@
 package com.six2dez.burp.aiagent.ui
 
+import burp.api.montoya.persistence.PersistedObject
 import com.six2dez.burp.aiagent.TestSettings
 import com.six2dez.burp.aiagent.backends.AgentConnection
 import com.six2dez.burp.aiagent.backends.ChatMessage
@@ -201,7 +202,131 @@ class ChatWireHistoryTest {
         assertEquals(listOf(ChatMessage("user", command)), f.sent[0].history)
     }
 
+    /**
+     * C — Q-261008-ph4-LATCH: a send the Cancel button cancelled is not delivered even when its backend
+     * still answers afterwards, so the next send carries the context and the catalog again.
+     */
+    @Test
+    fun aCancelledSendIsNotDeliveredEvenWhenItsResponseArrivesLate() {
+        val f = fixture(Outcome.Park, Outcome.Reply("Reply after retry."))
+        launch(f)
+        SwingUtilities.invokeAndWait { assertTrue(f.h.panel.cancelInFlightRequest(), "A send was in flight") }
+        fireParked(f, "Late reply.")
+        ChatPanelTestHarness.sendUserMessage(f.h, "retry please")
+        ChatPanelTestHarness.drainEdt()
+
+        val retry = f.sent[1]
+        assertTrue(retry.text.contains(CONTEXT_MARKER), "The cancelled send delivered nothing: ${retry.text}")
+        assertTrue(retry.text.contains(CATALOG_MARKER), "The cancelled send delivered no catalog: ${retry.text}")
+        assertEquals(CONTEXT_JSON, retry.contextJson)
+        assertEquals(listOf(ChatMessage("user", PROMPT)), retry.history, "The cancelled turn is history only as typed")
+    }
+
+    /**
+     * G — Q-261008-ph4-MEMORY: a send in flight while Clear Chat runs settles into the transcript it
+     * started with, so the cleared conversation's next send has an empty history and the full catalog.
+     */
+    @Test
+    fun aSendInFlightDuringClearChatCannotWriteIntoTheClearedConversation() {
+        val f = fixture(Outcome.Park, Outcome.Reply("Fresh reply."))
+        ChatPanelTestHarness.sendUserMessage(f.h, "first question")
+        SwingUtilities.invokeAndWait { f.h.panel.clearChatState() }
+        fireParked(f, "Stale reply.")
+        ChatPanelTestHarness.sendUserMessage(f.h, "fresh question")
+        ChatPanelTestHarness.drainEdt()
+
+        val fresh = f.sent[1]
+        assertTrue(fresh.history.isEmpty(), "The cleared conversation must start empty: ${fresh.history}")
+        assertTrue(fresh.text.contains(CATALOG_MARKER), "A cleared conversation needs the catalog again: ${fresh.text}")
+    }
+
+    /**
+     * F1 — Q-261008-ph4-MEMORY: saving sessions writes the display messages only, never a wire payload
+     * (the context JSON, the tool preamble or the catalog).
+     */
+    @Test
+    fun savingSessionsNeverWritesAWirePayload() {
+        val f = fixture(Outcome.Reply("Reply one."))
+        val stored = mutableMapOf<String, String>()
+        useInMemoryExtensionData(f, stored)
+        launch(f)
+        SwingUtilities.invokeAndWait { f.h.panel.saveSessions() }
+
+        assertTrue(stored.values.any { it.contains(PROMPT) }, "Anti-vacuity: the typed prompt was saved: $stored")
+        for (marker in listOf(CONTEXT_MARKER, PREAMBLE_MARKER, CATALOG_MARKER)) {
+            assertTrue(stored.values.none { it.contains(marker) }, "A saved value carries `$marker`: $stored")
+        }
+    }
+
+    /**
+     * F2 — Q-261008-ph4-MEMORY: a restored session sends its display text as history and never its
+     * original context; the catalog is sent again because no restored turn carries it.
+     */
+    @Test
+    fun aRestoredSessionSendsItsDisplayTextAndNeverItsOriginalContext() {
+        val stored = mutableMapOf<String, String>()
+        val before = fixture(Outcome.Reply("Reply one."))
+        useInMemoryExtensionData(before, stored)
+        launch(before)
+        SwingUtilities.invokeAndWait { before.h.panel.saveSessions() }
+
+        val after = fixture(Outcome.Reply("Reply two."))
+        useInMemoryExtensionData(after, stored)
+        SwingUtilities.invokeAndWait { after.h.panel.restoreSessions() }
+        ChatPanelTestHarness.sendUserMessage(after.h, "continue")
+        ChatPanelTestHarness.drainEdt()
+
+        val resumed = after.sent[0]
+        assertEquals(listOf(ChatMessage("user", PROMPT), ChatMessage("assistant", "Reply one.")), resumed.history)
+        assertFalse(resumed.text.contains(CONTEXT_MARKER), "The original context is never resent: ${resumed.text}")
+        assertNull(resumed.contextJson)
+        assertTrue(resumed.text.contains(CATALOG_MARKER), "No restored turn carries the catalog: ${resumed.text}")
+    }
+
     // ── Fixture ──────────────────────────────────────────────────────────────────────────────────
+
+    /** A backend that answers after the panel moved on: fires the parked callbacks from the test thread. */
+    private fun fireParked(
+        f: Fixture,
+        reply: String,
+    ) {
+        val onChunk = checkNotNull(f.parked.onChunk) { "No send was parked" }
+        val onComplete = checkNotNull(f.parked.onComplete) { "No send was parked" }
+        onChunk(reply)
+        onComplete(null)
+        ChatPanelTestHarness.drainEdt()
+    }
+
+    /**
+     * Points the panel's project store at [strings], an in-memory map (the answer shape of
+     * SettingsSingleSourceOfTruthTest's `inMemoryPreferences`). Two panels given the same map share it.
+     */
+    private fun useInMemoryExtensionData(
+        f: Fixture,
+        strings: MutableMap<String, String>,
+    ) {
+        val booleans = mutableMapOf<String, Boolean>()
+        val store = mock<PersistedObject>()
+        whenever(store.getString(any())).thenAnswer { strings[it.getArgument<String>(0)] }
+        whenever(store.setString(any(), any())).thenAnswer {
+            strings[it.getArgument<String>(0)] = it.getArgument(1)
+            null
+        }
+        whenever(store.deleteString(any())).thenAnswer {
+            strings.remove(it.getArgument<String>(0))
+            null
+        }
+        whenever(store.getBoolean(any())).thenAnswer { booleans[it.getArgument<String>(0)] }
+        whenever(store.setBoolean(any(), any())).thenAnswer {
+            booleans[it.getArgument<String>(0)] = it.getArgument(1)
+            null
+        }
+        whenever(
+            f.h.api
+                .persistence()
+                .extensionData(),
+        ).thenReturn(store)
+    }
 
     /** One captured `sendChat` call. */
     private data class SentChat(
