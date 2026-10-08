@@ -5,10 +5,8 @@ import com.six2dez.burp.aiagent.audit.AiRequestLogger
 import com.six2dez.burp.aiagent.audit.AuditLogger
 import com.six2dez.burp.aiagent.backends.BackendRegistry
 import com.six2dez.burp.aiagent.backends.HealthCheckResult
-import com.six2dez.burp.aiagent.config.AgentSettings
 import com.six2dez.burp.aiagent.config.AgentSettingsRepository
 import com.six2dez.burp.aiagent.config.Defaults
-import com.six2dez.burp.aiagent.config.toPreprocessorSettings
 import com.six2dez.burp.aiagent.context.ContextCapture
 import com.six2dez.burp.aiagent.mcp.McpSupervisor
 import com.six2dez.burp.aiagent.redact.PrivacyMode
@@ -181,7 +179,7 @@ class MainTab(
         backendPicker.addActionListener {
             val selected = backendPicker.selectedItem as? String ?: "codex-cli"
             settingsPanel.setPreferredBackend(selected)
-            persistSettings("backend-picker", settingsPanel.currentSettings())
+            persistSettings("backend-picker", HeaderSettingsChange.PreferredBackend(selected))
             requestHealthCheck(HealthCheckTrigger.SETTINGS_CHANGED)
         }
 
@@ -451,24 +449,21 @@ class MainTab(
             syncingToggles = true
             mcpToggle.isSelected = enabled
             syncingToggles = false
-            // The Swing read stays on the EDT; only the disk write and the bounded MCP stop move.
-            val settings = settingsPanel.currentSettings()
-            val updated = settings.copy(mcpSettings = settings.mcpSettings.copy(enabled = enabled))
-            persistSettingsAndApplyMcp("mcp-enabled-changed", updated)
+            persistSettingsAndApplyMcp("mcp-enabled-changed", HeaderSettingsChange.McpEnabled(enabled))
         }
         settingsPanel.onPassiveAiEnabledChanged = passiveSync@{ enabled ->
             if (syncingToggles) return@passiveSync
             syncingToggles = true
             passiveToggle.isSelected = enabled
             syncingToggles = false
-            persistSettings("passive-enabled-changed", settingsPanel.currentSettings())
+            persistSettings("passive-enabled-changed", HeaderSettingsChange.PassiveAiEnabled(enabled))
         }
         settingsPanel.onActiveAiEnabledChanged = activeSync@{ enabled ->
             if (syncingToggles) return@activeSync
             syncingToggles = true
             activeToggle.isSelected = enabled
             syncingToggles = false
-            persistSettings("active-enabled-changed", settingsPanel.currentSettings())
+            persistSettings("active-enabled-changed", HeaderSettingsChange.ActiveAiEnabled(enabled))
         }
 
         mcpToggle.addActionListener {
@@ -477,9 +472,7 @@ class MainTab(
             syncingToggles = true
             settingsPanel.setMcpEnabled(enabled)
             syncingToggles = false
-            val settings = settingsPanel.currentSettings()
-            val updated = settings.copy(mcpSettings = settings.mcpSettings.copy(enabled = enabled))
-            persistSettingsAndApplyMcp("mcp-toggle", updated)
+            persistSettingsAndApplyMcp("mcp-toggle", HeaderSettingsChange.McpEnabled(enabled))
         }
         passiveToggle.addActionListener {
             if (syncingToggles) return@addActionListener
@@ -487,7 +480,7 @@ class MainTab(
             syncingToggles = true
             settingsPanel.setPassiveAiEnabled(enabled)
             syncingToggles = false
-            persistSettings("passive-toggle", settingsPanel.currentSettings())
+            persistSettings("passive-toggle", HeaderSettingsChange.PassiveAiEnabled(enabled))
         }
         activeToggle.addActionListener {
             if (syncingToggles) return@addActionListener
@@ -495,7 +488,7 @@ class MainTab(
             syncingToggles = true
             settingsPanel.setActiveAiEnabled(enabled)
             syncingToggles = false
-            persistSettings("active-toggle", settingsPanel.currentSettings())
+            persistSettings("active-toggle", HeaderSettingsChange.ActiveAiEnabled(enabled))
         }
         settingsPanel.onSettingsChanged = { updated ->
             SwingUtilities.invokeLater {
@@ -575,7 +568,13 @@ class MainTab(
     }
 
     /**
-     * Persists [snapshot] on `burp-ai-settings-sync` and nothing else — no MCP apply, no scanner reload.
+     * Saves the one field [change] carries on `burp-ai-settings-sync` and nothing else — no MCP apply, no
+     * scanner reload.
+     *
+     * Each write carries ONE field, never a snapshot read off the Settings tab: the worker
+     * ([persistHeaderChange]) applies it to the SAVED snapshot inside the repository write lock, so
+     * unsaved Settings edits stay unsaved and a concurrent Save settings is never torn or overwritten
+     * with a stale snapshot (quick 261008-o97).
      *
      * Declared here rather than alongside the queue itself because detekt runs with
      * `buildUponDefaultConfig = true` and `detekt.yml` overrides only `complexity`, `style` and
@@ -583,35 +582,42 @@ class MainTab(
      * ahead of its callers would fail that task's own static-analysis gate with no sanctioned exit.
      *
      * **Mention ledger (structural gate).** `everyMainTabSettingsWriteGoesThroughThePersistQueue` reads
-     * this file from disk, strips comment lines — block comments included, which is why these six
-     * tokens can be named here at all — and asserts these counts as EQUALITIES. An eighth write site,
-     * or a seventh regressing to an inline save, moves a count and turns that test red. Update this
-     * ledger deliberately; do not relax the assertions to `>=`.
+     * this file from disk, strips comment lines — block comments included, which is why these tokens
+     * can be named here at all — and asserts these counts as EQUALITIES. An eighth write site, or a
+     * seventh regressing to an inline save, moves a count and turns that test red. Update this ledger
+     * deliberately; do not relax the assertions to `>=`.
      *
      * | Token | Count | Composition |
      * |---|---|---|
      * | `persistSettings(` | 6 | 1 declaration + 5 call sites (backend picker, passive/active host callbacks, passive/active header toggles) |
      * | `persistSettingsAndApplyMcp(` | 3 | 1 declaration + 2 call sites (the MCP host callback and the header mcpToggle) |
-     * | `settingsRepo.save(` | 2 | 1 in each persist helper's apply lambda |
-     * | `mcpSupervisor.applySettings(` | 1 | persistSettingsAndApplyMcp only |
+     * | `settingsRepo.save(` | 0 | header writes save one field through the worker bodies' `settingsRepo.update` |
+     * | `mcpSupervisor.applySettings(` | 0 | the MCP apply lives in persistHeaderChangeAndApplyMcp, built from what was saved |
+     * | `persistHeaderChange(` | 1 | persistSettings' apply lambda |
+     * | `persistHeaderChangeAndApplyMcp(` | 1 | persistSettingsAndApplyMcp's apply lambda |
      * | `supervisor.applySettings(` | 0 | App's repository listener (`mirrorAppliedSettingsInto`) owns that |
      * | `getSettings = { settingsRepo.load() }` | 1 | the ChatPanel construction: the chat reads the applied snapshot |
      */
     private fun persistSettings(
         label: String,
-        snapshot: AgentSettings,
+        change: HeaderSettingsChange,
     ) {
         settingsPersistQueue.submit(
             label = label,
-            supersedeKey = SettingsPersistQueue::class,
-            payload = snapshot,
-            apply = { settingsRepo.save(it) },
+            supersedeKey = change.supersedeKey,
+            payload = change,
+            apply = { persistHeaderChange(settingsRepo, it) },
             onSettled = { renderStatus() },
         )
     }
 
     /**
-     * Persists [snapshot] AND re-applies the MCP settings, both on `burp-ai-settings-sync`.
+     * Saves the MCP enabled flag [change] carries AND re-applies the MCP settings, both on
+     * `burp-ai-settings-sync`.
+     *
+     * The worker ([persistHeaderChangeAndApplyMcp]) saves the flag onto the SAVED snapshot under the
+     * repository write lock and applies MCP built from what was saved (port, external access, privacy
+     * mode), never from unsaved Settings edits (quick 261008-o97).
      *
      * REL-05 / SC4: with MCP going enabled→disabled this reaches `McpSupervisor.stop()` and then
      * `KtorMcpServerManager`'s bounded `future.get(10, TimeUnit.SECONDS)`. D-14 keeps that wait
@@ -629,21 +635,13 @@ class MainTab(
      */
     private fun persistSettingsAndApplyMcp(
         label: String,
-        snapshot: AgentSettings,
+        change: HeaderSettingsChange.McpEnabled,
     ) {
         settingsPersistQueue.submit(
             label = label,
-            supersedeKey = SettingsPersistQueue::class,
-            payload = snapshot,
-            apply = {
-                settingsRepo.save(it)
-                mcpSupervisor.applySettings(
-                    it.mcpSettings,
-                    it.privacyMode,
-                    it.determinismMode,
-                    it.toPreprocessorSettings(),
-                )
-            },
+            supersedeKey = change.supersedeKey,
+            payload = change,
+            apply = { persistHeaderChangeAndApplyMcp(settingsRepo, mcpSupervisor, it) },
             onSettled = { renderStatus() },
         )
     }

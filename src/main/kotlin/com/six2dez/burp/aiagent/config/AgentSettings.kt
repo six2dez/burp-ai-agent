@@ -187,6 +187,15 @@ class AgentSettingsRepository(
         java.util.concurrent.atomic
             .AtomicReference<AgentSettings?>(null)
 
+    /**
+     * Guards every write of the applied snapshot ([save] and [update]), listener notification included,
+     * so listeners see saves in save order. [load] never takes it, so the EDT (chat pill, safety
+     * indicator, status pill, UiActions) never waits on a save. [save] and [update] run only on worker
+     * threads: `burp-ai-settings-sync` for header writes, `burp-ai-settings-save` for Save settings and
+     * Restore defaults.
+     */
+    private val writeLock = Any()
+
     /** Notified after every fully successful [save]; see [addChangeListener]. */
     private val changeListeners =
         java.util.concurrent
@@ -199,6 +208,10 @@ class AgentSettingsRepository(
      * registration order, and only after every preference write succeeded and the snapshot is
      * published, so [load] inside a listener already returns the saved value. A failed save notifies
      * no listener. Listeners must be cheap, non-blocking and must not throw.
+     *
+     * Listeners run INSIDE [writeLock], so they see saves in save order. A listener must never block,
+     * and must never wait on another thread that saves: that thread would wait for this lock, and the
+     * two would deadlock. Posting to the EDT or setting an atomic reference is fine.
      */
     fun addChangeListener(listener: (AgentSettings) -> Unit) {
         changeListeners.add(listener)
@@ -558,187 +571,200 @@ class AgentSettingsRepository(
         )
 
     fun save(settings: AgentSettings) {
-        // WR-03: all prefs writes first; update the cache only on full success so a
-        // SecretCipherException mid-save does not leave the cache holding never-persisted values.
-        // On exception, clear the cache so the next load() re-reads the (partial) prefs.
-        try {
-            prefs.setString(KEY_CODEX_CMD, settings.codexCmd)
-            prefs.setString(KEY_GEMINI_CMD, settings.geminiCmd)
-            prefs.setString(KEY_OPENCODE_CMD, settings.opencodeCmd)
-            prefs.setString(KEY_CLAUDE_CMD, settings.claudeCmd)
-            prefs.setString(KEY_AGENT_PROFILE, settings.agentProfile)
-            prefs.setString(KEY_OLLAMA_CLI_CMD, settings.ollamaCliCmd)
-            prefs.setString(KEY_OLLAMA_MODEL, settings.ollamaModel)
-            prefs.setString(KEY_OLLAMA_URL, settings.ollamaUrl)
-            prefs.setString(KEY_OLLAMA_SERVE_CMD, settings.ollamaServeCmd)
-            prefs.setBoolean(KEY_OLLAMA_AUTOSTART, settings.ollamaAutoStart)
-            prefs.setString(KEY_OLLAMA_API_KEY, cipher.encrypt(settings.ollamaApiKey, KEY_OLLAMA_API_KEY))
-            prefs.setString(KEY_OLLAMA_HEADERS, settings.ollamaHeaders)
-            prefs.setInteger(KEY_OLLAMA_TIMEOUT, settings.ollamaTimeoutSeconds.coerceIn(30, 3600))
-            prefs.setInteger(KEY_OLLAMA_CONTEXT_WINDOW, settings.ollamaContextWindow.coerceIn(2048, 128000))
-            prefs.setString(KEY_LMSTUDIO_URL, settings.lmStudioUrl)
-            prefs.setString(KEY_LMSTUDIO_MODEL, settings.lmStudioModel)
-            prefs.setInteger(KEY_LMSTUDIO_TIMEOUT, settings.lmStudioTimeoutSeconds.coerceIn(30, 3600))
-            prefs.setString(KEY_LMSTUDIO_SERVER_CMD, settings.lmStudioServerCmd)
-            prefs.setBoolean(KEY_LMSTUDIO_AUTOSTART, settings.lmStudioAutoStart)
-            prefs.setString(KEY_LMSTUDIO_API_KEY, cipher.encrypt(settings.lmStudioApiKey, KEY_LMSTUDIO_API_KEY))
-            prefs.setString(KEY_LMSTUDIO_HEADERS, settings.lmStudioHeaders)
-            prefs.setString(KEY_OPENAI_COMPAT_URL, settings.openAiCompatibleUrl)
-            prefs.setString(KEY_OPENAI_COMPAT_MODEL, settings.openAiCompatibleModel)
-            prefs.setString(KEY_OPENAI_COMPAT_API_KEY, cipher.encrypt(settings.openAiCompatibleApiKey, KEY_OPENAI_COMPAT_API_KEY))
-            prefs.setString(KEY_OPENAI_COMPAT_HEADERS, settings.openAiCompatibleHeaders)
-            prefs.setInteger(KEY_OPENAI_COMPAT_TIMEOUT, settings.openAiCompatibleTimeoutSeconds.coerceIn(30, 3600))
-            prefs.setString(KEY_NVIDIA_NIM_URL, settings.nvidiaNimUrl)
-            prefs.setString(KEY_NVIDIA_NIM_MODEL, settings.nvidiaNimModel)
-            prefs.setString(KEY_NVIDIA_NIM_API_KEY, cipher.encrypt(settings.nvidiaNimApiKey, KEY_NVIDIA_NIM_API_KEY))
-            prefs.setString(KEY_NVIDIA_NIM_HEADERS, settings.nvidiaNimHeaders)
-            prefs.setInteger(KEY_NVIDIA_NIM_TIMEOUT, settings.nvidiaNimTimeoutSeconds.coerceIn(30, 3600))
-            prefs.setString(KEY_PERPLEXITY_URL, settings.perplexityUrl)
-            prefs.setString(KEY_PERPLEXITY_MODEL, settings.perplexityModel)
-            prefs.setString(KEY_PERPLEXITY_API_KEY, cipher.encrypt(settings.perplexityApiKey, KEY_PERPLEXITY_API_KEY))
-            prefs.setString(KEY_PERPLEXITY_HEADERS, settings.perplexityHeaders)
-            prefs.setInteger(KEY_PERPLEXITY_TIMEOUT, settings.perplexityTimeoutSeconds.coerceIn(30, 3600))
-            // REL-04: persist CLI timeout plaintext (not a secret — timeout integer, V5 validated)
-            prefs.setInteger(KEY_CLI_TIMEOUT, settings.cliTimeoutSeconds.coerceIn(30, 3600))
-            // CAP-01: Anthropic — model (plain string), API key (encrypted), token-budget (plain integers)
-            prefs.setString(KEY_ANTHROPIC_MODEL, settings.anthropicModel)
-            prefs.setString(KEY_ANTHROPIC_API_KEY, cipher.encrypt(settings.anthropicApiKey, KEY_ANTHROPIC_API_KEY))
-            // CAP-04: token-budget thresholds are integers, NOT secrets — never SecretCipher (Pitfall 5)
-            prefs.setInteger(KEY_TOKEN_BUDGET_WARN, settings.tokenBudgetWarnThreshold.coerceAtLeast(0))
-            prefs.setInteger(KEY_TOKEN_BUDGET_CAP, settings.tokenBudgetHardCap.coerceAtLeast(0))
-            prefs.setString(KEY_COPILOT_CMD, settings.copilotCmd)
-            prefs.setString(KEY_PROMPT_FIND_VULNS, settings.requestPromptTemplate)
-            prefs.setString(KEY_PROMPT_FULL_REPORT, settings.issuePromptTemplate)
-            prefs.setString(KEY_PROMPT_ISSUE_ANALYZE, settings.issueAnalyzePrompt)
-            prefs.setString(KEY_PROMPT_ISSUE_POC, settings.issuePocPrompt)
-            prefs.setString(KEY_PROMPT_ISSUE_IMPACT, settings.issueImpactPrompt)
-            prefs.setString(KEY_PROMPT_QUICK_RECON, settings.requestSummaryPrompt)
-            prefs.setString(KEY_PROMPT_EXPLAIN_JS, settings.explainJsPrompt)
-            prefs.setString(KEY_PROMPT_ACCESS_CONTROL, settings.accessControlPrompt)
-            prefs.setString(KEY_PROMPT_LOGIN_SEQUENCE, settings.loginSequencePrompt)
-            prefs.setString(KEY_HOST_SALT, settings.hostAnonymizationSalt)
-            prefs.setString(KEY_PREFERRED_BACKEND, settings.preferredBackendId)
-            prefs.setString(KEY_PRIVACY_MODE, settings.privacyMode.name)
-            prefs.setBoolean(KEY_DETERMINISM, settings.determinismMode)
-            prefs.setBoolean(KEY_AUTORESTART, settings.autoRestart)
-            prefs.setBoolean(KEY_AUDIT_ENABLED, settings.auditEnabled)
-            saveMcpSettings(settings.mcpSettings)
-            prefs.setBoolean(KEY_PREPROCESS_PROXY_HISTORY, settings.preprocessProxyHistory)
-            prefs.setInteger(
-                KEY_PREPROCESS_MAX_RESPONSE_SIZE_KB,
-                settings.preprocessMaxResponseSizeKb.coerceIn(1, 10_240),
-            )
-            prefs.setBoolean(KEY_PREPROCESS_FILTER_BINARY_CONTENT, settings.preprocessFilterBinaryContent)
-            prefs.setString(
-                KEY_PREPROCESS_ALLOWED_CONTENT_TYPES,
-                serializeContentTypeSet(settings.preprocessAllowedContentTypes),
-            )
-            prefs.setBoolean(KEY_PASSIVE_AI_ENABLED, settings.passiveAiEnabled)
-            prefs.setInteger(KEY_PASSIVE_AI_RATE, settings.passiveAiRateSeconds)
-            prefs.setBoolean(KEY_PASSIVE_AI_SCOPE_ONLY, settings.passiveAiScopeOnly)
-            prefs.setInteger(KEY_PASSIVE_AI_MAX_SIZE, settings.passiveAiMaxSizeKb)
-            prefs.setString(KEY_PASSIVE_AI_MIN_SEVERITY, settings.passiveAiMinSeverity.name)
-            prefs.setInteger(KEY_PASSIVE_AI_ENDPOINT_DEDUP_MINUTES, settings.passiveAiEndpointDedupMinutes.coerceIn(1, 240))
-            prefs.setInteger(
-                KEY_PASSIVE_AI_FINGERPRINT_DEDUP_MINUTES,
-                settings.passiveAiResponseFingerprintDedupMinutes.coerceIn(1, 240),
-            )
-            prefs.setInteger(
-                KEY_PASSIVE_AI_PROMPT_CACHE_TTL_MINUTES,
-                settings.passiveAiPromptCacheTtlMinutes.coerceIn(1, 240),
-            )
-            prefs.setInteger(
-                KEY_PASSIVE_AI_ENDPOINT_CACHE_ENTRIES,
-                settings.passiveAiEndpointCacheEntries.coerceIn(100, 50_000),
-            )
-            prefs.setInteger(
-                KEY_PASSIVE_AI_FINGERPRINT_CACHE_ENTRIES,
-                settings.passiveAiResponseFingerprintCacheEntries.coerceIn(100, 50_000),
-            )
-            prefs.setInteger(
-                KEY_PASSIVE_AI_PROMPT_CACHE_ENTRIES,
-                settings.passiveAiPromptCacheEntries.coerceIn(50, 5_000),
-            )
-            prefs.setInteger(
-                KEY_PASSIVE_AI_REQUEST_BODY_MAX_CHARS,
-                settings.passiveAiRequestBodyMaxChars.coerceIn(256, 20_000),
-            )
-            prefs.setInteger(
-                KEY_PASSIVE_AI_RESPONSE_BODY_MAX_CHARS,
-                settings.passiveAiResponseBodyMaxChars.coerceIn(512, 40_000),
-            )
-            prefs.setInteger(
-                KEY_PASSIVE_AI_HEADER_MAX_COUNT,
-                settings.passiveAiHeaderMaxCount.coerceIn(5, 120),
-            )
-            prefs.setInteger(
-                KEY_PASSIVE_AI_PARAM_MAX_COUNT,
-                settings.passiveAiParamMaxCount.coerceIn(5, 100),
-            )
-            prefs.setString(KEY_PASSIVE_AI_EXCLUDED_EXTENSIONS, settings.passiveAiExcludedExtensions)
-            prefs.setInteger(KEY_PASSIVE_AI_BATCH_SIZE, settings.passiveAiBatchSize)
-            prefs.setBoolean(KEY_PASSIVE_AI_PERSISTENT_CACHE_ENABLED, settings.passiveAiPersistentCacheEnabled)
-            prefs.setInteger(KEY_PASSIVE_AI_PERSISTENT_CACHE_TTL_HOURS, settings.passiveAiPersistentCacheTtlHours)
-            prefs.setInteger(KEY_PASSIVE_AI_PERSISTENT_CACHE_MAX_MB, settings.passiveAiPersistentCacheMaxMb)
-            prefs.setInteger(
-                KEY_CONTEXT_REQUEST_BODY_MAX_CHARS,
-                settings.contextRequestBodyMaxChars.coerceIn(256, 40_000),
-            )
-            prefs.setInteger(
-                KEY_CONTEXT_RESPONSE_BODY_MAX_CHARS,
-                settings.contextResponseBodyMaxChars.coerceIn(512, 80_000),
-            )
-            prefs.setBoolean(KEY_CONTEXT_COMPACT_JSON, settings.contextCompactJson)
-            prefs.setBoolean(KEY_ACTIVE_AI_ENABLED, settings.activeAiEnabled)
-            prefs.setInteger(KEY_ACTIVE_AI_MAX_CONCURRENT, settings.activeAiMaxConcurrent)
-            prefs.setInteger(KEY_ACTIVE_AI_MAX_PAYLOADS, settings.activeAiMaxPayloadsPerPoint)
-            prefs.setInteger(KEY_ACTIVE_AI_TIMEOUT, settings.activeAiTimeoutSeconds)
-            prefs.setInteger(KEY_ACTIVE_AI_DELAY, settings.activeAiRequestDelayMs)
-            prefs.setString(KEY_ACTIVE_AI_RISK_LEVEL, settings.activeAiMaxRiskLevel.name)
-            prefs.setBoolean(KEY_ACTIVE_AI_SCOPE_ONLY, settings.activeAiScopeOnly)
-            prefs.setBoolean(KEY_ACTIVE_AI_AUTO_PASSIVE, settings.activeAiAutoFromPassive)
-            prefs.setString(KEY_ACTIVE_AI_SCAN_MODE, settings.activeAiScanMode.name)
-            prefs.setBoolean(KEY_ACTIVE_AI_USE_COLLABORATOR, settings.activeAiUseCollaborator)
-            prefs.setBoolean(KEY_ACTIVE_AI_ADAPTIVE_PAYLOADS, settings.activeAiAdaptivePayloads)
-            prefs.setBoolean(KEY_BOUNTY_PROMPT_ENABLED, settings.bountyPromptEnabled)
-            prefs.setString(KEY_BOUNTY_PROMPT_DIR, settings.bountyPromptDir)
-            prefs.setBoolean(KEY_BOUNTY_PROMPT_AUTO_CREATE_ISSUES, settings.bountyPromptAutoCreateIssues)
-            prefs.setInteger(
-                KEY_BOUNTY_PROMPT_CONFIDENCE_THRESHOLD,
-                settings.bountyPromptIssueConfidenceThreshold.coerceIn(0, 100),
-            )
-            prefs.setString(
-                KEY_BOUNTY_PROMPT_ENABLED_IDS,
-                serializeIdSet(settings.bountyPromptEnabledPromptIds),
-            )
-            prefs.setBoolean(KEY_AI_LOGGER_ENABLED, settings.aiRequestLoggerEnabled)
-            prefs.setInteger(KEY_AI_LOGGER_MAX_ENTRIES, settings.aiRequestLoggerMaxEntries.coerceIn(50, 5_000))
-            prefs.setString(KEY_CUSTOM_PROMPT_LIBRARY, serializeCustomPromptLibrary(settings.customPromptLibrary))
-            // 07-02 D-02: persist small-model mode alongside the other chat-context settings.
-            prefs.setBoolean(KEY_CHAT_SMALL_MODEL_MODE, settings.smallModelMode)
-            // PRIV-02: persist custom redaction patterns as plaintext newline-joined string.
-            // NOT routed through cipher.encrypt — patterns are config, not secrets (Pitfall 5).
-            prefs.setString(KEY_CUSTOM_REDACTION_PATTERNS, settings.customRedactionPatterns.joinToString("\n"))
-            prefs.setInteger(KEY_SETTINGS_SCHEMA_VERSION, CURRENT_SETTINGS_SCHEMA_VERSION)
-            // All writes succeeded — now safe to cache.
-            cachedSettings.set(settings)
-        } catch (e: Exception) {
-            // WR-03: partial write — evict the cache so the next load() re-reads prefs and
-            // does not return settings that were never fully persisted.
-            cachedSettings.set(null)
-            throw e
+        synchronized(writeLock) {
+            // Quick 261008-o97: one writer at a time, which closes residual R2 of quick 261008-n0c.
+            // WR-03: all prefs writes first; update the cache only on full success so a
+            // SecretCipherException mid-save does not leave the cache holding never-persisted values.
+            // On exception, clear the cache so the next load() re-reads the (partial) prefs.
+            try {
+                prefs.setString(KEY_CODEX_CMD, settings.codexCmd)
+                prefs.setString(KEY_GEMINI_CMD, settings.geminiCmd)
+                prefs.setString(KEY_OPENCODE_CMD, settings.opencodeCmd)
+                prefs.setString(KEY_CLAUDE_CMD, settings.claudeCmd)
+                prefs.setString(KEY_AGENT_PROFILE, settings.agentProfile)
+                prefs.setString(KEY_OLLAMA_CLI_CMD, settings.ollamaCliCmd)
+                prefs.setString(KEY_OLLAMA_MODEL, settings.ollamaModel)
+                prefs.setString(KEY_OLLAMA_URL, settings.ollamaUrl)
+                prefs.setString(KEY_OLLAMA_SERVE_CMD, settings.ollamaServeCmd)
+                prefs.setBoolean(KEY_OLLAMA_AUTOSTART, settings.ollamaAutoStart)
+                prefs.setString(KEY_OLLAMA_API_KEY, cipher.encrypt(settings.ollamaApiKey, KEY_OLLAMA_API_KEY))
+                prefs.setString(KEY_OLLAMA_HEADERS, settings.ollamaHeaders)
+                prefs.setInteger(KEY_OLLAMA_TIMEOUT, settings.ollamaTimeoutSeconds.coerceIn(30, 3600))
+                prefs.setInteger(KEY_OLLAMA_CONTEXT_WINDOW, settings.ollamaContextWindow.coerceIn(2048, 128000))
+                prefs.setString(KEY_LMSTUDIO_URL, settings.lmStudioUrl)
+                prefs.setString(KEY_LMSTUDIO_MODEL, settings.lmStudioModel)
+                prefs.setInteger(KEY_LMSTUDIO_TIMEOUT, settings.lmStudioTimeoutSeconds.coerceIn(30, 3600))
+                prefs.setString(KEY_LMSTUDIO_SERVER_CMD, settings.lmStudioServerCmd)
+                prefs.setBoolean(KEY_LMSTUDIO_AUTOSTART, settings.lmStudioAutoStart)
+                prefs.setString(KEY_LMSTUDIO_API_KEY, cipher.encrypt(settings.lmStudioApiKey, KEY_LMSTUDIO_API_KEY))
+                prefs.setString(KEY_LMSTUDIO_HEADERS, settings.lmStudioHeaders)
+                prefs.setString(KEY_OPENAI_COMPAT_URL, settings.openAiCompatibleUrl)
+                prefs.setString(KEY_OPENAI_COMPAT_MODEL, settings.openAiCompatibleModel)
+                prefs.setString(KEY_OPENAI_COMPAT_API_KEY, cipher.encrypt(settings.openAiCompatibleApiKey, KEY_OPENAI_COMPAT_API_KEY))
+                prefs.setString(KEY_OPENAI_COMPAT_HEADERS, settings.openAiCompatibleHeaders)
+                prefs.setInteger(KEY_OPENAI_COMPAT_TIMEOUT, settings.openAiCompatibleTimeoutSeconds.coerceIn(30, 3600))
+                prefs.setString(KEY_NVIDIA_NIM_URL, settings.nvidiaNimUrl)
+                prefs.setString(KEY_NVIDIA_NIM_MODEL, settings.nvidiaNimModel)
+                prefs.setString(KEY_NVIDIA_NIM_API_KEY, cipher.encrypt(settings.nvidiaNimApiKey, KEY_NVIDIA_NIM_API_KEY))
+                prefs.setString(KEY_NVIDIA_NIM_HEADERS, settings.nvidiaNimHeaders)
+                prefs.setInteger(KEY_NVIDIA_NIM_TIMEOUT, settings.nvidiaNimTimeoutSeconds.coerceIn(30, 3600))
+                prefs.setString(KEY_PERPLEXITY_URL, settings.perplexityUrl)
+                prefs.setString(KEY_PERPLEXITY_MODEL, settings.perplexityModel)
+                prefs.setString(KEY_PERPLEXITY_API_KEY, cipher.encrypt(settings.perplexityApiKey, KEY_PERPLEXITY_API_KEY))
+                prefs.setString(KEY_PERPLEXITY_HEADERS, settings.perplexityHeaders)
+                prefs.setInteger(KEY_PERPLEXITY_TIMEOUT, settings.perplexityTimeoutSeconds.coerceIn(30, 3600))
+                // REL-04: persist CLI timeout plaintext (not a secret — timeout integer, V5 validated)
+                prefs.setInteger(KEY_CLI_TIMEOUT, settings.cliTimeoutSeconds.coerceIn(30, 3600))
+                // CAP-01: Anthropic — model (plain string), API key (encrypted), token-budget (plain integers)
+                prefs.setString(KEY_ANTHROPIC_MODEL, settings.anthropicModel)
+                prefs.setString(KEY_ANTHROPIC_API_KEY, cipher.encrypt(settings.anthropicApiKey, KEY_ANTHROPIC_API_KEY))
+                // CAP-04: token-budget thresholds are integers, NOT secrets — never SecretCipher (Pitfall 5)
+                prefs.setInteger(KEY_TOKEN_BUDGET_WARN, settings.tokenBudgetWarnThreshold.coerceAtLeast(0))
+                prefs.setInteger(KEY_TOKEN_BUDGET_CAP, settings.tokenBudgetHardCap.coerceAtLeast(0))
+                prefs.setString(KEY_COPILOT_CMD, settings.copilotCmd)
+                prefs.setString(KEY_PROMPT_FIND_VULNS, settings.requestPromptTemplate)
+                prefs.setString(KEY_PROMPT_FULL_REPORT, settings.issuePromptTemplate)
+                prefs.setString(KEY_PROMPT_ISSUE_ANALYZE, settings.issueAnalyzePrompt)
+                prefs.setString(KEY_PROMPT_ISSUE_POC, settings.issuePocPrompt)
+                prefs.setString(KEY_PROMPT_ISSUE_IMPACT, settings.issueImpactPrompt)
+                prefs.setString(KEY_PROMPT_QUICK_RECON, settings.requestSummaryPrompt)
+                prefs.setString(KEY_PROMPT_EXPLAIN_JS, settings.explainJsPrompt)
+                prefs.setString(KEY_PROMPT_ACCESS_CONTROL, settings.accessControlPrompt)
+                prefs.setString(KEY_PROMPT_LOGIN_SEQUENCE, settings.loginSequencePrompt)
+                prefs.setString(KEY_HOST_SALT, settings.hostAnonymizationSalt)
+                prefs.setString(KEY_PREFERRED_BACKEND, settings.preferredBackendId)
+                prefs.setString(KEY_PRIVACY_MODE, settings.privacyMode.name)
+                prefs.setBoolean(KEY_DETERMINISM, settings.determinismMode)
+                prefs.setBoolean(KEY_AUTORESTART, settings.autoRestart)
+                prefs.setBoolean(KEY_AUDIT_ENABLED, settings.auditEnabled)
+                saveMcpSettings(settings.mcpSettings)
+                prefs.setBoolean(KEY_PREPROCESS_PROXY_HISTORY, settings.preprocessProxyHistory)
+                prefs.setInteger(
+                    KEY_PREPROCESS_MAX_RESPONSE_SIZE_KB,
+                    settings.preprocessMaxResponseSizeKb.coerceIn(1, 10_240),
+                )
+                prefs.setBoolean(KEY_PREPROCESS_FILTER_BINARY_CONTENT, settings.preprocessFilterBinaryContent)
+                prefs.setString(
+                    KEY_PREPROCESS_ALLOWED_CONTENT_TYPES,
+                    serializeContentTypeSet(settings.preprocessAllowedContentTypes),
+                )
+                prefs.setBoolean(KEY_PASSIVE_AI_ENABLED, settings.passiveAiEnabled)
+                prefs.setInteger(KEY_PASSIVE_AI_RATE, settings.passiveAiRateSeconds)
+                prefs.setBoolean(KEY_PASSIVE_AI_SCOPE_ONLY, settings.passiveAiScopeOnly)
+                prefs.setInteger(KEY_PASSIVE_AI_MAX_SIZE, settings.passiveAiMaxSizeKb)
+                prefs.setString(KEY_PASSIVE_AI_MIN_SEVERITY, settings.passiveAiMinSeverity.name)
+                prefs.setInteger(KEY_PASSIVE_AI_ENDPOINT_DEDUP_MINUTES, settings.passiveAiEndpointDedupMinutes.coerceIn(1, 240))
+                prefs.setInteger(
+                    KEY_PASSIVE_AI_FINGERPRINT_DEDUP_MINUTES,
+                    settings.passiveAiResponseFingerprintDedupMinutes.coerceIn(1, 240),
+                )
+                prefs.setInteger(
+                    KEY_PASSIVE_AI_PROMPT_CACHE_TTL_MINUTES,
+                    settings.passiveAiPromptCacheTtlMinutes.coerceIn(1, 240),
+                )
+                prefs.setInteger(
+                    KEY_PASSIVE_AI_ENDPOINT_CACHE_ENTRIES,
+                    settings.passiveAiEndpointCacheEntries.coerceIn(100, 50_000),
+                )
+                prefs.setInteger(
+                    KEY_PASSIVE_AI_FINGERPRINT_CACHE_ENTRIES,
+                    settings.passiveAiResponseFingerprintCacheEntries.coerceIn(100, 50_000),
+                )
+                prefs.setInteger(
+                    KEY_PASSIVE_AI_PROMPT_CACHE_ENTRIES,
+                    settings.passiveAiPromptCacheEntries.coerceIn(50, 5_000),
+                )
+                prefs.setInteger(
+                    KEY_PASSIVE_AI_REQUEST_BODY_MAX_CHARS,
+                    settings.passiveAiRequestBodyMaxChars.coerceIn(256, 20_000),
+                )
+                prefs.setInteger(
+                    KEY_PASSIVE_AI_RESPONSE_BODY_MAX_CHARS,
+                    settings.passiveAiResponseBodyMaxChars.coerceIn(512, 40_000),
+                )
+                prefs.setInteger(
+                    KEY_PASSIVE_AI_HEADER_MAX_COUNT,
+                    settings.passiveAiHeaderMaxCount.coerceIn(5, 120),
+                )
+                prefs.setInteger(
+                    KEY_PASSIVE_AI_PARAM_MAX_COUNT,
+                    settings.passiveAiParamMaxCount.coerceIn(5, 100),
+                )
+                prefs.setString(KEY_PASSIVE_AI_EXCLUDED_EXTENSIONS, settings.passiveAiExcludedExtensions)
+                prefs.setInteger(KEY_PASSIVE_AI_BATCH_SIZE, settings.passiveAiBatchSize)
+                prefs.setBoolean(KEY_PASSIVE_AI_PERSISTENT_CACHE_ENABLED, settings.passiveAiPersistentCacheEnabled)
+                prefs.setInteger(KEY_PASSIVE_AI_PERSISTENT_CACHE_TTL_HOURS, settings.passiveAiPersistentCacheTtlHours)
+                prefs.setInteger(KEY_PASSIVE_AI_PERSISTENT_CACHE_MAX_MB, settings.passiveAiPersistentCacheMaxMb)
+                prefs.setInteger(
+                    KEY_CONTEXT_REQUEST_BODY_MAX_CHARS,
+                    settings.contextRequestBodyMaxChars.coerceIn(256, 40_000),
+                )
+                prefs.setInteger(
+                    KEY_CONTEXT_RESPONSE_BODY_MAX_CHARS,
+                    settings.contextResponseBodyMaxChars.coerceIn(512, 80_000),
+                )
+                prefs.setBoolean(KEY_CONTEXT_COMPACT_JSON, settings.contextCompactJson)
+                prefs.setBoolean(KEY_ACTIVE_AI_ENABLED, settings.activeAiEnabled)
+                prefs.setInteger(KEY_ACTIVE_AI_MAX_CONCURRENT, settings.activeAiMaxConcurrent)
+                prefs.setInteger(KEY_ACTIVE_AI_MAX_PAYLOADS, settings.activeAiMaxPayloadsPerPoint)
+                prefs.setInteger(KEY_ACTIVE_AI_TIMEOUT, settings.activeAiTimeoutSeconds)
+                prefs.setInteger(KEY_ACTIVE_AI_DELAY, settings.activeAiRequestDelayMs)
+                prefs.setString(KEY_ACTIVE_AI_RISK_LEVEL, settings.activeAiMaxRiskLevel.name)
+                prefs.setBoolean(KEY_ACTIVE_AI_SCOPE_ONLY, settings.activeAiScopeOnly)
+                prefs.setBoolean(KEY_ACTIVE_AI_AUTO_PASSIVE, settings.activeAiAutoFromPassive)
+                prefs.setString(KEY_ACTIVE_AI_SCAN_MODE, settings.activeAiScanMode.name)
+                prefs.setBoolean(KEY_ACTIVE_AI_USE_COLLABORATOR, settings.activeAiUseCollaborator)
+                prefs.setBoolean(KEY_ACTIVE_AI_ADAPTIVE_PAYLOADS, settings.activeAiAdaptivePayloads)
+                prefs.setBoolean(KEY_BOUNTY_PROMPT_ENABLED, settings.bountyPromptEnabled)
+                prefs.setString(KEY_BOUNTY_PROMPT_DIR, settings.bountyPromptDir)
+                prefs.setBoolean(KEY_BOUNTY_PROMPT_AUTO_CREATE_ISSUES, settings.bountyPromptAutoCreateIssues)
+                prefs.setInteger(
+                    KEY_BOUNTY_PROMPT_CONFIDENCE_THRESHOLD,
+                    settings.bountyPromptIssueConfidenceThreshold.coerceIn(0, 100),
+                )
+                prefs.setString(
+                    KEY_BOUNTY_PROMPT_ENABLED_IDS,
+                    serializeIdSet(settings.bountyPromptEnabledPromptIds),
+                )
+                prefs.setBoolean(KEY_AI_LOGGER_ENABLED, settings.aiRequestLoggerEnabled)
+                prefs.setInteger(KEY_AI_LOGGER_MAX_ENTRIES, settings.aiRequestLoggerMaxEntries.coerceIn(50, 5_000))
+                prefs.setString(KEY_CUSTOM_PROMPT_LIBRARY, serializeCustomPromptLibrary(settings.customPromptLibrary))
+                // 07-02 D-02: persist small-model mode alongside the other chat-context settings.
+                prefs.setBoolean(KEY_CHAT_SMALL_MODEL_MODE, settings.smallModelMode)
+                // PRIV-02: persist custom redaction patterns as plaintext newline-joined string.
+                // NOT routed through cipher.encrypt — patterns are config, not secrets (Pitfall 5).
+                prefs.setString(KEY_CUSTOM_REDACTION_PATTERNS, settings.customRedactionPatterns.joinToString("\n"))
+                prefs.setInteger(KEY_SETTINGS_SCHEMA_VERSION, CURRENT_SETTINGS_SCHEMA_VERSION)
+                // All writes succeeded — now safe to cache.
+                cachedSettings.set(settings)
+            } catch (e: Exception) {
+                // WR-03: partial write — evict the cache so the next load() re-reads prefs and
+                // does not return settings that were never fully persisted.
+                cachedSettings.set(null)
+                throw e
+            }
+            // Outside the try on purpose: a listener must never be able to evict a snapshot whose writes
+            // all succeeded, and a failed save rethrows from the catch, so it never reaches this line.
+            notifyChangeListeners(settings)
         }
-        // Outside the try on purpose: a listener must never be able to evict a snapshot whose writes
-        // all succeeded, and a failed save rethrows from the catch, so it never reaches this line.
-        notifyChangeListeners(settings)
     }
 
-    /** Loads the applied snapshot, applies [transform], saves the result and returns it. */
-    fun update(transform: (AgentSettings) -> AgentSettings): AgentSettings {
-        val updated = transform(load())
-        save(updated)
-        return updated
-    }
+    /**
+     * Loads the applied snapshot, applies [transform] and saves the result, all under the lock [save]
+     * takes, so [transform] always sees the newest saved snapshot and no save can run between the read
+     * and the write (quick 261008-o97: a header write sets one field of what is saved at save time,
+     * never of a snapshot read at click time).
+     *
+     * [transform] must be pure and cheap, because it runs inside the write lock. Returns the snapshot
+     * that was saved.
+     */
+    fun update(transform: (AgentSettings) -> AgentSettings): AgentSettings =
+        synchronized(writeLock) {
+            // The monitor is reentrant, so the nested save() takes it again without blocking.
+            val updated = transform(load())
+            save(updated)
+            updated
+        }
 
     private fun migrateIfNeeded() {
         val storedVersion = prefs.getInteger(KEY_SETTINGS_SCHEMA_VERSION) ?: 1

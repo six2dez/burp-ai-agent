@@ -4,10 +4,8 @@ import burp.api.montoya.MontoyaApi
 import burp.api.montoya.persistence.Preferences
 import com.six2dez.burp.aiagent.audit.AuditLogger
 import com.six2dez.burp.aiagent.backends.BackendRegistry
-import com.six2dez.burp.aiagent.config.AgentSettings
 import com.six2dez.burp.aiagent.config.AgentSettingsRepository
 import com.six2dez.burp.aiagent.config.McpSettings
-import com.six2dez.burp.aiagent.config.toPreprocessorSettings
 import com.six2dez.burp.aiagent.mcp.McpSupervisor
 import com.six2dez.burp.aiagent.redact.PrivacyMode
 import com.six2dez.burp.aiagent.redact.Redaction
@@ -76,13 +74,9 @@ class HeaderSettingsWritesTest {
             target = !panel.passiveAiEnabled.isSelected
         }
 
-        // MainTab composition (RED: today's code)
-        var snapshot: AgentSettings? = null
-        onEdt {
-            panel.setPassiveAiEnabled(target)
-            snapshot = panel.currentSettings()
-        }
-        onBackgroundThread { repo.save(checkNotNull(snapshot)) }
+        // MainTab composition
+        onEdt { panel.setPassiveAiEnabled(target) }
+        onBackgroundThread { persistHeaderChange(repo, HeaderSettingsChange.PassiveAiEnabled(target)) }
         // end MainTab composition
 
         assertEquals(
@@ -117,18 +111,9 @@ class HeaderSettingsWritesTest {
         }
         clearInvocations(mcp)
 
-        // MainTab composition (RED: today's code)
-        var updated: AgentSettings? = null
-        onEdt {
-            panel.setMcpEnabled(target)
-            val s = panel.currentSettings()
-            updated = s.copy(mcpSettings = s.mcpSettings.copy(enabled = target))
-        }
-        onBackgroundThread {
-            val u = checkNotNull(updated)
-            repo.save(u)
-            mcp.applySettings(u.mcpSettings, u.privacyMode, u.determinismMode, u.toPreprocessorSettings())
-        }
+        // MainTab composition
+        onEdt { panel.setMcpEnabled(target) }
+        onBackgroundThread { persistHeaderChangeAndApplyMcp(repo, mcp, HeaderSettingsChange.McpEnabled(target)) }
         // end MainTab composition
 
         val mcpCaptor = argumentCaptor<McpSettings>()
