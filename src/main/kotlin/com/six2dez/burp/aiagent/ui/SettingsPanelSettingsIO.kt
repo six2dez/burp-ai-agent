@@ -635,6 +635,15 @@ internal fun SettingsPanel.applyAndSaveSettingsAsync(
     // Same placement rule and same reason as OffEdtDispatch's dispatchedObserver and
     // SettingsPersistQueue.submit: the generation must be the CLICK's, not the thread-start's.
     val generation = saveGeneration.incrementAndGet()
+    // Quick 261008-n0c: the rendering of the applied settings, for the Unsaved changes marker. It is
+    // captured at dispatch, not re-read at completion, so an edit made during the flight stays marked
+    // unsaved. On Restore defaults it is the rendering of the defaults applySettingsToUi just wrote,
+    // which is why it is not `updated`. The working copy is installed first, on the EDT, because the
+    // fields with no component (salt, TTLs, context window) are read from it and the body installs the
+    // same value on the worker; without this a restore, whose defaults carry a fresh salt, would leave
+    // a false marker. For a plain Save `updated` was read from that same working copy, so it is a no-op.
+    settings = updated
+    val onScreenAtDispatch = currentSettings()
     val lowered = AtomicBoolean(false)
     val lowerBusy = {
         if (lowered.compareAndSet(false, true)) {
@@ -665,6 +674,7 @@ internal fun SettingsPanel.applyAndSaveSettingsAsync(
             try {
                 result.onSuccess {
                     onSettingsChanged?.invoke(updated)
+                    markOnScreenSettingsApplied(onScreenAtDispatch)
                     refreshPassiveAiStatus()
                     refreshActiveAiStatus()
                     updateProfileWarnings()

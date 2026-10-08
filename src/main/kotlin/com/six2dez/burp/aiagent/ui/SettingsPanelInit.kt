@@ -514,6 +514,7 @@ internal fun SettingsPanel.initUiWiring() {
         Timer(2000) {
             refreshPassiveAiStatus()
             refreshActiveAiStatus()
+            refreshUnsavedMarker()
         }
     statusRefreshTimer?.start()
     updateProfileWarnings()

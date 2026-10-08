@@ -26,6 +26,7 @@ import javax.swing.JSpinner
 import javax.swing.JTextArea
 import javax.swing.JTextField
 import javax.swing.SpinnerNumberModel
+import javax.swing.SwingUtilities
 import javax.swing.Timer
 
 class SettingsPanel(
@@ -526,15 +527,58 @@ class SettingsPanel(
             10,
         )
 
-    /** Declaration only (quick 261008-n0c RED): never shown yet. */
-    internal val unsavedChangesLabel = JLabel("Unsaved changes").apply { isVisible = false }
+    /**
+     * Quick 261008-n0c — the "Unsaved changes" marker in the Settings button row.
+     *
+     * Visible exactly while the on-screen settings differ from the settings in effect. Chat and
+     * scanners act only on the saved snapshot, so this is the one place the gap is shown.
+     */
+    internal val unsavedChangesLabel =
+        JLabel("Unsaved changes").apply {
+            font = DesignTokens.Typography.label
+            foreground = DesignTokens.Colors.statusWarning
+            toolTipText =
+                "On-screen settings differ from the settings in effect. Chat and scanners keep using " +
+                "the saved settings until you click Save settings."
+            isVisible = false
+        }
 
-    /** Declaration only (quick 261008-n0c RED): refreshes nothing yet. */
+    /**
+     * The on-screen RENDERING of the applied settings, i.e. what [currentSettings] returned when the
+     * applied snapshot was on screen. EDT only.
+     *
+     * It is deliberately not the repository object: the components normalize stored values (a backend
+     * the combo cannot show, KB/byte conversion, spinner clamps, merged tool toggles, re-validated custom
+     * patterns), so comparing against `settingsRepo.load()` would show a false marker on a fresh panel
+     * and after Restore defaults.
+     */
+    private var appliedOnScreen: AgentSettings? = null
+
+    /** EDT only. Records [view] as the rendering of the applied settings and refreshes the marker. */
+    internal fun markOnScreenSettingsApplied(view: AgentSettings) {
+        appliedOnScreen = view
+        refreshUnsavedMarker()
+    }
+
+    /**
+     * EDT only. Shows the marker exactly when the on-screen settings differ from [appliedOnScreen].
+     *
+     * Cost: one [currentSettings] (bounded SafeRegex probes per custom pattern) on every 2 s status
+     * tick, replacing MainTab's former once-a-second call of the same function.
+     */
     internal fun refreshUnsavedMarker() {
-        // Intentionally empty until the GREEN commit.
+        unsavedChangesLabel.isVisible = currentSettings() != appliedOnScreen
     }
 
     init {
         initUiWiring()
+        markOnScreenSettingsApplied(currentSettings())
+        // The listener runs on the saving worker, so it only posts. It is what clears the marker after
+        // MainTab's header writes, which persist a snapshot read off these components (residual R1).
+        settingsRepo.addChangeListener { saved ->
+            SwingUtilities.invokeLater {
+                if (!disposed) markOnScreenSettingsApplied(saved)
+            }
+        }
     }
 }
