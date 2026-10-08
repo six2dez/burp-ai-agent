@@ -89,7 +89,7 @@ private const val OUTPUT_NONE = "none"
  */
 internal class ToolDecisionReporter(
     private val logToOutput: (String) -> Unit,
-    private val verboseAudit: Boolean = false,
+    private val verboseAudit: () -> Boolean = { false },
 ) {
     /**
      * The only entry point. Emits both sinks and returns the metadata map for the third.
@@ -270,7 +270,7 @@ internal class ToolDecisionReporter(
      */
     private fun auditValue(value: String?): String? =
         value?.let {
-            if (verboseAudit) {
+            if (verboseAudit()) {
                 sanitizeBlock(it, maxChars = Defaults.MAX_CONTEXT_TOTAL_CHARS, maxLines = Int.MAX_VALUE)
             } else {
                 Hashing.sha256Hex(it)

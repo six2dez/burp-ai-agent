@@ -165,6 +165,7 @@ class SettingsPanel(
     internal val determinism = ToggleSwitch(settings.determinismMode)
     internal val autoRestart = ToggleSwitch(settings.autoRestart)
     internal val auditEnabled = ToggleSwitch(settings.auditEnabled)
+    internal val auditVerbose = ToggleSwitch(settings.auditVerbose)
 
     // 07-02 D-02: caps chat context to 1500/750 chars when ON (BUG-69-02 / issue #69).
     internal val chatSmallModelMode = ToggleSwitch(settings.smallModelMode)

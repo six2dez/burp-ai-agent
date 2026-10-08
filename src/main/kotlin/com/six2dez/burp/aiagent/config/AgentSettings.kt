@@ -93,6 +93,7 @@ data class AgentSettings(
     val determinismMode: Boolean,
     val autoRestart: Boolean,
     val auditEnabled: Boolean,
+    val auditVerbose: Boolean = false,
     val mcpSettings: McpSettings,
     // MCP proxy history preprocessing settings
     val preprocessProxyHistory: Boolean = Defaults.PREPROCESS_PROXY_HISTORY_ENABLED,
