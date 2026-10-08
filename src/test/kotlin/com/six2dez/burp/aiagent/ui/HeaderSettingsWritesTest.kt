@@ -168,6 +168,30 @@ class HeaderSettingsWritesTest {
         val reread = AgentSettingsRepository(api).load()
         assertEquals(PrivacyMode.STRICT, reread.privacyMode, "The preferences must say STRICT.")
         assertTrue(reread.passiveAiEnabled, "The preferences must hold the toggle.")
+        // STRICT and the toggle are both on screen and both saved: no false marker after the race.
+        onEdt { assertMarker(panel, false, "A header toggle that landed during a Save flight must leave no marker.") }
+    }
+
+    /**
+     * Q-261008-o97-MARKER — a header toggle with nothing else unsaved leaves no Unsaved changes marker.
+     *
+     * The repository is deliberately NOT seeded: its stored backend "burp-ai" is not in the fixture's
+     * backend combo, which is exactly the normalization that makes a saved repository object differ
+     * from its on-screen rendering.
+     */
+    @Test
+    fun aHeaderToggleWithNothingElseUnsavedLeavesNoMarker() {
+        val api = newApi()
+        val repo = AgentSettingsRepository(api)
+        val panel = newPanel(api, repo, mock(defaultAnswer = Answers.RETURNS_DEEP_STUBS))
+        onEdt {
+            assertMarker(panel, false, "Anti-vacuity: a fresh panel has no unsaved changes.")
+            panel.setPassiveAiEnabled(true)
+        }
+        onBackgroundThread { persistHeaderChange(repo, HeaderSettingsChange.PassiveAiEnabled(true)) }
+
+        onEdt { assertMarker(panel, false, "A header toggle with nothing else unsaved must leave no marker.") }
+        assertTrue(repo.load().passiveAiEnabled, "The header toggle must be saved.")
     }
 
     // ---------------------------------------------------------------------------------------------
