@@ -491,7 +491,7 @@ class ActiveAiScanner(
             // Checked BEFORE the baseline, so a skipped state-changing target sends nothing.
             val blockReason = ScanPolicy.idorReplayBlockReason(target.originalRequest.request().method(), riskCeiling)
             if (blockReason != null) {
-                api.logging().logToOutput("[ActiveAiScanner] Skipped ${target.id.take(200)}: $blockReason")
+                api.logging().logToOutput("[ActiveAiScanner] ${target.id.take(200)}: $blockReason")
                 return ActiveScanResult(target, 0, null, blockReason)
             }
         }
