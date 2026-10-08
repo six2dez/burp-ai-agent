@@ -134,6 +134,34 @@ object ScanPolicy {
         )
     val CACHE_CLASSES = setOf(VulnClass.CACHE_POISONING, VulnClass.CACHE_DECEPTION)
 
+    val SAFE_METHODS: Set<String> = setOf("GET", "HEAD", "OPTIONS")
+
+    val METHOD_SWITCH_CANDIDATES: List<String> = listOf("GET", "HEAD", "POST", "PUT")
+
+    // RED scaffold (quick 261008-vau): declarations only, still answering the pre-fix behaviour.
+    @Suppress("UNUSED_PARAMETER", "FunctionOnlyReturningConstant")
+    fun isSafeMethod(method: String?): Boolean = true
+
+    @Suppress("UNUSED_PARAMETER", "FunctionOnlyReturningConstant")
+    fun allowsStateChangingReplay(maxRisk: PayloadRisk): Boolean = true
+
+    @Suppress("UNUSED_PARAMETER", "FunctionOnlyReturningConstant")
+    fun idorReplayBlockReason(
+        method: String?,
+        maxRisk: PayloadRisk,
+    ): String? = null
+
+    @Suppress("UNUSED_PARAMETER")
+    fun methodSwitchAlternatives(
+        originalMethod: String?,
+        maxRisk: PayloadRisk,
+    ): List<String> =
+        when (originalMethod?.uppercase()) {
+            "GET" -> listOf("POST", "PUT")
+            "POST" -> listOf("GET", "PUT")
+            else -> listOf("GET", "POST")
+        }
+
     fun isAllowedForMode(
         mode: ScanMode,
         vulnClass: VulnClass,

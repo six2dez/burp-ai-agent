@@ -51,6 +51,14 @@ object Defaults {
     const val BACKEND_HEALTH_STARTUP_CHECK_DELAY_MS = 3_000L
     const val DEDUP_WINDOW_MS = 3_600_000L
     const val ACTIVE_SCAN_MAX_QUEUE_SIZE = 2_000
+
+    // (quick 261008-vau) Shared active-scan baselines: one sample per original request lives 5 min
+    // from insertion, at most 64 completed samples are kept (oldest evicted first, in-flight never),
+    // and every sample is dropped when the scanner stops. A failed measurement is never cached; a
+    // lookup waiting on another worker's measurement waits the request timeout plus this grace.
+    const val ACTIVE_SCAN_BASELINE_TTL_MS = 300_000L
+    const val ACTIVE_SCAN_BASELINE_MAX_ENTRIES = 64
+    const val ACTIVE_SCAN_BASELINE_WAIT_GRACE_MS = 5_000L
     const val MAX_CONTEXT_TOTAL_CHARS = 40_000
     const val CHAT_MAX_OUTPUT_TOKENS = 4096
     const val SCANNER_MAX_OUTPUT_TOKENS = 2048
