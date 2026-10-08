@@ -104,16 +104,30 @@ class ContextCollector(
         val items =
             issues
                 .map { i ->
-                    val host = i.httpService()?.host()
+                    val host: String? = i.httpService()?.host()
+                    // Same apply-then-own-host order as the HTTP capture: Redaction.apply handles
+                    // tokens, JWTs and custom patterns in every mode, then STRICT aliases the issue's
+                    // own host wherever the scanner wrote it into the text.
+                    val redactText: (String) -> String = { text ->
+                        val applied = Redaction.apply(text, policy, stableHostSalt = options.hostSalt)
+                        if (policy.anonymizeHosts && host != null) {
+                            UrlRedaction.anonymizeHostOccurrences(applied, host, options.hostSalt)
+                        } else {
+                            applied
+                        }
+                    }
+                    val name: String? = i.name()
+                    val detail: String? = i.detail()
+                    val remediation: String? = i.remediation()
                     AuditIssueItem(
-                        name = i.name(),
+                        name = redactText(name.orEmpty()),
                         severity = i.severity()?.name,
                         confidence = i.confidence()?.name,
-                        detail = i.detail(),
-                        remediation = i.remediation(),
+                        detail = detail?.let(redactText),
+                        remediation = remediation?.let(redactText),
                         affectedHost =
                             host?.let {
-                                if (policy.anonymizeHosts) Redaction.anonymizeHost(it, options.hostSalt) else it
+                                if (policy.anonymizeHosts) UrlRedaction.aliasHost(it, options.hostSalt) else it
                             },
                     )
                 }.let { list ->

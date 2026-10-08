@@ -102,8 +102,11 @@ class BountyPromptTagResolverTest {
     // WHY THIS SITE MATTERS MORE THAN THE TWO MCP TOOLS. `request_parse` and `params_extract` both
     // call `HttpRequest.httpRequest(input.content)` on CALLER-SUPPLIED content, so they ECHO a
     // cookie the caller already holds. This resolver reads a REAL Burp-held `HttpRequestResponse`
-    // and sends it to a configured AI backend. It is latent only because the class has no
-    // instantiation in `src/main/kotlin` — RE-MEASURED at execution time, not inherited.
+    // and sends it to a configured AI backend. The leak class is LIVE, not dormant: the resolver is
+    // constructed in production by `ui/UiActions.kt` (bountyPromptResolver) and reached from the
+    // right-click BountyPrompt menu. An earlier measurement that called the class unconstructed was
+    // invalidated by a raw NUL byte in that file, which made grep treat it as binary (corrected in
+    // quick task 261008-jx2).
     //
     // Every assertion below is on the RESOLVED TAG OUTPUT through the public `resolve(...)`, not on
     // the private helper, so the probe measures what a prompt would actually carry.
