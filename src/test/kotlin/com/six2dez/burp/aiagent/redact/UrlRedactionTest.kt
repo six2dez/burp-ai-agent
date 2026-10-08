@@ -109,6 +109,32 @@ class UrlRedactionTest {
     }
 
     @Test
+    fun schemeRelativeUrl_failsClosedInStrict() {
+        // java.net.URI parses //host/... as a non-absolute network-path reference, so it takes the
+        // fail-closed path, which must still find the //authority without a scheme.
+        val parsed = UrlRedaction.redact("//admin:pw@api.realcorp.com:8443/x?access_token=SECRETQ9", strict, SALT)
+        assertFalse(parsed.contains("realcorp", ignoreCase = true), parsed)
+        assertFalse(parsed.contains("admin:pw"), parsed)
+        assertFalse(parsed.contains("SECRETQ9"), parsed)
+        assertEquals("//[REDACTED]@$alias:8443/x?access_token=[REDACTED]", parsed)
+        assertEquals(parsed, UrlRedaction.redact(parsed, strict, SALT))
+
+        val unparseable = UrlRedaction.redact("//api.realcorp.com/a b?access_token=SECRETQ9", strict, SALT)
+        assertEquals("//$alias/a b?access_token=[REDACTED]", unparseable)
+        assertEquals(unparseable, UrlRedaction.redact(unparseable, strict, SALT))
+    }
+
+    @Test
+    fun schemeRelativeUrl_failsClosedInBalanced() {
+        val url = "//admin:pw@api.realcorp.com:8443/x?access_token=SECRETQ9"
+        val out = UrlRedaction.redact(url, RedactionPolicy.fromMode(PrivacyMode.BALANCED), SALT)
+
+        assertFalse(out.contains("admin:pw"), out)
+        assertFalse(out.contains("SECRETQ9"), out)
+        assertEquals("//[REDACTED]@api.realcorp.com:8443/x?access_token=[REDACTED]", out)
+    }
+
+    @Test
     fun registryAuthorityWithoutUriHost_failsClosedInStrict() {
         // java.net.URI parses this but reports a null host (underscore in a registry authority).
         val url = "https://my_host.realcorp.com/x?token=SECRETQ9"
@@ -147,6 +173,7 @@ class UrlRedactionTest {
             "https://admin:S3cr3t@api.realcorp.com:8443/api/v1/me?access_token=SECRETQ9&x=1#frag",
             "https://api.realcorp.com/search?q={x}",
             "not a url at all",
+            "//admin:pw@api.realcorp.com:8443/x?access_token=SECRETQ9",
         )) {
             assertEquals(url, UrlRedaction.redact(url, off, SALT))
         }
@@ -223,6 +250,12 @@ class UrlRedactionTest {
         assertNull(UrlRedaction.hostOf("/relative/path"))
         assertNull(UrlRedaction.hostOf(null))
         assertNull(UrlRedaction.hostOf(""))
+    }
+
+    @Test
+    fun hostOf_findsTheAuthorityOfASchemeRelativeUrl() {
+        assertEquals(HOST, UrlRedaction.hostOf("//api.realcorp.com/a b"))
+        assertEquals(HOST, UrlRedaction.hostOf("//admin:pw@api.realcorp.com:8443/x"))
     }
 
     private companion object {
