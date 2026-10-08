@@ -293,11 +293,12 @@ class SettingsPersistQueueTest {
     }
 
     /**
-     * CR-02 / REL-05 — every enumerated `MainTab` settings write goes through the persist queue.
+     * CR-02 / REL-05 / quick 261008-n0c — every enumerated `MainTab` settings write goes through the
+     * persist queue, and the chat neither saves nor applies settings.
      *
      * A structural gate, because the alternative is unreachable: driving a real `MainTab` headlessly
      * would need the whole Burp `MontoyaApi` surface plus a live `ChatPanel`. It reads `MainTab.kt`
-     * from disk and asserts the four counts pinned in the KDoc ledger above `persistSettings`, as
+     * from disk and asserts the six counts pinned in the KDoc ledger above `persistSettings`, as
      * EQUALITIES — "greater than zero" would pass with an eighth inline write site added.
      *
      * **Comment lines are stripped, block comments included.** The ledger deliberately reproduces the
@@ -324,19 +325,33 @@ class SettingsPersistQueueTest {
                 "McpSupervisor.stop().",
         )
         assertEquals(
-            3,
+            2,
             code.count { it.contains("settingsRepo.save(") },
-            "MainTab ledger: `settingsRepo.save(` must be 1 in each persist helper's apply lambda plus " +
-                "the ChatPanel applySettings lambda recorded as residual D-23-06-1. A fourth means a new " +
-                "write bypasses the queue's lock and can tear a snapshot (T-23-06-01/T-23-06-02).",
+            "MainTab ledger: `settingsRepo.save(` must be exactly 1 in each persist helper's apply lambda. " +
+                "A third means a new write bypasses the queue's lock and can tear a snapshot " +
+                "(T-23-06-01/T-23-06-02), or the chat saves settings again (quick 261008-n0c, H10).",
         )
         assertEquals(
-            2,
+            1,
             code.count { it.contains("mcpSupervisor.applySettings(") },
-            "MainTab ledger: `mcpSupervisor.applySettings(` must be 1 in persistSettingsAndApplyMcp plus " +
-                "the ChatPanel lambda. A third means a passive/active toggle now reaches " +
-                "McpSupervisor.stop(), which clears ScannerTaskRegistry and CollaboratorRegistry and " +
-                "would drop live scanner tasks (T-23-06-07).",
+            "MainTab ledger: `mcpSupervisor.applySettings(` must be 1, in persistSettingsAndApplyMcp. A " +
+                "second means a passive/active toggle or a chat send now reaches McpSupervisor.stop(), " +
+                "which clears ScannerTaskRegistry and CollaboratorRegistry and drops live scanner tasks " +
+                "(T-23-06-07).",
+        )
+        assertEquals(
+            0,
+            code.count { it.contains("supervisor.applySettings(") },
+            "MainTab ledger: `supervisor.applySettings(` must be 0. MainTab never pushes settings into " +
+                "AgentSupervisor; App's mirrorAppliedSettingsInto does it inside every successful save, " +
+                "so a MainTab call would be a second, unordered writer. The token is lowercase and does " +
+                "not match the MCP one.",
+        )
+        assertEquals(
+            1,
+            code.count { it.contains("getSettings = { settingsRepo.load() }") },
+            "MainTab ledger: `getSettings = { settingsRepo.load() }` must be 1, the ChatPanel " +
+                "construction. ChatPanel reads the applied snapshot and nothing else (quick 261008-n0c).",
         )
     }
 

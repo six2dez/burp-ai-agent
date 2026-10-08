@@ -6,6 +6,7 @@ import com.six2dez.burp.aiagent.audit.AuditLogger
 import com.six2dez.burp.aiagent.backends.BackendRegistry
 import com.six2dez.burp.aiagent.config.AgentSettings
 import com.six2dez.burp.aiagent.config.AgentSettingsRepository
+import com.six2dez.burp.aiagent.config.toPreprocessorSettings
 import com.six2dez.burp.aiagent.mcp.McpSupervisor
 import com.six2dez.burp.aiagent.mirrorAppliedSettingsInto
 import com.six2dez.burp.aiagent.redact.PrivacyMode
@@ -14,6 +15,7 @@ import com.six2dez.burp.aiagent.scanner.ActiveAiScanner
 import com.six2dez.burp.aiagent.scanner.PassiveAiScanner
 import com.six2dez.burp.aiagent.scanner.ensureBackendRunning
 import com.six2dez.burp.aiagent.supervisor.AgentSupervisor
+import com.six2dez.burp.aiagent.ui.components.PrivacyPill
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -21,7 +23,11 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.mockito.Answers
 import org.mockito.kotlin.any
+import org.mockito.kotlin.clearInvocations
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.mockingDetails
+import org.mockito.kotlin.never
+import org.mockito.kotlin.spy
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import java.io.File
@@ -180,6 +186,56 @@ class SettingsSingleSourceOfTruthTest {
         assertEquals(snapshot, provider(), "The scanners' provider must return the saved snapshot.")
     }
 
+    /**
+     * H10 (brief test b) — a chat send with unsaved Settings edits sends the applied snapshot's backend
+     * and privacy mode, shows the applied mode in the pill, and saves or applies nothing.
+     */
+    @Test
+    fun aChatSendWithUnsavedSettingsEditsSendsTheAppliedSnapshotAndSavesOrAppliesNothing() {
+        val api = newApi()
+        val repo = spy(AgentSettingsRepository(api))
+        val applied = repo.defaultSettings().copy(preferredBackendId = "codex-cli")
+        repo.save(applied)
+        val appSupervisor: AgentSupervisor = mock(defaultAnswer = Answers.RETURNS_DEEP_STUBS)
+        val mcpSupervisor: McpSupervisor = mock(defaultAnswer = Answers.RETURNS_DEEP_STUBS)
+        val panel = newPanel(api, repo, appSupervisor, mcpSupervisor)
+        SwingUtilities.invokeAndWait {
+            panel.privacyMode.selectedItem = PrivacyMode.OFF
+            panel.setPreferredBackend("ollama")
+        }
+        clearInvocations(repo, appSupervisor, mcpSupervisor)
+
+        // ---- MainTab composition (RED: today's MainTab.kt ChatPanel lambdas) ----
+        val h =
+            ChatPanelTestHarness.create(
+                "ok",
+                getSettings = { panel.currentSettings() },
+                applySettings = { s ->
+                    repo.save(s)
+                    appSupervisor.applySettings(s)
+                    mcpSupervisor.applySettings(s.mcpSettings, s.privacyMode, s.determinismMode, s.toPreprocessorSettings())
+                },
+            )
+        // ---- end of MainTab composition ----
+
+        ChatPanelTestHarness.sendUserMessage(h, "hello")
+        ChatPanelTestHarness.drainEdt()
+
+        val sent = mockingDetails(h.supervisor).invocations.single { it.method.name == "sendChat" }.arguments
+        assertEquals(PrivacyMode.BALANCED, sent[SEND_CHAT_PRIVACY_INDEX], "H10: the chat must send the applied privacy mode.")
+        assertEquals("codex-cli", sent[SEND_CHAT_BACKEND_INDEX], "H10: the chat must send the applied backend.")
+        var pillText: String? = null
+        SwingUtilities.invokeAndWait {
+            pillText = ChatPanelTestHarness.find(h.panel.root, PrivacyPill::class.java) { true }?.text
+        }
+        assertEquals("BALANCED", pillText, "T-n0c-03: the chat pill must show the mode actually in effect.")
+        verify(repo, never()).save(any())
+        verify(appSupervisor, never()).applySettings(any())
+        verify(h.supervisor, never()).applySettings(any())
+        verify(mcpSupervisor, never()).applySettings(any(), any(), any(), any())
+        assertEquals(applied, repo.load(), "A chat send must leave the applied snapshot untouched.")
+    }
+
     // ---------------------------------------------------------------------------------------------
     // Fixture
     // ---------------------------------------------------------------------------------------------
@@ -250,5 +306,7 @@ class SettingsSingleSourceOfTruthTest {
 
     private companion object {
         const val MAIN_SOURCE_ROOT = "src/main/kotlin"
+        const val SEND_CHAT_BACKEND_INDEX = 1
+        const val SEND_CHAT_PRIVACY_INDEX = 5
     }
 }
