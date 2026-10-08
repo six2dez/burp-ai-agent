@@ -25,6 +25,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
   or a proxy-history tool result could close a JSON string and inject members (for example an extra
   system-role message or a different `model`). Fixed by sending UTF-8 bytes (#84, #88). Redaction
   was not bypassed, because it runs before serialization.
+- **Right-click "send to AI" context leaked data the privacy mode promised to hide** - (a) the
+  `url` field of a captured request was sent raw next to the redacted request, so query-string
+  tokens (for example `access_token=`) leaked in BALANCED and STRICT, and the real hostname leaked
+  in STRICT; the preview showed a redacted URL that was not the one sent. (b) Scanner issue name,
+  detail and remediation were sent unredacted in every mode, including session IDs in URLs and
+  bearer tokens or JWTs quoted in the detail. (c) In STRICT, only the `Host:` line was anonymized,
+  so the item's own hostname still appeared in `Referer`, `Origin`, `Location` and absolute URLs
+  in bodies. (d) The BountyPrompt `[HTTP_Requests_Parameters]` tag sent parameter values such as
+  JWTs and secrets verbatim (only a parameter-name filter applied), and user custom patterns never
+  applied there. URLs now go through one fail-closed URL redactor (an unparseable URL no longer
+  comes back raw), issue text and every parameter line go through the redaction pipeline, and
+  STRICT aliases the item's own hostname everywhere in the captured text. Known remaining gap:
+  hostnames other than the item's own are still not anonymized in free text in STRICT (tracked
+  follow-up).
 
 ## [1.0.0] - 2026-08-22
 
