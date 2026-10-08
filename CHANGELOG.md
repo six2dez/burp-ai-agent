@@ -58,6 +58,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
   or cancelled message sends the context and the catalog again. After the privacy mode becomes
   stricter or you switch backend, earlier turns are resent only as the text you typed and the
   captured context is not sent again. Nothing new is saved with the project.
+- **AI scans and the MCP `http1_request` / `http2_request` tools could not test targets with a
+  self-signed or internal-CA certificate** (shipped in 1.0.0) - the AI active scanner, the Burp
+  Scanner AI check and both tools required upstream TLS certificate verification. They now follow
+  Burp's own TLS settings, and requests to AI providers still verify the certificate.
+- **The AI active scanner re-sent the original request once per insertion point and vulnerability
+  class before testing** (shipped in 1.0.0) - a right-click AI scan of a request with eight
+  injection points over every vulnerability class (48 classes in FULL mode) replayed the request
+  384 times before its payloads. One baseline per request is now shared by all of its targets
+  (right-click scans and passive-scanner follow-ups) for up to 5 minutes, and a failed baseline is
+  retried rather than reused.
+- **The Burp Scanner AI check bypassed the scan's resource pool** (shipped in 1.0.0) - it sent
+  through the extension's own HTTP client instead of the one Burp gives each scan check, so the
+  scan's resource pool, pause and session-handling rules did not apply; it also slept inside
+  Burp's scanner thread for the AI request delay and re-sent the base request before every
+  time-based payload. It now sends through the scan's client, measures the time-based baseline once
+  per insertion point, and the Delay (ms) setting applies only to the AI active scanner queue.
 
 ### Security
 
@@ -103,6 +119,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
   the log are detected. Files written by earlier versions are left as they are: if audit logging was
   on, they may hold the MCP token and full prompts, so regenerate the MCP token and delete them if
   needed.
+- **The AI active scanner replayed state-changing requests at every risk level** (shipped in
+  1.0.0) - the IDOR/BOLA test re-sent the original request with neighbouring IDs whatever its
+  method, so a DELETE, PUT, PATCH or POST was replayed against other objects even at SAFE, and the
+  403 bypass switched requests to POST or PUT. Now a request whose method is not GET, HEAD or
+  OPTIONS is replayed with neighbouring IDs only at DANGEROUS (below it the IDOR test is skipped and
+  the Output tab says why), and method switching tries only GET and HEAD below DANGEROUS.
 
 ## [1.0.0] - 2026-08-22
 

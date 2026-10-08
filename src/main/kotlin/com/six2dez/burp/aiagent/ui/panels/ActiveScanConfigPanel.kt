@@ -92,11 +92,17 @@ class ActiveScanConfigPanel(
         activeAiTimeoutSpinner.toolTipText = "Request timeout in seconds."
 
         activeAiDelaySpinner.font = DesignTokens.Typography.body
-        activeAiDelaySpinner.toolTipText = "Delay between requests in milliseconds (rate limiting)."
+        activeAiDelaySpinner.toolTipText =
+            "Minimum delay in milliseconds between requests of the AI active scanner queue " +
+            "(right-click AI scans and passive-scanner follow-ups). Burp Scanner audits run the AI check " +
+            "at the pace of the scan's resource pool and ignore this setting."
 
         activeAiRiskLevelCombo.font = DesignTokens.Typography.body
         activeAiRiskLevelCombo.background = DesignTokens.Colors.surface
-        activeAiRiskLevelCombo.toolTipText = "SAFE: read-only tests. MODERATE: may read data. DANGEROUS: may modify data."
+        activeAiRiskLevelCombo.toolTipText =
+            "SAFE: read-only tests. MODERATE: may read data. DANGEROUS: may modify data. " +
+            "DANGEROUS is the only level that replays a request whose method is not GET, HEAD or OPTIONS " +
+            "in IDOR/BOLA tests, or switches a 403 request to POST or PUT."
 
         activeAiScanModeCombo.font = DesignTokens.Typography.body
         activeAiScanModeCombo.background = DesignTokens.Colors.surface
