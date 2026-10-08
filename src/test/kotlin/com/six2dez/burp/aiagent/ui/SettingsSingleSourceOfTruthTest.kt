@@ -299,9 +299,13 @@ class SettingsSingleSourceOfTruthTest {
         onEdt { assertFalse(f.panel.unsavedChangesLabel.isVisible, "Restore defaults must leave no marker.") }
     }
 
-    /** MARKER / R1 — a header write persists the on-screen snapshot, so the marker clears once it is saved. */
+    /**
+     * MARKER — a save of exactly the on-screen values from a worker clears the marker, because the
+     * listener carries every header field that save changed. The header-write case lives in
+     * HeaderSettingsWritesTest.
+     */
     @Test
-    fun aHeaderWriteClearsTheMarkerOnceItIsSaved() {
+    fun aBackgroundSaveOfTheOnScreenValuesClearsTheMarker() {
         val f = markerFixture()
         var snapshot: AgentSettings? = null
         onEdt {
@@ -310,7 +314,7 @@ class SettingsSingleSourceOfTruthTest {
             assertMarker(f.panel, true, "Anti-vacuity: the toggle must show the marker.")
         }
 
-        // MainTab's persist-queue shape: the save runs on a background worker.
+        // A worker-thread save of exactly the on-screen values.
         val saver = Thread { f.repo.save(snapshot!!) }
         saver.start()
         saver.join()

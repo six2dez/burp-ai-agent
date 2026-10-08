@@ -146,6 +146,27 @@ internal sealed class HeaderSettingsChange {
     /** The persist-queue supersede key: the subclass, i.e. the field this change sets. */
     val supersedeKey: Any get() = javaClass
 
+    companion object {
+        /**
+         * [into] with every header field that differs between [from] and [to] set to [to]'s value; every
+         * other field of [into] unchanged. Used by the Unsaved changes marker: a header write changes one
+         * field of the saved snapshot, and the same single-field change is applied to the on-screen
+         * rendering of the applied settings.
+         */
+        fun carry(
+            from: AgentSettings,
+            to: AgentSettings,
+            into: AgentSettings,
+        ): AgentSettings =
+            listOf(
+                PreferredBackend(to.preferredBackendId),
+                McpEnabled(to.mcpSettings.enabled),
+                PassiveAiEnabled(to.passiveAiEnabled),
+                ActiveAiEnabled(to.activeAiEnabled),
+            ).filter { it.applyTo(from) != from }
+                .fold(into) { acc, change -> change.applyTo(acc) }
+    }
+
     data class PreferredBackend(
         val backendId: String,
     ) : HeaderSettingsChange() {

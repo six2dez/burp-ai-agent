@@ -550,9 +550,40 @@ class SettingsPanel(
      * It is deliberately not the repository object: the components normalize stored values (a backend
      * the combo cannot show, KB/byte conversion, spinner clamps, merged tool toggles, re-validated custom
      * patterns), so comparing against `settingsRepo.load()` would show a false marker on a fresh panel
-     * and after Restore defaults.
+     * and after Restore defaults. A Save marks its dispatch-time rendering ([markSaveApplied]); a header
+     * write carries its one field into it ([onAppliedSnapshotPublished], quick 261008-o97).
      */
     private var appliedOnScreen: AgentSettings? = null
+
+    /**
+     * The last applied snapshot this panel was told about: a repository object, not a rendering. EDT
+     * only. [onAppliedSnapshotPublished] diffs consecutive values to find the header fields a save changed.
+     */
+    private var lastAppliedSeen: AgentSettings = settings
+
+    /**
+     * EDT only. Called, in save order, with every snapshot the repository publishes. Carries the header
+     * fields that changed since the previous one into [appliedOnScreen], so a header write moves the
+     * rendering by the same single-field change it made to the saved snapshot: no false marker after a
+     * header toggle, and the marker stays while other edits are unsaved.
+     */
+    internal fun onAppliedSnapshotPublished(saved: AgentSettings) {
+        val previous = lastAppliedSeen
+        lastAppliedSeen = saved
+        appliedOnScreen?.let { markOnScreenSettingsApplied(HeaderSettingsChange.carry(previous, saved, it)) }
+    }
+
+    /**
+     * EDT only. The Save tail: marks [onScreenAtDispatch] (the rendering of what [saved] persisted) as
+     * applied, plus every header write that waited on the repository lock and landed after this save,
+     * i.e. the header fields that differ between [saved] and the newest published snapshot.
+     */
+    internal fun markSaveApplied(
+        saved: AgentSettings,
+        onScreenAtDispatch: AgentSettings,
+    ) {
+        markOnScreenSettingsApplied(HeaderSettingsChange.carry(saved, lastAppliedSeen, onScreenAtDispatch))
+    }
 
     /** EDT only. Records [view] as the rendering of the applied settings and refreshes the marker. */
     internal fun markOnScreenSettingsApplied(view: AgentSettings) {
@@ -573,11 +604,14 @@ class SettingsPanel(
     init {
         initUiWiring()
         markOnScreenSettingsApplied(currentSettings())
-        // The listener runs on the saving worker, so it only posts. It is what clears the marker after
-        // MainTab's header writes, which persist a snapshot read off these components (residual R1).
+        // The listener runs on the saving worker inside the repository write lock and only posts, so
+        // the posts reach the EDT in save order. A header write changes one field of the saved snapshot,
+        // and the same single-field change is applied to the rendering (quick 261008-o97). Installing
+        // the repository object itself would show a false marker, because the components normalize
+        // stored values.
         settingsRepo.addChangeListener { saved ->
             SwingUtilities.invokeLater {
-                if (!disposed) markOnScreenSettingsApplied(saved)
+                if (!disposed) onAppliedSnapshotPublished(saved)
             }
         }
     }

@@ -267,10 +267,11 @@ internal fun SettingsPanel.validateAndCollectCustomPatterns(): List<String> {
  *
  * **Why a flag rather than firing the three callbacks from `applyAndSaveSettingsAsync`'s EDT tail.**
  * The verifier offered both. Moving them to the tail would fire them for BOTH callers, and on the
- * `saveSettings()` path `onMcpEnabledChanged` reaches `MainTab`'s `settingsRepo.save()` plus
- * `mcpSupervisor.applySettings(...)` immediately after the worker's [applyAndSaveSettingsBody] has
- * already done exactly those two things — a second disk write and a second bounded MCP stop/start on
- * every save. The flag confines the change to the single caller that has the problem.
+ * `saveSettings()` path `onMcpEnabledChanged` reaches `MainTab`'s `persistHeaderChangeAndApplyMcp` (a
+ * save plus `mcpSupervisor.applySettings(...)`) immediately after the worker's
+ * [applyAndSaveSettingsBody] has already done exactly those two things — a second disk write and a
+ * second bounded MCP stop/start on every save. The flag confines the change to the single caller that
+ * has the problem.
  *
  * On the restore-defaults path the three callbacks are pure duplication already: one line later
  * [applyAndSaveSettingsBody] performs `settingsRepo.save`, `mcpSupervisor.applySettings`,
@@ -642,6 +643,9 @@ internal fun SettingsPanel.applyAndSaveSettingsAsync(
     // fields with no component (salt, TTLs, context window) are read from it and the body installs the
     // same value on the worker; without this a restore, whose defaults carry a fresh salt, would leave
     // a false marker. For a plain Save `updated` was read from that same working copy, so it is a no-op.
+    // Quick 261008-o97: a header write that waited on the repository lock and landed after this save is
+    // carried onto this dispatch-time rendering by markSaveApplied. That works because this save's own
+    // listener post always runs on the EDT before this tail (same worker, FIFO).
     settings = updated
     val onScreenAtDispatch = currentSettings()
     val lowered = AtomicBoolean(false)
@@ -674,7 +678,7 @@ internal fun SettingsPanel.applyAndSaveSettingsAsync(
             try {
                 result.onSuccess {
                     onSettingsChanged?.invoke(updated)
-                    markOnScreenSettingsApplied(onScreenAtDispatch)
+                    markSaveApplied(updated, onScreenAtDispatch)
                     refreshPassiveAiStatus()
                     refreshActiveAiStatus()
                     updateProfileWarnings()
