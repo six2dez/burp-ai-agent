@@ -9,6 +9,7 @@ import java.util.concurrent.ExecutionException
 import java.util.concurrent.FutureTask
 import java.util.concurrent.TimeUnit
 import javax.swing.SwingUtilities
+import burp.api.montoya.core.ByteArray as MontoyaByteArray
 
 data class TransportResponse(
     val statusCode: Int,
@@ -29,8 +30,8 @@ class MontoyaHttpTransport(
             HttpRequest
                 .httpRequestFromUrl(url)
                 .withMethod("POST")
-                .withBody(jsonBody)
-                .withAddedHeader("Content-Type", "application/json")
+                .withBody(utf8Body(jsonBody))
+                .withAddedHeader("Content-Type", "application/json; charset=utf-8")
         headers.forEach { (name, value) ->
             request = request.withAddedHeader(name, value)
         }
@@ -97,6 +98,24 @@ class MontoyaHttpTransport(
     companion object {
         // Extra grace over the request's own response timeout before the off-EDT worker join gives up.
         private const val EDT_OFFLOAD_GRACE_MS = 5_000L
+
+        /**
+         * Encodes a JSON request body as explicit UTF-8 bytes for Burp.
+         *
+         * Burp's String-to-message-bytes conversion keeps only the low byte of each char instead of
+         * encoding it as UTF-8. That corrupted every non-ASCII character sent to the HTTP backends
+         * and could even turn characters such as U+2022 or U+0122 into a raw JSON `"` byte
+         * (#84 #85 #86 #88). `String.toByteArray(UTF_8)` maps an unpaired surrogate (e.g. from a
+         * `take(n)` that split a pair) to '?', which is intended.
+         *
+         * The SpreadOperator suppression is deliberate: Montoya's only byte[] entry point is the
+         * Java vararg `byteArray(byte...)`, Kotlin can pass an existing array to it only with a
+         * spread, and one array copy per request is negligible next to the network round trip.
+         * Answered in source per ADR-17 clause 1 rather than baselined.
+         */
+        @Suppress("SpreadOperator")
+        private fun utf8Body(json: String): MontoyaByteArray =
+            MontoyaByteArray.byteArray(*json.toByteArray(Charsets.UTF_8))
 
         // Force UTF-8: Montoya's bodyToString() decodes with the JVM platform charset, which mojibakes
         // multibyte responses (e.g. Chinese, emoji) on hosts whose default charset isn't UTF-8.
