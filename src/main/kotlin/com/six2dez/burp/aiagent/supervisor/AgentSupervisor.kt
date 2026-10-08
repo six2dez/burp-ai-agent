@@ -372,7 +372,7 @@ class AgentSupervisor(
             onChunk = { chunk ->
                 responseAccumulator.append(chunk)
                 if (audit.isEnabled()) {
-                    audit.logEvent("agent_chunk", mapOf("backendId" to backendId, "chunk" to chunk))
+                    audit.logEvent("agent_chunk", mapOf("backendId" to backendId) + audit.bodyFields("chunk", chunk))
                 }
                 onChunk(chunk)
             },
@@ -380,7 +380,10 @@ class AgentSupervisor(
             maxOutputTokens = maxOutputTokens,
             onComplete = { err ->
                 val durationMs = System.currentTimeMillis() - sendStartMs
-                audit.logEvent("prompt_complete", mapOf("backendId" to backendId, "error" to err?.message))
+                audit.logEvent(
+                    "prompt_complete",
+                    mapOf("backendId" to backendId, "status" to (if (err == null) "ok" else "error")) + audit.errorFields(err),
+                )
                 if (err != null) {
                     api.logging().logToError("AI backend error ($backendId): ${err.message}")
                     aiRequestLogger?.log(
@@ -524,7 +527,7 @@ class AgentSupervisor(
             onChunk = { chunk ->
                 chatResponseAccumulator.append(chunk)
                 if (audit.isEnabled()) {
-                    audit.logEvent("agent_chunk", mapOf("backendId" to backendId, "chunk" to chunk))
+                    audit.logEvent("agent_chunk", mapOf("backendId" to backendId) + audit.bodyFields("chunk", chunk))
                 }
                 onChunk(chunk)
             },
@@ -532,7 +535,10 @@ class AgentSupervisor(
             maxOutputTokens = maxOutputTokens,
             onComplete = { err ->
                 val durationMs = System.currentTimeMillis() - chatSendStartMs
-                audit.logEvent("prompt_complete", mapOf("backendId" to backendId, "error" to err?.message))
+                audit.logEvent(
+                    "prompt_complete",
+                    mapOf("backendId" to backendId, "status" to (if (err == null) "ok" else "error")) + audit.errorFields(err),
+                )
                 if (err != null) {
                     api.logging().logToError("AI backend error ($backendId): ${err.message}")
                     aiRequestLogger?.log(
