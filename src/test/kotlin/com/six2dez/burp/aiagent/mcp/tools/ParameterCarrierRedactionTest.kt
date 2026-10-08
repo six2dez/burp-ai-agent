@@ -491,13 +491,15 @@ class ParameterCarrierRedactionTest {
         // in two named files and nothing else.
         //
         // THE REPLACEMENT LIVE EXAMPLE, which does exist: `prompts/bountyprompt/
-        // BountyPromptTagResolver.kt:151` renders `name=value (TYPE)` for prompt tags and applies its
-        // OWN inline cookie control — `Redaction.isCookieParameterType(...) -> "[STRIPPED]"` — in a
-        // THIRD file, without ever calling `sanitizeParameters`. This pin cannot see it. Read it with
-        // its caveat: it is LATENT, because the class has zero instantiations in `src/main/kotlin`
-        // (re-measured 2026-08-27), so it is a real example of the SHAPE this pin misses rather than
-        // a live leak. A bound stated with a live example is a bound; a bound stated abstractly is the
-        // sentence three prior rounds of this phase also wrote.
+        // BountyPromptTagResolver.kt` (buildRequestParameters) renders `name=value (TYPE)` for prompt
+        // tags and applies its OWN inline cookie control — `Redaction.isCookieParameterType(...) ->
+        // "[STRIPPED]"` — in a THIRD file, without ever calling `sanitizeParameters`. This pin cannot
+        // see it. The resolver is LIVE: it is constructed in production by `ui/UiActions.kt`
+        // (bountyPromptResolver) and reached from the right-click BountyPrompt menu. An earlier
+        // measurement that called it uninstantiated was invalidated by a raw NUL byte in that file,
+        // which made grep skip it as binary (corrected in quick task 261008-jx2). A bound stated with
+        // a live example is a bound; a bound stated abstractly is the sentence three prior rounds of
+        // this phase also wrote.
         val perFile = PRODUCER_FILES.associateWith { path -> codeLines(path).count { it.text.contains(SANITIZER_CALL) } }
 
         perFile.forEach { (path, count) ->
