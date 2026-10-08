@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Fixed
+
+- **Non-ASCII characters corrupted requests to every HTTP AI backend** - Anthropic,
+  OpenAI-compatible, NVIDIA NIM, Perplexity, LM Studio and Ollama all received a mangled body
+  whenever a prompt held non-ASCII text: the arrows in the bundled agent profiles, accented letters,
+  bullets, or emoji in proxied traffic. Symptoms varied by backend: llama.cpp "ill-formed UTF-8",
+  LM Studio "invalid_json", LiteLLM `model=None`, Anthropic "surrogates not allowed" / "unexpected
+  control character". The body was handed to Burp as text and Burp kept only the low byte of each
+  character, so some characters (for example `•`) even became a raw `"` that changed the structure
+  of the JSON request. Bodies are now sent as UTF-8 bytes with
+  `Content-Type: application/json; charset=utf-8`. Fixes #84, #85, #86 and #88.
+
+### Security
+
+- **Target-controlled text could alter the structure of AI backend requests** - the same low-byte
+  conversion turned `Ģ`/`•` into `"`, `ŝ` into `]` and `Ž` into `}`, so content from a scanned page
+  or a proxy-history tool result could close a JSON string and inject members (for example an extra
+  system-role message or a different `model`). Fixed by sending UTF-8 bytes (#84, #88). Redaction
+  was not bypassed, because it runs before serialization.
+
 ## [1.0.0] - 2026-08-22
 
 First stable release. The whole line is a security-correctness milestone: an external review of

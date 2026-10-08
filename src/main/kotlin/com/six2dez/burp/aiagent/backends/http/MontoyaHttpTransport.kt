@@ -114,8 +114,7 @@ class MontoyaHttpTransport(
          * Answered in source per ADR-17 clause 1 rather than baselined.
          */
         @Suppress("SpreadOperator")
-        private fun utf8Body(json: String): MontoyaByteArray =
-            MontoyaByteArray.byteArray(*json.toByteArray(Charsets.UTF_8))
+        private fun utf8Body(json: String): MontoyaByteArray = MontoyaByteArray.byteArray(*json.toByteArray(Charsets.UTF_8))
 
         // Force UTF-8: Montoya's bodyToString() decodes with the JVM platform charset, which mojibakes
         // multibyte responses (e.g. Chinese, emoji) on hosts whose default charset isn't UTF-8.
