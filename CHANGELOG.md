@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Changed
+
+- **The AI status pill no longer polls the backend every 5 seconds** - local backends (CLI tools,
+  Burp AI and HTTP servers on a loopback address) are re-checked every 30 seconds; remote providers
+  are checked only at startup, after a settings or backend change, and when the pill is clicked.
+  All checks run on a single background thread and never overlap; the tooltip shows when the last
+  check ran.
+
 ### Fixed
 
 - **Non-ASCII characters corrupted requests to every HTTP AI backend** - Anthropic,
@@ -17,6 +25,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
   character, so some characters (for example `•`) even became a raw `"` that changed the structure
   of the JSON request. Bodies are now sent as UTF-8 bytes with
   `Content-Type: application/json; charset=utf-8`. Fixes #84, #85, #86 and #88.
+- **NVIDIA NIM and Perplexity requests always failed** ("Unrecognized token 'data'") - both
+  asked for a streamed response, which the buffered Burp transport then parsed as one JSON
+  document. They now send non-streaming requests, and every OpenAI-compatible backend also
+  aggregates a streamed (SSE) body for servers that stream regardless.
+- **Backend health checks sent billable requests and could bypass Burp's upstream proxy** - NVIDIA
+  NIM and Perplexity health checks were real chat completions; they are now a free
+  `GET /v1/models`. They no longer fall back to a direct connection, and the Burp transport now
+  survives a Settings save, so health traffic keeps going through Burp's upstream proxy.
 
 ### Security
 

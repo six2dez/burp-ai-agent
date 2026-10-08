@@ -42,6 +42,13 @@ object Defaults {
     const val PASSIVE_SCAN_TIMEOUT_MS = 90_000L
     const val HEALTH_CHECK_INTERVAL_MS = 2_000L
     const val BACKEND_STARTUP_DELAY_MS = 2_000L
+
+    // AI status pill: poll interval for LOCAL backends only (CLI, Burp AI, loopback HTTP servers).
+    // Remote providers are never polled; their checks are network calls to a third party.
+    const val LOCAL_BACKEND_HEALTH_POLL_INTERVAL_MS = 30_000L
+
+    // AI status pill: delay before the one-off startup check (remote providers included).
+    const val BACKEND_HEALTH_STARTUP_CHECK_DELAY_MS = 3_000L
     const val DEDUP_WINDOW_MS = 3_600_000L
     const val ACTIVE_SCAN_MAX_QUEUE_SIZE = 2_000
     const val MAX_CONTEXT_TOTAL_CHARS = 40_000

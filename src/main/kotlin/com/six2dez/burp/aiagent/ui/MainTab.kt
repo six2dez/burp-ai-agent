@@ -7,6 +7,7 @@ import com.six2dez.burp.aiagent.backends.BackendRegistry
 import com.six2dez.burp.aiagent.backends.HealthCheckResult
 import com.six2dez.burp.aiagent.config.AgentSettings
 import com.six2dez.burp.aiagent.config.AgentSettingsRepository
+import com.six2dez.burp.aiagent.config.Defaults
 import com.six2dez.burp.aiagent.config.toPreprocessorSettings
 import com.six2dez.burp.aiagent.context.ContextCapture
 import com.six2dez.burp.aiagent.mcp.McpSupervisor
@@ -16,11 +17,16 @@ import com.six2dez.burp.aiagent.supervisor.AgentSupervisor
 import com.six2dez.burp.aiagent.ui.components.DependencyBanner
 import com.six2dez.burp.aiagent.ui.components.ToggleSwitch
 import java.awt.BorderLayout
+import java.awt.Cursor
 import java.awt.Dimension
 import java.awt.Graphics
 import java.awt.Graphics2D
 import java.awt.RenderingHints
 import java.awt.event.KeyEvent
+import java.awt.event.MouseAdapter
+import java.awt.event.MouseEvent
+import java.time.LocalTime
+import java.util.concurrent.Executors
 import javax.swing.BoxLayout
 import javax.swing.JComponent
 import javax.swing.JLabel
@@ -101,6 +107,19 @@ class MainTab(
         DependencyBanner("MCP Server must be enabled. Toggle MCP to enable AI features.")
     private var syncingToggles = false
     private var healthTimer: Timer? = null
+
+    // Status-pill health checks: ONE named daemon thread plus a single-flight gate, so checks never
+    // overlap and never pile up threads. A Settings save / click that lands mid-check is coalesced
+    // into exactly one re-check after the flight ends.
+    private val healthExec =
+        Executors.newSingleThreadExecutor { r -> Thread(r, "burp-ai-agent-health").apply { isDaemon = true } }
+    private val healthGate =
+        SingleFlightGate(healthExec) {
+            SwingUtilities.invokeLater { requestHealthCheck(HealthCheckTrigger.SETTINGS_CHANGED) }
+        }
+
+    // EDT-confined: the first timer tick is the startup check (remote providers included).
+    private var startupHealthCheckDone = false
     private var sessionPersistTimer: Timer? = null
     private var lastProjectId: String? = null
 
@@ -174,6 +193,7 @@ class MainTab(
             val selected = backendPicker.selectedItem as? String ?: "codex-cli"
             settingsPanel.setPreferredBackend(selected)
             persistSettings("backend-picker", settingsPanel.currentSettings())
+            requestHealthCheck(HealthCheckTrigger.SETTINGS_CHANGED)
         }
 
         mcpToggle.isSelected = initialSettings.mcpSettings.enabled
@@ -194,37 +214,23 @@ class MainTab(
         mcpGroup.add(mcpStatusLabel)
 
         styleStatusLabel(backendStatusLabel)
-        // Check health in background every 5s, not every 1s to avoid spam
+        // Click the pill to re-check on demand; remote providers are never polled on a timer.
+        backendStatusLabel.cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+        backendStatusLabel.toolTipText = "Click to re-check"
+        backendStatusLabel.addMouseListener(
+            object : MouseAdapter() {
+                override fun mouseClicked(e: MouseEvent) {
+                    requestHealthCheck(HealthCheckTrigger.USER_CLICK)
+                }
+            },
+        )
+        // First tick = startup check for every backend; later ticks poll local backends only.
         healthTimer =
-            Timer(5000) {
-                val settings = settingsPanel.currentSettings()
-                Thread {
-                    val health = supervisor.backendHealth(settings)
-                    SwingUtilities.invokeLater {
-                        when (health) {
-                            is HealthCheckResult.Healthy -> {
-                                backendStatusLabel.text = "AI: OK"
-                                backendStatusLabel.background = UiTheme.Colors.statusRunning
-                                backendStatusLabel.toolTipText = "Backend health check passed."
-                            }
-                            is HealthCheckResult.Degraded -> {
-                                backendStatusLabel.text = "AI: Degraded"
-                                backendStatusLabel.background = UiTheme.Colors.statusTerminal
-                                backendStatusLabel.toolTipText = health.message
-                            }
-                            else -> {
-                                backendStatusLabel.text = "AI: Offline"
-                                backendStatusLabel.background = UiTheme.Colors.statusCrashed
-                                backendStatusLabel.toolTipText =
-                                    when (health) {
-                                        is HealthCheckResult.Unavailable -> health.message
-                                        else -> "Backend did not respond."
-                                    }
-                            }
-                        }
-                    }
-                }.start()
-            }
+            Timer(Defaults.LOCAL_BACKEND_HEALTH_POLL_INTERVAL_MS.toInt()) {
+                val trigger = if (startupHealthCheckDone) HealthCheckTrigger.PERIODIC else HealthCheckTrigger.STARTUP
+                startupHealthCheckDone = true
+                requestHealthCheck(trigger)
+            }.apply { initialDelay = Defaults.BACKEND_HEALTH_STARTUP_CHECK_DELAY_MS.toInt() }
         healthTimer?.start()
 
         val passiveLabel = JLabel("Passive")
@@ -526,6 +532,59 @@ class MainTab(
                 activeToggle.isSelected = updated.activeAiEnabled
                 syncingToggles = false
                 renderStatus()
+                requestHealthCheck(HealthCheckTrigger.SETTINGS_CHANGED)
+            }
+        }
+    }
+
+    /**
+     * EDT only. Reads the current settings, asks [BackendHealthPolicy] whether [trigger] may run a
+     * check for the selected backend, and hands the network I/O to the single health thread. The
+     * result is painted back on the EDT.
+     *
+     * Any exception from a backend's health check (third-party code for external backends) must
+     * still repaint the pill as Offline instead of leaving a stale "AI: OK", hence the broad catch.
+     */
+    @Suppress("TooGenericExceptionCaught")
+    private fun requestHealthCheck(trigger: HealthCheckTrigger) {
+        val settings = settingsPanel.currentSettings()
+        if (!BackendHealthPolicy.shouldRun(trigger, settings)) return
+        healthGate.submit(coalesce = trigger != HealthCheckTrigger.PERIODIC) {
+            val health =
+                try {
+                    supervisor.backendHealth(settings)
+                } catch (e: Exception) {
+                    HealthCheckResult.Unavailable(e.message ?: "Health check failed")
+                }
+            val checkedAt = LocalTime.now()
+            SwingUtilities.invokeLater { renderBackendHealth(health, checkedAt) }
+        }
+    }
+
+    private fun renderBackendHealth(
+        health: HealthCheckResult,
+        checkedAt: LocalTime,
+    ) {
+        when (health) {
+            is HealthCheckResult.Healthy -> {
+                backendStatusLabel.text = "AI: OK"
+                backendStatusLabel.background = UiTheme.Colors.statusRunning
+                backendStatusLabel.toolTipText = BackendHealthPolicy.tooltip("Backend health check passed.", checkedAt)
+            }
+            is HealthCheckResult.Degraded -> {
+                backendStatusLabel.text = "AI: Degraded"
+                backendStatusLabel.background = UiTheme.Colors.statusTerminal
+                backendStatusLabel.toolTipText = BackendHealthPolicy.tooltip(health.message, checkedAt)
+            }
+            else -> {
+                backendStatusLabel.text = "AI: Offline"
+                backendStatusLabel.background = UiTheme.Colors.statusCrashed
+                val message =
+                    when (health) {
+                        is HealthCheckResult.Unavailable -> health.message
+                        else -> "Backend did not respond."
+                    }
+                backendStatusLabel.toolTipText = BackendHealthPolicy.tooltip(message, checkedAt)
             }
         }
     }
@@ -929,6 +988,7 @@ class MainTab(
         mcpStatusTimer.stop()
         healthTimer?.stop()
         healthTimer = null
+        healthExec.shutdownNow()
         sessionPersistTimer?.stop()
         sessionPersistTimer = null
         chatPanel.shutdown()
