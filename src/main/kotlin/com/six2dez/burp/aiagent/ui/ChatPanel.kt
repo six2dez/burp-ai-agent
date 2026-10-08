@@ -726,8 +726,10 @@ class ChatPanel(
                         }
                     // Settled here, on the completion thread (the transcript is synchronized), before the
                     // panel goes idle or a tool-chain continuation is queued, so the next turn always
-                    // plans from a settled transcript.
-                    if (err == null) {
+                    // plans from a settled transcript. A send whose connection the Cancel button already took
+                    // is not delivered, even when its backend still answers: it is not part of the conversation.
+                    val cancelled = callbackConnection != null && !shouldSetIdle
+                    if (err == null && !cancelled) {
                         wire.recordDelivered(wirePlan, finalPrompt, typedFallback, responseBuffer.toString(), carriedCatalog)
                     } else {
                         wire.recordUndelivered(typedFallback)
