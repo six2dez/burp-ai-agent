@@ -200,7 +200,7 @@ private class ModelApproved(
  * decisive case, and the reason this is a per-chat holder rather than anything wider: an approval
  * granted while reviewing target A must not silently apply when the user opens a new chat about
  * target B. The memory dies with the chat session because the holder does — plan 22-07 stores one of
- * these on `ChatPanel.ToolSessionState`, beside `toolsMode` and `toolCatalogSent`,
+ * these as `ChatPanel.ToolSessionState.approvalMemory`, beside `toolsMode` and `wire`,
  * which is why this class must stay constructible with no arguments and hold only plain collections.
  *
  * Measured fact worth recording so a future contributor does not "fix" it: approvals do **not** survive

@@ -1211,12 +1211,13 @@ class ActiveAiScanner(
             mapOf(
                 "vuln_class" to confirmation.target.vulnHint.vulnClass.name,
                 "url" to
-                    confirmation.target.originalRequest
-                        .request()
-                        .url(),
-                "payload" to confirmation.payload.value.take(100),
+                    AuditLogger.endpointOf(
+                        confirmation.target.originalRequest
+                            .request()
+                            .url(),
+                    ),
                 "confidence" to confirmation.confidence.toString(),
-            ),
+            ) + audit.bodyFields("payload", confirmation.payload.value),
         )
     }
 

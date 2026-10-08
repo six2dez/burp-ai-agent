@@ -4,6 +4,7 @@ import burp.api.montoya.http.message.HttpRequestResponse
 import burp.api.montoya.scanner.audit.issues.AuditIssue
 import burp.api.montoya.scanner.audit.issues.AuditIssueConfidence
 import burp.api.montoya.scanner.audit.issues.AuditIssueSeverity
+import com.six2dez.burp.aiagent.audit.AuditLogger
 import com.six2dez.burp.aiagent.config.AgentSettings
 import com.six2dez.burp.aiagent.config.Defaults
 import com.six2dez.burp.aiagent.supervisor.AgentSupervisor
@@ -151,7 +152,7 @@ internal fun PassiveAiScanner.handleFinding(
                             "title" to title,
                             "severity" to rawSeverity,
                             "confidence" to confidence.toString(),
-                            "url" to requestResponse.request().url(),
+                            "url" to AuditLogger.endpointOf(requestResponse.request().url()),
                             "source" to source,
                         ),
                     )

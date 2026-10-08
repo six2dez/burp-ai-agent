@@ -342,11 +342,13 @@ class ExternalMcpClientManager(
             if (auditLogger?.isEnabled() == true) {
                 AuditLogger.emitGlobal(
                     "external_mcp_call",
-                    buildMap {
+                    buildMap<String, Any> {
                         put("server", serverName)
                         put("tool", toolName)
                         put("status", "error")
-                        put("error", e.message.orEmpty())
+                        // The message is a body: errorClass plus its SHA-256 and length, the text itself
+                        // only under Verbose audit (quick 261008-sqa).
+                        auditLogger?.errorFields(e)?.let { putAll(it) }
                         // Note: bearer token is never included in audit output (T-16-03-TL).
                     },
                 )

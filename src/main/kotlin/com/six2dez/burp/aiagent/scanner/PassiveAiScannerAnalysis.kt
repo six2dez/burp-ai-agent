@@ -399,7 +399,7 @@ internal fun PassiveAiScanner.doAnalysis(requestResponse: HttpRequestResponse) {
             audit.logEvent(
                 "passive_ai_scan_cache_hit",
                 mapOf(
-                    "url" to request.url(),
+                    "url" to AuditLogger.endpointOf(request.url()),
                     "method" to request.method(),
                     "status" to (response?.statusCode() ?: 0).toString(),
                     "promptChars" to singlePrompt.length.toString(),
@@ -557,7 +557,7 @@ internal fun PassiveAiScanner.doAnalysis(requestResponse: HttpRequestResponse) {
         audit.logEvent(
             "passive_ai_scan",
             mapOf(
-                "url" to request.url(),
+                "url" to AuditLogger.endpointOf(request.url()),
                 "method" to request.method(),
                 "status" to (response?.statusCode() ?: 0).toString(),
                 "promptChars" to singlePrompt.length.toString(),

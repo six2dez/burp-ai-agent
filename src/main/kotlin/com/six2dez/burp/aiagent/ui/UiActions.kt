@@ -748,13 +748,12 @@ object UiActions {
                         actionName = "BountyPrompt: ${definition.title}",
                         onCompleted = { response, error ->
                             if (error != null) {
-                                audit?.logEvent(
-                                    "bountyprompt_completion_error",
-                                    mapOf(
-                                        "promptId" to definition.id,
-                                        "error" to (error.message ?: "unknown"),
-                                    ),
-                                )
+                                audit?.let { logger ->
+                                    logger.logEvent(
+                                        "bountyprompt_completion_error",
+                                        mapOf<String, Any>("promptId" to definition.id) + logger.errorFields(error),
+                                    )
+                                }
                                 return@openChatWithContext
                             }
                             handleBountyPromptCompletion(

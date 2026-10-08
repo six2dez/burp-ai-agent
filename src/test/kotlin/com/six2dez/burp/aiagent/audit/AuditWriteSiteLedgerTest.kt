@@ -11,24 +11,31 @@ import java.io.File
  * Field classes: C = credential (never written, in either mode); B = body (digest pair
  * `<name>Sha256` + `<name>Utf8Bytes` always, the body only under Verbose audit); M = metadata (always).
  *
- * | Site | Event | Fields |
- * |---|---|---|
- * | AgentSupervisor session start / stop | session_start, session_stop | backendId, sessionId, model, displayName, note: M |
- * | AgentSupervisor send / sendChat | prompt + bundles/ | ids, modes, prompt source/id/title, contextKind: M; promptText, contextJson: B; backendConfig = AuditBackendConfig allowlist (header values, env values, baseUrl userinfo/query/fragment, command, cliSessionId: C) |
- * | AgentSupervisor send / sendChat | agent_chunk | backendId: M; chunk: B |
- * | AgentSupervisor send / sendChat | prompt_complete | backendId, status, errorClass: M; error: B |
- * | PassiveAiScannerAnalysis | passive_ai_scan_cache_hit, passive_ai_scan | url: endpoint form (query = C); method, status, promptChars, issues, responseChars: M |
- * | PassiveAiScannerFinding | passive_ai_issue | title, severity, confidence, source: M; url: endpoint form |
- * | ActiveAiScanner | active_scan_confirmed | vuln_class, confidence: M; url: endpoint form; payload: B |
- * | UiActions BountyPrompt | bountyprompt_action_invoked, _output_only, _issue_creation_skipped, _issue_result | ids, targets, privacyMode, backendId, counts, reasons: M |
- * | UiActions BountyPrompt | bountyprompt_completion_error | promptId, errorClass: M; error: B |
- * | ChatPanel, PassiveAiScannerAnalysis, McpToolContext | secret_tripwire_allow / _detect | path, sessionId, shapeCategories, entropyScore: M (the matched value is never present) |
- * | ExternalMcpClientManager | external_mcp_call | server, tool, status, errorClass: M; error: B |
- * | McpTool telemetry | mcp_tool_blocked / _start / _end | tool, toolType, hasArgs, argsSha256 (digest), reason, outcome, errorType, durationMs, outputChars: M |
- * | McpBlockedRequestReporter | mcp_transport_blocked | reason, mode, method, path, suppressed: M; origin, host, referer, userAgent: SHA-256 in both modes |
- * | ToolDecisionReporter | mcp_tool_decision | decision metadata: M; args: B, audit event only |
- * | App | global emitter routing to AuditLogger.logEvent | routing only |
- * | AuditLogger (declarations, dead writers) | contexts/ files, the bundle zip export | contextJson: B (written only with audit and verbose on) |
+ * - AgentSupervisor `session_start` / `session_stop`: backendId, sessionId, model, displayName, note: M.
+ * - AgentSupervisor `prompt` (audit.jsonl) + bundles/ (send, sendChat): ids, modes, promptSource, promptId,
+ *   promptTitle, contextKind, verbose: M; promptText, contextJson: B; backendConfig is the
+ *   AuditBackendConfig allowlist (header values, env values, baseUrl userinfo / query / fragment,
+ *   command, cliSessionId: C).
+ * - AgentSupervisor `agent_chunk`: backendId: M; chunk: B.
+ * - AgentSupervisor `prompt_complete`: backendId, status, errorClass: M; error: B.
+ * - PassiveAiScannerAnalysis `passive_ai_scan_cache_hit`, `passive_ai_scan`: url in endpoint form (its
+ *   query is a C carrier); method, status, promptChars, issues, responseChars: M.
+ * - PassiveAiScannerFinding `passive_ai_issue`: title, severity, confidence, source: M; url in endpoint form.
+ * - ActiveAiScanner `active_scan_confirmed`: vuln_class, confidence: M; url in endpoint form; payload: B.
+ * - UiActions `bountyprompt_action_invoked`, `_output_only`, `_issue_creation_skipped`, `_issue_result`:
+ *   ids, targets, privacyMode, backendId, counts, constant reasons: M.
+ * - UiActions `bountyprompt_completion_error`: promptId, errorClass: M; error: B.
+ * - ChatPanel, PassiveAiScannerAnalysis, McpToolContext `secret_tripwire_allow` / `_detect`: path,
+ *   sessionId, shapeCategories, entropyScore: M (the matched value is never present).
+ * - ExternalMcpClientManager `external_mcp_call`: server, tool, status, errorClass: M; error: B.
+ * - McpTool `mcp_tool_blocked` / `_start` / `_end`: tool, toolType, hasArgs, argsSha256 (a digest), reason,
+ *   outcome, errorType, durationMs, outputChars: M.
+ * - McpBlockedRequestReporter `mcp_transport_blocked`: reason, mode, method, path, suppressed: M; origin,
+ *   host, referer, userAgent: remote header values, SHA-256 in both modes.
+ * - ToolDecisionReporter `mcp_tool_decision`: decision metadata: M; args: B, in the audit event only.
+ * - App: the global emitter routing to AuditLogger.logEvent (routing only).
+ * - AuditLogger: the two declarations, plus the uncalled contexts/ and bundle zip writers (contextJson: B,
+ *   written only with audit logging and verbose on).
  *
  * A new audit write site turns [everyAuditWriteSiteIsInTheLedger] red. Its author must classify every
  * field of the new record in the table above before raising the count.
