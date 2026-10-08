@@ -5,6 +5,9 @@ import burp.api.montoya.http.HttpService
 import burp.api.montoya.http.message.HttpRequestResponse
 import burp.api.montoya.http.message.requests.HttpRequest
 import burp.api.montoya.http.message.responses.HttpResponse
+import burp.api.montoya.scanner.audit.issues.AuditIssue
+import burp.api.montoya.scanner.audit.issues.AuditIssueConfidence
+import burp.api.montoya.scanner.audit.issues.AuditIssueSeverity
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.six2dez.burp.aiagent.redact.PrivacyMode
 import com.six2dez.burp.aiagent.redact.Redaction
@@ -89,6 +92,62 @@ class ContextCollectorPrivacyTest {
         }
     }
 
+    @Test
+    fun strictIssueCapture_redactsTokensJwtAndOwnHostInIssueText() {
+        val capture = issueCapture(PrivacyMode.STRICT)
+
+        for (text in listOf(capture.contextJson, capture.previewText)) {
+            assertFalse(text.contains(SESSION_SECRET), text)
+            assertFalse(text.contains(JWT), text)
+            assertFalse(text.contains(JWT_PAYLOAD), text)
+            assertFalse(text.contains("realcorp", ignoreCase = true), text)
+        }
+    }
+
+    @Test
+    fun balancedIssueCapture_redactsTokensAndJwtInIssueText() {
+        val capture = issueCapture(PrivacyMode.BALANCED)
+
+        for (text in listOf(capture.contextJson, capture.previewText)) {
+            assertFalse(text.contains(SESSION_SECRET), text)
+            assertFalse(text.contains(JWT), text)
+            assertFalse(text.contains(JWT_PAYLOAD), text)
+        }
+    }
+
+    @Test
+    fun strictIssueCapture_affectedHostMatchesTheAliasInsideTheDetail() {
+        val capture = issueCapture(PrivacyMode.STRICT)
+        val item = mapper.readTree(capture.contextJson)["items"][0]
+        val alias = item["affectedHost"].asText()
+
+        assertTrue(alias.startsWith("host-"), alias)
+        assertTrue(item["detail"].asText().contains("https://$alias/app"), item["detail"].asText())
+    }
+
+    private fun issueCapture(mode: PrivacyMode): ContextCapture {
+        val service = mock<HttpService>()
+        whenever(service.host()).thenReturn(ISSUE_HOST)
+        val issue = mock<AuditIssue>()
+        whenever(issue.name()).thenReturn("Session token in URL https://$ISSUE_HOST/app?JSESSIONID=$SESSION_SECRET")
+        whenever(issue.severity()).thenReturn(AuditIssueSeverity.MEDIUM)
+        whenever(issue.confidence()).thenReturn(AuditIssueConfidence.FIRM)
+        whenever(issue.detail()).thenReturn(
+            "<p>The application exposes a session token in the URL " +
+                "<b>https://$ISSUE_HOST/app?JSESSIONID=$SESSION_SECRET</b>.</p>" +
+                "<p>The request carried <code>Authorization: Bearer $JWT</code>.</p>",
+        )
+        whenever(issue.remediation()).thenReturn(
+            "Move the token out of https://$ISSUE_HOST/app?JSESSIONID=$SESSION_SECRET and into a cookie.",
+        )
+        whenever(issue.httpService()).thenReturn(service)
+
+        return ContextCollector(mock<MontoyaApi>()).fromAuditIssues(
+            listOf(issue),
+            ContextOptions(privacyMode = mode, deterministic = true, hostSalt = SALT),
+        )
+    }
+
     private fun urlField(capture: ContextCapture): String = mapper.readTree(capture.contextJson)["items"][0]["url"].asText()
 
     private fun capture(
@@ -135,5 +194,10 @@ class ContextCollectorPrivacyTest {
         const val SALT = "jx2-privacy-salt"
         const val QUERY_SECRET = "SECRETQ9"
         const val RAW_URL = "https://api.realcorp.com/api/v1/me?access_token=SECRETQ9&x=1"
+        const val ISSUE_HOST = "intranet.realcorp.local"
+        const val SESSION_SECRET = "SECRETS1"
+        const val JWT_PAYLOAD = "eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ"
+        const val JWT =
+            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.$JWT_PAYLOAD.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
     }
 }
