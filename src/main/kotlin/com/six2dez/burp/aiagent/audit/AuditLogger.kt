@@ -42,23 +42,33 @@ class AuditLogger(
         }
 
         /**
-         * The endpoint form of [url] for an audit record: scheme, host, port and path. Userinfo (everything
-         * up to the last `@` of the authority, so an `@` or `?` inside a password is removed too), query and
+         * The endpoint form of [url] for an audit record: scheme, host, port and path. Userinfo, query and
          * fragment are dropped in both audit modes. Null or blank input gives null.
+         *
+         * The candidate authority runs from just after the first `//` (or from the start when there is
+         * none, so a scheme-less `user:pass@host/path` loses its userinfo too) to the next `/` or the end.
+         * Userinfo is everything up to the candidate's LAST `@`, so an `@` inside a password is removed.
+         *
+         * **Ambiguous authority, fail closed.** When the candidate holds an `@` and a `?` or `#` occurs
+         * before that last `@`, the split cannot be decided: it is either a raw `?`/`#` inside a password
+         * or a query/fragment that holds an `@` (`https://gw.example?user=a@b.com&key=…` has no path, so
+         * its whole query sits in the candidate). Each reading writes the other one's secret, so only the
+         * text before the authority is kept (for example `https://`), cut at its own first `?` or `#`.
          */
         fun endpointOf(url: String?): String? {
             if (url.isNullOrBlank()) return null
             val trimmed = url.trim()
             val authorityMarker = trimmed.indexOf("//")
+            val authorityStart = if (authorityMarker < 0) 0 else authorityMarker + 2
+            val slash = trimmed.indexOf('/', authorityStart)
+            val authority = trimmed.substring(authorityStart, if (slash < 0) trimmed.length else slash)
+            val at = authority.lastIndexOf('@')
+            val ambiguous = at >= 0 && authority.substring(0, at).indexOfAny(charArrayOf('?', '#')) >= 0
             val withoutUserInfo =
-                if (authorityMarker < 0) {
-                    trimmed
+                if (ambiguous) {
+                    trimmed.substring(0, authorityStart)
                 } else {
-                    val authorityStart = authorityMarker + 2
-                    val slash = trimmed.indexOf('/', authorityStart)
-                    val authorityEnd = if (slash < 0) trimmed.length else slash
-                    val at = trimmed.lastIndexOf('@', authorityEnd - 1)
-                    if (at >= authorityStart) trimmed.substring(0, authorityStart) + trimmed.substring(at + 1) else trimmed
+                    trimmed.substring(0, authorityStart) + trimmed.substring(authorityStart + at + 1)
                 }
             val cut = withoutUserInfo.indexOfAny(charArrayOf('?', '#'))
             val endpoint = if (cut < 0) withoutUserInfo else withoutUserInfo.substring(0, cut)
