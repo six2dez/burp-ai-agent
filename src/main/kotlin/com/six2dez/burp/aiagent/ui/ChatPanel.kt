@@ -645,13 +645,31 @@ class ChatPanel(
         }
         val assistant = sessionPanel.addStreamingMessage("AI")
         val state = sessionStates.getOrPut(sessionId) { ToolSessionState() }
-        val toolContext = if (state.toolsMode) buildToolContext(settings, sessionId) else null
-        val toolPreamble = if (state.toolsMode) buildToolPreamble(toolContext, state, mutateState = true) else null
-        // Only include context JSON on the first turn — history already carries it
-        val effectiveContextJson = if (session != null && session.contextSent) null else contextJson
-        if (effectiveContextJson != null && session != null) {
-            session.contextSent = true
+        // Captured here, on the EDT: the completion settles into THIS transcript even if Clear Chat
+        // replaces the session's transcript while the send is in flight.
+        val wire = state.wire
+        val wireTag = ChatWireTranscript.Tag(settings.privacyMode, backendId)
+        if (contextJson != null) wire.offerContext(contextJson, wireTag)
+        val wirePlan = wire.planTurn(wireTag)
+        if (wirePlan.contextWithheld) {
+            api.logging().logToOutput(
+                "[ChatPanel] The captured context was not resent: the privacy mode or the backend changed since it was captured.",
+            )
         }
+        val toolContext = if (state.toolsMode) buildToolContext(settings, sessionId) else null
+        val toolPreamble = if (state.toolsMode) buildToolPreamble(toolContext, wirePlan.includeCatalog) else null
+        // The captured context is attached until a delivered send has carried it, and only while the
+        // privacy guard allows it; from then on the history carries the turn that delivered it.
+        val effectiveContextJson = wirePlan.contextJson
+        // The typed form of this turn, which the guard falls back to. Follow-ups have no typed text, so
+        // the guard omits them.
+        val typedFallback =
+            session
+                ?.messages
+                ?.lastOrNull()
+                ?.takeIf { normalizeRole(it.role) == "user" && it.content == userText }
+                ?.content
+        val carriedCatalog = toolPreamble != null && wirePlan.includeCatalog
         // Extract agent instructions as system prompt for HTTP backends
         val agentBlock =
             com.six2dez.burp.aiagent.agents.AgentProfileLoader
@@ -680,27 +698,14 @@ class ChatPanel(
         }
 
         val responseBuffer = StringBuilder()
-        val history =
-            session?.messages?.let { msgs ->
-                val trimmed =
-                    if (msgs.isNotEmpty() &&
-                        normalizeRole(msgs.last().role) == "user" &&
-                        msgs.last().content == userText
-                    ) {
-                        msgs.dropLast(1)
-                    } else {
-                        msgs
-                    }
-                trimmed.map { ChatMessage(normalizeRole(it.role), it.content) }
-            }
         val callbackConnectionRef = AtomicReference<AgentConnection?>(null)
         val connection =
             supervisor.sendChat(
                 chatSessionId = sessionId,
                 backendId = backendId,
                 text = finalPrompt,
-                history = history,
-                contextJson = contextJson,
+                history = wirePlan.history,
+                contextJson = effectiveContextJson,
                 privacyMode = settings.privacyMode,
                 determinismMode = settings.determinismMode,
                 traceId = traceId,
@@ -719,6 +724,14 @@ class ChatPanel(
                         } else {
                             inFlightConnection.clearIfMatches(callbackConnection)
                         }
+                    // Settled here, on the completion thread (the transcript is synchronized), before the
+                    // panel goes idle or a tool-chain continuation is queued, so the next turn always
+                    // plans from a settled transcript.
+                    if (err == null) {
+                        wire.recordDelivered(wirePlan, finalPrompt, typedFallback, responseBuffer.toString(), carriedCatalog)
+                    } else {
+                        wire.recordUndelivered(typedFallback)
+                    }
                     if (shouldSetIdle) {
                         SwingUtilities.invokeLater { setSendingState(false) }
                     }
@@ -1188,6 +1201,8 @@ class ChatPanel(
 
         panel.addMessage("You", commandPreview)
         session.messages.add(ChatMessage("user", commandPreview))
+        val wire = state.wire
+        wire.recordPlain("user", commandPreview)
 
         // UI-SPEC Rule S-2, and it is not decoration: the call below no longer blocks the EDT, so
         // without entering the busy state the user could fire a tool and press Send on the same idle,
@@ -1207,11 +1222,11 @@ class ChatPanel(
             work = { McpToolExecutor.executeTool(invocation.toolId, args, context, ToolCallOrigin.UserDialog) },
             onEdt = { result ->
                 finishUserOriginatedToolCall(panel, sessionId, invocation.toolId, token, result) { text ->
-                    sessionsById[sessionId]?.messages?.add(
-                        ChatMessage("assistant", "Tool result (${invocation.toolId}):\n$text"),
-                    )
+                    val toolResult = "Tool result (${invocation.toolId}):\n$text"
+                    sessionsById[sessionId]?.messages?.add(ChatMessage("assistant", toolResult))
+                    // Reaches the model with the next turn, tagged with the snapshot the tool context was built from.
+                    wire.recordToolResult(toolResult, ChatWireTranscript.Tag(settings.privacyMode, settings.preferredBackendId))
                     state.toolsMode = true
-                    state.toolCatalogSent = true
                     refreshSessionList()
                 }
             },
@@ -1350,7 +1365,6 @@ class ChatPanel(
         supervisor.removeChatSession(selected.id)
         // Clear logical message history so the backend doesn't receive stale context
         selected.messages.clear()
-        selected.contextSent = false
         selected.messageCount = 0
         selected.totalCharsIn = 0
         selected.totalCharsOut = 0
@@ -1358,13 +1372,15 @@ class ChatPanel(
         selected.totalTokensOut = 0
         sessionDrafts[selected.id] = ""
         val state = sessionStates.getOrPut(selected.id) { ToolSessionState() }
-        state.toolCatalogSent = false
         state.toolsMode = true
         // T-22-34 / ADR-15: the D-10 approve/deny memory goes with the history it was granted against.
         // Clear Chat is the user declaring a new task, which is D-10's own justification for asking
         // again — an approval given while reviewing target A must not run silently against target B.
         // A fresh holder drops both session sets and the repeat counter in one assignment.
         state.approvalMemory = ToolApprovalMemory()
+        // A fresh transcript drops the turns as sent and any pending context in one assignment. A send in
+        // flight right now settles into the transcript it captured, never into this one.
+        state.wire = ChatWireTranscript()
         // Remove persisted messages for this session
         try {
             projectData().deleteString(sessionMsgKeyPrefix + selected.id)
@@ -1384,7 +1400,8 @@ class ChatPanel(
         val summary = privacySummary(getSettings().privacyMode)
         val payload = buildContextPayload(promptText, capture.contextJson, actionName)
         val toolContext = if (state.toolsMode) buildToolContext(getSettings(), sessionId) else null
-        val toolPreamble = if (state.toolsMode) buildToolPreamble(toolContext, state, mutateState = false) else null
+        // The preview of a new session's first send, which carries the full catalog.
+        val toolPreamble = if (state.toolsMode) buildToolPreamble(toolContext, includeCatalog = true) else null
         val finalPayload =
             if (!toolPreamble.isNullOrBlank()) {
                 toolPreamble + "\n\n" + payload
@@ -1897,7 +1914,13 @@ class ChatPanel(
                 sessionDrafts[id] = ""
                 val panel = SessionPanel()
                 sessionPanels[id] = panel
-                sessionStates[id] = ToolSessionState()
+                // A restored session has no wire payload: its history is its display text, and its
+                // original context is never resent.
+                val restoredState = ToolSessionState()
+                for (msg in messages) {
+                    restoredState.wire.recordPlain(normalizeRole(msg.role), msg.content)
+                }
+                sessionStates[id] = restoredState
                 chatCards.add(panel.root, id)
 
                 // Display restored messages
@@ -2012,7 +2035,6 @@ class ChatPanel(
         var totalTokensIn: Long = 0,
         var totalTokensOut: Long = 0,
         val messages: MutableList<ChatMessage> = mutableListOf(),
-        var contextSent: Boolean = false,
         /**
          * Metadata describing how this chat session was launched (prompt source, prompt id,
          * context kind). Forwarded to AgentSupervisor.sendChat so it lands in
@@ -2065,7 +2087,9 @@ class ChatPanel(
 
     private data class ToolSessionState(
         var toolsMode: Boolean = true,
-        var toolCatalogSent: Boolean = false,
+        // The session's wire transcript: the turns as they were sent. In memory only, never persisted;
+        // replaced whole by Clear Chat, like approvalMemory below.
+        var wire: ChatWireTranscript = ChatWireTranscript(),
         // D-10: the SEC-06 approve/deny memory is keyed on the CHAT session and dies with it — no new
         // lifecycle, no persistence. An approval granted while reviewing target A must not silently
         // apply when the user opens a new chat about target B (T-22-20).
@@ -2601,7 +2625,6 @@ class ChatPanel(
             val list = McpToolExecutor.describeTools(context, includeSchemas = true)
             panel.addMessage("Tools", list)
             state.toolsMode = true
-            state.toolCatalogSent = true
             return true
         }
         if (trimmed.startsWith("/tool ")) {
@@ -2622,6 +2645,7 @@ class ChatPanel(
             // it too (FLAG-23-03), which removes an asymmetry with the dialog path rather than keeping it.
             panel.addMessage("You", trimmed)
             sessionsById[sessionId]?.messages?.add(ChatMessage("user", trimmed))
+            state.wire.recordPlain("user", trimmed)
             // Rule S-2: the panel is busy for as long as the worker runs, and Cancel has a token to take.
             setSendingState(true)
             val token = RunningToolToken(toolName)
@@ -2636,7 +2660,6 @@ class ChatPanel(
                 onEdt = { result ->
                     finishUserOriginatedToolCall(panel, sessionId, toolName, token, result) {
                         state.toolsMode = true
-                        state.toolCatalogSent = state.toolCatalogSent || argsJson != null
                     }
                 },
             )
@@ -3448,8 +3471,7 @@ class ChatPanel(
 
     private fun buildToolPreamble(
         context: McpToolContext?,
-        state: ToolSessionState,
-        mutateState: Boolean,
+        includeCatalog: Boolean,
     ): String? {
         if (context == null) return null
         val header =
@@ -3468,12 +3490,12 @@ IMPORTANT:
 - After receiving a tool result, continue your analysis or make another tool call.
 - For confirmed vulnerabilities, call `issue_create` with concrete evidence.
         """.trim()
-        if (state.toolCatalogSent) return header
-        if (mutateState) {
-            state.toolCatalogSent = true
+        // Two returns, not three: detekt's ReturnCount baseline entry names this function's old signature.
+        return if (includeCatalog) {
+            header + "\n\n" + McpToolExecutor.describeTools(context, includeSchemas = true, includeDisabled = false)
+        } else {
+            header
         }
-        val list = McpToolExecutor.describeTools(context, includeSchemas = true, includeDisabled = false)
-        return header + "\n\n" + list
     }
 
     private fun buildToolContext(
