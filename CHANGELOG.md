@@ -50,11 +50,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
   so the item's own hostname still appeared in `Referer`, `Origin`, `Location` and absolute URLs
   in bodies. (d) The BountyPrompt `[HTTP_Requests_Parameters]` tag sent parameter values such as
   JWTs and secrets verbatim (only a parameter-name filter applied), and user custom patterns never
-  applied there. URLs now go through one fail-closed URL redactor (an unparseable URL no longer
-  comes back raw), issue text and every parameter line go through the redaction pipeline, and
-  STRICT aliases the item's own hostname everywhere in the captured text. Known remaining gap:
-  hostnames other than the item's own are still not anonymized in free text in STRICT (tracked
-  follow-up).
+  applied there. URLs now go through one fail-closed URL redactor (an unparseable or
+  scheme-relative URL no longer comes back raw), issue text and every parameter line go through
+  the redaction pipeline, and STRICT aliases the item's own hostname everywhere in the captured
+  text. Known remaining gap: hostnames other than the item's own are still not anonymized in free
+  text in STRICT (tracked follow-up).
 
 ## [1.0.0] - 2026-08-22
 

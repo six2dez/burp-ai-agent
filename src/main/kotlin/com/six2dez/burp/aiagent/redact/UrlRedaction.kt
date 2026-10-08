@@ -16,15 +16,20 @@ import java.util.Locale
  *   hosts are anonymized, port kept), redacts the fragment with the same `[?&]key=` rule as the
  *   query, aliases the own host wherever else it appears in the URL, and finally runs the
  *   host-less [Redaction.apply] so token, JWT and user custom-pattern rules apply uniformly. When
- *   the URL does not parse it still rewrites the `scheme://authority` prefix it can find, and it
- *   never skips the final apply.
+ *   the URL does not parse (or parses without a scheme) it still rewrites the `[scheme:]//authority`
+ *   prefix it can find, a scheme-relative `//host` reference included, and it never skips the
+ *   final apply.
  * - [anonymizeHostOccurrences] aliases one known hostname wherever it appears in text, including
  *   inside percent-encoded URLs, and must run AFTER [Redaction.apply] so the `Host:` line is not
  *   aliased twice.
  */
 object UrlRedaction {
     private val aliasShape = Regex("^host-[0-9a-f]{12}\\.local$", RegexOption.IGNORE_CASE)
-    private val authorityPrefix = Regex("^[A-Za-z][A-Za-z0-9+.-]*://([^/?#]*)")
+
+    // The scheme is optional so a scheme-relative `//host` reference (a network-path reference)
+    // still has its authority rewritten; group 1 is always the authority.
+    private val authorityPrefix = Regex("^(?:[A-Za-z][A-Za-z0-9+.-]*:)?//([^/?#]*)")
+
     private const val REDACTED_USERINFO = "[REDACTED]"
 
     // A host occurrence starts after a character that cannot belong to a DNS label, or right after
@@ -47,9 +52,9 @@ object UrlRedaction {
     ): String = if (aliasShape.matches(host)) host else Redaction.anonymizeHost(host.lowercase(Locale.ROOT), salt)
 
     /**
-     * The host of an absolute URL: the `java.net.URI` host when it parses, otherwise the host part
-     * of the `scheme://authority` prefix (userinfo and port removed, a bracketed IPv6 literal kept
-     * whole). Null when neither yields a host.
+     * The host of a URL: the `java.net.URI` host when it parses, otherwise the host part of the
+     * `[scheme:]//authority` prefix, a scheme-relative `//host` reference included (userinfo and
+     * port removed, a bracketed IPv6 literal kept whole). Null when neither yields a host.
      */
     fun hostOf(rawUrl: String?): String? {
         if (rawUrl.isNullOrBlank()) return null
@@ -135,9 +140,9 @@ object UrlRedaction {
         return rebuilt to host
     }
 
-    // FAIL CLOSED: rewrite the authority of the scheme://authority prefix and keep the rest
-    // verbatim. Without such a prefix there is no host to rewrite; the caller's final
-    // Redaction.apply still runs.
+    // FAIL CLOSED: rewrite the authority of the [scheme:]//authority prefix (a scheme-relative
+    // //host reference included) and keep the rest verbatim. Without such a prefix there is no
+    // host to rewrite; the caller's final Redaction.apply still runs.
     private fun rewriteUnparsedUrl(
         rawUrl: String,
         policy: RedactionPolicy,
@@ -151,7 +156,7 @@ object UrlRedaction {
         return rebuilt to authority.host.ifEmpty { null }
     }
 
-    // The authority of the scheme://authority prefix, with its character range in [rawUrl].
+    // The authority of the [scheme:]//authority prefix, with its character range in [rawUrl].
     private fun prefixAuthority(rawUrl: String): Pair<IntRange, Authority>? {
         val group = authorityPrefix.find(rawUrl)?.groups?.get(1) ?: return null
         return group.range to Authority.parse(group.value)
