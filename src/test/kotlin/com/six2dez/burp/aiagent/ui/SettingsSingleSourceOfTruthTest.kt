@@ -444,7 +444,7 @@ class SettingsSingleSourceOfTruthTest {
         }
         whenever(prefs.getInteger(any())).thenAnswer { integers[it.getArgument<String>(0)] }
         whenever(prefs.setInteger(any(), any())).thenAnswer {
-            if (failIntegerWrites) throw IllegalStateException("simulated preference write failure")
+            check(!failIntegerWrites) { "simulated preference write failure" }
             integers[it.getArgument<String>(0)] = it.getArgument(1)
             null
         }
