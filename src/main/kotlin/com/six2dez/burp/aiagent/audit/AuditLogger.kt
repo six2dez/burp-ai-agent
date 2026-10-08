@@ -14,6 +14,7 @@ import java.util.zip.ZipOutputStream
 
 class AuditLogger(
     private val api: MontoyaApi,
+    private val baseDir: File = File(System.getProperty("user.home"), ".burp-ai-agent"),
 ) {
     companion object {
         @Volatile
@@ -29,10 +30,15 @@ class AuditLogger(
         ) {
             globalEmitter?.invoke(type, payload)
         }
+
+        fun endpointOf(url: String?): String? = url
     }
 
     @Volatile
     private var enabled: Boolean = true
+
+    @Volatile
+    var verbose: Boolean = false
     private val mapper =
         JsonMapper
             .builder()
@@ -40,7 +46,11 @@ class AuditLogger(
             .enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS)
             .build()
             .registerKotlinModule()
-    private val baseDir: File = File(System.getProperty("user.home"), ".burp-ai-agent").also { it.mkdirs() }
+
+    init {
+        baseDir.mkdirs()
+    }
+
     private val logFile: File = File(baseDir, "audit.jsonl")
     private val bundleDir: File = File(baseDir, "bundles").also { it.mkdirs() }
     private val contextDir: File = File(baseDir, "contexts").also { it.mkdirs() }
