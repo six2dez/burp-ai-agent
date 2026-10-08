@@ -115,6 +115,8 @@ class ActiveScannerRequestSafetyTest {
                 it.startsWith("[ActiveAiScanner] ") && it.contains(target.id) && it.contains("DANGEROUS")
             }
         assertEquals(1, lines.size, "expected one Output line naming the skipped target, got ${outputLines(recorder.api)}")
+        val line = lines.single()
+        assertEquals(1, Regex("Skipped").findAll(line).count(), "the skip notice says Skipped once: $line")
     }
 
     @Test
