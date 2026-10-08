@@ -169,11 +169,11 @@ class AuditVerboseSettingTest {
         val loudHome = root.resolve("decision-verbose").toFile()
         runApprovedToolCall(loudHome, auditVerbose = true, marker = ARGS_ON_MARKER)
         val loud = decisionRecords(loudHome)
-        val withArgs = loud.filter { it.path("payload").path("args").asText().contains(ARGS_ON_MARKER) }
+        val withArgs = loud.filter { argsOf(it).contains(ARGS_ON_MARKER) }
         assertEquals(1, withArgs.size, "Exactly one decision record carries the verbose args: $loud")
         val payload = withArgs.single().path("payload")
         assertEquals(
-            Hashing.sha256Hex(payload.path("args").asText()),
+            Hashing.sha256Hex(argsOf(withArgs.single())),
             payload.path("argsSha256").asText(),
             "argsSha256 is the digest of the args the reporter received.",
         )
@@ -215,6 +215,8 @@ class AuditVerboseSettingTest {
         ChatPanelTestHarness.awaitToolSettled(count = 1)
         AuditLogger.registerGlobalEmitter(null)
     }
+
+    private fun argsOf(record: JsonNode): String = record.path("payload").path("args").asText()
 
     private fun decisionRecords(home: File): List<JsonNode> =
         File(home, "audit.jsonl")

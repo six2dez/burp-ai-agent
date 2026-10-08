@@ -372,6 +372,8 @@ class AgentSettingsRepository(
             determinismMode = prefs.getBoolean(KEY_DETERMINISM) ?: false,
             autoRestart = prefs.getBoolean(KEY_AUTORESTART) ?: true,
             auditEnabled = prefs.getBoolean(KEY_AUDIT_ENABLED) ?: false,
+            // A missing key is an install from 1.0.0 or earlier: verbose audit stays off (quick 261008-sqa).
+            auditVerbose = prefs.getBoolean(KEY_AUDIT_VERBOSE) ?: false,
             mcpSettings = mcpSettings,
             preprocessProxyHistory =
                 prefs.getBoolean(KEY_PREPROCESS_PROXY_HISTORY)
@@ -526,6 +528,7 @@ class AgentSettingsRepository(
             determinismMode = false,
             autoRestart = true,
             auditEnabled = false,
+            auditVerbose = false,
             mcpSettings = defaultMcpSettings(),
             preprocessProxyHistory = Defaults.PREPROCESS_PROXY_HISTORY_ENABLED,
             preprocessMaxResponseSizeKb = Defaults.PREPROCESS_MAX_RESPONSE_SIZE_KB,
@@ -638,6 +641,7 @@ class AgentSettingsRepository(
                 prefs.setBoolean(KEY_DETERMINISM, settings.determinismMode)
                 prefs.setBoolean(KEY_AUTORESTART, settings.autoRestart)
                 prefs.setBoolean(KEY_AUDIT_ENABLED, settings.auditEnabled)
+                prefs.setBoolean(KEY_AUDIT_VERBOSE, settings.auditVerbose)
                 saveMcpSettings(settings.mcpSettings)
                 prefs.setBoolean(KEY_PREPROCESS_PROXY_HISTORY, settings.preprocessProxyHistory)
                 prefs.setInteger(
@@ -927,6 +931,7 @@ class AgentSettingsRepository(
         private const val KEY_DETERMINISM = "determinism.enabled"
         private const val KEY_AUTORESTART = "agent.autorestart"
         private const val KEY_AUDIT_ENABLED = "audit.enabled"
+        private const val KEY_AUDIT_VERBOSE = "audit.verbose"
         private const val KEY_MCP_ENABLED = "mcp.enabled"
         private const val KEY_MCP_HOST = "mcp.host"
         private const val KEY_MCP_PORT = "mcp.port"

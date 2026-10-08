@@ -177,11 +177,17 @@ class ChatPanel(
      * rather than the Burp API handle — the `McpBlockedRequestReporter` convention — which is what
      * keeps the reporter assertable with no Montoya mock.
      *
-     * The hash-by-default seam stays at its default. Model-supplied values are digested unless a
-     * verbose-audit flag turns them into plaintext, and there is still no such flag anywhere in the
-     * repo; CLAUDE.md's "hashes only unless verbose is on" is therefore satisfied by construction.
+     * The verbose seam reads the Verbose audit setting from the applied snapshot ([getSettings]) at each
+     * report (quick 261008-sqa), so a saved change applies to the next decision. Model-supplied args are
+     * always digested as `argsSha256`; Verbose audit adds the args body under `args` in the audit event
+     * only, and the metadata map the reporter returns never carries it, because AI Activity metadata
+     * reaches the AI request log and `ai_audit_query`.
      */
-    private val toolDecisionReporter = ToolDecisionReporter(logToOutput = { line -> api.logging().logToOutput(line) })
+    private val toolDecisionReporter =
+        ToolDecisionReporter(
+            logToOutput = { line -> api.logging().logToOutput(line) },
+            verboseAudit = { getSettings().auditVerbose },
+        )
     private var mcpAvailable = true
     private var activeSessionId: String? = null
     private var suppressDraftSync = false

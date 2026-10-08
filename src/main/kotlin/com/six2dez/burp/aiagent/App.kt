@@ -155,6 +155,7 @@ object App {
             )
         }
         auditLogger.setEnabled(settings.auditEnabled)
+        auditLogger.verbose = settings.auditVerbose
         supervisor.applySettings(settings)
         mcpSupervisor.applySettings(
             settings.mcpSettings,

@@ -41,6 +41,9 @@ private const val STATUS_DENIED = "denied"
 /** The caller's existing "the tool ran and did not error" derivation. Used when no `runStatus` is supplied. */
 private const val STATUS_OK = "ok"
 
+/** The audit-only key of the verbose args body (quick 261008-sqa). Never part of the returned metadata. */
+private const val ARGS_KEY = "args"
+
 /** Written in place of a tool name the catalog could not resolve. The raw name is hashed alongside it. */
 private const val UNKNOWN_TOOL_NAME = "unknown"
 
@@ -71,15 +74,17 @@ private const val OUTPUT_NONE = "none"
  * testable with no Mockito deep stub and no display, and it is why the import list above carries no
  * Burp type, no Swing type and no AWT type — only the audit seam, the digest and a constants holder.
  *
- * **D-10 / [verboseAudit].** `AgentSettings` has `auditEnabled` but there is still no verbose-audit flag
- * anywhere in the repo (verified again this phase), so [verboseAudit] is a constructor seam that callers
- * wire to `false`. Hashing model-supplied values is therefore the effective default, which is what
- * CLAUDE.md's "hashes only unless verbose is on" requires. **Adding a user-facing verbose toggle is
- * explicitly out of scope for SEC-06** and Phase 20 already declined it; do not add one here. The split
- * is by provenance, not by convenience: the canonical tool ID, the tier, the decision, the trace ID and
- * the chain step are all extension-derived and stay plaintext, because a hashed decision would make the
- * record useless. Only the values the model authored — the args JSON, and a tool name the catalog could
- * not resolve — are hashed.
+ * **D-10 / [verboseAudit].** Since quick 261008-sqa, [verboseAudit] reads the user-facing Verbose audit
+ * setting (`AgentSettings.auditVerbose`, off by default and off for existing installs); ChatPanel wires it to
+ * the applied settings snapshot, and it is read once per [report]. `argsSha256` is a digest of the whole
+ * args string in BOTH modes, which is what CLAUDE.md's "hashes only unless verbose is on" requires;
+ * verbose ADDS the args body under its own `args` key, right after the digest, in the audit event only.
+ * The returned metadata map never carries `args`: it becomes AI Activity metadata, which reaches the AI
+ * request log and, through `ai_audit_query`, MCP clients, so verbose must not widen those sinks. The
+ * split is by provenance, not by convenience: the canonical tool ID, the tier, the decision, the trace ID
+ * and the chain step are all extension-derived and stay plaintext, because a hashed decision would make
+ * the record useless. Only the values the model authored — the args JSON, and a tool name the catalog
+ * could not resolve — are hashed.
  *
  * **Phase 20 D-09 aggregation is deliberately NOT applied**, and saying so is better than leaving the
  * omission unexamined. The flood vector D-09 answers was a remote, unauthenticated peer able to generate
@@ -105,7 +110,8 @@ internal class ToolDecisionReporter(
      *   flips the tool name to a hash: an unresolvable name is model-controlled text.
      * @param tier the resolved [SecTier]. Emitted on EVERY event, including `AUTO`.
      * @param decision what was decided. Emitted on every event.
-     * @param argsJson the model-supplied arguments. Hashed unless [verboseAudit] is on.
+     * @param argsJson the model-supplied arguments. Always digested as `argsSha256`; while [verboseAudit]
+     *   is on, the audit event also carries them under `args`, which the returned metadata map omits.
      * @param traceId extension-derived correlation ID, plaintext, so a decision can be joined to the
      *   `MCP_TOOL_CALL` record and the backend turn it came from.
      * @param chainStep the 1-based step within the tool chain (SC3's "chain step").
@@ -136,6 +142,7 @@ internal class ToolDecisionReporter(
     ): Map<String, String> {
         val payload =
             buildPayload(
+                verbose = verboseAudit(),
                 rawToolName = rawToolName,
                 canonicalId = canonicalId,
                 knownTool = knownTool,
@@ -152,8 +159,12 @@ internal class ToolDecisionReporter(
         logToOutput(outputLine(rawToolName, canonicalId, knownTool, tier, decision, chainStep, traceId))
         // Null values are dropped rather than emitted as empty strings: AiRequestLogger.log takes
         // Map<String, String>, and "key absent" and "key present but empty" must stay distinguishable
-        // in the AI Activity record for the same reason they do in the audit payload.
-        return payload.mapNotNull { (key, value) -> value?.let { key to it } }.toMap()
+        // in the AI Activity record for the same reason they do in the audit payload. The verbose args
+        // body is audit-only: AI Activity metadata reaches the AI request log and `ai_audit_query`.
+        return payload
+            .filterKeys { it != ARGS_KEY }
+            .mapNotNull { (key, value) -> value?.let { key to it } }
+            .toMap()
     }
 
     /**
@@ -168,11 +179,13 @@ internal class ToolDecisionReporter(
      *
      * Conditional keys are inserted at their ordered position rather than appended, so a payload never
      * carries a key whose meaning does not apply: `toolNameSha256` only for an unresolved name,
-     * `implicitDenyReason` only for an implicit denial, `argsSha256` only when there were args, and
-     * `resultChars` only when a tool actually produced a result.
+     * `implicitDenyReason` only for an implicit denial, `argsSha256` only when there were args, `args`
+     * only when there were args and [verbose] is on, and `resultChars` only when a tool actually produced
+     * a result.
      */
     @Suppress("LongParameterList")
     private fun buildPayload(
+        verbose: Boolean,
         rawToolName: String,
         canonicalId: String,
         knownTool: Boolean,
@@ -205,7 +218,7 @@ internal class ToolDecisionReporter(
                 },
         ).apply {
             if (!knownTool) {
-                // D-10, and the SAME rule [auditValue] applies to the args: digest the WHOLE value.
+                // D-10, and the SAME rule `argsSha256` follows: digest the WHOLE value.
                 //
                 // This used to run through [sanitizeInline], whose cap is 120 characters, so the digest
                 // identified a whitespace-collapsed PREFIX of the name rather than the name — two
@@ -229,7 +242,10 @@ internal class ToolDecisionReporter(
             if (decision == ToolDecision.IMPLICIT_DENY) {
                 put("implicitDenyReason", implicitDenyReason?.wireValue)
             }
-            argsJson?.takeIf { it.isNotBlank() }?.let { put("argsSha256", auditValue(it)) }
+            argsJson?.takeIf { it.isNotBlank() }?.let { args ->
+                put("argsSha256", Hashing.sha256Hex(args))
+                if (verbose) put(ARGS_KEY, verboseArgs(args))
+            }
             // A denial has no result, so the key is dropped even if a caller supplies one. Enforced
             // here rather than trusted to the call site: a record reading "denied" alongside a result
             // length is self-contradictory, and an auditor cannot tell which half to believe.
@@ -240,9 +256,10 @@ internal class ToolDecisionReporter(
     }
 
     /**
-     * D-10: hash the WHOLE value, or write the whole value under the verbose seam. Null in, null out —
-     * the caller drops blank args before calling, so "args absent" and "args empty" stay distinguishable
-     * without hashing the empty string.
+     * D-10: the verbose `args` body. `argsSha256` is always the digest of the WHOLE value as given (the
+     * caller drops blank args first, so "args absent" and "args empty" stay distinguishable without
+     * hashing the empty string); under Verbose audit this body is written next to it, in the audit event
+     * only.
      *
      * **The digest is taken over the value as given, and nothing is discarded first.** It used to run
      * through [sanitizeInline], whose default cap is 120 characters, so `argsSha256` identified a
@@ -255,12 +272,12 @@ internal class ToolDecisionReporter(
      *
      * Sanitization is applied only to the form that is actually RENDERED. A hex digest is safe by
      * construction — 64 characters of `[0-9a-f]`, nothing model-authored survives it — so the default
-     * path needs no sanitizer at all. The verbose path does, and it uses [sanitizeBlock] rather than
+     * digest needs no sanitizer at all. The verbose body does, and it uses [sanitizeBlock] rather than
      * [sanitizeInline] for the reason [sanitizeInline]'s own KDoc gives: `\p{Cntrl}` includes `\n` and
      * `\t`, so the inline form flattens JSON into one unreadable line. The cap is the extension's
      * established ceiling for model-supplied context, the same one the approval card uses for its full
      * args stage, so the record can hold everything the card could have shown. Neither form ever reaches
-     * [outputLine] — the Output tab carries no arguments at all — and both audit sinks are Jackson-
+     * [outputLine] — the Output tab carries no arguments at all — and the audit sink is Jackson-
      * serialized, so a preserved newline cannot forge a record line.
      *
      * This hash is still not required to equal the one `McpTool.runTool` records under the same key
@@ -268,14 +285,7 @@ internal class ToolDecisionReporter(
      * key name is shared so an analyst reads both fields as "a digest of the arguments"; byte equality
      * across the two records is not claimed.
      */
-    private fun auditValue(value: String?): String? =
-        value?.let {
-            if (verboseAudit()) {
-                sanitizeBlock(it, maxChars = Defaults.MAX_CONTEXT_TOTAL_CHARS, maxLines = Int.MAX_VALUE)
-            } else {
-                Hashing.sha256Hex(it)
-            }
-        }
+    private fun verboseArgs(value: String): String? = sanitizeBlock(value, maxChars = Defaults.MAX_CONTEXT_TOTAL_CHARS, maxLines = Int.MAX_VALUE)
 
     /**
      * Exactly one line per invocation, carrying **sanitized plaintext and never a hash** — the Output tab

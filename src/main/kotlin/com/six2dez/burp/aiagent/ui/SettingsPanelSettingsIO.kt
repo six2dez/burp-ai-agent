@@ -143,6 +143,7 @@ internal fun SettingsPanel.currentSettings(): AgentSettings {
         determinismMode = determinism.isSelected,
         autoRestart = autoRestart.isSelected,
         auditEnabled = auditEnabled.isSelected,
+        auditVerbose = auditVerbose.isSelected,
         mcpSettings = mcpSettings,
         preprocessProxyHistory = preprocessProxyHistory.isSelected,
         preprocessMaxResponseSizeKb =
@@ -343,6 +344,7 @@ internal fun SettingsPanel.applySettingsToUi(
     determinism.isSelected = updated.determinismMode
     autoRestart.isSelected = updated.autoRestart
     auditEnabled.isSelected = updated.auditEnabled
+    auditVerbose.isSelected = updated.auditVerbose
     // 07-02 D-02: keep the small-model-mode toggle in sync with persisted state.
     chatSmallModelMode.isSelected = updated.smallModelMode
     promptRequest.text = updated.requestPromptTemplate
@@ -563,8 +565,10 @@ internal fun SettingsPanel.applyAndSaveSettingsBody(
     // pattern list is current when it reads. Both halves are always fully published: setCustomPatterns
     // assigns a whole new List<Pattern> to a @Volatile field, and audit.setEnabled flips a @Volatile
     // boolean. There is no state in which a call is redacted under no rules, and no state in which a
-    // partially compiled pattern list is readable.
+    // partially compiled pattern list is readable. `audit.verbose` (quick 261008-sqa) is a @Volatile
+    // boolean too, written right after the switch it qualifies.
     audit.setEnabled(updated.auditEnabled)
+    audit.verbose = updated.auditVerbose
     // PRIV-02: push validated custom patterns into the live redaction pipeline so edits
     // take effect without a restart (per 13-RESEARCH A7 / Open Question 1).
     com.six2dez.burp.aiagent.redact.Redaction
