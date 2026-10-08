@@ -452,6 +452,51 @@ class SettingsPersistQueueTest {
         )
     }
 
+    /**
+     * Q-261008-o97-HEALTH / -LEDGER — the AI status pill checks the APPLIED backend, and the backend
+     * picker re-checks only once its write has landed.
+     *
+     * Structural for the reason [everyMainTabSettingsWriteGoesThroughThePersistQueue] states: a real
+     * `MainTab` cannot be built headlessly. Equalities on MainTab's comment-stripped code. Checking
+     * on-screen, unsaved backend settings is the Settings tab's Test connection button
+     * (`SettingsPanelActions.testBackendConnection`), which never comes through `requestHealthCheck`.
+     */
+    @Test
+    fun theStatusPillChecksTheAppliedBackendOnceAPickerWriteLands() {
+        val code = codeLinesOf(MAIN_TAB_SOURCE)
+
+        assertEquals(
+            0,
+            code.count { it.contains("settingsPanel.currentSettings()") },
+            "MainTab ledger: `settingsPanel.currentSettings()` must be 0. MainTab reads only the applied " +
+                "snapshot (settingsRepo.load()); a read of the on-screen settings would save or check " +
+                "unsaved Settings edits (quick 261008-o97).",
+        )
+        val body = functionBodyOf(code.joinToString("\n"), "private fun requestHealthCheck(")
+        assertTrue(
+            body.contains("val settings = settingsRepo.load()"),
+            "requestHealthCheck must check the applied backend settings, i.e. read settingsRepo.load().",
+        )
+        val recheck = code.filter { it.contains("recheckHealth = true") }
+        assertEquals(
+            1,
+            recheck.size,
+            "MainTab ledger: `recheckHealth = true` must be 1, the backend picker's persistSettings call.",
+        )
+        assertTrue(
+            recheck.single().contains("\"backend-picker\""),
+            "Only the backend picker re-checks health after its write lands; found: ${recheck.single()}",
+        )
+        assertEquals(
+            3,
+            code.count { it.contains("requestHealthCheck(HealthCheckTrigger.SETTINGS_CHANGED)") },
+            "MainTab ledger: `requestHealthCheck(HealthCheckTrigger.SETTINGS_CHANGED)` must be 3: " +
+                "healthGate's coalesced re-run, the Save tail in onSettingsChanged and persistSettings' " +
+                "settle callback. A fourth means the picker checks again before its write landed, i.e. " +
+                "the old backend.",
+        )
+    }
+
     // ---------------------------------------------------------------------------------------------
     // Fixture
     // ---------------------------------------------------------------------------------------------
@@ -492,6 +537,30 @@ class SettingsPersistQueueTest {
                 val trimmed = line.trimStart()
                 trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*")
             }
+    }
+
+    /**
+     * The brace-balanced body that follows [signature] in [source] (already comment-stripped). The
+     * shape of `SettingsSaveAsyncTest.functionBody`.
+     */
+    private fun functionBodyOf(
+        source: String,
+        signature: String,
+    ): String {
+        val start = source.indexOf(signature)
+        require(start >= 0) { "No `$signature` in the source — this structural assertion is stale." }
+        val open = source.indexOf('{', start)
+        var depth = 0
+        var index = open
+        while (index < source.length) {
+            if (source[index] == '{') depth++
+            if (source[index] == '}') {
+                depth--
+                if (depth == 0) return source.substring(open, index + 1)
+            }
+            index++
+        }
+        error("Unbalanced braces after `$signature`.")
     }
 
     private companion object {
