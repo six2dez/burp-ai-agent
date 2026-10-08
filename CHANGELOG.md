@@ -33,13 +33,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
   NIM and Perplexity health checks were real chat completions; they are now a free
   `GET /v1/models`. They no longer fall back to a direct connection, and the Burp transport now
   survives a Settings save, so health traffic keeps going through Burp's upstream proxy.
-- **Sending a chat message saved and applied unsaved Settings edits** - every send read the values
-  on screen in the Settings tab, saved them and re-applied them, so a half-edited setting took
-  effect without clicking Save; with MCP disabled each message also cleared the MCP scanner tasks
-  and Collaborator clients (the next turn failed with "Task not found"), and with stdio enabled the
-  bridge restarted every turn. The chat now uses only saved settings, its privacy pill and the
-  header safety indicator show the mode actually in effect, and the Settings tab shows an
-  "Unsaved changes" marker until you click Save settings.
+- **Sending a chat message, flipping a header toggle or picking a backend saved unsaved Settings
+  edits** - every send read the values on screen in the Settings tab, saved them and re-applied
+  them, so a half-edited setting took effect without clicking Save; with MCP disabled each message
+  also cleared the MCP scanner tasks and Collaborator clients (the next turn failed with "Task not
+  found"), and with stdio enabled the bridge restarted every turn. The header MCP, Passive and
+  Active toggles, the backend picker and the matching Settings-tab switches did the same on every
+  click (shipped in 1.0.0): they saved every unsaved Settings edit, a half-made privacy downgrade
+  included, applied it only partly (custom redaction patterns, MCP privacy and the audit setting
+  were not updated), the MCP switches applied unsaved MCP settings such as the port, and a click
+  made while Save settings was still writing could write part of the old settings back; the AI
+  status pill also checked the on-screen backend settings. Each toggle or backend pick now saves
+  only the value you changed onto the saved settings, the MCP switches apply the saved MCP
+  settings, the chat, its privacy pill, the header safety indicator and the AI status pill use
+  what is actually in effect, and the Settings tab shows an "Unsaved changes" marker until you
+  click Save settings.
 
 ### Security
 

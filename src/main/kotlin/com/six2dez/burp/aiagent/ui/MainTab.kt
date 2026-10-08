@@ -179,8 +179,7 @@ class MainTab(
         backendPicker.addActionListener {
             val selected = backendPicker.selectedItem as? String ?: "codex-cli"
             settingsPanel.setPreferredBackend(selected)
-            persistSettings("backend-picker", HeaderSettingsChange.PreferredBackend(selected))
-            requestHealthCheck(HealthCheckTrigger.SETTINGS_CHANGED)
+            persistSettings("backend-picker", HeaderSettingsChange.PreferredBackend(selected), recheckHealth = true)
         }
 
         mcpToggle.isSelected = initialSettings.mcpSettings.enabled
@@ -516,16 +515,20 @@ class MainTab(
     }
 
     /**
-     * EDT only. Reads the current settings, asks [BackendHealthPolicy] whether [trigger] may run a
+     * EDT only. Reads the applied settings, asks [BackendHealthPolicy] whether [trigger] may run a
      * check for the selected backend, and hands the network I/O to the single health thread. The
      * result is painted back on the EDT.
+     *
+     * The pill checks the APPLIED backend config, the one chat and scanners use (quick 261008-o97).
+     * Checking on-screen, unsaved values is the Settings tab's Test connection button
+     * (`SettingsPanelActions.testBackendConnection`), which does not come through here.
      *
      * Any exception from a backend's health check (third-party code for external backends) must
      * still repaint the pill as Offline instead of leaving a stale "AI: OK", hence the broad catch.
      */
     @Suppress("TooGenericExceptionCaught")
     private fun requestHealthCheck(trigger: HealthCheckTrigger) {
-        val settings = settingsPanel.currentSettings()
+        val settings = settingsRepo.load()
         if (!BackendHealthPolicy.shouldRun(trigger, settings)) return
         healthGate.submit(coalesce = trigger != HealthCheckTrigger.PERIODIC) {
             val health =
@@ -597,17 +600,28 @@ class MainTab(
      * | `persistHeaderChangeAndApplyMcp(` | 1 | persistSettingsAndApplyMcp's apply lambda |
      * | `supervisor.applySettings(` | 0 | App's repository listener (`mirrorAppliedSettingsInto`) owns that |
      * | `getSettings = { settingsRepo.load() }` | 1 | the ChatPanel construction: the chat reads the applied snapshot |
+     * | `settingsPanel.currentSettings()` | 0 | MainTab reads only the applied snapshot |
+     * | `recheckHealth = true` | 1 | the backend picker re-checks health after its write lands |
+     * | `requestHealthCheck(HealthCheckTrigger.SETTINGS_CHANGED)` | 3 | healthGate's coalesced re-run, the Save tail in onSettingsChanged, persistSettings' settle callback |
+     *
+     * [recheckHealth] re-runs the status-pill health check from the settle callback (on the EDT), i.e.
+     * after the write landed: the pill reads the applied snapshot, so a check made at click time would
+     * still see the old backend.
      */
     private fun persistSettings(
         label: String,
         change: HeaderSettingsChange,
+        recheckHealth: Boolean = false,
     ) {
         settingsPersistQueue.submit(
             label = label,
             supersedeKey = change.supersedeKey,
             payload = change,
             apply = { persistHeaderChange(settingsRepo, it) },
-            onSettled = { renderStatus() },
+            onSettled = {
+                renderStatus()
+                if (recheckHealth) requestHealthCheck(HealthCheckTrigger.SETTINGS_CHANGED)
+            },
         )
     }
 
