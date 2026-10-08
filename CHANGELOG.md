@@ -48,6 +48,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
   settings, the chat, its privacy pill, the header safety indicator and the AI status pill use
   what is actually in effect, and the Settings tab shows an "Unsaved changes" marker until you
   click Save settings.
+- **Chat follow-up messages lost the captured request/response context and the tool catalog from
+  the second message on** (shipped in 1.0.0) - every backend that rebuilds the conversation from the
+  chat history (the HTTP backends, Burp AI, and the CLI backends other than Claude CLI, which keeps
+  its own session) received only the text typed in earlier turns, so the context sent with "Send to
+  AI", the MCP tool catalog and earlier tool results were missing, and a first message that failed
+  or was cancelled lost the context and the catalog for the whole chat. The history now carries each
+  turn as it was sent (each backend still trims its oldest turns to its history limit), and a failed
+  or cancelled message sends the context and the catalog again. After the privacy mode becomes
+  stricter or you switch backend, earlier turns are resent only as the text you typed and the
+  captured context is not sent again. Nothing new is saved with the project.
 
 ### Security
 
