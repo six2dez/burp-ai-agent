@@ -33,8 +33,8 @@ class NvidiaNimBackendFactory : AiBackendFactory {
                 apiKeySelector = { it.nvidiaNimApiKey },
                 headersSelector = { it.nvidiaNimHeaders },
                 timeoutSelector = { it.nvidiaNimTimeoutSeconds },
-                streaming = true,
-                defaultHeaders = mapOf("Accept" to "text/event-stream"),
+                streaming = false,
+                defaultHeaders = mapOf("Accept" to "application/json"),
                 payloadCustomizer = { payload ->
                     payload["max_tokens"] = 16384
                     payload["top_p"] = 1.0

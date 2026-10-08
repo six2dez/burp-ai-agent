@@ -24,8 +24,8 @@ class PerplexityBackendFactory : AiBackendFactory {
             apiKeySelector = { it.perplexityApiKey },
             headersSelector = { it.perplexityHeaders },
             timeoutSelector = { it.perplexityTimeoutSeconds },
-            streaming = true,
-            defaultHeaders = mapOf("Accept" to "text/event-stream"),
+            streaming = false,
+            defaultHeaders = mapOf("Accept" to "application/json"),
             healthCheckProvider = ::perplexityHealthCheck,
             // Perplexity's chat-completions endpoint is at the root, no /v1 prefix.
             chatCompletionsBasePath = "/chat/completions",

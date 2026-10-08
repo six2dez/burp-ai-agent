@@ -1,6 +1,5 @@
 package com.six2dez.burp.aiagent.backends.openai
 
-import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import com.six2dez.burp.aiagent.backends.AgentConnection
@@ -269,15 +268,11 @@ class OpenAiCompatibleBackend(
                                 onComplete(IllegalStateException("$backendDisplayName response body was empty"))
                                 return@submit
                             }
-                            val node = mapper.readTree(body)
-                            val content =
-                                node
-                                    .path("choices")
-                                    .path(0)
-                                    .path("message")
-                                    .path("content")
-                                    .asText()
-                            extractUsage(node)?.let { lastTokenUsageRef.set(it) }
+                            // Single JSON document or (defensively) an SSE body from a server that
+                            // streams regardless of "stream":false; see OpenAiResponseParser.
+                            val parsed = OpenAiResponseParser.parse(mapper, body)
+                            val content = parsed.content
+                            parsed.usage?.let { lastTokenUsageRef.set(it) }
                             if (content.isBlank()) {
                                 onComplete(IllegalStateException("$backendDisplayName response content was empty"))
                                 return@submit
@@ -323,17 +318,6 @@ class OpenAiCompatibleBackend(
             }
         }
 
-        private fun extractUsage(node: JsonNode): TokenUsage? {
-            val usageNode = node.path("usage")
-            val promptTokens = usageNode.path("prompt_tokens").asInt(-1)
-            val completionTokens = usageNode.path("completion_tokens").asInt(-1)
-            if (promptTokens < 0 && completionTokens < 0) return null
-            return TokenUsage(
-                inputTokens = promptTokens.coerceAtLeast(0),
-                outputTokens = completionTokens.coerceAtLeast(0),
-            )
-        }
-
         override fun stop() {
             alive.set(false)
             exec.shutdownNow()
@@ -372,8 +356,14 @@ class OpenAiCompatibleBackend(
             overrides: Map<String, String>,
         ): Map<String, String> {
             if (defaults.isEmpty()) return overrides
+            // Case-insensitive: a user-supplied "accept" replaces the default "Accept" instead of
+            // travelling next to it (HTTP header names are case-insensitive).
             val merged = LinkedHashMap<String, String>()
-            merged.putAll(defaults)
+            defaults.forEach { (name, value) ->
+                if (overrides.keys.none { it.equals(name, ignoreCase = true) }) {
+                    merged[name] = value
+                }
+            }
             merged.putAll(overrides)
             return merged
         }
