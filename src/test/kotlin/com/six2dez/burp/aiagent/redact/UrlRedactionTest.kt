@@ -135,6 +135,92 @@ class UrlRedactionTest {
     }
 
     @Test
+    fun relativeUrlWithoutAuthority_losesItsTokenInStrictAndBalanced() {
+        // No //authority, so there is no host to rewrite; the final apply still drops the token.
+        for (policy in listOf(RedactionPolicy.fromMode(PrivacyMode.STRICT), balanced)) {
+            val parsed = UrlRedaction.redact("/api/v1/me?access_token=SECRETQ9&x=1", policy, SALT)
+            assertFalse(parsed.contains("SECRETQ9"), parsed)
+            assertEquals("/api/v1/me?access_token=[REDACTED]&x=1", parsed)
+
+            val unparseable = UrlRedaction.redact("/search?q={x}&access_token=SECRETQ9", policy, SALT)
+            assertFalse(unparseable.contains("SECRETQ9"), unparseable)
+            assertEquals("/search?q={x}&access_token=[REDACTED]", unparseable)
+        }
+    }
+
+    @Test
+    fun opaqueMailtoUri_hasNoHostToAliasAndLosesItsTokenInStrictAndBalanced() {
+        // An opaque URI has no authority, so there is no URI host to alias. The address domain is
+        // not a host under this redactor's model (Redaction.apply never aliases email domains
+        // either), and the callers' own-host pass still aliases the item's own hostname.
+        for (policy in listOf(RedactionPolicy.fromMode(PrivacyMode.STRICT), balanced)) {
+            val out = UrlRedaction.redact("mailto:security@example.org?subject=hi&access_token=SECRETQ9", policy, SALT)
+            assertFalse(out.contains("SECRETQ9"), out)
+            assertEquals("mailto:security@example.org?subject=hi&access_token=[REDACTED]", out)
+        }
+    }
+
+    @Test
+    fun emptyHostAuthority_dropsUserinfoAndTokenInStrictAndBalanced() {
+        // Unparseable (space in the path) with an empty host: the userinfo still goes, the port
+        // stays, and there is no host to alias.
+        for (policy in listOf(RedactionPolicy.fromMode(PrivacyMode.STRICT), balanced)) {
+            val out = UrlRedaction.redact("http://admin:pw@:80/a b?access_token=SECRETQ9", policy, SALT)
+            assertFalse(out.contains("admin:pw"), out)
+            assertFalse(out.contains("SECRETQ9"), out)
+            assertEquals("http://[REDACTED]@:80/a b?access_token=[REDACTED]", out)
+        }
+    }
+
+    @Test
+    fun unparsedIpv6Authority_isAliasedWholeInStrict() {
+        val policy = RedactionPolicy.fromMode(PrivacyMode.STRICT)
+
+        val closed = UrlRedaction.redact("http://admin:pw@[fd00::5]:8443/a b?access_token=SECRETQ9", policy, SALT)
+        assertFalse(closed.contains("fd00"), closed)
+        assertFalse(closed.contains("admin:pw"), closed)
+        assertFalse(closed.contains("SECRETQ9"), closed)
+        assertEquals(
+            "http://[REDACTED]@" + Redaction.anonymizeHost("[fd00::5]", SALT) + ":8443/a b?access_token=[REDACTED]",
+            closed,
+        )
+
+        // The whole malformed bracket run is one host, so no fragment of the address survives.
+        val unclosed = UrlRedaction.redact("http://[fd00::5:8443/a b?access_token=SECRETQ9", policy, SALT)
+        assertFalse(unclosed.contains("fd00"), unclosed)
+        assertFalse(unclosed.contains("SECRETQ9"), unclosed)
+        assertEquals(
+            "http://" + Redaction.anonymizeHost("[fd00::5:8443", SALT) + "/a b?access_token=[REDACTED]",
+            unclosed,
+        )
+    }
+
+    @Test
+    fun unparsedIpv6Authority_dropsUserinfoAndTokenInBalanced() {
+        val policy = RedactionPolicy.fromMode(PrivacyMode.BALANCED)
+
+        val closed = UrlRedaction.redact("http://admin:pw@[fd00::5]:8443/a b?access_token=SECRETQ9", policy, SALT)
+        assertFalse(closed.contains("admin:pw"), closed)
+        assertFalse(closed.contains("SECRETQ9"), closed)
+        assertEquals("http://[REDACTED]@[fd00::5]:8443/a b?access_token=[REDACTED]", closed)
+
+        val unclosed = UrlRedaction.redact("http://[fd00::5:8443/a b?access_token=SECRETQ9", policy, SALT)
+        assertFalse(unclosed.contains("SECRETQ9"), unclosed)
+        assertEquals("http://[fd00::5:8443/a b?access_token=[REDACTED]", unclosed)
+    }
+
+    @Test
+    fun hostOnlyPolicy_aliasesEveryOwnHostOccurrenceAndLeavesUserinfoToTheTokenSwitch() {
+        // No mode builds this policy; it isolates the host switch from the token switch. The own
+        // host percent-encoded inside the kept userinfo is caught by the %XX boundary.
+        val hostOnly = RedactionPolicy(stripCookies = true, redactTokens = false, anonymizeHosts = true)
+        val out = UrlRedaction.redact("https://ops%40api.realcorp.com:pw@api.realcorp.com/x", hostOnly, SALT)
+
+        assertFalse(out.contains("realcorp", ignoreCase = true), out)
+        assertEquals("https://ops%40$alias:pw@$alias/x", out)
+    }
+
+    @Test
     fun registryAuthorityWithoutUriHost_failsClosedInStrict() {
         // java.net.URI parses this but reports a null host (underscore in a registry authority).
         val url = "https://my_host.realcorp.com/x?token=SECRETQ9"
@@ -174,6 +260,13 @@ class UrlRedactionTest {
             "https://api.realcorp.com/search?q={x}",
             "not a url at all",
             "//admin:pw@api.realcorp.com:8443/x?access_token=SECRETQ9",
+            "/api/v1/me?access_token=SECRETQ9&x=1",
+            "/search?q={x}&access_token=SECRETQ9",
+            "mailto:security@example.org?subject=hi&access_token=SECRETQ9",
+            "http://admin:pw@:80/a b?access_token=SECRETQ9",
+            "http://admin:pw@[fd00::5]:8443/a b?access_token=SECRETQ9",
+            "http://[fd00::5:8443/a b?access_token=SECRETQ9",
+            "https://ops%40api.realcorp.com:pw@api.realcorp.com/x",
         )) {
             assertEquals(url, UrlRedaction.redact(url, off, SALT))
         }
@@ -256,6 +349,17 @@ class UrlRedactionTest {
     fun hostOf_findsTheAuthorityOfASchemeRelativeUrl() {
         assertEquals(HOST, UrlRedaction.hostOf("//api.realcorp.com/a b"))
         assertEquals(HOST, UrlRedaction.hostOf("//admin:pw@api.realcorp.com:8443/x"))
+    }
+
+    @Test
+    fun hostOf_failsClosedOnHostlessAndBracketedShapes() {
+        assertNull(UrlRedaction.hostOf("mailto:security@example.org"))
+        assertNull(UrlRedaction.hostOf("/search?q={x}"))
+        // Parses with a null URI host; the prefix authority has an empty host.
+        assertNull(UrlRedaction.hostOf("http://:80/a"))
+        assertNull(UrlRedaction.hostOf("http://:80/a b"))
+        assertEquals("[fd00::5]", UrlRedaction.hostOf("http://[fd00::5]:8443/a b"))
+        assertEquals("[fd00::5:8443", UrlRedaction.hostOf("http://[fd00::5:8443/a b"))
     }
 
     private companion object {
