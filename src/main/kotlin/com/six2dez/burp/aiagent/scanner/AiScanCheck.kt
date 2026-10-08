@@ -56,10 +56,14 @@ class AiScanCheck(
         // Determine which vulnerability classes to test based on insertion point
         val vulnClasses = determineVulnClasses(insertionPoint)
 
-        // Rate-limit pacing: timestamp when the last request finished, so we sleep only the
-        // remaining interval before the next request instead of the full delay on top of the
-        // round-trip (avoids idling a Burp scanner thread longer than necessary).
-        var lastRequestEndMs = 0L
+        // Pacing: every request goes through the scan's `http`, so Burp's scan resource pool paces
+        // this check (and its pause and session-handling rules apply). The request-delay setting
+        // paces only the AI active scanner queue; this check never sleeps in Burp's scanner thread.
+
+        // Time-based baseline: one round trip of the base request per doCheck, measured at the first
+        // BLIND_TIME payload. Null when it failed; every BLIND_TIME payload is then skipped rather
+        // than compared with a fake fast baseline.
+        val timeBaselineMs by lazy(LazyThreadSafetyMode.NONE) { measureTimeBaseline(baseRequestResponse, http) }
 
         for (vulnClass in vulnClasses) {
             val payloads =
@@ -69,17 +73,11 @@ class AiScanCheck(
 
             for (payload in payloads) {
                 try {
-                    // Rate limiting: honour a minimum interval between requests, counting the
-                    // request round-trip toward that interval rather than sleeping the full
-                    // delay on top of it (keeps the scanner thread from idling unnecessarily).
-                    val delayMs = settings.activeAiRequestDelayMs.toLong()
-                    if (delayMs > 0 && lastRequestEndMs > 0L) {
-                        val remaining = delayMs - (System.currentTimeMillis() - lastRequestEndMs)
-                        if (remaining > 0L) Thread.sleep(remaining)
-                    }
-
-                    val issue = testPayload(baseRequestResponse, insertionPoint, payload, vulnClass)
-                    lastRequestEndMs = System.currentTimeMillis()
+                    val baselineTimeMs = if (payload.detectionMethod == DetectionMethod.BLIND_TIME) timeBaselineMs else 0L
+                    val issue =
+                        baselineTimeMs?.let {
+                            testPayload(baseRequestResponse, insertionPoint, payload, vulnClass, http, it)
+                        }
                     if (issue != null) {
                         issues.add(issue)
                         // Found a confirmed vuln for this class, move to next
@@ -232,11 +230,31 @@ class AiScanCheck(
         return filtered.filter { ScanPolicy.isAllowedForMode(mode, it) }
     }
 
+    /**
+     * Sends the base request once through the scan's [http] and returns its round trip in ms, or
+     * null when the send fails or brings no response (time-based payloads are then skipped).
+     */
+    private fun measureTimeBaseline(
+        base: HttpRequestResponse,
+        http: Http,
+    ): Long? =
+        try {
+            val start = System.currentTimeMillis()
+            val response = http.sendRequest(base.request())?.response()
+            val elapsedMs = System.currentTimeMillis() - start
+            if (response == null) null else elapsedMs
+        } catch (e: Exception) {
+            api.logging().logToError("[AiScanCheck] Time-based baseline failed: ${e.message}")
+            null
+        }
+
     private fun testPayload(
         baseRequestResponse: HttpRequestResponse,
         insertionPoint: AuditInsertionPoint,
         payload: Payload,
         vulnClass: VulnClass,
+        http: Http,
+        baselineTimeMs: Long,
     ): AuditIssue? {
         val settings = getSettings()
 
@@ -257,19 +275,9 @@ class AiScanCheck(
             return null
         }
 
-        // Measure baseline if needed for time-based
-        val baselineTime =
-            if (payload.detectionMethod == DetectionMethod.BLIND_TIME) {
-                val start = System.currentTimeMillis()
-                api.http().sendRequest(baseRequestResponse.request())
-                System.currentTimeMillis() - start
-            } else {
-                0L
-            }
-
-        // Send attack request
+        // Send attack request through the scan's Http
         val startTime = System.currentTimeMillis()
-        val attackResponse = api.http().sendRequest(attackRequest)
+        val attackResponse = http.sendRequest(attackRequest)
         val responseTime = System.currentTimeMillis() - startTime
 
         val attackRequestResponse = HttpRequestResponse.httpRequestResponse(attackRequest, attackResponse.response())
@@ -279,7 +287,7 @@ class AiScanCheck(
             when (payload.detectionMethod) {
                 DetectionMethod.BLIND_TIME -> {
                     val expectedDelay = payload.timeDelayMs ?: 3000
-                    responseAnalyzer.analyzeTimeBased(baselineTime, responseTime, expectedDelay)
+                    responseAnalyzer.analyzeTimeBased(baselineTimeMs, responseTime, expectedDelay)
                 }
                 else -> {
                     val confirmation =
@@ -293,32 +301,34 @@ class AiScanCheck(
                 }
             }
 
-        if (!confirmed) return null
+        return if (!confirmed) {
+            null
+        } else {
+            // Build evidence
+            val evidence = buildEvidence(baseRequestResponse, attackRequestResponse, payload, vulnClass, responseTime, baselineTimeMs)
 
-        // Build evidence
-        val evidence = buildEvidence(baseRequestResponse, attackRequestResponse, payload, vulnClass, responseTime, baselineTime)
+            // Add markers to highlight payload in request and evidence in response
+            val markedAttack =
+                IssueMarkerSupport
+                    .markRequestPayload(
+                        attackRequestResponse,
+                        payload.value,
+                    ).let { IssueMarkerSupport.markResponseEvidence(it, evidence) }
 
-        // Add markers to highlight payload in request and evidence in response
-        val markedAttack =
-            IssueMarkerSupport
-                .markRequestPayload(
-                    attackRequestResponse,
-                    payload.value,
-                ).let { IssueMarkerSupport.markResponseEvidence(it, evidence) }
-
-        // Create Burp issue
-        return AuditIssue.auditIssue(
-            "[AI Active] ${vulnClass.name} (Burp Scanner)",
-            buildDetail(insertionPoint, payload, evidence),
-            ScannerIssueSupport.remediation(vulnClass),
-            baseRequestResponse.request().url(),
-            ScannerIssueSupport.mapSeverity(vulnClass),
-            mapConfidence(payload),
-            null, // background
-            null, // remediationBackground
-            ScannerIssueSupport.mapSeverity(vulnClass),
-            listOf(baseRequestResponse, markedAttack),
-        )
+            // Create Burp issue
+            AuditIssue.auditIssue(
+                "[AI Active] ${vulnClass.name} (Burp Scanner)",
+                buildDetail(insertionPoint, payload, evidence),
+                ScannerIssueSupport.remediation(vulnClass),
+                baseRequestResponse.request().url(),
+                ScannerIssueSupport.mapSeverity(vulnClass),
+                mapConfidence(payload),
+                null, // background
+                null, // remediationBackground
+                ScannerIssueSupport.mapSeverity(vulnClass),
+                listOf(baseRequestResponse, markedAttack),
+            )
+        }
     }
 
     private fun buildEvidence(
