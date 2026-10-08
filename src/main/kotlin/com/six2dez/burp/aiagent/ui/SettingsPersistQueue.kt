@@ -1,6 +1,9 @@
 package com.six2dez.burp.aiagent.ui
 
 import com.six2dez.burp.aiagent.config.AgentSettings
+import com.six2dez.burp.aiagent.config.AgentSettingsRepository
+import com.six2dez.burp.aiagent.config.toPreprocessorSettings
+import com.six2dez.burp.aiagent.mcp.McpSupervisor
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
@@ -65,10 +68,11 @@ internal class SettingsPersistQueue(
      *
      * Returns as soon as the worker thread is started. The worker is named `burp-ai-settings-sync`.
      */
-    fun submit(
+    fun <T> submit(
         label: String,
-        snapshot: AgentSettings,
-        apply: (AgentSettings) -> Unit,
+        supersedeKey: Any,
+        payload: T,
+        apply: (T) -> Unit,
         onSettled: (Result<Unit>) -> Unit,
     ) {
         // FIRST STATEMENT, and load-bearing rather than stylistic: minted on the calling thread, so
@@ -79,7 +83,7 @@ internal class SettingsPersistQueue(
             threadName = "burp-ai-settings-sync",
             label = "$label-$generation",
             logError = logError,
-            work = { applyIfCurrent(generation, snapshot, apply) },
+            work = { applyIfCurrent(generation, supersedeKey, payload, apply) },
             onEdt = onSettled,
         )
     }
@@ -107,16 +111,67 @@ internal class SettingsPersistQueue(
      * generation replayable, or a failed older write could later be applied over a newer successful
      * one — the same torn state the lock exists to prevent, arriving by a slower route.
      */
-    private fun applyIfCurrent(
+    @Suppress("UNUSED_PARAMETER")
+    private fun <T> applyIfCurrent(
         generation: Long,
-        snapshot: AgentSettings,
-        apply: (AgentSettings) -> Unit,
+        supersedeKey: Any,
+        payload: T,
+        apply: (T) -> Unit,
     ) {
         lock.withLock {
             if (disposed) return
             if (generation <= applied.get()) return
             applied.set(generation)
-            apply(snapshot)
+            apply(payload)
         }
     }
+}
+
+/** One header settings write: the single field a click changes. */
+internal sealed class HeaderSettingsChange {
+    abstract fun applyTo(settings: AgentSettings): AgentSettings
+
+    val supersedeKey: Any get() = javaClass
+
+    data class PreferredBackend(
+        val backendId: String,
+    ) : HeaderSettingsChange() {
+        override fun applyTo(settings: AgentSettings): AgentSettings = settings.copy(preferredBackendId = backendId)
+    }
+
+    data class McpEnabled(
+        val enabled: Boolean,
+    ) : HeaderSettingsChange() {
+        override fun applyTo(settings: AgentSettings): AgentSettings =
+            settings.copy(mcpSettings = settings.mcpSettings.copy(enabled = enabled))
+    }
+
+    data class PassiveAiEnabled(
+        val enabled: Boolean,
+    ) : HeaderSettingsChange() {
+        override fun applyTo(settings: AgentSettings): AgentSettings = settings.copy(passiveAiEnabled = enabled)
+    }
+
+    data class ActiveAiEnabled(
+        val enabled: Boolean,
+    ) : HeaderSettingsChange() {
+        override fun applyTo(settings: AgentSettings): AgentSettings = settings.copy(activeAiEnabled = enabled)
+    }
+}
+
+/** Worker body of a header write that does not touch MCP. */
+internal fun persistHeaderChange(
+    settingsRepo: AgentSettingsRepository,
+    change: HeaderSettingsChange,
+): AgentSettings = settingsRepo.update(change::applyTo)
+
+/** Worker body of a header MCP write. */
+internal fun persistHeaderChangeAndApplyMcp(
+    settingsRepo: AgentSettingsRepository,
+    mcpSupervisor: McpSupervisor,
+    change: HeaderSettingsChange.McpEnabled,
+): AgentSettings {
+    val saved = settingsRepo.update(change::applyTo)
+    mcpSupervisor.applySettings(saved.mcpSettings, saved.privacyMode, saved.determinismMode, saved.toPreprocessorSettings())
+    return saved
 }

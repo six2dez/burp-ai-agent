@@ -603,7 +603,8 @@ class MainTab(
     ) {
         settingsPersistQueue.submit(
             label = label,
-            snapshot = snapshot,
+            supersedeKey = SettingsPersistQueue::class,
+            payload = snapshot,
             apply = { settingsRepo.save(it) },
             onSettled = { renderStatus() },
         )
@@ -632,7 +633,8 @@ class MainTab(
     ) {
         settingsPersistQueue.submit(
             label = label,
-            snapshot = snapshot,
+            supersedeKey = SettingsPersistQueue::class,
+            payload = snapshot,
             apply = {
                 settingsRepo.save(it)
                 mcpSupervisor.applySettings(

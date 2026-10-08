@@ -733,6 +733,13 @@ class AgentSettingsRepository(
         notifyChangeListeners(settings)
     }
 
+    /** Loads the applied snapshot, applies [transform], saves the result and returns it. */
+    fun update(transform: (AgentSettings) -> AgentSettings): AgentSettings {
+        val updated = transform(load())
+        save(updated)
+        return updated
+    }
+
     private fun migrateIfNeeded() {
         val storedVersion = prefs.getInteger(KEY_SETTINGS_SCHEMA_VERSION) ?: 1
         var effectiveVersion = storedVersion.coerceAtLeast(1)

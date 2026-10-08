@@ -88,7 +88,8 @@ class SettingsPersistQueueTest {
             SwingUtilities.invokeAndWait {
                 queue.submit(
                     label = "handshake",
-                    snapshot = snapshot("only"),
+                    supersedeKey = SAME_FIELD,
+                    payload = snapshot("only"),
                     apply = {
                         workerThread.add(Thread.currentThread().name)
                         applyEntered.countDown()
@@ -151,11 +152,11 @@ class SettingsPersistQueueTest {
             }
 
             SwingUtilities.invokeAndWait {
-                queue.submit("write", snapshot("alpha"), body) { }
+                queue.submit("write", SAME_FIELD, snapshot("alpha"), body) { }
             }
             assertTrue(firstEntered.await(20, TimeUnit.SECONDS), "The first write never reached the apply body.")
             SwingUtilities.invokeAndWait {
-                queue.submit("write", snapshot("beta"), body) { }
+                queue.submit("write", SAME_FIELD, snapshot("beta"), body) { }
             }
 
             // A bounded window for the second write to overlap the first. Under the lock it cannot,
@@ -170,9 +171,9 @@ class SettingsPersistQueueTest {
                 overlapSeen.get(),
                 "T-23-06-01/T-23-06-02: two apply bodies were inside the persist body at once. " +
                     "SettingsPersistQueue.applyIfCurrent must run each apply to completion under its " +
-                    "single ReentrantLock, or two AgentSettingsRepository.save() calls can interleave " +
-                    "and persist privacyMode from one snapshot beside customRedactionPatterns from " +
-                    "another.",
+                    "single ReentrantLock, so two header MCP writes never overlap their bounded MCP " +
+                    "stop/start. (AgentSettingsRepository's write lock is what keeps save() whole for " +
+                    "every writer, quick 261008-o97.)",
             )
             assertEquals(
                 listOf("alpha", "beta"),
@@ -207,7 +208,7 @@ class SettingsPersistQueueTest {
             }
 
             val olderSubmitter =
-                Thread({ queue.submit("older", snapshot("stale"), body) { } }, "older-submitter")
+                Thread({ queue.submit("older", SAME_FIELD, snapshot("stale"), body) { } }, "older-submitter")
             olderSubmitter.isDaemon = true
             olderSubmitter.start()
             assertTrue(olderParked.await(20, TimeUnit.SECONDS), "The older submitter never reached the dispatch hook.")
@@ -215,7 +216,7 @@ class SettingsPersistQueueTest {
             // Generation 2 is minted and applied while generation 1 is still parked before its worker
             // has even been started.
             SwingUtilities.invokeAndWait {
-                queue.submit("newer", snapshot("current"), body) { }
+                queue.submit("newer", SAME_FIELD, snapshot("current"), body) { }
             }
             assertTrue(settledSignal.await(25, TimeUnit.SECONDS), "The newer write never settled.")
 
@@ -232,6 +233,56 @@ class SettingsPersistQueueTest {
                     "written over the newer one the user actually chose last.",
             )
             assertEquals(2, settled.size, "Both writes must settle, including the dropped one.")
+        }
+    }
+
+    /**
+     * Q-261008-o97-R1 (T-o97-05) — writes to different fields never supersede each other.
+     *
+     * Each header write now carries ONE field, so dropping an older write because a newer write to a
+     * DIFFERENT field began first would silently lose a toggle the header still shows as changed. The
+     * same dispatched-observer parking as the test above: the older write (key "passive") is held before
+     * its worker starts while the newer one (key "active") runs to completion.
+     */
+    @Test
+    fun writesToDifferentFieldsNeverSupersedeEachOther() {
+        assertTimeoutPreemptively(Duration.ofSeconds(30)) {
+            val queue = SettingsPersistQueue { errors.add(it) }
+            val olderParked = CountDownLatch(1)
+            val releaseOlder = CountDownLatch(1)
+            val body: (AgentSettings) -> Unit = { snapshot -> appliedIds.add(snapshot.preferredBackendId) }
+
+            OffEdtDispatch.registerDispatchedObserver { label ->
+                if (label.startsWith("older-")) {
+                    olderParked.countDown()
+                    releaseOlder.await(20, TimeUnit.SECONDS)
+                }
+            }
+
+            val olderSubmitter =
+                Thread({ queue.submit("older", "passive", snapshot("passive"), body) { } }, "older-submitter")
+            olderSubmitter.isDaemon = true
+            olderSubmitter.start()
+            assertTrue(olderParked.await(20, TimeUnit.SECONDS), "The older submitter never reached the dispatch hook.")
+
+            SwingUtilities.invokeAndWait {
+                queue.submit("newer", "active", snapshot("active"), body) { }
+            }
+            assertTrue(settledSignal.await(25, TimeUnit.SECONDS), "The newer write never settled.")
+
+            settledSignal = CountDownLatch(1)
+            releaseOlder.countDown()
+            assertTrue(settledSignal.await(25, TimeUnit.SECONDS), "The older write never settled.")
+            olderSubmitter.join(TimeUnit.SECONDS.toMillis(20))
+
+            assertEquals(
+                listOf("active", "passive"),
+                appliedIds.toList(),
+                "Q-261008-o97-R1: a write to one field must never drop a write to another field. Each " +
+                    "header write sets one field of the saved snapshot, so the supersede rule is per " +
+                    "field; a missing \"passive\" means a passive toggle was silently never saved.",
+            )
+            assertEquals(2, settled.size, "Both writes must settle.")
         }
     }
 
@@ -254,7 +305,8 @@ class SettingsPersistQueueTest {
             SwingUtilities.invokeAndWait {
                 queue.submit(
                     label = "held",
-                    snapshot = snapshot("held"),
+                    supersedeKey = SAME_FIELD,
+                    payload = snapshot("held"),
                     apply = { s ->
                         appliedIds.add(s.preferredBackendId)
                         inApply.set(true)
@@ -279,7 +331,7 @@ class SettingsPersistQueueTest {
 
             settledSignal = CountDownLatch(1)
             SwingUtilities.invokeAndWait {
-                queue.submit("after-dispose", snapshot("after"), { s -> appliedIds.add(s.preferredBackendId) }) { }
+                queue.submit("after-dispose", SAME_FIELD, snapshot("after"), { s: AgentSettings -> appliedIds.add(s.preferredBackendId) }) { }
             }
             assertTrue(settledSignal.await(25, TimeUnit.SECONDS), "The post-dispose write never settled.")
 
@@ -298,7 +350,7 @@ class SettingsPersistQueueTest {
      *
      * A structural gate, because the alternative is unreachable: driving a real `MainTab` headlessly
      * would need the whole Burp `MontoyaApi` surface plus a live `ChatPanel`. It reads `MainTab.kt`
-     * from disk and asserts the six counts pinned in the KDoc ledger above `persistSettings`, as
+     * from disk and asserts the eight counts pinned in the KDoc ledger above `persistSettings`, as
      * EQUALITIES — "greater than zero" would pass with an eighth inline write site added.
      *
      * **Comment lines are stripped, block comments included.** The ledger deliberately reproduces the
@@ -325,19 +377,32 @@ class SettingsPersistQueueTest {
                 "McpSupervisor.stop().",
         )
         assertEquals(
-            2,
+            0,
             code.count { it.contains("settingsRepo.save(") },
-            "MainTab ledger: `settingsRepo.save(` must be exactly 1 in each persist helper's apply lambda. " +
-                "A third means a new write bypasses the queue's lock and can tear a snapshot " +
-                "(T-23-06-01/T-23-06-02), or the chat saves settings again (quick 261008-n0c, H10).",
+            "MainTab ledger: `settingsRepo.save(` must be 0. Header writes save through " +
+                "persistHeaderChange / persistHeaderChangeAndApplyMcp, which apply one field to the saved " +
+                "snapshot under the repository write lock (quick 261008-o97). A save here would persist " +
+                "a whole snapshot again, unsaved Settings edits included, or the chat saves settings " +
+                "again (quick 261008-n0c, H10).",
+        )
+        assertEquals(
+            0,
+            code.count { it.contains("mcpSupervisor.applySettings(") },
+            "MainTab ledger: `mcpSupervisor.applySettings(` must be 0. The only MCP apply of a header " +
+                "write is inside persistHeaderChangeAndApplyMcp, built from what was saved; one here " +
+                "would apply unsaved MCP edits, or let a passive/active toggle reach McpSupervisor.stop() " +
+                "and drop live scanner tasks (T-23-06-07).",
         )
         assertEquals(
             1,
-            code.count { it.contains("mcpSupervisor.applySettings(") },
-            "MainTab ledger: `mcpSupervisor.applySettings(` must be 1, in persistSettingsAndApplyMcp. A " +
-                "second means a passive/active toggle or a chat send now reaches McpSupervisor.stop(), " +
-                "which clears ScannerTaskRegistry and CollaboratorRegistry and drops live scanner tasks " +
-                "(T-23-06-07).",
+            code.count { it.contains("persistHeaderChange(") },
+            "MainTab ledger: `persistHeaderChange(` must be 1, persistSettings' apply lambda.",
+        )
+        assertEquals(
+            1,
+            code.count { it.contains("persistHeaderChangeAndApplyMcp(") },
+            "MainTab ledger: `persistHeaderChangeAndApplyMcp(` must be 1, persistSettingsAndApplyMcp's " +
+                "apply lambda.",
         )
         assertEquals(
             0,
@@ -352,6 +417,38 @@ class SettingsPersistQueueTest {
             code.count { it.contains("getSettings = { settingsRepo.load() }") },
             "MainTab ledger: `getSettings = { settingsRepo.load() }` must be 1, the ChatPanel " +
                 "construction. ChatPanel reads the applied snapshot and nothing else (quick 261008-n0c).",
+        )
+    }
+
+    /**
+     * Q-261008-o97-ATOMIC / -MCP — the header-write worker bodies save only through the atomic
+     * `AgentSettingsRepository.update`, and only the MCP body applies MCP settings.
+     *
+     * Equalities on comment-stripped `SettingsPersistQueue.kt`: two `update(` calls (one per worker
+     * body), no `save(` (a whole-snapshot save would bypass the read-modify-write under the repository
+     * lock), and one MCP apply (only the McpEnabled body may reach McpSupervisor.stop(), T-23-06-07).
+     */
+    @Test
+    fun headerWriteWorkerBodiesSaveOnlyThroughTheAtomicUpdate() {
+        val code = codeLinesOf(PERSIST_QUEUE_SOURCE)
+
+        assertEquals(
+            2,
+            code.count { it.contains("settingsRepo.update(") },
+            "Worker bodies: `settingsRepo.update(` must be 1 in persistHeaderChange + 1 in " +
+                "persistHeaderChangeAndApplyMcp.",
+        )
+        assertEquals(
+            0,
+            code.count { it.contains("settingsRepo.save(") },
+            "Worker bodies: `settingsRepo.save(` must be 0. A header write saves one field onto the " +
+                "saved snapshot through update(), never a snapshot read at click time.",
+        )
+        assertEquals(
+            1,
+            code.count { it.contains("mcpSupervisor.applySettings(") },
+            "Worker bodies: `mcpSupervisor.applySettings(` must be 1, in persistHeaderChangeAndApplyMcp, " +
+                "built from what update() saved (T-23-06-07).",
         )
     }
 
@@ -399,5 +496,9 @@ class SettingsPersistQueueTest {
 
     private companion object {
         const val MAIN_TAB_SOURCE = "src/main/kotlin/com/six2dez/burp/aiagent/ui/MainTab.kt"
+        const val PERSIST_QUEUE_SOURCE = "src/main/kotlin/com/six2dez/burp/aiagent/ui/SettingsPersistQueue.kt"
+
+        /** One supersede key shared by the tests that model writes to the same field. */
+        const val SAME_FIELD = "same-field"
     }
 }
