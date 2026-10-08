@@ -291,15 +291,28 @@ class AuditWritePathTest {
                 "https://u:urlpass-SENTINEL@h.example:8443/a/b?t=urlquery-SENTINEL#f" to "https://h.example:8443/a/b",
                 "//u:urlpass-SENTINEL@h.example/p?t=urlquery-SENTINEL" to "//h.example/p",
                 "https://u:p@ss-urlpass-SENTINEL@h.example/p" to "https://h.example/p",
-                "https://u:pa?ss-urlpass-SENTINEL@h.example/x" to "https://h.example/x",
+                // Ambiguous: a raw `?` before the last `@` could be in a password or start a query.
+                // Either reading puts the other one's secret in the output, so it fails closed.
+                "https://u:pa?ss-urlpass-SENTINEL@h.example/x" to "https://",
                 "https://h.example?token=urlquery-SENTINEL" to "https://h.example",
                 "not a url?x=urlquery-SENTINEL" to "not a url",
+                // No path: a query or fragment holding an `@` must never be read as userinfo.
+                "https://gw.example?user=a@b.com&key=urlquery-SENTINEL" to "https://",
+                "https://gw.example#frag@urlquery-SENTINEL" to "https://",
+                // No `//`: the userinfo of a scheme-less authority is stripped too.
+                "u:urlpass-SENTINEL@llm.example:11434/v1" to "llm.example:11434/v1",
+                // A `//` inside a query: the fail-closed prefix is itself cut at its query.
+                "/p?r=//a?b@urlquery-SENTINEL" to "/p",
             )
-        for ((input, expected) in table) {
-            val out = AuditLogger.endpointOf(input)
-            assertEquals(expected, out, "endpointOf($input)")
-            assertFalse(out!!.contains(URL_PASSWORD) || out.contains(URL_QUERY) || out.contains('#'), "endpointOf($input) = $out")
-        }
+        // Every row is evaluated before asserting, so a failure names all mismatching rows at once.
+        val outputs = table.map { (input, _) -> input to AuditLogger.endpointOf(input) }
+        val mismatches =
+            table.zip(outputs).filter { (row, result) -> row.second != result.second }.map { (row, result) ->
+                "endpointOf(${row.first}) expected <${row.second}> but was <${result.second}>"
+            }
+        assertEquals(emptyList<String>(), mismatches, "endpointOf rows")
+        val leaks = outputs.filter { (_, out) -> out == null || out.contains(URL_PASSWORD) || out.contains(URL_QUERY) || out.contains('#') }
+        assertEquals(emptyList<Pair<String, String?>>(), leaks, "endpointOf output holding a secret, a fragment or null")
         assertEquals(null, AuditLogger.endpointOf(null))
         assertEquals(null, AuditLogger.endpointOf("   "))
     }
