@@ -9,6 +9,7 @@ import com.six2dez.burp.aiagent.backends.cli.CopilotCliBackendFactory
 import com.six2dez.burp.aiagent.backends.cli.GeminiCliBackendFactory
 import com.six2dez.burp.aiagent.backends.cli.OpenCodeCliBackendFactory
 import com.six2dez.burp.aiagent.backends.http.HttpBackendSupport
+import com.six2dez.burp.aiagent.backends.http.MontoyaHttpTransport
 import com.six2dez.burp.aiagent.backends.lmstudio.LmStudioBackendFactory
 import com.six2dez.burp.aiagent.backends.nvidia.NvidiaNimBackendFactory
 import com.six2dez.burp.aiagent.backends.ollama.OllamaBackendFactory
@@ -29,10 +30,25 @@ class BackendRegistry(
 
     private val externalBackendDir = File(System.getProperty("user.home"), ".burp-ai-agent/backends").also { it.mkdirs() }
 
+    // BUG-69-01: Burp's HTTP transport for HTTP backends' health checks. The registry owns it so
+    // reload() (the Settings save path) re-applies it to the freshly created instances. Declared
+    // above `init` on purpose: Kotlin runs initializers in declaration order, so a property placed
+    // after `init { reload() }` would be initialized after the first reload.
+    @Volatile
+    private var httpTransport: MontoyaHttpTransport? = null
+
     init {
         reload()
     }
 
+    /** Remembers [transport] and injects it into every current and future [HttpTransportAware] backend. */
+    @Synchronized
+    fun setHttpTransport(transport: MontoyaHttpTransport) {
+        httpTransport = transport
+        applyHttpTransport()
+    }
+
+    @Synchronized
     fun reload() {
         backends.clear()
         availabilityCache.clear()
@@ -83,6 +99,8 @@ class BackendRegistry(
         // Optional drop-in backend JARs
         loadExternalBackendJars()
 
+        applyHttpTransport()
+
         api.logging().logToOutput("Total backends registered: ${backends.size}")
     }
 
@@ -132,6 +150,15 @@ class BackendRegistry(
         availabilityCache.clear()
         closeExternalClassLoader()
         HttpBackendSupport.shutdownSharedClients()
+    }
+
+    private fun applyHttpTransport() {
+        val transport = httpTransport ?: return
+        backends.values.forEach { backend ->
+            if (backend is HttpTransportAware) {
+                backend.setHealthCheckTransport(transport)
+            }
+        }
     }
 
     private fun loadExternalBackendJars() {

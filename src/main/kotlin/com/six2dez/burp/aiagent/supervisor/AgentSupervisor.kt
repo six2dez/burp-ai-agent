@@ -10,9 +10,6 @@ import com.six2dez.burp.aiagent.backends.BackendRegistry
 import com.six2dez.burp.aiagent.backends.DiagnosableConnection
 import com.six2dez.burp.aiagent.backends.HealthCheckResult
 import com.six2dez.burp.aiagent.backends.http.MontoyaHttpTransport
-import com.six2dez.burp.aiagent.backends.lmstudio.LmStudioBackend
-import com.six2dez.burp.aiagent.backends.ollama.OllamaBackend
-import com.six2dez.burp.aiagent.backends.openai.OpenAiCompatibleBackend
 import com.six2dez.burp.aiagent.config.AgentSettings
 import com.six2dez.burp.aiagent.config.Defaults
 import com.six2dez.burp.aiagent.redact.PrivacyMode
@@ -98,22 +95,10 @@ class AgentSupervisor(
             Defaults.HEALTH_CHECK_INTERVAL_MS,
             TimeUnit.MILLISECONDS,
         )
-        // BUG-69-01: inject MontoyaHttpTransport into every HTTP-based backend's healthCheck path.
-        // Without this, healthCheck() falls back to OkHttp which silently bypasses Burp's upstream
-        // proxy / SOCKS / cert store (issue #69). NVIDIA NIM is registered as an
-        // OpenAiCompatibleBackend (NvidiaNimBackendFactory.create()) so the `is OpenAiCompatibleBackend`
-        // branch also covers it via the same setHealthCheckTransport() setter.
-        registry
-            .listAllBackendIds()
-            .mapNotNull { registry.get(it) }
-            .forEach { b ->
-                when (b) {
-                    is OpenAiCompatibleBackend -> b.setHealthCheckTransport(httpTransport)
-                    is LmStudioBackend -> b.setHealthCheckTransport(httpTransport)
-                    is OllamaBackend -> b.setHealthCheckTransport(httpTransport)
-                    else -> { /* CLI / BurpAI backends do not have HTTP health */ }
-                }
-            }
+        // BUG-69-01: HTTP backends' health checks must use Burp's HTTP stack (upstream proxy /
+        // SOCKS / cert store). The registry remembers the transport and re-applies it to every
+        // HttpTransportAware backend on reload(), so a Settings save no longer drops it.
+        registry.setHttpTransport(httpTransport)
     }
 
     fun applySettings(settings: AgentSettings) {

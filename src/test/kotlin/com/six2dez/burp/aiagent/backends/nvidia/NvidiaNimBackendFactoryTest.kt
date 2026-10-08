@@ -3,7 +3,11 @@ package com.six2dez.burp.aiagent.backends.nvidia
 import burp.api.montoya.MontoyaApi
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
+import com.six2dez.burp.aiagent.TestSettings
+import com.six2dez.burp.aiagent.backends.AiBackend
 import com.six2dez.burp.aiagent.backends.BackendLaunchConfig
+import com.six2dez.burp.aiagent.backends.HealthCheckResult
+import com.six2dez.burp.aiagent.backends.HttpTransportAware
 import com.six2dez.burp.aiagent.backends.http.MontoyaHttpTransport
 import com.six2dez.burp.aiagent.backends.http.TransportResponse
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -13,9 +17,15 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito
 import org.mockito.kotlin.any
+import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.doAnswer
+import org.mockito.kotlin.doReturn
+import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.never
 import org.mockito.kotlin.spy
+import org.mockito.kotlin.times
+import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -64,6 +74,68 @@ class NvidiaNimBackendFactoryTest {
         val accept = captured.headers.orEmpty().filterKeys { it.equals("accept", ignoreCase = true) }
         assertEquals(1, accept.size, "exactly one accept header must travel: $accept")
         assertEquals("text/plain", accept.values.single())
+    }
+
+    // --- Health checks (quick 261008-kw4): one non-billable GET /v1/models via the transport ----
+
+    @Test
+    fun healthCheckIsOneGetToV1ModelsWithBearerAndCustomHeaders() {
+        val (backend, transport) = backendWithStatusTransport(200)
+        val result = backend.healthCheck(healthSettings())
+        assertEquals(HealthCheckResult.Healthy, result)
+        val headers = argumentCaptor<Map<String, String>>()
+        verify(transport, times(1)).get(eq("https://integrate.api.nvidia.com/v1/models"), headers.capture(), any())
+        assertEquals("Bearer nvapi-test", headers.firstValue["Authorization"])
+        assertEquals("1", headers.firstValue["X-Custom"])
+        verify(transport, never()).post(any(), any(), any(), any())
+    }
+
+    @Test
+    fun healthCheckMapsStatusCodes() {
+        assertEquals(HealthCheckResult.Healthy, backendWithStatusTransport(200).first.healthCheck(healthSettings()))
+        val auth = backendWithStatusTransport(401).first.healthCheck(healthSettings())
+        assertTrue(auth is HealthCheckResult.Degraded && auth.message.contains("authentication failed"), "got $auth")
+        val limited = backendWithStatusTransport(429).first.healthCheck(healthSettings())
+        assertTrue(limited is HealthCheckResult.Degraded && limited.message.contains("rate limited"), "got $limited")
+        assertEquals(
+            HealthCheckResult.Unavailable("HTTP 500."),
+            backendWithStatusTransport(500).first.healthCheck(healthSettings()),
+        )
+    }
+
+    @Test
+    fun healthCheckWithBlankModelIsUnavailableWithoutTouchingTheTransport() {
+        val (backend, transport) = backendWithStatusTransport(200)
+        val result = backend.healthCheck(healthSettings().copy(nvidiaNimModel = ""))
+        assertTrue(result is HealthCheckResult.Unavailable && result.message.contains("model is empty"), "got $result")
+        Mockito.verifyNoInteractions(transport)
+    }
+
+    @Test
+    fun healthCheckWithoutTransportIsUnknownAndDoesNoNetworkIo() {
+        // A network attempt against the discard port would yield Unavailable; Unknown proves the
+        // OkHttp fallback is gone (health traffic must never bypass Burp's HTTP stack).
+        val backend = NvidiaNimBackendFactory().create()
+        val result = backend.healthCheck(healthSettings().copy(nvidiaNimUrl = "http://127.0.0.1:9"))
+        assertEquals(HealthCheckResult.Unknown, result)
+    }
+
+    private fun healthSettings() =
+        TestSettings.baselineSettings().copy(
+            nvidiaNimUrl = "https://integrate.api.nvidia.com",
+            nvidiaNimModel = "meta/llama-3.1-8b-instruct",
+            nvidiaNimApiKey = "nvapi-test",
+            nvidiaNimHeaders = "X-Custom: 1",
+        )
+
+    private fun backendWithStatusTransport(status: Int): Pair<AiBackend, MontoyaHttpTransport> {
+        val transport = spy(MontoyaHttpTransport(mock<MontoyaApi>(defaultAnswer = Mockito.RETURNS_DEEP_STUBS)))
+        doReturn(TransportResponse(status, "{}", status in 200..299))
+            .whenever(transport)
+            .get(any(), any(), any())
+        val backend = NvidiaNimBackendFactory().create()
+        (backend as HttpTransportAware).setHealthCheckTransport(transport)
+        return backend to transport
     }
 
     private class CapturedPost {

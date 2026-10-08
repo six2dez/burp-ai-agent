@@ -7,6 +7,7 @@ import com.six2dez.burp.aiagent.backends.AiBackend
 import com.six2dez.burp.aiagent.backends.BackendDiagnostics
 import com.six2dez.burp.aiagent.backends.BackendLaunchConfig
 import com.six2dez.burp.aiagent.backends.HealthCheckResult
+import com.six2dez.burp.aiagent.backends.HttpTransportAware
 import com.six2dez.burp.aiagent.backends.JsonModeCapable
 import com.six2dez.burp.aiagent.backends.TokenUsage
 import com.six2dez.burp.aiagent.backends.UsageAwareConnection
@@ -21,6 +22,10 @@ import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
+// Every constructor parameter is a per-provider knob the NIM / Perplexity factories set; a holder
+// class would trip constructorThreshold 10 as well. Answered in source (ADR-17 clause 1) because
+// the quick-261008-kw4 health-provider signature change invalidated the old baseline entry.
+@Suppress("LongParameterList")
 class OpenAiCompatibleBackend(
     override val id: String = "openai-compatible",
     override val displayName: String = "Generic (OpenAI-compatible)",
@@ -33,33 +38,37 @@ class OpenAiCompatibleBackend(
     private val streaming: Boolean = false,
     private val defaultHeaders: Map<String, String> = emptyMap(),
     private val payloadCustomizer: ((MutableMap<String, Any?>) -> Unit)? = null,
-    private val healthCheckProvider: ((AgentSettings) -> HealthCheckResult)? = null,
+    // Factory-specific health check. Receives the registry-injected transport explicitly so the
+    // provider can never fall back to a direct socket (NIM / Perplexity return Unknown without it).
+    private val healthCheckProvider: ((AgentSettings, MontoyaHttpTransport?) -> HealthCheckResult)? = null,
     // Path appended to a bare-host base URL (no /v\d+ and no /chat/completions). Defaults to the
     // OpenAI shape; Perplexity overrides to "/chat/completions" because its API has no /v1 prefix.
     private val chatCompletionsBasePath: String = "/v1/chat/completions",
     // OpenAI-style {"type":"json_object"} response_format. Perplexity's Sonar API rejects this
     // field, so set false there; the scanner prompts still ask the model for JSON in plain text.
     private val supportsJsonObjectResponseFormat: Boolean = true,
-) : AiBackend {
+) : AiBackend,
+    HttpTransportAware {
     override val supportsSystemRole: Boolean = true
 
     private val mapper = ObjectMapper().registerKotlinModule()
 
     /**
-     * Optional, supervisor-injected [MontoyaHttpTransport] used by [healthCheck] (and exposed to
-     * factory-specific health-check providers such as NVIDIA NIM). The injection happens once in
-     * [com.six2dez.burp.aiagent.supervisor.AgentSupervisor]'s init block so the [AiBackend.healthCheck]
-     * signature stays unchanged. Null only on the unit-test path (tests construct backends directly
-     * without a supervisor), where [HttpBackendSupport.healthCheckGet] is the OkHttp fallback.
+     * Optional [MontoyaHttpTransport] used by [healthCheck] and passed to factory-specific
+     * health-check providers (NVIDIA NIM, Perplexity). [com.six2dez.burp.aiagent.backends.BackendRegistry]
+     * injects it via [HttpTransportAware] and re-applies it after every reload, so the
+     * [AiBackend.healthCheck] signature stays unchanged. Null only on the unit-test path (tests
+     * construct backends directly without a registry transport); there the generic check falls
+     * back to [HttpBackendSupport.healthCheckGet] and the NIM / Perplexity providers return Unknown.
      */
     @Volatile
     private var healthCheckTransport: MontoyaHttpTransport? = null
 
-    fun setHealthCheckTransport(transport: MontoyaHttpTransport) {
+    override fun setHealthCheckTransport(transport: MontoyaHttpTransport) {
         healthCheckTransport = transport
     }
 
-    fun healthCheckTransport(): MontoyaHttpTransport? = healthCheckTransport
+    override fun healthCheckTransport(): MontoyaHttpTransport? = healthCheckTransport
 
     override fun launch(config: BackendLaunchConfig): AgentConnection {
         val baseUrl = effectiveBaseUrl(config.baseUrl)
@@ -89,7 +98,7 @@ class OpenAiCompatibleBackend(
 
     override fun healthCheck(settings: AgentSettings): HealthCheckResult {
         if (healthCheckProvider != null) {
-            return healthCheckProvider.invoke(settings)
+            return healthCheckProvider.invoke(settings, healthCheckTransport)
         }
         val baseUrl = effectiveBaseUrl(baseUrlSelector(settings))
         if (baseUrl.isBlank()) {

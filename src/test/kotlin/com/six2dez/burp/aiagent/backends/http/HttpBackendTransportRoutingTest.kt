@@ -31,7 +31,8 @@ import java.util.concurrent.atomic.AtomicReference
 /**
  * Verifies BUG-69-01 transport-routing wiring:
  *   (a) healthCheck() for OpenAi-compatible, LmStudio, Ollama backends invokes transport.get();
- *   (b) healthCheck() for NVIDIA NIM invokes transport.post();
+ *   (b) healthCheck() for NVIDIA NIM (and Perplexity, see PerplexityBackendFactoryTest) invokes
+ *       transport.get() on /v1/models — never post(), never a billable chat completion;
  *   (c) send() with transport == null in OpenAi-compatible / LmStudio fails fast with
  *       IllegalStateException containing "MontoyaHttpTransport unavailable";
  *   (d) HttpBackendSupport.buildClient KDoc declares the unit-test-only fact and removes the
@@ -201,10 +202,10 @@ class HttpBackendTransportRoutingTest {
     }
 
     @Test
-    fun `healthCheck routes NvidiaNim through transport via POST`() {
+    fun `healthCheck routes NvidiaNim through transport via GET on v1 models`() {
         val factory = NvidiaNimBackendFactory()
         val backend = factory.create() as OpenAiCompatibleBackend
-        val transport = stubTransportPost()
+        val transport = stubTransportGet()
         backend.setHealthCheckTransport(transport)
 
         val settings =
@@ -216,12 +217,13 @@ class HttpBackendTransportRoutingTest {
 
         val result = backend.healthCheck(settings)
         assertEquals(HealthCheckResult.Healthy, result)
-        verify(transport).post(
-            eq("https://integrate.api.nvidia.com/v1/chat/completions"),
-            any(),
+        verify(transport).get(
+            eq("https://integrate.api.nvidia.com/v1/models"),
             any(),
             any(),
         )
+        // Quick 261008-kw4: the health check must never send a (billable) chat completion.
+        verify(transport, Mockito.never()).post(any(), any(), any(), any())
     }
 
     @Test
@@ -284,7 +286,7 @@ class HttpBackendTransportRoutingTest {
         return spy
     }
 
-    /** Variant whose `post()` returns 200 — needed for NVIDIA NIM. */
+    /** Variant whose `post()` returns 200 — proves the blank-model path never touches the transport. */
     private fun stubTransportPost(): MontoyaHttpTransport {
         val api = mock<MontoyaApi>(defaultAnswer = Mockito.RETURNS_DEEP_STUBS)
         val real = MontoyaHttpTransport(api)

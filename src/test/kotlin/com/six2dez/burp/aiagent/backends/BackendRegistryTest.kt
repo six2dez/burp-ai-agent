@@ -2,6 +2,7 @@ package com.six2dez.burp.aiagent.backends
 
 import burp.api.montoya.MontoyaApi
 import burp.api.montoya.logging.Logging
+import com.six2dez.burp.aiagent.backends.http.MontoyaHttpTransport
 import com.six2dez.burp.aiagent.config.AgentSettings
 import com.six2dez.burp.aiagent.config.McpSettings
 import com.six2dez.burp.aiagent.config.SeverityLevel
@@ -9,8 +10,10 @@ import com.six2dez.burp.aiagent.redact.PrivacyMode
 import com.six2dez.burp.aiagent.scanner.PayloadRisk
 import com.six2dez.burp.aiagent.scanner.ScanMode
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.mockito.Mockito
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
 import java.util.concurrent.atomic.AtomicInteger
@@ -60,6 +63,33 @@ class BackendRegistryTest {
         cache[Pair("backend", 9)] = true
         registry.shutdown()
         assertTrue(cache.isEmpty())
+    }
+
+    @Test
+    fun setHttpTransport_survivesReload() {
+        // Quick 261008-kw4 / BUG-69-01: Settings save calls reload(), which recreates every
+        // backend. The registry must re-apply Burp's transport so health checks keep using it.
+        val registry = createRegistry()
+        val transport = MontoyaHttpTransport(mock<MontoyaApi>(defaultAnswer = Mockito.RETURNS_DEEP_STUBS))
+        registry.setHttpTransport(transport)
+        registry.reload()
+
+        val aware = registry.listAllBackendIds().mapNotNull { registry.get(it) as? HttpTransportAware }
+        aware.forEach { assertSame(transport, it.healthCheckTransport(), "transport lost after reload") }
+        val awareIds = registry.listAllBackendIds().filter { registry.get(it) is HttpTransportAware }.toSet()
+        assertTrue(
+            awareIds.containsAll(setOf("nvidia-nim", "perplexity", "openai-compatible", "lmstudio", "ollama")),
+            "expected HTTP backends to be HttpTransportAware, got $awareIds",
+        )
+    }
+
+    @Test
+    fun setHttpTransport_appliesToExistingInstancesWithoutReload() {
+        val registry = createRegistry()
+        val nim = registry.get("nvidia-nim") as HttpTransportAware
+        val transport = MontoyaHttpTransport(mock<MontoyaApi>(defaultAnswer = Mockito.RETURNS_DEEP_STUBS))
+        registry.setHttpTransport(transport)
+        assertSame(transport, nim.healthCheckTransport())
     }
 
     private fun createRegistry(): BackendRegistry {

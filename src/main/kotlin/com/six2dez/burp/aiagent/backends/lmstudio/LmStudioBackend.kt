@@ -7,6 +7,7 @@ import com.six2dez.burp.aiagent.backends.AiBackend
 import com.six2dez.burp.aiagent.backends.BackendDiagnostics
 import com.six2dez.burp.aiagent.backends.BackendLaunchConfig
 import com.six2dez.burp.aiagent.backends.HealthCheckResult
+import com.six2dez.burp.aiagent.backends.HttpTransportAware
 import com.six2dez.burp.aiagent.backends.JsonModeCapable
 import com.six2dez.burp.aiagent.backends.TokenUsage
 import com.six2dez.burp.aiagent.backends.UsageAwareConnection
@@ -21,7 +22,9 @@ import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
-class LmStudioBackend : AiBackend {
+class LmStudioBackend :
+    AiBackend,
+    HttpTransportAware {
     override val id: String = "lmstudio"
     override val displayName: String = "LM Studio (local)"
     override val supportsSystemRole: Boolean = true
@@ -31,16 +34,16 @@ class LmStudioBackend : AiBackend {
     /**
      * Optional, supervisor-injected [MontoyaHttpTransport] used by [healthCheck]. Null only on the
      * unit-test path (tests construct backends directly without a supervisor); production wiring
-     * lives in [com.six2dez.burp.aiagent.supervisor.AgentSupervisor]'s init block.
+     * lives in [com.six2dez.burp.aiagent.backends.BackendRegistry] (re-applied on every reload).
      */
     @Volatile
     private var healthCheckTransport: MontoyaHttpTransport? = null
 
-    fun setHealthCheckTransport(transport: MontoyaHttpTransport) {
+    override fun setHealthCheckTransport(transport: MontoyaHttpTransport) {
         healthCheckTransport = transport
     }
 
-    fun healthCheckTransport(): MontoyaHttpTransport? = healthCheckTransport
+    override fun healthCheckTransport(): MontoyaHttpTransport? = healthCheckTransport
 
     override fun launch(config: BackendLaunchConfig): AgentConnection {
         val baseUrl = config.baseUrl?.trimEnd('/') ?: "http://127.0.0.1:1234"
