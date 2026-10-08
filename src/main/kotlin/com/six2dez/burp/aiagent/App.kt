@@ -343,6 +343,15 @@ object App {
     }
 }
 
+/** Declaration only (quick 261008-n0c RED): mirrors nothing yet. */
+@Suppress("UNUSED_PARAMETER")
+internal fun mirrorAppliedSettingsInto(
+    settingsRepo: AgentSettingsRepository,
+    supervisor: AgentSupervisor,
+) {
+    // Intentionally empty until the GREEN commit.
+}
+
 /**
  * REL-07 / SC6 — the thread factory for the extension-wide worker pool.
  *

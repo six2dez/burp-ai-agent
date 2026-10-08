@@ -190,6 +190,12 @@ class AgentSettingsRepository(
         cachedSettings.set(null)
     }
 
+    /** Declaration only (quick 261008-n0c RED): registers nothing yet. */
+    @Suppress("UNUSED_PARAMETER")
+    fun addChangeListener(listener: (AgentSettings) -> Unit) {
+        // Intentionally empty until the GREEN commit.
+    }
+
     fun load(): AgentSettings {
         // Return cached snapshot if available (thread-safe immutable data class)
         cachedSettings.get()?.let { return it }
