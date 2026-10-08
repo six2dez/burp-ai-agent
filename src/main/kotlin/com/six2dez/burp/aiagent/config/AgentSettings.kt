@@ -176,24 +176,36 @@ class AgentSettingsRepository(
      */
     private val cipher: SecretCipher = SecretCipher(prefs)
 
-    /** Thread-safe cached settings snapshot. Updated atomically on save(). */
+    /**
+     * Thread-safe cached settings snapshot, updated atomically on a fully successful [save].
+     *
+     * This is the extension's one applied settings snapshot: App creates exactly one repository and
+     * injects it into MainTab and SettingsPanel, and the scanners read it through their providers on
+     * every use, so a save through any path is what every reader sees next (quick 261008-n0c, C2).
+     */
     private val cachedSettings =
         java.util.concurrent.atomic
             .AtomicReference<AgentSettings?>(null)
 
+    /** Notified after every fully successful [save]; see [addChangeListener]. */
+    private val changeListeners =
+        java.util.concurrent
+            .CopyOnWriteArrayList<(AgentSettings) -> Unit>()
+
     /**
-     * Drops the cached snapshot so the next [load] re-reads preferences. Use this when
-     * another repository instance (e.g. the one owned by SettingsPanel) may have
-     * persisted newer values behind our back.
+     * Registers [listener] to receive every snapshot [save] publishes.
+     *
+     * Listeners run synchronously on the saving thread (never the EDT in this codebase), in
+     * registration order, and only after every preference write succeeded and the snapshot is
+     * published, so [load] inside a listener already returns the saved value. A failed save notifies
+     * no listener. Listeners must be cheap, non-blocking and must not throw.
      */
-    fun invalidate() {
-        cachedSettings.set(null)
+    fun addChangeListener(listener: (AgentSettings) -> Unit) {
+        changeListeners.add(listener)
     }
 
-    /** Declaration only (quick 261008-n0c RED): registers nothing yet. */
-    @Suppress("UNUSED_PARAMETER")
-    fun addChangeListener(listener: (AgentSettings) -> Unit) {
-        // Intentionally empty until the GREEN commit.
+    private fun notifyChangeListeners(settings: AgentSettings) {
+        changeListeners.forEach { it(settings) }
     }
 
     fun load(): AgentSettings {
@@ -716,6 +728,9 @@ class AgentSettingsRepository(
             cachedSettings.set(null)
             throw e
         }
+        // Outside the try on purpose: a listener must never be able to evict a snapshot whose writes
+        // all succeeded, and a failed save rethrows from the catch, so it never reaches this line.
+        notifyChangeListeners(settings)
     }
 
     private fun migrateIfNeeded() {

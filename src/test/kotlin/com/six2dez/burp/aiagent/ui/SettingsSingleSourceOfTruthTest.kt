@@ -204,6 +204,7 @@ class SettingsSingleSourceOfTruthTest {
         val panel =
             SettingsPanel(
                 api = api,
+                settingsRepo = repo,
                 backends = backends,
                 supervisor = supervisor,
                 audit = mock<AuditLogger>(defaultAnswer = Answers.RETURNS_DEEP_STUBS),

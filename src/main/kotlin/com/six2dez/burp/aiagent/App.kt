@@ -97,6 +97,7 @@ object App {
         auditLogger = AuditLogger(api)
         AuditLogger.registerGlobalEmitter { type, payload -> auditLogger.logEvent(type, payload) }
         supervisor = AgentSupervisor(api, backendRegistry, auditLogger, workerPool)
+        mirrorAppliedSettingsInto(settingsRepo, supervisor)
         Alerting.transport = supervisor.httpTransport
         aiRequestLogger = AiRequestLogger()
         supervisor.aiRequestLogger = aiRequestLogger
@@ -181,7 +182,7 @@ object App {
         activeAiScanner.useCollaborator = settings.activeAiUseCollaborator
         activeAiScanner.setEnabled(settings.activeAiEnabled)
 
-        val ui = MainTab(api, backendRegistry, supervisor, auditLogger, mcpSupervisor, passiveAiScanner, activeAiScanner, aiRequestLogger)
+        val ui = MainTab(api, settingsRepo, backendRegistry, supervisor, auditLogger, mcpSupervisor, passiveAiScanner, activeAiScanner, aiRequestLogger)
         mainTab = ui
         api.userInterface().registerSuiteTab("Custom AI Agent", ui.root)
 
@@ -343,13 +344,19 @@ object App {
     }
 }
 
-/** Declaration only (quick 261008-n0c RED): mirrors nothing yet. */
-@Suppress("UNUSED_PARAMETER")
+/**
+ * Quick 261008-n0c — makes [AgentSupervisor]'s settings copy a mirror of the one [settingsRepo].
+ *
+ * AgentSupervisor keeps its own AtomicReference because its launch config (backend commands, URLs,
+ * keys, MCP env) and its auto-restart read settings off the EDT. This listener updates it inside every
+ * successful save, including MainTab's header writes (backend picker, scanner and MCP toggles), which
+ * never call `supervisor.applySettings` themselves.
+ */
 internal fun mirrorAppliedSettingsInto(
     settingsRepo: AgentSettingsRepository,
     supervisor: AgentSupervisor,
 ) {
-    // Intentionally empty until the GREEN commit.
+    settingsRepo.addChangeListener { supervisor.applySettings(it) }
 }
 
 /**

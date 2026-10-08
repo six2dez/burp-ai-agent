@@ -55,6 +55,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
   the redaction pipeline, and STRICT aliases the item's own hostname everywhere in the captured
   text. Known remaining gap: hostnames other than the item's own are still not anonymized in free
   text in STRICT (tracked follow-up).
+- **The AI scanners kept the settings from extension load** - the passive and active AI scanners
+  and the Burp Scanner checks read a copy of the settings taken when the extension loaded, so a
+  privacy mode or backend change made in Settings never reached them until Burp restarted: passive
+  scans kept redacting with the old privacy mode, the passive scanner switched the shared AI backend
+  back to the startup one (possibly a cloud backend after a local one was picked), and the active
+  scan check kept the startup risk level, scope and delay. They now read the last saved settings on
+  every use.
 
 ## [1.0.0] - 2026-08-22
 

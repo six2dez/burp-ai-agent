@@ -30,6 +30,7 @@ import javax.swing.Timer
 
 class SettingsPanel(
     internal val api: MontoyaApi,
+    internal val settingsRepo: AgentSettingsRepository,
     internal val backends: BackendRegistry,
     internal val supervisor: AgentSupervisor,
     internal val audit: AuditLogger,
@@ -37,7 +38,10 @@ class SettingsPanel(
     internal val passiveAiScanner: com.six2dez.burp.aiagent.scanner.PassiveAiScanner,
     internal val activeAiScanner: com.six2dez.burp.aiagent.scanner.ActiveAiScanner,
 ) {
-    internal val settingsRepo = AgentSettingsRepository(api)
+    /**
+     * The panel's working copy for fields that have no component (salt, TTLs, context window), not an
+     * applied-snapshot cache.
+     */
     internal var settings: AgentSettings = settingsRepo.load()
     internal val customPromptLibraryEditor =
         CustomPromptLibraryEditor().apply {

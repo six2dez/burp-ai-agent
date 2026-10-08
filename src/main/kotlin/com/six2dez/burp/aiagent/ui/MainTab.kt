@@ -55,6 +55,7 @@ private const val CHAT_PANEL_MIN_WIDTH = 560
 
 class MainTab(
     private val api: MontoyaApi,
+    private val settingsRepo: AgentSettingsRepository,
     private val backends: BackendRegistry,
     private val supervisor: AgentSupervisor,
     private val audit: AuditLogger,
@@ -84,7 +85,6 @@ class MainTab(
 
     private val statusLabel = JLabel("Idle")
     private val sessionLabel = JLabel("Session: -")
-    private val settingsRepo = AgentSettingsRepository(api)
 
     /**
      * REL-05 / SC4 / CR-02 — the one seam every header and Settings-tab settings write leaves the EDT
@@ -124,7 +124,7 @@ class MainTab(
     private var lastProjectId: String? = null
 
     init {
-        settingsPanel = SettingsPanel(api, backends, supervisor, audit, mcpSupervisor, passiveAiScanner, activeAiScanner)
+        settingsPanel = SettingsPanel(api, settingsRepo, backends, supervisor, audit, mcpSupervisor, passiveAiScanner, activeAiScanner)
         if (aiRequestLogger != null) {
             aiLoggerPanel = AiLoggerPanel(aiRequestLogger)
         }
@@ -509,10 +509,6 @@ class MainTab(
             persistSettings("active-toggle", settingsPanel.currentSettings())
         }
         settingsPanel.onSettingsChanged = { updated ->
-            // SettingsPanel owns its own repository instance; drop our cache so the
-            // next tab.currentSettings() reads the freshly persisted values (custom
-            // prompt library, canned prompts, etc.).
-            settingsRepo.invalidate()
             SwingUtilities.invokeLater {
                 aiRequestLogger?.enabled = updated.aiRequestLoggerEnabled
                 aiRequestLogger?.maxEntries = updated.aiRequestLoggerMaxEntries
