@@ -24,7 +24,7 @@ repositories {
 
 dependencies {
     // Burp Montoya API (compileOnly, Burp provides it at runtime)
-    compileOnly("net.portswigger.burp.extensions:montoya-api:2026.2")
+    compileOnly("net.portswigger.burp.extensions:montoya-api:2026.7")
 
     // JSON
     // Jackson's Gradle module metadata imports its BOM, so these two versions also align jackson-core and jackson-annotations
@@ -59,7 +59,7 @@ dependencies {
 
     testImplementation(kotlin("test"))
     testImplementation("org.junit.jupiter:junit-jupiter:6.0.3")
-    testImplementation("net.portswigger.burp.extensions:montoya-api:2026.2")
+    testImplementation("net.portswigger.burp.extensions:montoya-api:2026.7")
     testImplementation("org.mockito.kotlin:mockito-kotlin:5.4.0")
     testImplementation("com.squareup.okhttp3:mockwebserver:5.4.0")
 }
