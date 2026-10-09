@@ -19,6 +19,9 @@ import com.six2dez.burp.aiagent.util.IssueUtils
  * registration is silently caught in App.kt.
  *
  * Contract:
+ *  - With the AI passive scanner off (PassiveAiScanner.isEnabled() false) doCheck() does nothing:
+ *    no local heuristics, no issue, no enqueued analysis. Both halves of the passive scanner share
+ *    that one runtime switch, which is read on every check.
  *  - doCheck() returns synchronously after running fast local heuristics
  *  - Async AI deep-analysis is enqueued to PassiveAiScanner.executor
  *  - AI findings surface later via api.siteMap().add() inside PassiveAiScanner
@@ -34,7 +37,8 @@ class AiPassiveScanCheck(
      * Synchronous per-request passive check.
      *
      * Steps:
-     *  1. Load settings, apply scope filter.
+     *  1. Skip when the AI passive scanner is off (checked first, so the off path does no scope
+     *     lookup) or when the request is out of scope while scope-only is set.
      *  2. Run fast local heuristics via passiveScanner.localChecks().
      *  3. Convert LocalFinding list to AuditIssue list and return immediately.
      *  4. Enqueue async AI deep-analysis via passiveScanner.enqueueForScanCheck().
@@ -44,8 +48,10 @@ class AiPassiveScanCheck(
     override fun doCheck(httpRequestResponse: HttpRequestResponse): AuditResult {
         val settings = getSettings()
 
-        // Scope check — mirror of AiScanCheck.activeAudit lines 44-46
-        if (settings.passiveAiScopeOnly &&
+        // Switch first (the same runtime flag the AI half reads), then the scope check — mirror of
+        // AiScanCheck.activeAudit lines 44-46.
+        if (!passiveScanner.isEnabled() ||
+            settings.passiveAiScopeOnly &&
             !api.scope().isInScope(httpRequestResponse.request().url())
         ) {
             return AuditResult.auditResult(emptyList())
