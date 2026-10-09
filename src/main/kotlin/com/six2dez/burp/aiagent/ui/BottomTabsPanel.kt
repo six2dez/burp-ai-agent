@@ -80,6 +80,7 @@ class BottomTabsPanel(
         val buttonPanel = JPanel(FlowLayout(FlowLayout.RIGHT, 12, 6))
         buttonPanel.background = UiTheme.Colors.surface
         buttonPanel.border = EmptyBorder(4, 12, 8, 12)
+        buttonPanel.add(settingsPanel.unsavedChangesLabel)
         buttonPanel.add(restoreButton)
         buttonPanel.add(saveButton)
 

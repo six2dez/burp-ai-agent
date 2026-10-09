@@ -7,8 +7,10 @@ import burp.api.montoya.http.message.requests.HttpRequest
 import burp.api.montoya.http.message.responses.HttpResponse
 import com.six2dez.burp.aiagent.context.ContextOptions
 import com.six2dez.burp.aiagent.redact.PrivacyMode
+import com.six2dez.burp.aiagent.redact.Redaction
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
+import java.util.Base64
 import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -100,8 +102,11 @@ class BountyPromptTagResolverTest {
     // WHY THIS SITE MATTERS MORE THAN THE TWO MCP TOOLS. `request_parse` and `params_extract` both
     // call `HttpRequest.httpRequest(input.content)` on CALLER-SUPPLIED content, so they ECHO a
     // cookie the caller already holds. This resolver reads a REAL Burp-held `HttpRequestResponse`
-    // and sends it to a configured AI backend. It is latent only because the class has no
-    // instantiation in `src/main/kotlin` — RE-MEASURED at execution time, not inherited.
+    // and sends it to a configured AI backend. The leak class is LIVE, not dormant: the resolver is
+    // constructed in production by `ui/UiActions.kt` (bountyPromptResolver) and reached from the
+    // right-click BountyPrompt menu. An earlier measurement that called the class unconstructed was
+    // invalidated by a raw NUL byte in that file, which made grep treat it as binary (corrected in
+    // quick task 261008-jx2).
     //
     // Every assertion below is on the RESOLVED TAG OUTPUT through the public `resolve(...)`, not on
     // the private helper, so the probe measures what a prompt would actually carry.
@@ -166,6 +171,78 @@ class BountyPromptTagResolverTest {
         )
     }
 
+    // ── quick task 261008-jx2 — parameter VALUES go through Redaction.apply ──
+    //
+    // The NAME filter above never looks at a value, so a JWT in `state=` or a secret matched by a
+    // user custom pattern reached the prompt verbatim. These probes drive the resolved tag output.
+
+    @Test
+    fun jwtAndCustomPatternValuesAreRedactedFromTheParametersTagUnderStrict() {
+        assertJwtAndCustomPatternRedacted(PrivacyMode.STRICT)
+    }
+
+    @Test
+    fun jwtAndCustomPatternValuesAreRedactedFromTheParametersTagUnderBalanced() {
+        assertJwtAndCustomPatternRedacted(PrivacyMode.BALANCED)
+    }
+
+    @Test
+    fun customPatternValuesAreRedactedFromTheParametersTagUnderOff() {
+        Redaction.setCustomPatterns(listOf(CUSTOM_PATTERN))
+        try {
+            val resolved =
+                resolveParametersTag(
+                    PrivacyMode.OFF,
+                    paramOfType(HttpParameterType.BODY, "pass", CUSTOM_SECRET),
+                )
+
+            assertFalse(resolved.contains(CUSTOM_SECRET), "custom patterns must apply in every mode: $resolved")
+        } finally {
+            Redaction.setCustomPatterns(emptyList())
+        }
+    }
+
+    @Test
+    fun ownHostInsideAnEncodedParameterValueIsAliasedUnderStrict() {
+        val resolved =
+            resolveParametersTag(
+                PrivacyMode.STRICT,
+                paramOfType(HttpParameterType.URL, "next", "https%3A%2F%2Fexample.com%2Fhome"),
+            )
+
+        assertFalse(resolved.contains("example.com", ignoreCase = true), "the item's own host reached the prompt: $resolved")
+    }
+
+    private fun assertJwtAndCustomPatternRedacted(mode: PrivacyMode) {
+        Redaction.setCustomPatterns(listOf(CUSTOM_PATTERN))
+        try {
+            val jwt = longJwt()
+            val payloadHead = jwt.split('.')[1].take(40)
+            val resolved =
+                resolveParametersTag(
+                    mode,
+                    paramOfType(HttpParameterType.URL, "state", jwt),
+                    paramOfType(HttpParameterType.BODY, "pass", CUSTOM_SECRET),
+                )
+
+            assertFalse(resolved.contains(CUSTOM_SECRET), "a custom-pattern match reached the prompt under $mode: $resolved")
+            assertFalse(resolved.contains(payloadHead), "a JWT payload reached the prompt under $mode: $resolved")
+            assertTrue(resolved.contains("[JWT_REDACTED]"), "the JWT must be redacted before truncation: $resolved")
+        } finally {
+            Redaction.setCustomPatterns(emptyList())
+        }
+    }
+
+    // A JWT longer than the 500-char value bound, with a long payload segment, so truncating the
+    // value first would cut it mid-payload and the JWT rule would no longer see three segments.
+    private fun longJwt(): String {
+        val encoder = Base64.getUrlEncoder().withoutPadding()
+        val payload = encoder.encodeToString("{\"sub\":\"${"x".repeat(600)}\"}".toByteArray())
+        val jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.$payload.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
+        check(jwt.length >= 600)
+        return jwt
+    }
+
     private fun resolveParametersTag(
         mode: PrivacyMode,
         vararg parameters: ParsedHttpParameter,
@@ -227,5 +304,7 @@ class BountyPromptTagResolverTest {
         const val COOKIE_OFF_SENTINEL = "bountycharlie"
         const val NAME_FILTER_SENTINEL = "bountydelta"
         const val PASS_THROUGH_SENTINEL = "bountyecho"
+        const val CUSTOM_PATTERN = "hunter2\\w+"
+        const val CUSTOM_SECRET = "hunter2secret"
     }
 }

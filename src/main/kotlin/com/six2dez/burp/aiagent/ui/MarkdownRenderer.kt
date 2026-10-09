@@ -81,10 +81,7 @@ object MarkdownRenderer {
             }
 
         // Links [text](url)
-        html =
-            html.replace(LINK_REGEX) { m ->
-                "<a href='${m.groupValues[2]}' style='color:$linkColor;'>${m.groupValues[1]}</a>"
-            }
+        html = html.replace(LINK_REGEX) { m -> renderLink(m, linkColor) }
 
         // Horizontal rule (--- or ***)
         html =
@@ -104,6 +101,36 @@ object MarkdownRenderer {
             </html>
             """.trimIndent()
     }
+
+    /**
+     * Quick 261009-do9: one markdown link, as an anchor only when [ChatLinkPolicy] accepts its URL.
+     *
+     * The capture arrives after the `&`, `<`, `>` escaping at the top of [toHtml], so it is decoded
+     * first (`&amp;` LAST, so an escaped `&lt;` cannot turn into `<`) and the policy sees the raw URL.
+     * The accepted URI is then attribute-escaped (`&` FIRST, then `<`, `>`, `"`, `'`), which the Swing
+     * parser decodes back. The policy input, the parsed HREF and the click handler's description are
+     * therefore one string. A rejected link stays visible as its literal markdown text.
+     */
+    private fun renderLink(
+        match: MatchResult,
+        linkColor: String,
+    ): String {
+        val rawUrl =
+            match.groupValues[2]
+                .replace("&lt;", "<")
+                .replace("&gt;", ">")
+                .replace("&amp;", "&")
+        val uri = ChatLinkPolicy.acceptedUri(rawUrl) ?: return match.value
+        return "<a href='${escapeAttribute(uri.toString())}' style='color:$linkColor;'>${match.groupValues[1]}</a>"
+    }
+
+    private fun escapeAttribute(value: String): String =
+        value
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace("\"", "&quot;")
+            .replace("'", "&#39;")
 
     private fun colorToHex(c: java.awt.Color): String = "#%02x%02x%02x".format(c.red, c.green, c.blue)
 

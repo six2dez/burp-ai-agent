@@ -5,9 +5,8 @@ import com.six2dez.burp.aiagent.audit.AiRequestLogger
 import com.six2dez.burp.aiagent.audit.AuditLogger
 import com.six2dez.burp.aiagent.backends.BackendRegistry
 import com.six2dez.burp.aiagent.backends.HealthCheckResult
-import com.six2dez.burp.aiagent.config.AgentSettings
 import com.six2dez.burp.aiagent.config.AgentSettingsRepository
-import com.six2dez.burp.aiagent.config.toPreprocessorSettings
+import com.six2dez.burp.aiagent.config.Defaults
 import com.six2dez.burp.aiagent.context.ContextCapture
 import com.six2dez.burp.aiagent.mcp.McpSupervisor
 import com.six2dez.burp.aiagent.redact.PrivacyMode
@@ -16,11 +15,16 @@ import com.six2dez.burp.aiagent.supervisor.AgentSupervisor
 import com.six2dez.burp.aiagent.ui.components.DependencyBanner
 import com.six2dez.burp.aiagent.ui.components.ToggleSwitch
 import java.awt.BorderLayout
+import java.awt.Cursor
 import java.awt.Dimension
 import java.awt.Graphics
 import java.awt.Graphics2D
 import java.awt.RenderingHints
 import java.awt.event.KeyEvent
+import java.awt.event.MouseAdapter
+import java.awt.event.MouseEvent
+import java.time.LocalTime
+import java.util.concurrent.Executors
 import javax.swing.BoxLayout
 import javax.swing.JComponent
 import javax.swing.JLabel
@@ -49,6 +53,7 @@ private const val CHAT_PANEL_MIN_WIDTH = 560
 
 class MainTab(
     private val api: MontoyaApi,
+    private val settingsRepo: AgentSettingsRepository,
     private val backends: BackendRegistry,
     private val supervisor: AgentSupervisor,
     private val audit: AuditLogger,
@@ -78,7 +83,6 @@ class MainTab(
 
     private val statusLabel = JLabel("Idle")
     private val sessionLabel = JLabel("Session: -")
-    private val settingsRepo = AgentSettingsRepository(api)
 
     /**
      * REL-05 / SC4 / CR-02 — the one seam every header and Settings-tab settings write leaves the EDT
@@ -101,11 +105,24 @@ class MainTab(
         DependencyBanner("MCP Server must be enabled. Toggle MCP to enable AI features.")
     private var syncingToggles = false
     private var healthTimer: Timer? = null
+
+    // Status-pill health checks: ONE named daemon thread plus a single-flight gate, so checks never
+    // overlap and never pile up threads. A Settings save / click that lands mid-check is coalesced
+    // into exactly one re-check after the flight ends.
+    private val healthExec =
+        Executors.newSingleThreadExecutor { r -> Thread(r, "burp-ai-agent-health").apply { isDaemon = true } }
+    private val healthGate =
+        SingleFlightGate(healthExec) {
+            SwingUtilities.invokeLater { requestHealthCheck(HealthCheckTrigger.SETTINGS_CHANGED) }
+        }
+
+    // EDT-confined: the first timer tick is the startup check (remote providers included).
+    private var startupHealthCheckDone = false
     private var sessionPersistTimer: Timer? = null
     private var lastProjectId: String? = null
 
     init {
-        settingsPanel = SettingsPanel(api, backends, supervisor, audit, mcpSupervisor, passiveAiScanner, activeAiScanner)
+        settingsPanel = SettingsPanel(api, settingsRepo, backends, supervisor, audit, mcpSupervisor, passiveAiScanner, activeAiScanner)
         if (aiRequestLogger != null) {
             aiLoggerPanel = AiLoggerPanel(aiRequestLogger)
         }
@@ -114,19 +131,8 @@ class MainTab(
             ChatPanel(
                 api = api,
                 supervisor = supervisor,
-                getSettings = { settingsPanel.currentSettings() },
-                applySettings = { settings ->
-                    settingsRepo.save(settings)
-                    aiRequestLogger?.enabled = settings.aiRequestLoggerEnabled
-                    aiRequestLogger?.maxEntries = settings.aiRequestLoggerMaxEntries
-                    supervisor.applySettings(settings)
-                    mcpSupervisor.applySettings(
-                        settings.mcpSettings,
-                        settings.privacyMode,
-                        settings.determinismMode,
-                        settings.toPreprocessorSettings(),
-                    )
-                },
+                // Quick 261008-n0c (H10): the chat reads the applied snapshot and never saves or applies.
+                getSettings = { settingsRepo.load() },
                 validateBackend = { validateBackendCommand(it) },
                 ensureBackendReady = { ensureBackendReady(it) },
                 showError = { showError(it) },
@@ -173,7 +179,7 @@ class MainTab(
         backendPicker.addActionListener {
             val selected = backendPicker.selectedItem as? String ?: "codex-cli"
             settingsPanel.setPreferredBackend(selected)
-            persistSettings("backend-picker", settingsPanel.currentSettings())
+            persistSettings("backend-picker", HeaderSettingsChange.PreferredBackend(selected), recheckHealth = true)
         }
 
         mcpToggle.isSelected = initialSettings.mcpSettings.enabled
@@ -194,37 +200,23 @@ class MainTab(
         mcpGroup.add(mcpStatusLabel)
 
         styleStatusLabel(backendStatusLabel)
-        // Check health in background every 5s, not every 1s to avoid spam
+        // Click the pill to re-check on demand; remote providers are never polled on a timer.
+        backendStatusLabel.cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+        backendStatusLabel.toolTipText = "Click to re-check"
+        backendStatusLabel.addMouseListener(
+            object : MouseAdapter() {
+                override fun mouseClicked(e: MouseEvent) {
+                    requestHealthCheck(HealthCheckTrigger.USER_CLICK)
+                }
+            },
+        )
+        // First tick = startup check for every backend; later ticks poll local backends only.
         healthTimer =
-            Timer(5000) {
-                val settings = settingsPanel.currentSettings()
-                Thread {
-                    val health = supervisor.backendHealth(settings)
-                    SwingUtilities.invokeLater {
-                        when (health) {
-                            is HealthCheckResult.Healthy -> {
-                                backendStatusLabel.text = "AI: OK"
-                                backendStatusLabel.background = UiTheme.Colors.statusRunning
-                                backendStatusLabel.toolTipText = "Backend health check passed."
-                            }
-                            is HealthCheckResult.Degraded -> {
-                                backendStatusLabel.text = "AI: Degraded"
-                                backendStatusLabel.background = UiTheme.Colors.statusTerminal
-                                backendStatusLabel.toolTipText = health.message
-                            }
-                            else -> {
-                                backendStatusLabel.text = "AI: Offline"
-                                backendStatusLabel.background = UiTheme.Colors.statusCrashed
-                                backendStatusLabel.toolTipText =
-                                    when (health) {
-                                        is HealthCheckResult.Unavailable -> health.message
-                                        else -> "Backend did not respond."
-                                    }
-                            }
-                        }
-                    }
-                }.start()
-            }
+            Timer(Defaults.LOCAL_BACKEND_HEALTH_POLL_INTERVAL_MS.toInt()) {
+                val trigger = if (startupHealthCheckDone) HealthCheckTrigger.PERIODIC else HealthCheckTrigger.STARTUP
+                startupHealthCheckDone = true
+                requestHealthCheck(trigger)
+            }.apply { initialDelay = Defaults.BACKEND_HEALTH_STARTUP_CHECK_DELAY_MS.toInt() }
         healthTimer?.start()
 
         val passiveLabel = JLabel("Passive")
@@ -456,24 +448,21 @@ class MainTab(
             syncingToggles = true
             mcpToggle.isSelected = enabled
             syncingToggles = false
-            // The Swing read stays on the EDT; only the disk write and the bounded MCP stop move.
-            val settings = settingsPanel.currentSettings()
-            val updated = settings.copy(mcpSettings = settings.mcpSettings.copy(enabled = enabled))
-            persistSettingsAndApplyMcp("mcp-enabled-changed", updated)
+            persistSettingsAndApplyMcp("mcp-enabled-changed", HeaderSettingsChange.McpEnabled(enabled))
         }
         settingsPanel.onPassiveAiEnabledChanged = passiveSync@{ enabled ->
             if (syncingToggles) return@passiveSync
             syncingToggles = true
             passiveToggle.isSelected = enabled
             syncingToggles = false
-            persistSettings("passive-enabled-changed", settingsPanel.currentSettings())
+            persistSettings("passive-enabled-changed", HeaderSettingsChange.PassiveAiEnabled(enabled))
         }
         settingsPanel.onActiveAiEnabledChanged = activeSync@{ enabled ->
             if (syncingToggles) return@activeSync
             syncingToggles = true
             activeToggle.isSelected = enabled
             syncingToggles = false
-            persistSettings("active-enabled-changed", settingsPanel.currentSettings())
+            persistSettings("active-enabled-changed", HeaderSettingsChange.ActiveAiEnabled(enabled))
         }
 
         mcpToggle.addActionListener {
@@ -482,9 +471,7 @@ class MainTab(
             syncingToggles = true
             settingsPanel.setMcpEnabled(enabled)
             syncingToggles = false
-            val settings = settingsPanel.currentSettings()
-            val updated = settings.copy(mcpSettings = settings.mcpSettings.copy(enabled = enabled))
-            persistSettingsAndApplyMcp("mcp-toggle", updated)
+            persistSettingsAndApplyMcp("mcp-toggle", HeaderSettingsChange.McpEnabled(enabled))
         }
         passiveToggle.addActionListener {
             if (syncingToggles) return@addActionListener
@@ -492,7 +479,7 @@ class MainTab(
             syncingToggles = true
             settingsPanel.setPassiveAiEnabled(enabled)
             syncingToggles = false
-            persistSettings("passive-toggle", settingsPanel.currentSettings())
+            persistSettings("passive-toggle", HeaderSettingsChange.PassiveAiEnabled(enabled))
         }
         activeToggle.addActionListener {
             if (syncingToggles) return@addActionListener
@@ -500,13 +487,9 @@ class MainTab(
             syncingToggles = true
             settingsPanel.setActiveAiEnabled(enabled)
             syncingToggles = false
-            persistSettings("active-toggle", settingsPanel.currentSettings())
+            persistSettings("active-toggle", HeaderSettingsChange.ActiveAiEnabled(enabled))
         }
         settingsPanel.onSettingsChanged = { updated ->
-            // SettingsPanel owns its own repository instance; drop our cache so the
-            // next tab.currentSettings() reads the freshly persisted values (custom
-            // prompt library, canned prompts, etc.).
-            settingsRepo.invalidate()
             SwingUtilities.invokeLater {
                 aiRequestLogger?.enabled = updated.aiRequestLoggerEnabled
                 aiRequestLogger?.maxEntries = updated.aiRequestLoggerMaxEntries
@@ -526,12 +509,75 @@ class MainTab(
                 activeToggle.isSelected = updated.activeAiEnabled
                 syncingToggles = false
                 renderStatus()
+                requestHealthCheck(HealthCheckTrigger.SETTINGS_CHANGED)
             }
         }
     }
 
     /**
-     * Persists [snapshot] on `burp-ai-settings-sync` and nothing else — no MCP apply, no scanner reload.
+     * EDT only. Reads the applied settings, asks [BackendHealthPolicy] whether [trigger] may run a
+     * check for the selected backend, and hands the network I/O to the single health thread. The
+     * result is painted back on the EDT.
+     *
+     * The pill checks the APPLIED backend config, the one chat and scanners use (quick 261008-o97).
+     * Checking on-screen, unsaved values is the Settings tab's Test connection button
+     * (`SettingsPanelActions.testBackendConnection`), which does not come through here.
+     *
+     * Any exception from a backend's health check (third-party code for external backends) must
+     * still repaint the pill as Offline instead of leaving a stale "AI: OK", hence the broad catch.
+     */
+    @Suppress("TooGenericExceptionCaught")
+    private fun requestHealthCheck(trigger: HealthCheckTrigger) {
+        val settings = settingsRepo.load()
+        if (!BackendHealthPolicy.shouldRun(trigger, settings)) return
+        healthGate.submit(coalesce = trigger != HealthCheckTrigger.PERIODIC) {
+            val health =
+                try {
+                    supervisor.backendHealth(settings)
+                } catch (e: Exception) {
+                    HealthCheckResult.Unavailable(e.message ?: "Health check failed")
+                }
+            val checkedAt = LocalTime.now()
+            SwingUtilities.invokeLater { renderBackendHealth(health, checkedAt) }
+        }
+    }
+
+    private fun renderBackendHealth(
+        health: HealthCheckResult,
+        checkedAt: LocalTime,
+    ) {
+        when (health) {
+            is HealthCheckResult.Healthy -> {
+                backendStatusLabel.text = "AI: OK"
+                backendStatusLabel.background = UiTheme.Colors.statusRunning
+                backendStatusLabel.toolTipText = BackendHealthPolicy.tooltip("Backend health check passed.", checkedAt)
+            }
+            is HealthCheckResult.Degraded -> {
+                backendStatusLabel.text = "AI: Degraded"
+                backendStatusLabel.background = UiTheme.Colors.statusTerminal
+                backendStatusLabel.toolTipText = BackendHealthPolicy.tooltip(health.message, checkedAt)
+            }
+            else -> {
+                backendStatusLabel.text = "AI: Offline"
+                backendStatusLabel.background = UiTheme.Colors.statusCrashed
+                val message =
+                    when (health) {
+                        is HealthCheckResult.Unavailable -> health.message
+                        else -> "Backend did not respond."
+                    }
+                backendStatusLabel.toolTipText = BackendHealthPolicy.tooltip(message, checkedAt)
+            }
+        }
+    }
+
+    /**
+     * Saves the one field [change] carries on `burp-ai-settings-sync` and nothing else — no MCP apply, no
+     * scanner reload.
+     *
+     * Each write carries ONE field, never a snapshot read off the Settings tab: the worker
+     * ([persistHeaderChange]) applies it to the SAVED snapshot inside the repository write lock, so
+     * unsaved Settings edits stay unsaved and a concurrent Save settings is never torn or overwritten
+     * with a stale snapshot (quick 261008-o97).
      *
      * Declared here rather than alongside the queue itself because detekt runs with
      * `buildUponDefaultConfig = true` and `detekt.yml` overrides only `complexity`, `style` and
@@ -539,32 +585,53 @@ class MainTab(
      * ahead of its callers would fail that task's own static-analysis gate with no sanctioned exit.
      *
      * **Mention ledger (structural gate).** `everyMainTabSettingsWriteGoesThroughThePersistQueue` reads
-     * this file from disk, strips comment lines — block comments included, which is why these four
-     * tokens can be named here at all — and asserts these counts as EQUALITIES. An eighth write site,
-     * or a seventh regressing to an inline save, moves a count and turns that test red. Update this
-     * ledger deliberately; do not relax the assertions to `>=`.
+     * this file from disk, strips comment lines — block comments included, which is why these tokens
+     * can be named here at all — and asserts these counts as EQUALITIES. An eighth write site, or a
+     * seventh regressing to an inline save, moves a count and turns that test red. Update this ledger
+     * deliberately; do not relax the assertions to `>=`.
      *
      * | Token | Count | Composition |
      * |---|---|---|
      * | `persistSettings(` | 6 | 1 declaration + 5 call sites (backend picker, passive/active host callbacks, passive/active header toggles) |
      * | `persistSettingsAndApplyMcp(` | 3 | 1 declaration + 2 call sites (the MCP host callback and the header mcpToggle) |
-     * | `settingsRepo.save(` | 3 | 1 in each helper's apply lambda + 1 in the ChatPanel `applySettings` lambda, the residual recorded as D-23-06-1 |
-     * | `mcpSupervisor.applySettings(` | 2 | 1 in the MCP-applying helper + 1 in that same ChatPanel lambda |
+     * | `settingsRepo.save(` | 0 | header writes save one field through the worker bodies' `settingsRepo.update` |
+     * | `mcpSupervisor.applySettings(` | 0 | the MCP apply lives in persistHeaderChangeAndApplyMcp, built from what was saved |
+     * | `persistHeaderChange(` | 1 | persistSettings' apply lambda |
+     * | `persistHeaderChangeAndApplyMcp(` | 1 | persistSettingsAndApplyMcp's apply lambda |
+     * | `supervisor.applySettings(` | 0 | App's repository listener (`mirrorAppliedSettingsInto`) owns that |
+     * | `getSettings = { settingsRepo.load() }` | 1 | the ChatPanel construction: the chat reads the applied snapshot |
+     * | `settingsPanel.currentSettings()` | 0 | MainTab reads only the applied snapshot |
+     * | `recheckHealth = true` | 1 | the backend picker re-checks health after its write lands |
+     * | `requestHealthCheck(HealthCheckTrigger.SETTINGS_CHANGED)` | 3 | healthGate's coalesced re-run, the Save tail in onSettingsChanged, persistSettings' settle callback |
+     *
+     * [recheckHealth] re-runs the status-pill health check from the settle callback (on the EDT), i.e.
+     * after the write landed: the pill reads the applied snapshot, so a check made at click time would
+     * still see the old backend.
      */
     private fun persistSettings(
         label: String,
-        snapshot: AgentSettings,
+        change: HeaderSettingsChange,
+        recheckHealth: Boolean = false,
     ) {
         settingsPersistQueue.submit(
             label = label,
-            snapshot = snapshot,
-            apply = { settingsRepo.save(it) },
-            onSettled = { renderStatus() },
+            supersedeKey = change.supersedeKey,
+            payload = change,
+            apply = { persistHeaderChange(settingsRepo, it) },
+            onSettled = {
+                renderStatus()
+                if (recheckHealth) requestHealthCheck(HealthCheckTrigger.SETTINGS_CHANGED)
+            },
         )
     }
 
     /**
-     * Persists [snapshot] AND re-applies the MCP settings, both on `burp-ai-settings-sync`.
+     * Saves the MCP enabled flag [change] carries AND re-applies the MCP settings, both on
+     * `burp-ai-settings-sync`.
+     *
+     * The worker ([persistHeaderChangeAndApplyMcp]) saves the flag onto the SAVED snapshot under the
+     * repository write lock and applies MCP built from what was saved (port, external access, privacy
+     * mode), never from unsaved Settings edits (quick 261008-o97).
      *
      * REL-05 / SC4: with MCP going enabled→disabled this reaches `McpSupervisor.stop()` and then
      * `KtorMcpServerManager`'s bounded `future.get(10, TimeUnit.SECONDS)`. D-14 keeps that wait
@@ -572,31 +639,23 @@ class MainTab(
      * instead of by the Burp UI. [renderStatus] runs from the queue's EDT tail, so the badge reports
      * the state AFTER the apply rather than before it.
      *
-     * **Why this phase ends with TWO persist helpers rather than one flag-taking helper.** Five of the
-     * eight `settingsRepo.save` sites in this file do not apply MCP settings at all: the two that do
-     * are the MCP-enabled host callback and the header `mcpToggle`; the other five are the backend
-     * picker, the passive and active host callbacks and the passive and active header toggles (the
-     * eighth, in the `ChatPanel` `applySettings` lambda in `init`, is recorded residual `D-23-06-1`).
+     * **Why this phase ends with TWO persist helpers rather than one flag-taking helper.** This file has
+     * seven settings writes; two apply MCP, five do not. The two that do are the MCP-enabled host
+     * callback and the header `mcpToggle`; the other five are the backend picker, the passive and active
+     * host callbacks and the passive and active header toggles.
      * `McpSupervisor.stop()` also clears `ScannerTaskRegistry` and `CollaboratorRegistry`, so applying
      * MCP settings on every passive/active toggle would drop live scanner tasks — a behaviour change,
      * not a harmless no-op (`T-23-06-07`). Two narrow helpers keep that impossible by construction.
      */
     private fun persistSettingsAndApplyMcp(
         label: String,
-        snapshot: AgentSettings,
+        change: HeaderSettingsChange.McpEnabled,
     ) {
         settingsPersistQueue.submit(
             label = label,
-            snapshot = snapshot,
-            apply = {
-                settingsRepo.save(it)
-                mcpSupervisor.applySettings(
-                    it.mcpSettings,
-                    it.privacyMode,
-                    it.determinismMode,
-                    it.toPreprocessorSettings(),
-                )
-            },
+            supersedeKey = change.supersedeKey,
+            payload = change,
+            apply = { persistHeaderChangeAndApplyMcp(settingsRepo, mcpSupervisor, it) },
             onSettled = { renderStatus() },
         )
     }
@@ -680,7 +739,10 @@ class MainTab(
     }
 
     private fun updateSafetySummary() {
-        val settings = settingsPanel.currentSettings()
+        // Quick 261008-n0c: the header indicator states what is in effect, the same rule as the chat
+        // pill. Reading the applied snapshot also means this 1 Hz tick no longer re-runs every custom
+        // pattern's SafeRegex probe on the EDT.
+        val settings = settingsRepo.load()
         val privacy = settings.privacyMode.name
         val mcpExposure =
             when {
@@ -929,6 +991,7 @@ class MainTab(
         mcpStatusTimer.stop()
         healthTimer?.stop()
         healthTimer = null
+        healthExec.shutdownNow()
         sessionPersistTimer?.stop()
         sessionPersistTimer = null
         chatPanel.shutdown()

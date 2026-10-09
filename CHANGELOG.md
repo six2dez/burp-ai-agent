@@ -6,6 +6,169 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Changed
+
+- **The AI status pill no longer polls the backend every 5 seconds** - local backends (CLI tools,
+  Burp AI and HTTP servers on a loopback address) are re-checked every 30 seconds; remote providers
+  are checked only at startup, after a settings or backend change, and when the pill is clicked.
+  All checks run on a single background thread and never overlap; the tooltip shows when the last
+  check ran.
+- Bumped slf4j to 2.0.18; updated `actions/setup-java` to v6 in CI.
+- CI no longer runs the whole test suite a second time after the fast gate; it now enforces the
+  coverage floors on the full test suite and builds and tests the BApp Store JAR
+  (`-PstoreBuild=true`).
+- Fixed tests that failed intermittently on the macOS and Windows CI runners.
+
+### Fixed
+
+- **Non-ASCII characters corrupted requests to every HTTP AI backend** - Anthropic,
+  OpenAI-compatible, NVIDIA NIM, Perplexity, LM Studio and Ollama all received a mangled body
+  whenever a prompt held non-ASCII text: the arrows in the bundled agent profiles, accented letters,
+  bullets, or emoji in proxied traffic. Symptoms varied by backend: llama.cpp "ill-formed UTF-8",
+  LM Studio "invalid_json", LiteLLM `model=None`, Anthropic "surrogates not allowed" / "unexpected
+  control character". The body was handed to Burp as text and Burp kept only the low byte of each
+  character, so some characters (for example `•`) even became a raw `"` that changed the structure
+  of the JSON request. Bodies are now sent as UTF-8 bytes with
+  `Content-Type: application/json; charset=utf-8`. Fixes #84, #85, #86 and #88.
+- **NVIDIA NIM and Perplexity requests always failed** ("Unrecognized token 'data'") - both
+  asked for a streamed response, which the buffered Burp transport then parsed as one JSON
+  document. They now send non-streaming requests, and every OpenAI-compatible backend also
+  aggregates a streamed (SSE) body for servers that stream regardless.
+- **Backend health checks sent billable requests and could bypass Burp's upstream proxy** - NVIDIA
+  NIM and Perplexity health checks were real chat completions; they are now a free
+  `GET /v1/models`. They no longer fall back to a direct connection, and the Burp transport now
+  survives a Settings save, so health traffic keeps going through Burp's upstream proxy.
+- **Sending a chat message, flipping a header toggle or picking a backend saved unsaved Settings
+  edits** - every send read the values on screen in the Settings tab, saved them and re-applied
+  them, so a half-edited setting took effect without clicking Save; with MCP disabled each message
+  also cleared the MCP scanner tasks and Collaborator clients (the next turn failed with "Task not
+  found"), and with stdio enabled the bridge restarted every turn. The header MCP, Passive and
+  Active toggles, the backend picker and the matching Settings-tab switches did the same on every
+  click (shipped in 1.0.0): they saved every unsaved Settings edit, a half-made privacy downgrade
+  included, applied it only partly (custom redaction patterns, MCP privacy and the audit setting
+  were not updated), the MCP switches applied unsaved MCP settings such as the port, and a click
+  made while Save settings was still writing could write part of the old settings back; the AI
+  status pill also checked the on-screen backend settings. Each toggle or backend pick now saves
+  only the value you changed onto the saved settings, the MCP switches apply the saved MCP
+  settings, the chat, its privacy pill, the header safety indicator and the AI status pill use
+  what is actually in effect, and the Settings tab shows an "Unsaved changes" marker until you
+  click Save settings.
+- **Chat follow-up messages lost the captured request/response context and the tool catalog from
+  the second message on** (shipped in 1.0.0) - every backend that rebuilds the conversation from the
+  chat history (the HTTP backends, Burp AI, and the CLI backends other than Claude CLI, which keeps
+  its own session) received only the text typed in earlier turns, so the context sent with "Send to
+  AI", the MCP tool catalog and earlier tool results were missing, and a first message that failed
+  or was cancelled lost the context and the catalog for the whole chat. The history now carries each
+  turn as it was sent (each backend still trims its oldest turns to its history limit), and a failed
+  or cancelled message sends the context and the catalog again. After the privacy mode becomes
+  stricter or you switch backend, earlier turns are resent only as the text you typed and the
+  captured context is not sent again. Nothing new is saved with the project.
+- **AI scans and the MCP `http1_request` / `http2_request` tools could not test targets with a
+  self-signed or internal-CA certificate** (shipped in 1.0.0) - the AI active scanner, the Burp
+  Scanner AI check and both tools required upstream TLS certificate verification. They now follow
+  Burp's own TLS settings, and requests to AI providers still verify the certificate.
+- **The AI active scanner re-sent the original request once per insertion point and vulnerability
+  class before testing** (shipped in 1.0.0) - a right-click AI scan of a request with eight
+  injection points over every vulnerability class (48 classes in FULL mode) replayed the request
+  384 times before its payloads. One baseline per request is now shared by all of its targets
+  (right-click scans and passive-scanner follow-ups) for up to 5 minutes, and a failed baseline is
+  retried rather than reused.
+- **The Burp Scanner AI check bypassed the scan's resource pool** (shipped in 1.0.0) - it sent
+  through the extension's own HTTP client instead of the one Burp gives each scan check, so the
+  scan's resource pool, pause and session-handling rules did not apply; it also slept inside
+  Burp's scanner thread for the AI request delay and re-sent the base request before every
+  time-based payload. It now sends through the scan's client, measures the time-based baseline once
+  per insertion point, and the Delay (ms) setting applies only to the AI active scanner queue.
+- **Burp Scanner filed `[AI Passive]` issues while the AI passive scanner was off, and
+  filed them twice while it was on** (shipped in 1.0.0) - every passive audit in Burp Professional
+  ran the extension's local checks (request smuggling indicators, a missing CSRF token, serialized
+  data, an executable upload) and filed their issues even though the AI passive scanner is off by
+  default; with it on, each finding was filed a second time under another name (for example
+  "Potential CSRF (Missing Token)" and "CSRF"). With the AI passive scanner off, the Burp Scanner
+  check now files nothing; with it on, it files each local finding once, under the `[AI Passive]`
+  name the AI passive scanner gives it (for example `[AI Passive] CSRF`), and records its audit
+  entry once. Issues already filed by 1.0.0 keep their old names. Right-click AI passive scans
+  still file their local findings.
+- **AI passive issues were filed under the wrong vulnerability class and could auto-queue the
+  wrong active tests** (shipped in 1.0.0) - the class in an `[AI Passive]` issue name was found
+  by searching the title for short acronyms as plain text, so they matched inside other words
+  ("ato" in "Indicators", "Validator" or "Actuator", "rce" in "Source", "Resource" or "Force",
+  "sso" in "Associated", "idor" in "Corridor", "sql" in "NoSQL"). The local request smuggling
+  check was filed as `[AI Passive] ACCOUNT_TAKEOVER`, JavaScript source map findings as
+  `[AI Passive] CMDI` and NoSQL injection as `[AI Passive] SQLI`; with the AI active scanner and
+  "Auto-queue passive findings" on, those findings could queue account-takeover or
+  command-injection tests against the request. Acronyms such as SQL, XSS, RCE, SSRF, ATO, SSO,
+  IDOR, JWT and CORS now match only as whole words, NoSQL is checked before SQL, and MySQL /
+  PostgreSQL / MSSQL / SQLite error titles still count as SQL injection. Issues already filed
+  under the old names keep them.
+- **Large bodies could lose content behind "REDACTION INCOMPLETE" markers on slow or busy
+  machines** - which parts were dropped depended on CPU load, so the same request could redact
+  differently from one run to the next. Redaction now bounds each pattern by a
+  deterministic amount of work, so the same input always redacts the same way.
+
+### Security
+
+- **Target-controlled text could alter the structure of AI backend requests** - the same low-byte
+  conversion turned `Ģ`/`•` into `"`, `ŝ` into `]` and `Ž` into `}`, so content from a scanned page
+  or a proxy-history tool result could close a JSON string and inject members (for example an extra
+  system-role message or a different `model`). Fixed by sending UTF-8 bytes (#84, #88). Redaction
+  was not bypassed, because it runs before serialization.
+- **Right-click "send to AI" context leaked data the privacy mode promised to hide** - (a) the
+  `url` field of a captured request was sent raw next to the redacted request, so query-string
+  tokens (for example `access_token=`) leaked in BALANCED and STRICT, and the real hostname leaked
+  in STRICT; the preview showed a redacted URL that was not the one sent. (b) Scanner issue name,
+  detail and remediation were sent unredacted in every mode, including session IDs in URLs and
+  bearer tokens or JWTs quoted in the detail. (c) In STRICT, only the `Host:` line was anonymized,
+  so the item's own hostname still appeared in `Referer`, `Origin`, `Location` and absolute URLs
+  in bodies. (d) The BountyPrompt `[HTTP_Requests_Parameters]` tag sent parameter values such as
+  JWTs and secrets verbatim (only a parameter-name filter applied), and user custom patterns never
+  applied there. URLs now go through one fail-closed URL redactor (an unparseable or
+  scheme-relative URL no longer comes back raw), issue text and every parameter line go through
+  the redaction pipeline, and STRICT aliases the item's own hostname everywhere in the captured
+  text. Known remaining gap: hostnames other than the item's own are still not anonymized in free
+  text in STRICT (tracked follow-up).
+- **The AI scanners kept the settings from extension load** - the passive and active AI scanners
+  and the Burp Scanner checks read a copy of the settings taken when the extension loaded, so a
+  privacy mode or backend change made in Settings never reached them until Burp restarted: passive
+  scans kept redacting with the old privacy mode, the passive scanner switched the shared AI backend
+  back to the startup one (possibly a cloud backend after a local one was picked), and the active
+  scan check kept the startup risk level, scope and delay. They now read the last saved settings on
+  every use.
+- **Audit logging wrote the MCP token, API credentials and full prompts to disk in clear** (shipped
+  in 1.0.0) - with audit logging on, every prompt record in `audit.jsonl` and `bundles/` carried the
+  MCP server token and custom header values such as `X-Custom-Auth` or `apikey`, and the prompt, the
+  captured context, every response chunk and provider error text were written in clear, contrary to
+  the documented hashes-only default. The files were created with the default umask (typically 0644
+  files and 0755 directories), so other local accounts could read them wherever the home directory
+  allows it, and the folders were created even with audit logging off. Records now keep only header
+  names and environment variable names, never their values, and the backend URL without credentials
+  or query; prompts, context, responses, error messages and active-scan payloads are recorded as a
+  SHA-256 and a byte length unless the new Verbose audit switch (next to Audit logging, off by
+  default) is on; scanner records keep target URLs without their query string; files are created
+  owner-only on macOS and Linux and older ones are tightened on the next write; nothing is created
+  until audit logging writes something; the Audit logging tooltip no longer claims that changes to
+  the log are detected. Files written by earlier versions are left as they are: if audit logging was
+  on, they may hold the MCP token and full prompts, so regenerate the MCP token and delete them if
+  needed.
+- **The AI active scanner replayed state-changing requests at every risk level** (shipped in
+  1.0.0) - the IDOR/BOLA test re-sent the original request with neighbouring IDs whatever its
+  method, so a DELETE, PUT, PATCH or POST was replayed against other objects even at SAFE, and the
+  403 bypass switched requests to POST or PUT. Now a request whose method is not GET, HEAD or
+  OPTIONS is replayed with neighbouring IDs only at DANGEROUS (below it the IDOR test is skipped and
+  the Output tab says why), and method switching tries only GET and HEAD below DANGEROUS.
+- **Links in chat replies opened any kind of address without asking** (shipped in 1.0.0) - a
+  markdown link in an AI reply or in tool output, text the scanned target can influence, became
+  clickable whatever its URL, and a click opened it at once without showing the address or asking.
+  On Windows a `file:` link makes the system connect to the named host over SMB, which can leak the
+  user's NTLM credentials. A quote in the link address also broke out of the generated link and
+  could add HTML attributes to it. Now only http and https links to a named host, with no `user@`
+  part, are clickable, and any other link is shown as plain text; a click first asks, shows the full
+  address and opens it only on Open; quotes in link addresses are escaped.
+- **The bundled Netty and Jackson libraries had known advisories** (shipped in 1.0.0) - the
+  extension JAR bundled Netty 4.1.119.Final, which Ktor 3.1.3 pulls in to run the MCP server, and
+  Jackson 2.22.1, the JSON library. Netty is now pinned to 4.1.138.Final through the Netty BOM
+  without changing Ktor, and Jackson is now 2.22.3.
+
 ## [1.0.0] - 2026-08-22
 
 First stable release. The whole line is a security-correctness milestone: an external review of

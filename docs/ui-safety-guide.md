@@ -6,8 +6,11 @@ This runbook covers safe operation of scanner and backend controls from the UI.
 
 1. Verify scope is configured before enabling active scanning.
 2. Start with `SAFE` risk level.
-3. Confirm queue size and backpressure indicators before bulk actions.
-4. Use targeted tests before broad scans.
+3. IDOR/BOLA tests replay a request whose method is not GET, HEAD or OPTIONS, and the 403 bypass
+   tries POST and PUT, only at `DANGEROUS`. Below it the IDOR target is skipped and the Output tab
+   says why.
+4. Confirm queue size and backpressure indicators before bulk actions.
+5. Use targeted tests before broad scans.
 
 ## Passive Scanner Cost/Safety
 

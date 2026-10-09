@@ -63,7 +63,7 @@ plus the wider class of issues the same review surfaced. Full detail in [CHANGEL
 - **Tool-Call Confirmation** — Tool calls the AI emits are gated: read-only bounded tools run silently, everything else asks first with an approval card in the chat. Unknown tools fail closed.
 - **3 Privacy Modes** — STRICT / BALANCED / OFF. Redact sensitive data before it leaves Burp.
 - **Custom Prompt Library** — Save free-form prompts per context (HTTP request or scanner issue); launch them from the right-click menu or type ad-hoc ones via `Custom…`.
-- **Audit Logging** — JSONL with SHA-256 integrity hashing for compliance; every launch stamped with `promptSource` / `contextKind` for reproducibility.
+- **Audit Logging** — Opt-in JSONL log with a per-record SHA-256; prompts, context and responses are recorded as SHA-256 plus length unless Verbose audit is on, and credentials are never written; every launch stamped with `promptSource` / `contextKind` for reproducibility.
 
 ## Quick Start
 

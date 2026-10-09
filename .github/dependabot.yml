@@ -18,6 +18,28 @@ updates:
       jackson:
         patterns:
           - "com.fasterxml.jackson.*"
+      netty:
+        patterns:
+          - "io.netty:*"
+    # Kotlin, kotlinx, Ktor, the MCP SDK, the Kotlin Gradle plugins and the CycloneDX plugin must
+    # move together, so their minor and major updates are ignored here (patch updates still
+    # arrive) until the joint toolchain upgrade, which removes these rules. The CycloneDX 3.x
+    # migration is done by hand.
+    ignore:
+      - dependency-name: "org.jetbrains.kotlin*"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "org.jetbrains.kotlinx:*"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "io.ktor:*"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "io.modelcontextprotocol:*"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "jvm"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "plugin.serialization"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "org.cyclonedx.bom"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
 
   - package-ecosystem: github-actions
     directory: "/"

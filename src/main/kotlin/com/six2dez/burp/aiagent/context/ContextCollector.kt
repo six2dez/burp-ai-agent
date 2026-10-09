@@ -10,8 +10,8 @@ import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import com.six2dez.burp.aiagent.config.Defaults
 import com.six2dez.burp.aiagent.redact.Redaction
 import com.six2dez.burp.aiagent.redact.RedactionPolicy
+import com.six2dez.burp.aiagent.redact.UrlRedaction
 import com.six2dez.burp.aiagent.util.SecurityExcerpts
-import java.net.URI
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.util.logging.Logger
@@ -49,19 +49,37 @@ class ContextCollector(
                             )
                         }
 
-                    val redactedReq = Redaction.apply(req, policy, stableHostSalt = options.hostSalt)
-                    val redactedResp = resp?.let { Redaction.apply(it, policy, stableHostSalt = options.hostSalt) }
+                    // Order is mandatory: Redaction.apply aliases the whole Host: value first, then the
+                    // own-host pass aliases the item's hostname everywhere else (Referer, Origin,
+                    // Location, absolute URLs in bodies). The reverse order would leave an alias on the
+                    // Host: line for Redaction.apply to alias again.
+                    val rawUrl: String? = item.request().url()
+                    val ownHost = item.httpService()?.host() ?: UrlRedaction.hostOf(rawUrl)
+                    val ownHostPass: (String) -> String = { text ->
+                        if (policy.anonymizeHosts && ownHost != null) {
+                            UrlRedaction.anonymizeHostOccurrences(text, ownHost, options.hostSalt)
+                        } else {
+                            text
+                        }
+                    }
+                    val redactedReq = ownHostPass(Redaction.apply(req, policy, stableHostSalt = options.hostSalt))
+                    val redactedResp =
+                        resp?.let { ownHostPass(Redaction.apply(it, policy, stableHostSalt = options.hostSalt)) }
 
-                    HttpItem(
-                        tool = null,
-                        url = item.request().url(),
-                        method = item.request().method(),
-                        request = redactedReq,
-                        response = redactedResp,
-                    )
+                    rawUrl to
+                        HttpItem(
+                            tool = null,
+                            url = rawUrl?.let { ownHostPass(UrlRedaction.redact(it, policy, options.hostSalt)) },
+                            method = item.request().method(),
+                            request = redactedReq,
+                            response = redactedResp,
+                        )
                 }.let { list ->
-                    if (options.deterministic) list.sortedBy { stableKey(it) } else list
-                }
+                    // The sort key uses the RAW url so the deterministic order does not depend on the
+                    // host salt (an alias would reshuffle items whenever the salt rotates). Only the
+                    // order is derived from it; the raw url itself is never emitted.
+                    if (options.deterministic) list.sortedBy { (rawUrl, item) -> stableKey(rawUrl, item) } else list
+                }.map { it.second }
 
         // Global context cap: drop trailing items if total serialized size exceeds limit
         val cappedItems = capItemsBySize(items)
@@ -86,16 +104,30 @@ class ContextCollector(
         val items =
             issues
                 .map { i ->
-                    val host = i.httpService()?.host()
+                    val host: String? = i.httpService()?.host()
+                    // Same apply-then-own-host order as the HTTP capture: Redaction.apply handles
+                    // tokens, JWTs and custom patterns in every mode, then STRICT aliases the issue's
+                    // own host wherever the scanner wrote it into the text.
+                    val redactText: (String) -> String = { text ->
+                        val applied = Redaction.apply(text, policy, stableHostSalt = options.hostSalt)
+                        if (policy.anonymizeHosts && host != null) {
+                            UrlRedaction.anonymizeHostOccurrences(applied, host, options.hostSalt)
+                        } else {
+                            applied
+                        }
+                    }
+                    val name: String? = i.name()
+                    val detail: String? = i.detail()
+                    val remediation: String? = i.remediation()
                     AuditIssueItem(
-                        name = i.name(),
+                        name = redactText(name.orEmpty()),
                         severity = i.severity()?.name,
                         confidence = i.confidence()?.name,
-                        detail = i.detail(),
-                        remediation = i.remediation(),
+                        detail = detail?.let(redactText),
+                        remediation = remediation?.let(redactText),
                         affectedHost =
                             host?.let {
-                                if (policy.anonymizeHosts) Redaction.anonymizeHost(it, options.hostSalt) else it
+                                if (policy.anonymizeHosts) UrlRedaction.aliasHost(it, options.hostSalt) else it
                             },
                     )
                 }.let { list ->
@@ -129,10 +161,12 @@ class ContextCollector(
         policy: RedactionPolicy,
         options: ContextOptions,
     ): String {
+        // item.url already holds the redacted string that is sent; printing it as-is keeps the
+        // preview truthful, and re-redacting it would alias the alias.
         val sampleLines =
             items.take(PREVIEW_MAX_ITEMS).map { item ->
-                val safeUrl = previewUrl(item.url, policy, options.hostSalt)
-                "${item.method ?: "?"} $safeUrl"
+                val sentUrl = item.url?.ifBlank { null } ?: "-"
+                "${item.method ?: "?"} $sentUrl"
             }
         return buildPreview(
             count = items.size,
@@ -181,29 +215,11 @@ class ContextCollector(
 ${sampleLines.ifEmpty { listOf("- (none)") }.joinToString(separator = "\n") { "  - $it" }}
         """.trimIndent()
 
-    private fun previewUrl(
-        url: String?,
-        policy: RedactionPolicy,
-        hostSalt: String,
+    private fun stableKey(
+        rawUrl: String?,
+        item: HttpItem,
     ): String {
-        if (url.isNullOrBlank()) return "-"
-        if (!policy.anonymizeHosts) return url
-        return try {
-            val uri = URI(url)
-            val host = uri.host ?: return url
-            val safeHost = Redaction.anonymizeHost(host, hostSalt)
-            val scheme = uri.scheme ?: "https"
-            val portPart = if (uri.port > 0) ":${uri.port}" else ""
-            val path = uri.rawPath.orEmpty().ifBlank { "/" }
-            val query = uri.rawQuery?.let { "?$it" }.orEmpty()
-            "$scheme://$safeHost$portPart$path$query"
-        } catch (_: Exception) {
-            url
-        }
-    }
-
-    private fun stableKey(item: HttpItem): String {
-        val base = listOf(item.url, item.method, hashOf(item.request)).joinToString("|")
+        val base = listOf(rawUrl, item.method, hashOf(item.request)).joinToString("|")
         return base
     }
 

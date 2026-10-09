@@ -851,6 +851,7 @@ class SettingsSaveAsyncTest {
         val panel =
             SettingsPanel(
                 api = api,
+                settingsRepo = AgentSettingsRepository(api),
                 backends = backends,
                 supervisor = supervisor,
                 audit = mock<AuditLogger>(defaultAnswer = Answers.RETURNS_DEEP_STUBS),

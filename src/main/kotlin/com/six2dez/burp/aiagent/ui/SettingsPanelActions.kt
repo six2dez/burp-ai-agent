@@ -10,9 +10,12 @@ import com.six2dez.burp.aiagent.ui.panels.CustomPromptsConfigPanel
 import com.six2dez.burp.aiagent.ui.panels.HelpConfigPanel
 import com.six2dez.burp.aiagent.ui.panels.PrivacyConfigPanel
 import com.six2dez.burp.aiagent.ui.panels.PromptConfigPanel
+import java.awt.FlowLayout
+import javax.swing.Box
 import javax.swing.DefaultComboBoxModel
 import javax.swing.JComboBox
 import javax.swing.JComponent
+import javax.swing.JLabel
 import javax.swing.JOptionPane
 import javax.swing.JPanel
 import javax.swing.JTextField
@@ -201,7 +204,24 @@ internal fun SettingsPanel.helpSection(): JPanel =
 internal fun SettingsPanel.privacySection(): JPanel =
     PrivacyConfigPanel(
         privacyMode = privacyMode,
-        auditEnabled = auditEnabled,
+        // Quick 261008-sqa (PD-12): PrivacyConfigPanel's constructor is baselined by its exact text, so
+        // the Verbose switch is composed INTO the Audit logging row here rather than added as a parameter.
+        auditEnabled =
+            JPanel(FlowLayout(FlowLayout.LEADING, 0, 0)).apply {
+                isOpaque = false
+                add(auditEnabled)
+                add(Box.createHorizontalStrut(DesignTokens.Spacing.md))
+                add(
+                    JLabel("Verbose").apply {
+                        font = DesignTokens.Typography.body
+                        foreground = DesignTokens.Colors.onSurface
+                        toolTipText = AUDIT_VERBOSE_TOOLTIP
+                        labelFor = auditVerbose
+                    },
+                )
+                add(Box.createHorizontalStrut(DesignTokens.Spacing.xs))
+                add(auditVerbose)
+            },
         autoRestart = autoRestart,
         determinism = determinism,
         rotateSaltBtn = rotateSaltBtn,
@@ -367,9 +387,9 @@ internal fun SettingsPanel.refreshPrivacyNotice() {
     // has no effect on anything. Passing the persisted list makes this banner agree with the two
     // sibling claims that already read it: `ChatPanel.privacySummary` and the
     // customPatternsConfigured parameter of ContextPreviewDialog.privacyModeHint.
-    // D-07: this deliberately does NOT call validateAndCollectCustomPatterns(), whose 50 ms
-    // per-pattern ReDoS probe must never run on the EDT during a notice refresh. No probe is needed
-    // here — the persisted list was already validated on the way in.
+    // D-07: this deliberately does NOT call validateAndCollectCustomPatterns(), whose ReDoS probes
+    // (six, each bounded by SafeRegex.PROBE_ACCESS_BUDGET) must never run on the EDT during a notice
+    // refresh. No probe is needed here - the persisted list was already validated on the way in.
     val (level, htmlMessage) =
         privacyNoticeFor(selectedPrivacy, auditOff, activeOn, settings.customRedactionPatterns)
     if (level != null && htmlMessage != null) {

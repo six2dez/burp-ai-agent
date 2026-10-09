@@ -102,8 +102,9 @@ class ChatPanelEdtConfinementTest {
         assertTimeoutPreemptively(Duration.ofSeconds(30)) {
             ChatPanelTestHarness.sendUserMessage(h, "summarise the proxy history")
             ChatPanelTestHarness.drainEdt()
+            val traceId = pendingTraceId(h)
             click(requireNotNull(ChatPanelTestHarness.findApprovalCard(h.panel.root)) { NO_CARD }, "Approve once")
-            ChatPanelTestHarness.awaitToolSettled(count = 1)
+            ChatPanelTestHarness.awaitToolSettled(label = traceId, count = 1)
         }
 
         val captured = requireNotNull(toolThread.get()) { "The tool body never ran — nothing was dispatched." }
@@ -160,7 +161,7 @@ class ChatPanelEdtConfinementTest {
             val card = requireNotNull(ChatPanelTestHarness.findApprovalCard(h.panel.root)) { NO_CARD }
             traceIdRef.set(pendingTraceId(h))
             click(card, "Approve once")
-            ChatPanelTestHarness.awaitToolSettled(count = 1)
+            ChatPanelTestHarness.awaitToolSettled(label = traceIdRef.get(), count = 1)
         }
 
         val record = decisionsFor(traceIdRef.get()).single()
@@ -220,7 +221,7 @@ class ChatPanelEdtConfinementTest {
             // Queued WHILE the tool is mid-call. On a blocked EDT this never runs and the tool's own
             // await above expires; on a free one it runs and releases the tool.
             SwingUtilities.invokeLater { latches.probeRan.countDown() }
-            ChatPanelTestHarness.awaitToolSettled(count = 1)
+            ChatPanelTestHarness.awaitToolSettled(label = traceIdRef.get(), count = 1)
         }
 
         // THE RUN STATUS IS THE CLAUSE THAT FAILS LOUDLY, AND IT IS ASSERTED FIRST FOR THAT REASON.
@@ -253,8 +254,11 @@ class ChatPanelEdtConfinementTest {
      * chain threads ONE trace id through every followup turn, which is what makes it the correct
      * selector — and the `step` field, not the list index, is what carries the ordering claim.
      *
-     * `awaitToolSettled(count = 8)` is the primary synchronisation rather than a raised drain count: a
-     * chain of eight daemon workers is precisely what draining the EDT queue is blind to.
+     * [ChatPanelTestHarness.awaitToolSettled] with this chain's own label and a count of eight is the
+     * primary synchronisation rather than a raised drain count: a chain of eight daemon workers is
+     * precisely what draining the EDT queue is blind to. The chain is selected by the trace id the
+     * harness recorded from `sendChat`, because the settle record is process-global and panels from
+     * earlier tests may still be settling their own chains.
      */
     @Test
     fun aFullAutoChainProducesEightResultsInSubmissionOrder() {
@@ -269,20 +273,19 @@ class ChatPanelEdtConfinementTest {
 
         assertTimeoutPreemptively(Duration.ofSeconds(60)) {
             ChatPanelTestHarness.sendUserMessage(h, "check scope repeatedly")
-            ChatPanelTestHarness.awaitToolSettled(count = ChatPanel.MAX_AUTO_TOOL_ITERATIONS)
+            val chainLabel = ChatPanelTestHarness.chainTraceId(h)
+            ChatPanelTestHarness.awaitToolSettled(label = chainLabel, count = ChatPanel.MAX_AUTO_TOOL_ITERATIONS)
         }
 
-        // The chain's identity, taken from THIS test's own dispatch record rather than guessed from the
-        // audit log. That it collapses to exactly one value is itself the claim that one chain ran.
-        val chainTraceId =
-            requireNotNull(ChatPanelTestHarness.settledLabels().distinct().singleOrNull()) {
-                "Expected exactly one chain to have settled; labels were ${ChatPanelTestHarness.settledLabels()}."
-            }
+        // The chain's identity, taken from the trace ids THIS panel passed to sendChat rather than
+        // guessed from the audit log. Re-read after every followup turn: that it still collapses to
+        // exactly one value is itself the claim that one chain ran.
+        val chainTraceId = ChatPanelTestHarness.chainTraceId(h)
         // LICENSES THE ORDERING CLAIM BELOW, so it is asserted first. A short chain would also produce a
         // correctly ORDERED prefix; only the count fails loudly when the chain stopped early.
         assertEquals(
             ChatPanel.MAX_AUTO_TOOL_ITERATIONS,
-            ChatPanelTestHarness.settledLabels().size,
+            ChatPanelTestHarness.settledLabels().count { it == chainTraceId },
             "Eight tool workers must have settled — one per chain step.",
         )
         assertEquals(
@@ -346,7 +349,7 @@ class ChatPanelEdtConfinementTest {
             assertTrue(inputArea(h).isEnabled, "UI-SPEC S-5: the input is usable again at once.")
 
             latches.probeRan.countDown()
-            ChatPanelTestHarness.awaitToolSettled(count = 1)
+            ChatPanelTestHarness.awaitToolSettled(label = traceIdRef.get(), count = 1)
         }
 
         val transcript = transcriptText(h)
@@ -503,7 +506,7 @@ class ChatPanelEdtConfinementTest {
             SwingUtilities.invokeAndWait { h.panel.deleteConfirmedSession(onlySession(h)) }
 
             latches.probeRan.countDown()
-            ChatPanelTestHarness.awaitToolSettled(count = 1)
+            ChatPanelTestHarness.awaitToolSettled(label = traceIdRef.get(), count = 1)
         }
 
         // LOUD CLAUSE 1. On a tree without the explicit supersede this reads "ok": the worker's token
@@ -584,7 +587,7 @@ class ChatPanelEdtConfinementTest {
             assertEquals(0, sessionCount(h), "Setup: the project change really did clear every session.")
 
             latches.probeRan.countDown()
-            ChatPanelTestHarness.awaitToolSettled(count = 1)
+            ChatPanelTestHarness.awaitToolSettled(label = traceIdRef.get(), count = 1)
         }
 
         val record = decisionsFor(traceIdRef.get()).single()
@@ -668,7 +671,7 @@ class ChatPanelEdtConfinementTest {
             )
 
             latches.probeRan.countDown()
-            ChatPanelTestHarness.awaitToolSettled(count = 1)
+            ChatPanelTestHarness.awaitToolSettled(label = traceIdRef.get(), count = 1)
         }
 
         val record = decisionsFor(traceIdRef.get()).single()
@@ -757,7 +760,7 @@ class ChatPanelEdtConfinementTest {
             SwingUtilities.invokeAndWait { cancelButton(h).doClick() }
 
             latches.probeRan.countDown()
-            ChatPanelTestHarness.awaitToolSettled(count = 1)
+            ChatPanelTestHarness.awaitToolSettled(label = traceIdRef.get(), count = 1)
         }
 
         // THE CLAIM. One click, one call on the wire — read from the Montoya double the tool body
@@ -820,7 +823,7 @@ class ChatPanelEdtConfinementTest {
                 // Reaching this at all is half the claim: the settle observer fires from the EDT tail's
                 // `finally`, so a worker whose throw had taken its tail down with it would never settle
                 // and this would time out instead of failing an assertion.
-                ChatPanelTestHarness.awaitToolSettled(count = 1)
+                ChatPanelTestHarness.awaitToolSettled(label = traceIdRef.get(), count = 1)
             }
         } finally {
             Thread.setDefaultUncaughtExceptionHandler(previousHandler)
@@ -909,6 +912,8 @@ class ChatPanelEdtConfinementTest {
             emptyList<ProxyHttpRequestResponse>()
         }
 
+        val slashLabelRef = AtomicReference<String>()
+        val chainLabelRef = AtomicReference<String>()
         assertTimeoutPreemptively(Duration.ofSeconds(30)) {
             // AUTO tier: no card, so the chain's first step is dispatched and blocked straight away.
             ChatPanelTestHarness.sendUserMessage(h, "check scope repeatedly")
@@ -919,16 +924,23 @@ class ChatPanelEdtConfinementTest {
             // The second user action, fired while the first is demonstrably still inside its call and
             // still holding its own limiter permit.
             ChatPanelTestHarness.sendUserMessage(h, """/tool proxy_http_history {"count":5}""")
+            val slashLabel = ChatPanelTestHarness.slashToolLabel()
+            slashLabelRef.set(slashLabel)
             // WAIT FOR THE /tool WORKER TO FINISH BEFORE RELEASING THE CHAIN, and the ordering is the
             // whole of the negative clause. Releasing first lets the chain drop its permit inside the
             // second call's 250 ms tryAcquire window, so a SHARED limiter would often acquire anyway
-            // and the assertion would be green against the defect — measured, by hoisting the limiter
-            // to a panel field and watching this test stay green. The chain is still blocked, so the
-            // first worker to settle is necessarily the /tool one.
-            ChatPanelTestHarness.awaitToolSettled(count = 1)
+            // and the assertion would be green against the defect: measured, by hoisting the limiter
+            // to a panel field and watching this test stay green. The await is on the /tool worker's
+            // own label, so the release-after-settle ordering no longer depends on which worker in the
+            // process settles first.
+            ChatPanelTestHarness.awaitToolSettled(label = slashLabel, count = 1)
             latches.probeRan.countDown()
-            ChatPanelTestHarness.awaitToolSettled(count = 1)
+            val chainLabel = ChatPanelTestHarness.chainTraceId(h)
+            chainLabelRef.set(chainLabel)
+            ChatPanelTestHarness.awaitToolSettled(label = chainLabel, count = 1)
         }
+        val slashLabel = slashLabelRef.get()
+        val chainLabel = chainLabelRef.get()
 
         // THE NEGATIVE CLAUSE. `finishUserOriginatedToolCall` renders whatever the executor returned,
         // so a refused acquisition arrives as a visible transcript row rather than as an exception.
@@ -951,16 +963,16 @@ class ChatPanelEdtConfinementTest {
             assertNotEquals(EDT_THREAD_NAME, thread.name, "SC1: the $name call must not execute on the EDT.")
             assertTrue(thread.isDaemon, "E9: the $name worker must be a daemon.")
         }
-        assertEquals(2, ChatPanelTestHarness.dispatchedLabels().size, "Exactly two workers were dispatched.")
+        assertEquals(
+            listOf(chainLabel, slashLabel),
+            ChatPanelTestHarness.dispatchedLabels().filter { it == chainLabel || it.startsWith(CHAT_TOOL_LABEL_PREFIX) },
+            "Exactly two workers were dispatched: the chain step, then the /tool call.",
+        )
         // The measured consequence, asserted rather than avoided: the /tool minted a new running-tool
         // token, so the chain's step lost the compare-and-set and landed in UI-SPEC state S4.
-        val chainTraceId =
-            requireNotNull(ChatPanelTestHarness.dispatchedLabels().singleOrNull { !it.startsWith("chat-tool-") }) {
-                "Expected exactly one chain-dispatched label; got ${ChatPanelTestHarness.dispatchedLabels()}."
-            }
         assertEquals(
             ChatPanel.SUPERSEDED_RUN_STATUS,
-            decisionsFor(chainTraceId).single()["status"],
+            decisionsFor(chainLabel).single()["status"],
             "The /tool command takes the panel-wide running-tool token, so the chain step it raced is " +
                 "superseded. Correct, and documented in this test's KDoc rather than designed around.",
         )
@@ -1137,6 +1149,7 @@ class ChatPanelEdtConfinementTest {
         assertTimeoutPreemptively(Duration.ofSeconds(30)) {
             ChatPanelTestHarness.sendUserMessage(h, E5_QUESTION)
             ChatPanelTestHarness.drainEdt()
+            val traceId = pendingTraceId(h)
             click(requireNotNull(ChatPanelTestHarness.findApprovalCard(h.panel.root)) { NO_CARD }, "Approve once")
             assertTrue(
                 latches.entered.await(HANDSHAKE_FAILSAFE_SECONDS, TimeUnit.SECONDS),
@@ -1145,7 +1158,7 @@ class ChatPanelEdtConfinementTest {
             // The real button, on the EDT, exactly as the AWT event pump would deliver the click.
             SwingUtilities.invokeAndWait { newSessionButton(h).doClick() }
             latches.probeRan.countDown()
-            ChatPanelTestHarness.awaitToolSettled(count = 1)
+            ChatPanelTestHarness.awaitToolSettled(label = traceId, count = 1)
             ChatPanelTestHarness.drainEdt(times = LONG_DRAIN)
         }
 
@@ -1204,6 +1217,7 @@ class ChatPanelEdtConfinementTest {
 
         assertTimeoutPreemptively(Duration.ofSeconds(30)) {
             ChatPanelTestHarness.sendUserMessage(h, SLASH_TOOL_COMMAND)
+            val slashLabel = ChatPanelTestHarness.slashToolLabel()
             assertTrue(
                 latches.entered.await(HANDSHAKE_FAILSAFE_SECONDS, TimeUnit.SECONDS),
                 "The /tool worker never started, so there was no running call to re-enter.",
@@ -1229,7 +1243,7 @@ class ChatPanelEdtConfinementTest {
             )
 
             latches.probeRan.countDown()
-            ChatPanelTestHarness.awaitToolSettled(count = 1)
+            ChatPanelTestHarness.awaitToolSettled(label = slashLabel, count = 1)
         }
     }
 
@@ -1252,6 +1266,7 @@ class ChatPanelEdtConfinementTest {
         assertTimeoutPreemptively(Duration.ofSeconds(30)) {
             assertTrue(toolsButton(h).isEnabled, "UI-SPEC S0: the Tools button starts live.")
             ChatPanelTestHarness.sendUserMessage(h, SLASH_TOOL_COMMAND)
+            val slashLabel = ChatPanelTestHarness.slashToolLabel()
             assertTrue(
                 latches.entered.await(HANDSHAKE_FAILSAFE_SECONDS, TimeUnit.SECONDS),
                 "The /tool worker never started, so the panel was never in S3.",
@@ -1264,7 +1279,7 @@ class ChatPanelEdtConfinementTest {
             )
 
             latches.probeRan.countDown()
-            ChatPanelTestHarness.awaitToolSettled(count = 1)
+            ChatPanelTestHarness.awaitToolSettled(label = slashLabel, count = 1)
         }
 
         assertTrue(toolsButton(h).isEnabled, "UI-SPEC S0: the Tools button is live again once the run settles.")
@@ -1296,6 +1311,7 @@ class ChatPanelEdtConfinementTest {
 
         assertTimeoutPreemptively(Duration.ofSeconds(30)) {
             ChatPanelTestHarness.sendUserMessage(h, SLASH_TOOL_COMMAND)
+            val slashLabel = ChatPanelTestHarness.slashToolLabel()
             assertTrue(
                 latches.entered.await(HANDSHAKE_FAILSAFE_SECONDS, TimeUnit.SECONDS),
                 "The /tool worker never started, so the panel was never in S3.",
@@ -1315,7 +1331,7 @@ class ChatPanelEdtConfinementTest {
             )
 
             latches.probeRan.countDown()
-            ChatPanelTestHarness.awaitToolSettled(count = 1)
+            ChatPanelTestHarness.awaitToolSettled(label = slashLabel, count = 1)
         }
     }
 
@@ -1346,13 +1362,14 @@ class ChatPanelEdtConfinementTest {
 
         assertTimeoutPreemptively(Duration.ofSeconds(30)) {
             ChatPanelTestHarness.sendUserMessage(h, SLASH_TOOL_COMMAND)
+            val slashLabel = ChatPanelTestHarness.slashToolLabel()
             assertTrue(
                 latches.entered.await(HANDSHAKE_FAILSAFE_SECONDS, TimeUnit.SECONDS),
                 "The /tool worker never started, so there was nothing to supersede.",
             )
             SwingUtilities.invokeAndWait { cancelButton(h).doClick() }
             latches.probeRan.countDown()
-            ChatPanelTestHarness.awaitToolSettled(count = 1)
+            ChatPanelTestHarness.awaitToolSettled(label = slashLabel, count = 1)
         }
 
         val record =
@@ -1401,6 +1418,7 @@ class ChatPanelEdtConfinementTest {
 
         assertTimeoutPreemptively(Duration.ofSeconds(30)) {
             ChatPanelTestHarness.sendUserMessage(h, SLASH_TOOL_COMMAND)
+            val slashLabel = ChatPanelTestHarness.slashToolLabel()
             assertTrue(
                 latches.entered.await(HANDSHAKE_FAILSAFE_SECONDS, TimeUnit.SECONDS),
                 "The /tool worker never started, so there was nothing to supersede.",
@@ -1411,7 +1429,7 @@ class ChatPanelEdtConfinementTest {
             // superseded worker rendering a row it must not render.
             rowsAfterCancel.set(transcriptRowCount(h))
             latches.probeRan.countDown()
-            ChatPanelTestHarness.awaitToolSettled(count = 1)
+            ChatPanelTestHarness.awaitToolSettled(label = slashLabel, count = 1)
         }
 
         assertEquals(
@@ -1447,7 +1465,8 @@ class ChatPanelEdtConfinementTest {
 
         assertTimeoutPreemptively(Duration.ofSeconds(30)) {
             ChatPanelTestHarness.sendUserMessage(h, SLASH_TOOL_COMMAND)
-            ChatPanelTestHarness.awaitToolSettled(count = 1)
+            val slashLabel = ChatPanelTestHarness.slashToolLabel()
+            ChatPanelTestHarness.awaitToolSettled(label = slashLabel, count = 1)
         }
 
         assertTrue(

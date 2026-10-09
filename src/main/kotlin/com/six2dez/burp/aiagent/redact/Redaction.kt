@@ -414,7 +414,7 @@ object Redaction {
     // is the measurable reason rather than the repeated one. Over 2000 scans of a 60-line
     // pretty-printed document: `^` 158 ms, `^[ \t]*+` 155 ms, `^[ \t]*` 164 ms, `(?<=^[ \t]*)`
     // 34237 ms — roughly 221x, because an unbounded look-back is retried at EVERY position. These
-    // header rules run in the header stage with NO per-pattern deadline (see [bodyStage]'s budget,
+    // header rules run in the header stage with NO per-pattern bound (see [bodyStage]'s budget,
     // which they are explicitly outside of), so a 221x multiplier on attacker-influenced input is a
     // denial-of-service surface, not a style question. The same cost model rejected a variable-width
     // [JSON_ESCAPED_NEWLINE] for a mere 2.4x.
@@ -444,7 +444,7 @@ object Redaction {
     // escaped newline, end-of-input, or the closing double quote of the JSON string. The two
     // alternatives are disjoint on their first character, so the repetition is deterministic — no
     // nested quantifier and no backtracking surface on a rule that runs in the header stage with no
-    // per-pattern deadline. There is deliberately NO negative lookbehind on the quote.
+    // per-pattern bound. There is deliberately NO negative lookbehind on the quote.
     private const val JSON_ESCAPED_HEADER_VALUE =
         ":\\s*(?:\\\\.|[^\"\\\\])+?(?=" + JSON_ESCAPED_NEWLINE + "|\$|\")"
 
@@ -704,7 +704,7 @@ object Redaction {
     // milliseconds per megabyte rather than the exponential blow-up SafeRegex exists to stop.
     //
     // DELIBERATELY NOT ROUTED THROUGH SafeRegex, and this is a decision rather than an oversight.
-    // SafeRegex.replaceAllSafeReporting(...).text is the ORIGINAL input on timeout, so ASSIGNING
+    // The .text of SafeRegex.replaceAllSafeReporting is the ORIGINAL input on timeout, so ASSIGNING
     // THAT TEXT WITHOUT BRANCHING ON timedOut would for THIS rule mean the unredacted cookie section
     // passed straight through — fail OPEN, in direct contradiction of D-02. Adopting SafeRegex here
     // therefore means branching on timedOut, and that is a behaviour change (what to drop, and how
@@ -1444,28 +1444,27 @@ object Redaction {
         suppressedTruncations.set(0L)
     }
 
-    // (PRIV-06) D-02: nanoseconds per millisecond, used to turn System.nanoTime() deltas into the
-    // millisecond deadlines SafeRegex takes. A named constant because detekt's MagicNumber rule
+    // (PRIV-06) D-02: nanoseconds per millisecond, now used only by the stage and cookie-section
+    // wall-clock budgets. A named constant because detekt's MagicNumber rule
     // ignores only -1/0/1/2 and QUAL-07 forbids growing detekt-baseline.xml.
     private const val NANOS_PER_MS = 1_000_000L
 
-    // (PRIV-06) D-01 / CR-04 / T-21-06 / T-21-08: how many times a window that did not scan in time
-    // may be halved and retried before it is dropped. Measured headroom at the 1 MB window width is
-    // only ~2.2x on Apple Silicon (23 ms for dense form content against a 50 ms per-pattern
-    // deadline), so a 2-3x slower machine would drop content that ships today; the ladder turns the
-    // deadline into a pacing mechanism instead of a cliff.
+    // (PRIV-06) D-01 / CR-04 / T-21-06 / T-21-08: how many times a window that exhausted its access
+    // budget may be halved and retried before it is dropped. The ladder no longer paces benign
+    // content: the built-in rules never exhaust their length-proportional budget (see
+    // SafeRegex.ACCESS_BUDGET_PER_CHAR), on any machine. It remains the recovery path for a
+    // super-linear custom pattern, whose cost per char grows with the window, so a smaller piece
+    // can complete where the whole window could not.
     //
-    // RAISED FROM 2 TO 4 BY CR-04, because two levels only reach quarters and that is not enough for
-    // the shape that made the ladder matter in the first place. A newline-free body is ONE window at
-    // any size — windowEnd gives an over-width line its own window, and such a body is a single line
-    // — and dense newline-free JSON costs ~31 ms/MB against a 50 ms deadline, so a 2 MiB window is
-    // still ~500 KB and ~15 ms over at quarters. Four levels reach sixteenths: 128 KB pieces at
-    // roughly 4 ms, which holds on hardware several times slower than the reference machine.
+    // RAISED FROM 2 TO 4 BY CR-04, because two levels only reach quarters. A newline-free body is ONE
+    // window at any size - windowEnd gives an over-width line its own window, and such a body is a
+    // single line - so once a rule exhausts on it the ladder is the only way to scan any of it. Four
+    // levels reach sixteenths.
     //
     // BOTH BOUNDS, stated so neither is mistaken for the other:
     //   - the real ceiling on retry WORK is Defaults.MAX_REDACTION_BUDGET_MS, not this depth. Every
-    //     retry runs under the same budget clock and every rule takes min(DEFAULT_TIMEOUT_MS,
-    //     remaining budget), so the ladder cannot outlive the total budget however deep it may go.
+    //     retry runs under the same stage clock, checked between rules, so the ladder cannot outlive
+    //     the total budget by more than one rule call's own access budget, however deep it goes.
     //   - the depth is capped at 4 rather than higher because of Pitfall 8: a wholly-unscannable
     //     window emits up to 2^depth markers, so 16 per window is the deliberate ceiling on the
     //     marker bloat that would otherwise inflate the very prompt this stage exists to bound.
@@ -1545,7 +1544,7 @@ object Redaction {
     private fun budgetExceededMarker(droppedChars: Int): String = "[REDACTION BUDGET EXCEEDED - $droppedChars CHARS DROPPED AND NOT SENT]"
 
     // (PRIV-06) D-02 / D-03: the marker left in place of a single window that could not be fully
-    // scanned inside its deadline. Same four wording properties as the budget marker above; a
+    // scanned inside its access budget. Same four wording properties as the budget marker above; a
     // distinct token so "the budget ran out" and "this window would not scan" stay tellable apart
     // in a prompt.
     private fun windowDroppedMarker(droppedChars: Int): String = "[REDACTION INCOMPLETE - $droppedChars CHARS DROPPED AND NOT SENT]"
@@ -1615,7 +1614,7 @@ object Redaction {
     // windowed path, runs through SafeRegex.replaceAllSafeReporting, and a timedOut flag is never
     // ignored: above the window width the affected window is DROPPED behind a marker, and at or
     // below it the partial result is discarded and the whole input is re-scanned through the
-    // windowed path. Assigning replaceAllSafeReporting(...).text anywhere in this stage WITHOUT
+    // windowed path. Assigning the .text of replaceAllSafeReporting anywhere in this stage WITHOUT
     // branching on timedOut would be fail-OPEN at exactly the moment D-02 demands fail-closed,
     // because on timeout that text is the input unchanged — byte-identical to "the pattern matched
     // nothing" (T-21-03). WR-03 deleted the String-returning façade that made that mistake a
@@ -1637,10 +1636,10 @@ object Redaction {
         // behaviour match the pre-Phase-21 implementation for the overwhelming majority of
         // payloads — when no rule times out, the loop below is byte-identical to a plain
         // replace-each-rule chain. One genuine change even on this path: the two built-in body
-        // rules previously ran with NO deadline at all (only custom patterns went through
+        // rules previously ran with NO bound at all (only custom patterns went through
         // SafeRegex) and now all of them do.
         //
-        // (PRIV-06) D-02 / D-14: that new deadline must not smuggle a fail-OPEN back in.
+        // (PRIV-06) D-02 / D-14: that new bound must not smuggle a fail-OPEN back in.
         // SafeRegex.replaceAllSafeReporting yields its input UNCHANGED as .text on timeout,
         // byte-identical to "the pattern matched nothing", so assigning that text here WITHOUT
         // branching on timedOut would silently skip an overrunning rule and emit unredacted content
@@ -1656,15 +1655,15 @@ object Redaction {
         // the partially-processed string avoids double-marking and any partial-application ordering
         // artifact, and it reuses that machinery instead of duplicating it here.
         //
-        // BUDGET CEILING — stated rather than assumed: this composition CAN exceed
-        // Defaults.MAX_REDACTION_BUDGET_MS, because windowedScan starts its own budget clock. The
-        // excess is bounded by construction: the single pass gives up after at most
-        // rules.size * SafeRegex.DEFAULT_TIMEOUT_MS, so the worst case is
-        // rules.size * DEFAULT_TIMEOUT_MS + MAX_REDACTION_BUDGET_MS — finite, and only reachable
-        // when a rule is already pathological. Threading one shared deadline into windowedScan was
-        // rejected: the fallthrough would then routinely arrive with the budget already spent and
-        // drop the ENTIRE body behind a single marker, which is fail-closed but destroys all
-        // analytic context (T-21-06) on an input small enough to scan properly.
+        // BUDGET CEILING - stated rather than assumed: this composition CAN exceed
+        // Defaults.MAX_REDACTION_BUDGET_MS, because windowedScan starts its own budget clock. The worst
+        // case is the rules already completed, plus one exhausted SafeRegex.accessBudgetFor(length),
+        // plus the stage budget, plus at most one rule-call overrun - finite, and only reachable by a
+        // pathological custom pattern, whose depth-0 window in windowedScan then re-exhausts: a known,
+        // bounded waste of one budget. Threading one shared deadline into windowedScan was rejected:
+        // the fallthrough would routinely arrive with the budget already spent and drop the ENTIRE
+        // body behind one marker, fail-closed but destroying all analytic context (T-21-06) on an
+        // input small enough to scan properly.
         if (input.length <= Defaults.MAX_REDACTION_BODY_CHARS) {
             var out = input
             for ((pattern, replacement) in rules) {
@@ -1707,18 +1706,19 @@ object Redaction {
     // concurrently on scanner threads and MCP tool threads, so object-level window state would
     // corrupt output across them (T-21-23).
     //
-    // (PRIV-06) W-04 / T-21-56 — [budgetMs] IS A TEST SEAM AND ITS DEFAULT IS LOAD-BEARING. It
-    // defaults to Defaults.MAX_REDACTION_BUDGET_MS, which is the value this function read inline
-    // before the parameter existed, so EVERY production call site is byte-identical in behaviour:
-    // bodyStage's two calls pass no budget and therefore still get the shipped 2 s. That is stated
-    // here rather than left to be inferred, because a default parameter that silently changes
-    // production behaviour is exactly the kind of seam that turns a test aid into a defect. The
-    // shipped constant is NOT a dial: it is a product decision (see Defaults.MAX_REDACTION_BUDGET_MS)
-    // and nothing in the test source set may change it.
+    // (PRIV-06) W-04 / T-21-56 - [budgetMs] AND [accessBudget] ARE TEST SEAMS AND THEIR DEFAULTS
+    // ARE LOAD-BEARING. budgetMs defaults to Defaults.MAX_REDACTION_BUDGET_MS and accessBudget to
+    // SafeRegex::accessBudgetFor, exactly what this function used before either parameter existed,
+    // so EVERY production call site is byte-identical in behaviour: bodyStage's two calls pass
+    // neither and get the shipped 2 s and the shipped per-rule budget. Stated here because a default
+    // that silently changes production behaviour is exactly the seam that turns a test aid into a
+    // defect. Neither shipped value is a dial (see Defaults.MAX_REDACTION_BUDGET_MS and
+    // SafeRegex.ACCESS_BUDGET_PER_CHAR), and nothing in the test source set may change them.
     private fun windowedScan(
         input: String,
         rules: List<Pair<Pattern, String>>,
         budgetMs: Long = Defaults.MAX_REDACTION_BUDGET_MS,
+        accessBudget: (Int) -> Long = SafeRegex::accessBudgetFor,
     ): String {
         val budgetDeadlineNanos = System.nanoTime() + budgetMs * NANOS_PER_MS
         val sink = StringBuilder(input.length)
@@ -1731,7 +1731,7 @@ object Redaction {
                 break
             }
             val end = windowEnd(input, index, Defaults.MAX_REDACTION_BODY_CHARS)
-            scanWindow(input.substring(index, end), rules, budgetDeadlineNanos, 0, sink)
+            scanWindow(input.substring(index, end), rules, budgetDeadlineNanos, 0, sink, accessBudget)
             index = end
         }
         return sink.toString()
@@ -1740,12 +1740,12 @@ object Redaction {
     // (PRIV-06) D-02: milliseconds left in the total body-stage budget; zero or negative once spent.
     private fun remainingBudgetMs(budgetDeadlineNanos: Long): Long = (budgetDeadlineNanos - System.nanoTime()) / NANOS_PER_MS
 
-    // (PRIV-06) D-02 / D-14: applies every rule to one window under a bounded deadline and appends
-    // the result ONLY when the whole window was scanned.
+    // (PRIV-06) D-02 / D-14: applies every rule to one window; appends ONLY a fully scanned result.
     //
-    // The minOf() is what stops a per-pattern deadline outliving the total budget: a rule starting
-    // with 12 ms of budget left gets a 12 ms deadline and REPORTS a timeout instead of overrunning.
-    // replaceAllSafeReporting(...).text is never taken here without first branching on timedOut — on
+    // Each rule gets accessBudget(current.length), a deterministic bound that reads no clock. The
+    // stage clock is checked BETWEEN rules only, so a rule that starts just before the deadline can
+    // overrun the 2 s by at most its own budget (about 0.6 s per MB on a pathological pattern).
+    // The .text of replaceAllSafeReporting is never taken here without first branching on timedOut - on
     // timeout that text is the input unchanged, indistinguishable from "no matches". WR-03 removed
     // the String-returning façade that used to hide that hazard behind a plain return type.
     private fun scanWindow(
@@ -1754,23 +1754,18 @@ object Redaction {
         budgetDeadlineNanos: Long,
         depth: Int,
         sink: StringBuilder,
+        accessBudget: (Int) -> Long,
     ) {
         var current = window
         for ((pattern, replacement) in rules) {
             val remainingMs = remainingBudgetMs(budgetDeadlineNanos)
             if (remainingMs <= 0L) {
-                dropOrRetry(window, rules, budgetDeadlineNanos, depth, sink)
+                dropOrRetry(window, rules, budgetDeadlineNanos, depth, sink, accessBudget)
                 return
             }
-            val result =
-                SafeRegex.replaceAllSafeReporting(
-                    current,
-                    pattern,
-                    replacement,
-                    minOf(SafeRegex.DEFAULT_TIMEOUT_MS, remainingMs),
-                )
+            val result = SafeRegex.replaceAllSafeReporting(current, pattern, replacement, accessBudget(current.length))
             if (result.timedOut) {
-                dropOrRetry(window, rules, budgetDeadlineNanos, depth, sink)
+                dropOrRetry(window, rules, budgetDeadlineNanos, depth, sink, accessBudget)
                 return
             }
             current = result.text
@@ -1780,8 +1775,8 @@ object Redaction {
 
     // (PRIV-06) D-01 / CR-04 / T-21-06: halve-and-retry before dropping. A window that did not scan
     // in time is split — at a LINE boundary whenever it has one, and otherwise at a bounded safe cut
-    // (see [splitPoint]) — and each half is retried, to WINDOW_RETRY_MAX_DEPTH levels, so a slower
-    // machine paces instead of losing content outright.
+    // (see [splitPoint]) - and each half is retried, to WINDOW_RETRY_MAX_DEPTH levels, so a
+    // super-linear pattern loses as little content as possible instead of the whole window.
     //
     // The window is dropped behind exactly one marker when the retry depth is exhausted, when the
     // budget is already spent, or when the window is too short to split at all — fail closed, so its
@@ -1802,6 +1797,7 @@ object Redaction {
         budgetDeadlineNanos: Long,
         depth: Int,
         sink: StringBuilder,
+        accessBudget: (Int) -> Long,
     ) {
         val retryable = depth < WINDOW_RETRY_MAX_DEPTH && remainingBudgetMs(budgetDeadlineNanos) > 0L
         val cut = if (retryable) splitPoint(window) else 0
@@ -1810,8 +1806,8 @@ object Redaction {
             maybeLogTruncation(System.currentTimeMillis(), window.length.toLong())
             return
         }
-        scanWindow(window.substring(0, cut), rules, budgetDeadlineNanos, depth + 1, sink)
-        scanWindow(window.substring(cut), rules, budgetDeadlineNanos, depth + 1, sink)
+        scanWindow(window.substring(0, cut), rules, budgetDeadlineNanos, depth + 1, sink, accessBudget)
+        scanWindow(window.substring(cut), rules, budgetDeadlineNanos, depth + 1, sink, accessBudget)
     }
 
     // (PRIV-06) D-01 / CR-04: where to cut [window] in half so each half can be retried.
@@ -1853,7 +1849,7 @@ object Redaction {
     //      here is fail-safe — it removes content that did not need removing, which is the direction
     //      this file errs in everywhere else too.
     //   3. This branch is reachable ONLY from dropOrRetry — that is, only after a rule has already
-    //      exceeded its deadline and the alternative is discarding the whole window behind a marker.
+    //      exhausted its access budget and the alternative is dropping the whole window behind a marker.
     //      A match truncated by the cut is a false negative, but the content it sits in is otherwise
     //      not scanned AND NOT EMITTED AT ALL, so there is strictly nothing to lose.
     //
@@ -1914,32 +1910,30 @@ object Redaction {
     // resetTruncationWindowForTest, testRedactCookieSections and testSplitPoint.
     //
     // WHY IT EXISTS, with this round's evidence rather than a general appeal to flakiness. The
-    // end-to-end path to the behaviour it carries — a newline-free body above the window width being
-    // scanned in pieces instead of destroyed — spends 97-101 % of the shipped 2 s budget on the
-    // reference machine (measured 2.19-2.35 s in isolation with the JaCoCo agent attached), and the
+    // end-to-end path to the behaviour it carries - a newline-free body above the window width being
+    // scanned in pieces instead of destroyed - spent 97-101 % of the shipped 2 s budget under the
+    // former wall-clock per-rule bound (measured 2.19-2.35 s with the JaCoCo agent attached), and the
     // reviewer bisected the break point at roughly a 1 000 ms effective budget, i.e. a runner about
     // twice as slow as an M-series Mac. That is the ordinary speed of a GitHub-hosted runner for
     // single-threaded regex work. An assertion sitting on that margin is a RACE, not a proof, and a
     // security test that flakes invites the next contributor to disable it.
     //
-    // WHAT THIS SEAM DOES NOT FIX, stated so the next person does not reach for a bigger budget. The
-    // total budget was only ONE of two causes of that test going red. The other is the per-pattern
-    // deadline against the size of the deepest piece dropOrRetry can produce — fixture divided by
-    // 2^WINDOW_RETRY_MAX_DEPTH — and no value of budgetMs moves it. That one is a property of the
-    // FIXTURE, is bounded by the ladder's capability ceiling, and is addressed where it belongs, in
-    // RedactionTest's NEWLINE_FREE_WINDOW_MULTIPLIER sizing comment. The ceiling itself is recorded
-    // as a product residual in .planning/phases/21-redaction-completeness/deferred-items.md (D-21-02).
+    // BOTH CAUSES, and why both are now injected. That test went red for two reasons: the total
+    // budget, and the per-rule bound against the size of the deepest piece dropOrRetry can produce
+    // (fixture divided by 2^WINDOW_RETRY_MAX_DEPTH). The per-rule bound was a wall clock, so whether
+    // the ladder engaged at all, and whether its pieces then scanned, depended on the machine. It is
+    // now a deterministic access budget, and [accessBudget] injects it per piece length, so a test
+    // forces exactly which ladder depths exhaust and which scan, identically on any hardware.
     //
-    // WHAT IS AND IS NOT INJECTED, because the distinction is the whole design:
-    //   - the TOTAL budget is injected. The mechanism under test is the WIRING — windowEnd making a
-    //     newline-free body exactly one window, scanWindow timing out on it, dropOrRetry reaching
+    // WHAT IS INJECTED, because the distinction is the whole design:
+    //   - the TOTAL budget. The mechanism under test is the WIRING - windowEnd making a
+    //     newline-free body exactly one window, scanWindow exhausting on it, dropOrRetry reaching
     //     splitPoint, and the retry ladder producing pieces that do scan. None of that needs the
     //     total budget to be tight; a tight total budget only decides how much of the body is
     //     reached before the tail is dropped, which is a different property with its own tests.
-    //   - the 50 ms PER-PATTERN deadline (SafeRegex.DEFAULT_TIMEOUT_MS, taken through the minOf in
-    //     scanWindow) is deliberately NOT injected. That deadline is the PRECONDITION the defect
-    //     needs: without a rule genuinely overrunning it, scanWindow never calls dropOrRetry, the
-    //     ladder never engages, and the fixture stops reproducing the defect entirely.
+    //   - the PER-RULE access budget, as a function of the piece length. The built-in rules never
+    //     exhaust their shipped budget, so without this injection scanWindow would never call
+    //     dropOrRetry and the ladder would go untested. It defaults to SafeRegex::accessBudgetFor.
     //
     // The deterministic ARITHMETIC half of CR-04 — splitPoint returning 0 on a newline-free window —
     // is asserted separately and hardware-independently by
@@ -1950,15 +1944,16 @@ object Redaction {
     internal fun testWindowedBodyStage(
         input: String,
         budgetMs: Long,
-    ): String = windowedScan(input, bodyRules(builtinsEnabled = true), budgetMs)
+        accessBudget: (Int) -> Long = SafeRegex::accessBudgetFor,
+    ): String = windowedScan(input, bodyRules(builtinsEnabled = true), budgetMs, accessBudget)
 
     // Internal test seam — [splitPoint] as the pure function it is. NOT part of the public API; only
     // referenced from the test source set, in the style of resetTruncationWindowForTest and
     // testRedactCookieSections above.
     //
-    // It exists because the end-to-end path to splitPoint runs only once a rule has genuinely
-    // exceeded its deadline, which needs a multi-megabyte fixture and is sensitive to machine speed,
-    // JIT warm-up and JaCoCo's per-character instrumentation of DeadlineCharSequence.get(). The
+    // It exists because the end-to-end path to splitPoint runs only once a rule has exhausted its
+    // access budget, which the built-in rules never do, so it needs a pathological custom pattern or
+    // an injected budget plus a multi-megabyte fixture. The
     // defect CR-04 records — splitPoint returning 0 on a newline-free window — is a pure function of
     // one string, so it can be asserted deterministically and identically on any hardware. Same
     // reasoning, and the same answer, as the injected budget on testRedactCookieSections.
@@ -1969,10 +1964,8 @@ object Redaction {
     // testSplitPoint above.
     //
     // It exists for the same reason testSplitPoint does. Reaching MAX_JSON_BOUNDARY_LOOKAHEAD_LINES
-    // through Redaction.apply needs a multi-megabyte fixture whose outcome then depends on machine
-    // speed and on JaCoCo's per-character instrumentation of DeadlineCharSequence.get() — the exact
-    // exposure W-04 spent this plan removing from the sibling gate. The property under test is not
-    // timing at all: WHERE THE LOOKAHEAD LOOP STOPS is a pure function of one string, three integers
+    // through Redaction.apply needs a multi-megabyte fixture, slow to build and to scan, while the
+    // property under test is not about scanning at all: WHERE THE LOOKAHEAD LOOP STOPS is a pure function of one string, three integers
     // and the cap, and it can be asserted identically on any hardware.
     //
     // The cap is the one part of the boundary machinery with no assertion on it. Its own comment
@@ -1990,8 +1983,8 @@ object Redaction {
 
     // (PRIV-06) D-01 AMENDED: the end of the window starting at [start] — the index just past the
     // last newline at or before [start] + [width]. A single line longer than [width] becomes its own
-    // oversized window rather than being split; the per-pattern deadline already bounds what that
-    // costs, and a mid-line cut is the only thing that can change a line-anchored rule's semantics.
+    // oversized window rather than being split; the per-rule access budget, proportional to the
+    // window, already bounds what that costs, and a mid-line cut is the only thing that can change a line-anchored rule's semantics.
     //
     // JSON boundary safety: jsonSecretKeyRegex can span newlines in TWO places — its whitespace
     // class between key and value (it matches a pretty-printed key/colon/value spread over four

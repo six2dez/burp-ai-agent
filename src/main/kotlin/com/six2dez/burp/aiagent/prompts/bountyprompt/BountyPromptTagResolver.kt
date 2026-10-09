@@ -4,7 +4,7 @@ import burp.api.montoya.http.message.HttpRequestResponse
 import com.six2dez.burp.aiagent.context.ContextOptions
 import com.six2dez.burp.aiagent.redact.Redaction
 import com.six2dez.burp.aiagent.redact.RedactionPolicy
-import java.net.URI
+import com.six2dez.burp.aiagent.redact.UrlRedaction
 
 class BountyPromptTagResolver {
     private val defaultMaxChunkChars = 3_000
@@ -76,10 +76,22 @@ class BountyPromptTagResolver {
         for ((index, rr) in requestResponses.withIndex()) {
             val requestRaw = rr.request().toString()
             val responseRaw = rr.response()?.toString()
-            val requestRedacted = Redaction.apply(requestRaw, policy, stableHostSalt = hostSalt)
-            val responseRedacted = responseRaw?.let { Redaction.apply(it, policy, stableHostSalt = hostSalt) }
-            val safeUrl = redactUrl(rr.request().url(), policy, hostSalt)
-            val label = "[${index + 1}] ${rr.request().method()} $safeUrl"
+            val rawUrl: String? = rr.request().url()
+            val safeUrl = rawUrl?.let { UrlRedaction.redact(it, policy, hostSalt) }
+            val ownHost = rr.httpService()?.host() ?: UrlRedaction.hostOf(rawUrl)
+            // Redaction.apply first (it aliases the whole Host: value), then the STRICT own-host pass
+            // for Referer / Origin / Location / absolute URLs in bodies. The reverse order would
+            // alias the alias on the Host: line.
+            val ownHostPass: (String) -> String = { text ->
+                if (policy.anonymizeHosts && ownHost != null) {
+                    UrlRedaction.anonymizeHostOccurrences(text, ownHost, hostSalt)
+                } else {
+                    text
+                }
+            }
+            val requestRedacted = ownHostPass(Redaction.apply(requestRaw, policy, stableHostSalt = hostSalt))
+            val responseRedacted = responseRaw?.let { ownHostPass(Redaction.apply(it, policy, stableHostSalt = hostSalt)) }
+            val label = "[${index + 1}] ${rr.request().method()} ${ownHostPass(safeUrl.orEmpty())}"
 
             val value =
                 when (tag) {
@@ -87,7 +99,7 @@ class BountyPromptTagResolver {
                     BountyPromptTag.HTTP_REQUESTS_HEADERS -> truncateChunk(extractHeaders(requestRedacted), maxChunkChars)
                     BountyPromptTag.HTTP_REQUESTS_PARAMETERS ->
                         truncateChunk(
-                            buildRequestParameters(rr, policy, hostSalt),
+                            ownHostPass(buildRequestParameters(rr, safeUrl.orEmpty(), policy, hostSalt)),
                             maxChunkChars,
                         )
                     BountyPromptTag.HTTP_REQUEST_BODY -> truncateChunk(extractBody(requestRedacted), maxChunkChars)
@@ -110,51 +122,45 @@ class BountyPromptTagResolver {
         return truncateTag(sections.joinToString("\n\n----------------------------------------------------------------\n\n"), maxTagChars)
     }
 
+    /**
+     * Renders the `[HTTP_Requests_Parameters]` block: a `URL:` line carrying [safeUrl] (already
+     * built by [UrlRedaction.redact]) and one `name=value (TYPE)` line per parameter, capped at 80.
+     *
+     * - Cookie TYPE gate (when cookies are stripped): the value is written as `[STRIPPED]` and the
+     *   line deliberately bypasses the pipeline, because the session-key vocabulary and
+     *   `cookieTypedParamRegex` would rewrite that marker to `[REDACTED]` and break the
+     *   `PHPSESSID=[STRIPPED] (COOKIE)` shape the MCP carriers share.
+     * - NAME filter (when tokens are redacted): a value whose parameter NAME looks sensitive is
+     *   replaced with `[REDACTED]` before anything else sees it.
+     * - Every other line goes through [Redaction.apply] in EVERY mode, so JWTs, bearer tokens,
+     *   sensitive keys and user custom patterns are redacted in the VALUE, not only by name.
+     * - Redact before truncate: the value is cut to [PARAM_VALUE_MAX_CHARS] only after the apply,
+     *   because a JWT cut mid-payload no longer has three segments and the JWT rule would miss it.
+     * - The caller runs the STRICT own-host pass over the whole block.
+     *
+     * This class IS constructed in production by `ui/UiActions.kt` (bountyPromptResolver); an
+     * earlier measurement that found no instantiation was invalidated by a raw NUL byte in that
+     * file, which made grep treat it as binary.
+     */
     private fun buildRequestParameters(
         rr: HttpRequestResponse,
+        safeUrl: String,
         policy: RedactionPolicy,
         hostSalt: String,
     ): String {
         val params =
             rr.request().parameters().take(80).joinToString("\n") { param ->
-                val rawValue = param.value().take(500)
-                // (PRIV-05) D-27-21 — the cookie TYPE gate, added ALONGSIDE the pre-existing
-                // `sensitiveParamName` NAME filter, never instead of it. The two answer DIFFERENT
-                // questions — "does this name look sensitive" versus "is this parameter a cookie" —
-                // and the name filter does not match e.g. PHPSESSID, so removing either narrows the
-                // control. This site is the one carrier in its class that would hold BURP-HELD
-                // request data rather than caller-echoed content, which is why it is fixed now
-                // rather than recorded as latent.
-                //
-                // The type gate is FIRST so it wins when both apply: a cookie is stripped, not
-                // merely token-redacted, matching what sanitizeHeaders and sanitizeParameters write
-                // for the same bytes on the MCP path. One vocabulary across all three carriers.
-                //
-                // UNADOPTED ALTERNATIVE, recorded rather than left as an omission: routing this tag
-                // value through `Redaction.apply`, which is the shape every SIBLING tag above uses.
-                // Rejected here because it would bring the WHOLE rule set to bear on this block — a
-                // strictly larger behaviour change, on dead code, in a plan scoped to the cookie
-                // class — and because buildRequestParameters already renders the `name=value (TYPE)`
-                // shape that `Redaction.cookieTypedParamRegex` covers, so the two approaches would
-                // produce two controls for one class at one site. That divergence is the defect this
-                // phase keeps paying for.
-                //
-                // WIDER DEFECT AT THIS SITE, recorded and deliberately NOT fixed here: because the
-                // tag value never passes `Redaction.apply`, a JWT, bearer token or secret carried in
-                // a URL- or BODY-typed parameter VALUE reaches the prompt verbatim in EVERY mode —
-                // the name filter keys on the parameter NAME, not the value. That is outside
-                // PRIV-05's cookie wording, it is latent while this class stays uninstantiated
-                // (re-measured at execution time: zero instantiations in src/main/kotlin), and plan
-                // 27-09 records it as a named residual.
-                val safeValue =
-                    when {
-                        policy.stripCookies && Redaction.isCookieParameterType(param.type().name) -> "[STRIPPED]"
-                        policy.redactTokens && sensitiveParamName.containsMatchIn(param.name()) -> "[REDACTED]"
-                        else -> rawValue
-                    }
-                "${param.name()}=$safeValue (${param.type().name})"
+                val name = param.name()
+                val type = param.type().name
+                if (policy.stripCookies && Redaction.isCookieParameterType(type)) {
+                    "${Redaction.apply(name, policy, stableHostSalt = hostSalt)}=[STRIPPED] ($type)"
+                } else {
+                    val value =
+                        if (policy.redactTokens && sensitiveParamName.containsMatchIn(name)) "[REDACTED]" else param.value()
+                    val head = Redaction.apply("$name=$value", policy, stableHostSalt = hostSalt)
+                    "${head.take(name.length + 1 + PARAM_VALUE_MAX_CHARS)} ($type)"
+                }
             }
-        val safeUrl = redactUrl(rr.request().url(), policy, hostSalt)
         return buildString {
             appendLine("URL: $safeUrl")
             appendLine("Parameters:")
@@ -225,49 +231,8 @@ class BountyPromptTagResolver {
             BountyPromptCategory.ADVISORY -> defaultMaxChunkChars to defaultMaxTagChars
         }
 
-    private fun redactUrl(
-        rawUrl: String,
-        policy: RedactionPolicy,
-        hostSalt: String,
-    ): String =
-        try {
-            val uri = URI(rawUrl)
-            val safeHost =
-                if (!uri.host.isNullOrBlank() && policy.anonymizeHosts) {
-                    Redaction.anonymizeHost(uri.host, hostSalt)
-                } else {
-                    uri.host
-                }
-            val safeQuery =
-                when {
-                    uri.query.isNullOrBlank() -> uri.query
-                    !policy.redactTokens -> uri.query
-                    else -> redactSensitiveQuery(uri.query)
-                }
-            URI(
-                uri.scheme,
-                uri.userInfo,
-                safeHost,
-                uri.port,
-                uri.path,
-                safeQuery,
-                uri.fragment,
-            ).toString()
-        } catch (_: Exception) {
-            rawUrl
-        }
-
-    private fun redactSensitiveQuery(query: String): String {
-        return query.split("&").joinToString("&") { pair ->
-            val idx = pair.indexOf('=')
-            if (idx <= 0) return@joinToString pair
-            val key = pair.substring(0, idx)
-            val value = pair.substring(idx + 1)
-            if (sensitiveParamName.containsMatchIn(key)) {
-                "$key=[REDACTED]"
-            } else {
-                "$key=$value"
-            }
-        }
+    private companion object {
+        // Upper bound on a rendered parameter value, applied AFTER redaction.
+        const val PARAM_VALUE_MAX_CHARS = 500
     }
 }

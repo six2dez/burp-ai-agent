@@ -2,6 +2,7 @@ package com.six2dez.burp.aiagent.redact
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.util.regex.Pattern
@@ -9,8 +10,9 @@ import java.util.regex.Pattern
 // PRIV-02 / SC3: unit tests for the SafeRegex interruptible-CharSequence ReDoS guard.
 // All tests run headless (no AWT) and must complete well under the CI timeout budget.
 class SafeRegexTest {
-    // PRIV-02 / SC3: a catastrophically-backtracking pattern should be rejected within the
-    // timeout budget and the call must return within ~200 ms wall-clock.
+    // PRIV-02 / SC3: a catastrophically-backtracking pattern is rejected because (a+)+$ needs
+    // 4 011 997 accesses on the first probe, 4.0x over PROBE_ACCESS_BUDGET. The 200 ms bound pins
+    // that exhausting a probe budget is cheap (measured 8-15 ms).
     @Test
     fun catastrophicPatternIsRejectedWithinBudget() {
         val start = System.currentTimeMillis()
@@ -39,8 +41,8 @@ class SafeRegexTest {
     // not.
     @Test
     fun catastrophicPatternTimesOutAndReturnsInput() {
-        // 2 000 'a' characters followed by '!' — on JDK 21 this reliably triggers the 50 ms
-        // deadline for pathological patterns like (a+)+$ anchored at the end. The shorter
+        // 2 000 'a' characters followed by '!': (a+)+$ needs 4 011 997 accesses on this input,
+        // 3.6x the default budget of 1 128 064, so it exhausts on any machine. The shorter
         // 64-char probe is handled by JDK 21's improved NFA engine without catastrophic blowup.
         val input = "a".repeat(2_000) + "!"
         val pattern = Pattern.compile("(a+)+\$")
@@ -66,8 +68,8 @@ class SafeRegexTest {
     // the two would lose exactly that distinction.
     @Test
     fun catastrophicPatternReportsTimedOut() {
-        // Same input and pattern as catastrophicPatternTimesOutAndReturnsInput — 2 000 'a'
-        // characters followed by '!' reliably trips the 50 ms deadline on JDK 21 for (a+)+$.
+        // Same input and pattern as catastrophicPatternTimesOutAndReturnsInput: (a+)+$ needs
+        // 4 011 997 accesses on it, 3.6x the default budget of 1 128 064.
         val input = "a".repeat(2_000) + "!"
         val pattern = Pattern.compile("(a+)+\$")
 
@@ -88,6 +90,28 @@ class SafeRegexTest {
 
         assertFalse(result.timedOut, "A pattern that completes must report timedOut = false")
         assertEquals("abc[REDACTED]", result.text, "replaceAllSafeReporting must apply the replacement when it completes")
+    }
+
+    // A LINEAR pattern over a LARGE input must complete, whatever the speed or load of the machine.
+    //
+    // [a-z]{1,8}# over 2 000 000 'a' followed by '#' costs 17 character accesses per input char: 8
+    // greedy reads, 8 '#' checks while backtracking, plus 1. That is about 34.0 M accesses in total.
+    // Under the former wall-clock deadline, at about 20 ns per access with the clock read, that is
+    // about 0.7 s of matcher work, about 14x over the deadline, so the call reported timedOut on any
+    // machine. Under the access budget it gets 1 000 000 + 64 x 2 000 001 = 129 000 064 accesses,
+    // about 3.8x headroom. The property pinned: whether a linear scan completes no longer depends on
+    // the speed of the machine.
+    @Test
+    fun aLinearScanOverALargeInputNeverReportsTimedOut() {
+        val input = "a".repeat(2_000_000) + "#"
+
+        val result = SafeRegex.replaceAllSafeReporting(input, Pattern.compile("[a-z]{1,8}#"), "X")
+
+        assertFalse(
+            result.timedOut,
+            "a linear pattern over a large input must never report timedOut; the bound must not depend on machine speed",
+        )
+        assertEquals("a".repeat(1_999_992) + "X", result.text, "the linear scan must run to completion")
     }
 
     // WR-01: patterns that can match the empty (zero-width) string must be rejected. Otherwise
@@ -113,7 +137,7 @@ class SafeRegexTest {
     // WR-07: ANTI-VACUITY PRECONDITION for the three rejection tests below, hoisted into its own
     // assertion so a reader can see it was checked rather than assumed.
     //
-    // Every catastrophic candidate below must be rejected BY THE PROBE DEADLINE, not by WR-01's
+    // Every catastrophic candidate below must be rejected BY THE PROBE BUDGET, not by WR-01's
     // zero-width guard, which runs first and would make the rejection tests green for entirely the
     // wrong reason. A candidate that matched the empty string would be rejected before a single
     // probe ran, and the test would pass identically with the corpus widening reverted. That is
@@ -148,6 +172,8 @@ class SafeRegexTest {
             "WR-07: (\\d+)+! is catastrophic on a digit run NOT terminated by '!' and must be rejected; " +
                 "every '!'-terminated probe accepts it because the trailing literal matches",
         )
+        assertEquals(PatternVerdict.PROBE_BUDGET_EXHAUSTED, SafeRegex.patternVerdict("(\\d+)+@"))
+        assertEquals(PatternVerdict.PROBE_BUDGET_EXHAUSTED, SafeRegex.patternVerdict("(\\d+)+!"))
     }
 
     // WR-07 (b): catastrophic on LOWERCASE — and the reason the corpus needs more than one
@@ -167,6 +193,7 @@ class SafeRegexTest {
             "WR-07: ([a-z]+)+! must be rejected; it survives EVERY '!'-terminated probe because its " +
                 "own trailing literal is '!', so the corpus must terminate a lowercase run some other way",
         )
+        assertEquals(PatternVerdict.PROBE_BUDGET_EXHAUSTED, SafeRegex.patternVerdict("([a-z]+)+!"))
     }
 
     // WR-07 (c): catastrophic on UPPERCASE. Not one of WR-07's three examples — added because the
@@ -180,6 +207,7 @@ class SafeRegexTest {
             "WR-07: ([A-Z]+)+! is catastrophic on a run of uppercase and must be rejected; " +
                 "no lowercase or digit probe reaches it",
         )
+        assertEquals(PatternVerdict.PROBE_BUDGET_EXHAUSTED, SafeRegex.patternVerdict("([A-Z]+)+!"))
     }
 
     // WR-07 (d): REGRESSION PIN, NOT A NEW GUARD — labelled as such deliberately.
@@ -196,6 +224,7 @@ class SafeRegexTest {
             SafeRegex.isPatternSafe("(\\w+\\s?)+\$"),
             "WR-07: (\\w+\\s?)+\$ must stay rejected (already rejected before the widening — regression pin)",
         )
+        assertEquals(PatternVerdict.PROBE_BUDGET_EXHAUSTED, SafeRegex.patternVerdict("(\\w+\\s?)+\$"))
     }
 
     // WR-07: the counter-assertion the rejection tests are worthless without. A corpus that rejects
@@ -233,24 +262,20 @@ class SafeRegexTest {
     // widening the corpus would have quietly swallowed a separately documented control and its
     // distinct save-path rejection message.
     //
-    // Asserted by cost, which is the only externally visible difference: the guard returns in
-    // microseconds while any probe timeout costs at least DEFAULT_TIMEOUT_MS (50 ms). Nine
-    // empty-matchers, so a corpus-driven rejection could not hide inside the bound.
+    // Asserted by verdict under a probe budget of 0: any probe that ran would exhaust at once and
+    // yield PROBE_BUDGET_EXHAUSTED, so MATCHES_EMPTY proves "before any probe" directly. The former
+    // check was a wall-time bound tied to a constant that no longer exists.
     @Test
     fun zeroWidthPatternsAreRejectedWithoutRunningAnyProbe() {
         val emptyMatchers = listOf("a*", "\\d*", "[0-9]*", "\\s*", "x?", "(foo)?", ".*", "(abc)*", "a|")
 
-        val start = System.currentTimeMillis()
         for (p in emptyMatchers) {
-            assertFalse(SafeRegex.isPatternSafe(p), "Empty-matching pattern must be rejected: $p")
+            assertEquals(
+                PatternVerdict.MATCHES_EMPTY,
+                SafeRegex.patternVerdict(p, probeBudget = 0L),
+                "WR-01's zero-width guard must reject before any probe runs: $p",
+            )
         }
-        val elapsed = System.currentTimeMillis() - start
-
-        assertTrue(
-            elapsed < SafeRegex.DEFAULT_TIMEOUT_MS,
-            "WR-01's zero-width guard must reject before any probe runs: ${emptyMatchers.size} empty-matchers " +
-                "took $elapsed ms, which is at least one probe deadline (${SafeRegex.DEFAULT_TIMEOUT_MS} ms)",
-        )
     }
 
     // PRIV-02 / WR-03: the counter-assertion to catastrophicPatternTimesOutAndReturnsInput — a
@@ -295,10 +320,10 @@ class SafeRegexTest {
     }
 
     // A replacement carrying a back-reference makes the matcher materialise the captured group,
-    // which slices the deadline-wrapped input rather than reading it character by character. The
-    // slice must stay deadline-aware — a plain String slice would silently drop the interruption
-    // guarantee for exactly the patterns most likely to backtrack. Asserted on the produced text;
-    // no wall-clock threshold is involved.
+    // which slices the budget-wrapped input rather than reading it character by character. The
+    // slice must stay budget-aware: a plain String slice would silently drop the access bound
+    // for exactly the patterns most likely to backtrack. Asserted on the produced text; no
+    // wall-clock threshold is involved.
     @Test
     fun groupReferencingReplacementSlicesTheInputAndKeepsWorking() {
         val result =
@@ -310,5 +335,90 @@ class SafeRegexTest {
 
         assertFalse(result.timedOut, "a benign group-referencing pattern must not report a timeout")
         assertEquals("token=abc[REDACTED] and token=def[REDACTED]", result.text)
+    }
+
+    // DETERMINISM PIN (i): a catastrophic pattern is cut off by COUNT, so the outcome is identical
+    // on every call and every machine. (a+)+$ needs 4 011 997 accesses on this input: three
+    // consecutive default-budget calls (1 128 064 each) all report timedOut, and ten times that
+    // budget lets the same call complete, which proves the cut-off is the budget and nothing else.
+    @Test
+    fun catastrophicPatternIsCutOffByCountNotByTime() {
+        val probe = "a".repeat(2_000) + "!"
+        val pattern = Pattern.compile("(a+)+\$")
+
+        repeat(3) { call ->
+            val result = SafeRegex.replaceAllSafeReporting(probe, pattern, "X")
+            assertTrue(result.timedOut, "call ${call + 1}: (a+)+\$ must exhaust the default budget every time")
+            assertEquals(probe, result.text, "call ${call + 1}: an exhausted call must return the input unchanged")
+        }
+
+        val generous =
+            SafeRegex.replaceAllSafeReporting(probe, pattern, "X", accessBudget = 10 * SafeRegex.accessBudgetFor(probe.length))
+        assertFalse(generous.timedOut, "(a+)+\$ must complete under 10x the default budget; it needs 4 011 997 accesses")
+        assertEquals(probe, generous.text, "(a+)+\$ matches nothing in this input, so a completed call returns it unchanged")
+    }
+
+    // DETERMINISM PIN (ii): a subSequence and its parent drain ONE budget. The Matcher slices the
+    // input to materialise groups; a slice with a fresh or copied budget would escape the bound for
+    // exactly the patterns most likely to backtrack. A nested slice shares it too.
+    @Test
+    fun subSequenceSharesTheParentsAccessBudget() {
+        val parent = BudgetedCharSequence("abcdefgh", AccessBudget(4))
+        val child = parent.subSequence(2, 6)
+
+        assertEquals('c', child[0])
+        assertEquals('d', child[1])
+        assertEquals('a', parent[0])
+        assertEquals('b', parent[1])
+        assertThrows(RegexTimeoutException::class.java, { child[2] }, "the 5th read via the child must exhaust the shared budget")
+        assertThrows(RegexTimeoutException::class.java, { parent[2] }, "the 5th read via the parent must exhaust the shared budget")
+
+        val root = BudgetedCharSequence("abcdefgh", AccessBudget(3))
+        val mid = root.subSequence(1, 7)
+        val leaf = mid.subSequence(1, 5)
+        assertEquals('c', leaf[0])
+        assertEquals('b', mid[0])
+        assertEquals('a', root[0])
+        assertThrows(RegexTimeoutException::class.java, { leaf[1] }, "a nested slice must share the same budget")
+        assertThrows(RegexTimeoutException::class.java, { mid[1] }, "a nested slice must share the same budget")
+        assertThrows(RegexTimeoutException::class.java, { root[1] }, "a nested slice must share the same budget")
+    }
+
+    // DETERMINISM PIN (iii): a budget of 0 exhausts on the FIRST access, and the call fails soft on
+    // the text while reporting timedOut, exactly as a spent budget does on a large input.
+    @Test
+    fun zeroAccessBudgetTimesOutOnTheFirstAccess() {
+        val result = SafeRegex.replaceAllSafeReporting("abc", Pattern.compile("b"), "X", accessBudget = 0L)
+
+        assertTrue(result.timedOut, "a budget of 0 must report timedOut")
+        assertEquals("abc", result.text, "an exhausted call must return the input unchanged")
+    }
+
+    // The budget is EXACT: N accesses succeed and the (N+1)-th throws. length and toString() spend
+    // nothing, so the Matcher's bookkeeping cannot exhaust a budget on its own.
+    @Test
+    fun accessBudgetAllowsExactlyItsCount() {
+        val seq = BudgetedCharSequence("abcd", AccessBudget(3))
+        assertEquals('a', seq[0])
+        assertEquals('b', seq[1])
+        assertEquals('c', seq[2])
+        assertThrows(RegexTimeoutException::class.java, { seq[3] }, "the 4th access on a budget of 3 must throw")
+
+        val empty = BudgetedCharSequence("abcd", AccessBudget(0))
+        assertEquals(4, empty.length, "length must spend nothing")
+        assertEquals("abcd", empty.toString(), "toString() must spend nothing")
+    }
+
+    // Every arm of patternVerdict, named. Each WR-07 catastrophic candidate is rejected by an
+    // exhausted probe budget (the cheapest, (a+)+$, needs 4.0x PROBE_ACCESS_BUDGET), never by the
+    // zero-width guard or the compiler.
+    @Test
+    fun patternVerdictNamesTheArmThatDecided() {
+        val catastrophic = listOf("(\\d+)+@", "(\\d+)+!", "([a-z]+)+!", "([A-Z]+)+!", "(\\w+\\s?)+\$", "(a+)+\$")
+        for (p in catastrophic) {
+            assertEquals(PatternVerdict.PROBE_BUDGET_EXHAUSTED, SafeRegex.patternVerdict(p), "WR-07 candidate: $p")
+        }
+        assertEquals(PatternVerdict.UNCOMPILABLE, SafeRegex.patternVerdict("(unclosed"))
+        assertEquals(PatternVerdict.ACCEPTED, SafeRegex.patternVerdict("\\d+"))
     }
 }

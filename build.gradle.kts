@@ -27,8 +27,9 @@ dependencies {
     compileOnly("net.portswigger.burp.extensions:montoya-api:2026.2")
 
     // JSON
-    implementation("com.fasterxml.jackson.core:jackson-databind:2.22.1")
-    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.22.1")
+    // Jackson's Gradle module metadata imports its BOM, so these two versions also align jackson-core and jackson-annotations
+    implementation("com.fasterxml.jackson.core:jackson-databind:2.22.3")
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.22.3")
 
     // HTTP client (Ollama + webhooks)
     implementation("com.squareup.okhttp3:okhttp:5.4.0")
@@ -37,6 +38,8 @@ dependencies {
     implementation("io.modelcontextprotocol:kotlin-sdk:0.5.0")
     implementation("io.ktor:ktor-server-core:3.1.3")
     implementation("io.ktor:ktor-server-netty:3.1.3")
+    // Ktor 3.1.3 pulls Netty 4.1.119, which has known advisories; the BOM pins the patched 4.1.x line without a Ktor upgrade
+    implementation(platform("io.netty:netty-bom:4.1.138.Final"))
     implementation("io.ktor:ktor-server-cors:3.1.3")
     implementation("io.ktor:ktor-server-sse:3.1.3")
     implementation("io.ktor:ktor-server-content-negotiation:3.1.3")
@@ -51,8 +54,8 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
 
     // Logging façade (we keep it minimal; Burp logs are also used)
-    implementation("org.slf4j:slf4j-api:2.0.16")
-    implementation("org.slf4j:slf4j-simple:2.0.16")
+    implementation("org.slf4j:slf4j-api:2.0.18")
+    implementation("org.slf4j:slf4j-simple:2.0.18")
 
     testImplementation(kotlin("test"))
     testImplementation("org.junit.jupiter:junit-jupiter:6.0.3")
@@ -369,11 +372,18 @@ detekt {
     config.setFrom(files("detekt.yml")) // project-specific overrides
 }
 
-tasks.withType<Test> {
+// Only `test` is finalized by the coverage report. The report reads the execution data of `test` and
+// depends on `test`, so finalizing every Test task made edtGuardWithoutAssertionsTest and
+// nightlyRegressionTest schedule a second full `test` run under whatever Gradle properties that
+// invocation had. In CI the assertions-disabled step re-ran the whole suite, heavy tests included,
+// after the fast suite had already passed with -PexcludeHeavyTests=true.
+tasks.test {
     finalizedBy(tasks.named("jacocoTestReport"))
 }
 
 tasks.named<JacocoReport>("jacocoTestReport") {
+    // Kept on purpose: Gradle's JaCoCo plugin does not make the report depend on `test`, so without
+    // this line the two floor tasks run on their own (as CI does) would verify stale or absent data.
     dependsOn(tasks.named("test"))
     reports {
         xml.required.set(true)
@@ -442,9 +452,9 @@ val jacocoMcpTreePackages =
 val jacocoMcpTreeLineFloor = 0.650
 
 tasks.named<JacocoCoverageVerification>("jacocoTestCoverageVerification") {
-    // `tasks.withType<Test>` already finalises the test task with jacocoTestReport, but relying on that
-    // ordering would leave this task reading whatever exec data happened to be on disk. Depend on the
-    // report explicitly so the verification cannot run against a stale or absent one.
+    // `tasks.test` (the only task the report finalizes) already runs jacocoTestReport after it, but
+    // relying on that ordering would leave this task reading whatever exec data happened to be on disk.
+    // Depend on the report explicitly so the verification cannot run against a stale or absent one.
     dependsOn(tasks.named<JacocoReport>("jacocoTestReport"))
     violationRules {
         rule {

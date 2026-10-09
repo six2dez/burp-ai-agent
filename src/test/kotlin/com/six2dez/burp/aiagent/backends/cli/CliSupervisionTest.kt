@@ -1,6 +1,7 @@
 package com.six2dez.burp.aiagent.backends.cli
 
 import com.six2dez.burp.aiagent.backends.BackendLaunchConfig
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -24,13 +25,7 @@ class CliSupervisionTest {
     @Test
     @Timeout(70, unit = TimeUnit.SECONDS)
     fun sendTimesOutAndReportsViaOnComplete() {
-        // Platform guard: use the correct argv for "sleep forever" on each OS
-        val sleepCmd =
-            if (System.getProperty("os.name").lowercase().contains("win")) {
-                listOf("cmd", "/c", "timeout", "/t", "60")
-            } else {
-                listOf("sleep", "60")
-            }
+        val sleepCmd = sleepForeverCommand(System.getProperty("os.name"))
 
         // Use a generic backend id so NonInteractiveCliConnection.buildCommand() returns
         // the raw sleepCmd without Codex-specific command wrapping (which would prepend
@@ -72,11 +67,49 @@ class CliSupervisionTest {
             assertTrue(completed, "onComplete must be called within 65 seconds")
             assertNotNull(completionError, "onComplete must receive an error on timeout")
             assertTrue(
-                completionError!!.message?.contains("timed out", ignoreCase = true) == true,
-                "error message must mention timeout; got: ${completionError!!.message}",
+                completionError!!.message.orEmpty().startsWith(EXPECTED_TIMEOUT_PREFIX),
+                "The error must be the watchdog's timeout message, not an immediate non-zero exit read as a " +
+                    "failed command. Expected it to start with '$EXPECTED_TIMEOUT_PREFIX'; got: ${completionError!!.message}",
             )
         } finally {
             connection.stop()
         }
     }
+
+    @Test
+    fun theSleepCommandIsChosenByOsName() {
+        val why =
+            "The backend always redirects the child's stdin (from NUL or from a pipe). Windows timeout.exe " +
+                "exits at once on redirected input, while ping ignores stdin; and ping must be the direct child, " +
+                "because destroyForcibly kills only the direct child."
+        assertEquals(listOf("ping", "-n", "61", "127.0.0.1"), sleepForeverCommand("Windows 11"), why)
+        assertEquals(listOf("ping", "-n", "61", "127.0.0.1"), sleepForeverCommand("Windows Server 2022"), why)
+        assertEquals(listOf("sleep", "60"), sleepForeverCommand("Mac OS X"), "macOS keeps the POSIX sleep, which ignores stdin.")
+        assertEquals(listOf("sleep", "60"), sleepForeverCommand("Linux"), "Linux keeps the POSIX sleep, which ignores stdin.")
+    }
 }
+
+/**
+ * The start of the watchdog's timeout message for the 30 s floor.
+ *
+ * Built by `buildTimeoutMessage` in CliBackend.kt; `CliBackend.launch` coerces `cliTimeoutSeconds` to at
+ * least 30, so a timeout from this test always reads "after 30s".
+ */
+private const val EXPECTED_TIMEOUT_PREFIX = "CLI command timed out after 30s"
+
+/**
+ * The argv for a process that runs well past the 30 s watchdog on the OS named by [osName].
+ *
+ * The backend always redirects the child's stdin, from NUL or from a pipe. Windows timeout.exe exits at
+ * once on redirected input (CI saw "ERROR: Input redirection is not supported" after 0.11-0.13 s), so
+ * Windows uses ping, which ignores stdin: 61 echo requests one second apart take about 60 s, and the
+ * watchdog kills it first. It runs without a cmd wrapper, so destroyForcibly kills the process actually
+ * sleeping instead of leaving a grandchild running. The `contains("win")` predicate matches the backend's
+ * own OS check.
+ */
+private fun sleepForeverCommand(osName: String): List<String> =
+    if (osName.lowercase().contains("win")) {
+        listOf("ping", "-n", "61", "127.0.0.1")
+    } else {
+        listOf("sleep", "60")
+    }

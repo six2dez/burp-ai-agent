@@ -48,7 +48,7 @@ object Entropy {
 
     // Splits on any character that is NOT a typical secret/token character.
     // The character class [^A-Za-z0-9+/=_-] is linear and ReDoS-safe — no backtracking
-    // patterns are introduced, so no SafeRegex deadline wrapper is required. (RESEARCH G6)
+    // patterns are introduced, so no SafeRegex access budget wrapper is required. (RESEARCH G6)
     // NOTE: this splitter treats '.' as a delimiter, so dot-delimited runs are evaluated
     // segment-by-segment. The dot-aware second pass below ([DOTTED_SPLIT]) recovers the
     // case where the individual segments are each < MIN_TOKEN_LEN but the dot-joined run is

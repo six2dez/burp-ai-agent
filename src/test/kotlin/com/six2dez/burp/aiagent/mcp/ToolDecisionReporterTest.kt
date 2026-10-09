@@ -229,9 +229,40 @@ class ToolDecisionReporterTest {
 
     @Test
     fun argsArePlaintextOnlyUnderTheVerboseSeam() {
-        report(reporter = verboseReporter(), argsJson = ARGS_JSON)
+        val metadata = report(reporter = verboseReporter(), argsJson = ARGS_JSON)
 
-        assertEquals(ARGS_JSON, payloadAt(0)["argsSha256"])
+        // Quick 261008-sqa: `argsSha256` is a digest in BOTH modes; verbose ADDS the body under its own
+        // key, right after the digest, instead of writing plaintext under a key named for a hash.
+        assertEquals(Hashing.sha256Hex(ARGS_JSON), payloadAt(0)["argsSha256"])
+        assertEquals(ARGS_JSON, payloadAt(0)["args"])
+        val keys = payloadAt(0).keys.toList()
+        assertEquals(keys.indexOf("argsSha256") + 1, keys.indexOf("args"), "`args` must follow `argsSha256`: $keys")
+        // The returned map becomes AI Activity metadata, which reaches the AI request log and
+        // `ai_audit_query`; verbose must not widen what those sinks hold.
+        assertFalse(metadata.containsKey("args"), "verbose args leaked into the AI Activity metadata")
+        assertFalse(metadata.values.any { it.contains("SECRETMARKER") }, "raw args reached the AI Activity metadata")
+    }
+
+    @Test
+    fun theVerboseSupplierIsReadPerReport() {
+        var verbose = false
+        val reporter = ToolDecisionReporter(logToOutput = { line -> lines += line }, verboseAudit = { verbose })
+        report(reporter = reporter, argsJson = ARGS_JSON)
+        verbose = true
+        report(reporter = reporter, argsJson = ARGS_JSON)
+
+        assertFalse(payloadAt(0).containsKey("args"), "the first report ran with verbose off")
+        assertEquals(ARGS_JSON, payloadAt(1)["args"], "the second report must see the flipped setting")
+        assertEquals(payloadAt(0)["argsSha256"], payloadAt(1)["argsSha256"], "the digest does not depend on the mode")
+    }
+
+    @Test
+    fun theDefaultReporterWritesNoArgsKey() {
+        val metadata = report(argsJson = ARGS_JSON)
+
+        assertFalse(payloadAt(0).containsKey("args"), "the default reporter must not write the args body")
+        assertFalse(metadata.containsKey("args"))
+        assertEquals(Hashing.sha256Hex(ARGS_JSON), payloadAt(0)["argsSha256"])
     }
 
     @Test
@@ -268,10 +299,13 @@ class ToolDecisionReporterTest {
         val args = "{\n  \"content\": \"GET /x HTTP/1.1\",\n  \"marker\": \"" + "y".repeat(INLINE_CAP) + "\"\n}"
         report(reporter = verboseReporter(), argsJson = args)
 
-        // The verbose seam is the only form that is ever rendered, so it is the only one that is
+        // The verbose body is the only form that is ever rendered, so it is the only one that is
         // sanitized — with the BLOCK form, because the inline form flattens JSON into one unreadable
         // line, which is the opposite of D-07's rule that the full args are shown.
-        assertEquals(args, payloadAt(0)["argsSha256"])
+        assertEquals(args, payloadAt(0)["args"])
+        assertEquals(Hashing.sha256Hex(args), payloadAt(0)["argsSha256"])
+        val keys = payloadAt(0).keys.toList()
+        assertEquals(keys.indexOf("argsSha256") + 1, keys.indexOf("args"), "`args` must follow `argsSha256`: $keys")
     }
 
     @Test
@@ -427,7 +461,7 @@ class ToolDecisionReporterTest {
      */
     private fun reporter(): ToolDecisionReporter = ToolDecisionReporter(logToOutput = { line -> lines += line })
 
-    private fun verboseReporter(): ToolDecisionReporter = ToolDecisionReporter(logToOutput = { line -> lines += line }, verboseAudit = true)
+    private fun verboseReporter(): ToolDecisionReporter = ToolDecisionReporter(logToOutput = { line -> lines += line }, verboseAudit = { true })
 
     /**
      * Ten parameters would reach detekt's `LongParameterList` functionThreshold of 10, so the canonical

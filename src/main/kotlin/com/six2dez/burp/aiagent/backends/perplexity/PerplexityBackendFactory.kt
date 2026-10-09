@@ -1,17 +1,14 @@
 package com.six2dez.burp.aiagent.backends.perplexity
 
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import com.six2dez.burp.aiagent.backends.AiBackend
 import com.six2dez.burp.aiagent.backends.AiBackendFactory
 import com.six2dez.burp.aiagent.backends.HealthCheckResult
-import com.six2dez.burp.aiagent.backends.http.HttpBackendSupport
+import com.six2dez.burp.aiagent.backends.http.MontoyaHttpTransport
 import com.six2dez.burp.aiagent.backends.openai.OpenAiCompatibleBackend
+import com.six2dez.burp.aiagent.backends.openai.OpenAiModelsUrl
 import com.six2dez.burp.aiagent.config.AgentSettings
 import com.six2dez.burp.aiagent.util.HeaderParser
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
+import java.util.concurrent.TimeUnit
 
 class PerplexityBackendFactory : AiBackendFactory {
     override fun create(): AiBackend =
@@ -24,8 +21,8 @@ class PerplexityBackendFactory : AiBackendFactory {
             apiKeySelector = { it.perplexityApiKey },
             headersSelector = { it.perplexityHeaders },
             timeoutSelector = { it.perplexityTimeoutSeconds },
-            streaming = true,
-            defaultHeaders = mapOf("Accept" to "text/event-stream"),
+            streaming = false,
+            defaultHeaders = mapOf("Accept" to "application/json"),
             healthCheckProvider = ::perplexityHealthCheck,
             // Perplexity's chat-completions endpoint is at the root, no /v1 prefix.
             chatCompletionsBasePath = "/chat/completions",
@@ -37,71 +34,32 @@ class PerplexityBackendFactory : AiBackendFactory {
     companion object {
         const val DEFAULT_BASE_URL: String = "https://api.perplexity.ai"
 
-        private val mapper = ObjectMapper().registerKotlinModule()
+        private const val HEALTH_TIMEOUT_MIN_SECONDS = 5
+        private const val HEALTH_TIMEOUT_MAX_SECONDS = 30
 
-        private fun perplexityHealthCheck(settings: AgentSettings): HealthCheckResult {
+        private fun perplexityHealthCheck(
+            settings: AgentSettings,
+            transport: MontoyaHttpTransport?,
+        ): HealthCheckResult {
             val baseUrl = settings.perplexityUrl.trim().ifBlank { DEFAULT_BASE_URL }
-            val model = settings.perplexityModel.trim()
-            if (model.isBlank()) {
-                return HealthCheckResult.Unavailable("Perplexity model is empty.")
-            }
-
-            val headers =
-                withDefaultAcceptHeader(
-                    HeaderParser.withBearerToken(
-                        settings.perplexityApiKey,
-                        HeaderParser.parse(settings.perplexityHeaders),
-                    ),
-                )
-            val payload =
-                mapOf(
-                    "model" to model,
-                    "messages" to listOf(mapOf("role" to "user", "content" to "Hey")),
-                    "max_tokens" to 16,
-                    "stream" to false,
-                )
-
-            return try {
-                val url = buildChatCompletionsUrl(baseUrl)
-                val client = HttpBackendSupport.sharedClient(baseUrl, settings.perplexityTimeoutSeconds.toLong().coerceIn(5L, 30L))
-                val request =
-                    Request
-                        .Builder()
-                        .url(url)
-                        .post(mapper.writeValueAsString(payload).toRequestBody("application/json".toMediaType()))
-                        .apply { headers.forEach { (name, value) -> header(name, value) } }
-                        .build()
-                client.newCall(request).execute().use { response ->
-                    when {
-                        response.isSuccessful -> HealthCheckResult.Healthy
-                        response.code == 401 || response.code == 403 ->
-                            HealthCheckResult.Degraded("Endpoint reachable but authentication failed (HTTP ${response.code}).")
-                        response.code == 429 ->
-                            HealthCheckResult.Degraded("Endpoint reachable but rate limited (HTTP 429).")
-                        else -> HealthCheckResult.Unavailable("HTTP ${response.code}.")
-                    }
+            return when {
+                settings.perplexityModel.isBlank() -> HealthCheckResult.Unavailable("Perplexity model is empty.")
+                // BUG-69-01: health traffic must use Burp's HTTP stack. Without the registry-injected
+                // transport there is no safe way to probe, so report Unknown instead of opening a socket.
+                transport == null -> HealthCheckResult.Unknown
+                else -> {
+                    val headers =
+                        HeaderParser.withBearerToken(
+                            settings.perplexityApiKey,
+                            HeaderParser.parse(settings.perplexityHeaders),
+                        )
+                    val timeoutSeconds =
+                        settings.perplexityTimeoutSeconds.coerceIn(HEALTH_TIMEOUT_MIN_SECONDS, HEALTH_TIMEOUT_MAX_SECONDS)
+                    val timeoutMs = TimeUnit.SECONDS.toMillis(timeoutSeconds.toLong())
+                    // GET /v1/models is free; the previous chat-completion probe was billed on every check.
+                    transport.healthCheckGet(OpenAiModelsUrl.versioned(baseUrl), headers, timeoutMs)
                 }
-            } catch (e: Exception) {
-                HealthCheckResult.Unavailable(e.message ?: "Request failed")
             }
-        }
-
-        private fun buildChatCompletionsUrl(baseUrl: String): String {
-            val trimmed = baseUrl.trimEnd('/')
-            val lower = trimmed.lowercase()
-            if (lower.endsWith("/chat/completions")) return trimmed
-            if (lower.matches(Regex(".*/v\\d+/chat/completions", RegexOption.IGNORE_CASE))) return trimmed
-            if (lower.matches(Regex(".*/v\\d+", RegexOption.IGNORE_CASE))) return "$trimmed/chat/completions"
-            return "$trimmed/chat/completions"
-        }
-
-        private fun withDefaultAcceptHeader(headers: Map<String, String>): Map<String, String> {
-            val merged = LinkedHashMap<String, String>()
-            merged.putAll(headers)
-            if (merged.keys.none { it.equals("accept", ignoreCase = true) }) {
-                merged["Accept"] = "text/event-stream"
-            }
-            return merged
         }
     }
 }

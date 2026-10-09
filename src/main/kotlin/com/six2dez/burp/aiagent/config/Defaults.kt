@@ -42,8 +42,23 @@ object Defaults {
     const val PASSIVE_SCAN_TIMEOUT_MS = 90_000L
     const val HEALTH_CHECK_INTERVAL_MS = 2_000L
     const val BACKEND_STARTUP_DELAY_MS = 2_000L
+
+    // AI status pill: poll interval for LOCAL backends only (CLI, Burp AI, loopback HTTP servers).
+    // Remote providers are never polled; their checks are network calls to a third party.
+    const val LOCAL_BACKEND_HEALTH_POLL_INTERVAL_MS = 30_000L
+
+    // AI status pill: delay before the one-off startup check (remote providers included).
+    const val BACKEND_HEALTH_STARTUP_CHECK_DELAY_MS = 3_000L
     const val DEDUP_WINDOW_MS = 3_600_000L
     const val ACTIVE_SCAN_MAX_QUEUE_SIZE = 2_000
+
+    // (quick 261008-vau) Shared active-scan baselines: one sample per original request lives 5 min
+    // from insertion, at most 64 completed samples are kept (oldest evicted first, in-flight never),
+    // and every sample is dropped when the scanner stops. A failed measurement is never cached; a
+    // lookup waiting on another worker's measurement waits the request timeout plus this grace.
+    const val ACTIVE_SCAN_BASELINE_TTL_MS = 300_000L
+    const val ACTIVE_SCAN_BASELINE_MAX_ENTRIES = 64
+    const val ACTIVE_SCAN_BASELINE_WAIT_GRACE_MS = 5_000L
     const val MAX_CONTEXT_TOTAL_CHARS = 40_000
     const val CHAT_MAX_OUTPUT_TOKENS = 4096
     const val SCANNER_MAX_OUTPUT_TOKENS = 2048
@@ -92,9 +107,9 @@ object Defaults {
     // (PRIV-06 / D-02) Total wall-clock budget for the body-redaction stage. Windows are processed
     // in order until it is spent; everything past that point is dropped behind a visible marker
     // rather than passed through — fail closed, so unscanned bytes never reach a backend. The
-    // per-pattern deadline handed to SafeRegex is min(SafeRegex.DEFAULT_TIMEOUT_MS, remaining
-    // budget), so a per-pattern deadline can never outlive the total. The MAX_ prefix matches
-    // MAX_REDACTION_BODY_CHARS above.
+    // per-pattern bound is SafeRegex's deterministic access budget, not a share of this budget.
+    // This wall-clock budget is a liveness backstop checked between rules, so a single rule can
+    // overrun it by at most its own access budget. The MAX_ prefix matches MAX_REDACTION_BODY_CHARS.
     // Sized from measurement rather than from an external source: ~27 ms per 1 MB window for the
     // form plus JSON rules on Apple Silicon / JDK 21, so 2 000 ms covers tens of megabytes (the
     // reference implementation processed a 4.16 MB input in 849 ms).

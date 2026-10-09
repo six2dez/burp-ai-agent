@@ -143,6 +143,7 @@ internal fun SettingsPanel.currentSettings(): AgentSettings {
         determinismMode = determinism.isSelected,
         autoRestart = autoRestart.isSelected,
         auditEnabled = auditEnabled.isSelected,
+        auditVerbose = auditVerbose.isSelected,
         mcpSettings = mcpSettings,
         preprocessProxyHistory = preprocessProxyHistory.isSelected,
         preprocessMaxResponseSizeKb =
@@ -211,7 +212,7 @@ internal fun SettingsPanel.currentSettings(): AgentSettings {
 
 /**
  * Splits the custom-patterns text area by newline, validates each non-blank line via
- * SafeRegex.isPatternSafe (regex compile + 50 ms ReDoS probe), and updates the
+ * SafeRegex.isPatternSafe (regex compile + ReDoS probes bounded by an access budget), and updates the
  * patternsFeedbackLabel with statusError / statusSuccess accordingly.
  *
  * Valid lines are returned; invalid/slow lines are dropped (not persisted).
@@ -267,10 +268,11 @@ internal fun SettingsPanel.validateAndCollectCustomPatterns(): List<String> {
  *
  * **Why a flag rather than firing the three callbacks from `applyAndSaveSettingsAsync`'s EDT tail.**
  * The verifier offered both. Moving them to the tail would fire them for BOTH callers, and on the
- * `saveSettings()` path `onMcpEnabledChanged` reaches `MainTab`'s `settingsRepo.save()` plus
- * `mcpSupervisor.applySettings(...)` immediately after the worker's [applyAndSaveSettingsBody] has
- * already done exactly those two things — a second disk write and a second bounded MCP stop/start on
- * every save. The flag confines the change to the single caller that has the problem.
+ * `saveSettings()` path `onMcpEnabledChanged` reaches `MainTab`'s `persistHeaderChangeAndApplyMcp` (a
+ * save plus `mcpSupervisor.applySettings(...)`) immediately after the worker's
+ * [applyAndSaveSettingsBody] has already done exactly those two things — a second disk write and a
+ * second bounded MCP stop/start on every save. The flag confines the change to the single caller that
+ * has the problem.
  *
  * On the restore-defaults path the three callbacks are pure duplication already: one line later
  * [applyAndSaveSettingsBody] performs `settingsRepo.save`, `mcpSupervisor.applySettings`,
@@ -342,6 +344,7 @@ internal fun SettingsPanel.applySettingsToUi(
     determinism.isSelected = updated.determinismMode
     autoRestart.isSelected = updated.autoRestart
     auditEnabled.isSelected = updated.auditEnabled
+    auditVerbose.isSelected = updated.auditVerbose
     // 07-02 D-02: keep the small-model-mode toggle in sync with persisted state.
     chatSmallModelMode.isSelected = updated.smallModelMode
     promptRequest.text = updated.requestPromptTemplate
@@ -562,8 +565,10 @@ internal fun SettingsPanel.applyAndSaveSettingsBody(
     // pattern list is current when it reads. Both halves are always fully published: setCustomPatterns
     // assigns a whole new List<Pattern> to a @Volatile field, and audit.setEnabled flips a @Volatile
     // boolean. There is no state in which a call is redacted under no rules, and no state in which a
-    // partially compiled pattern list is readable.
+    // partially compiled pattern list is readable. `audit.verbose` (quick 261008-sqa) is a @Volatile
+    // boolean too, written right after the switch it qualifies.
     audit.setEnabled(updated.auditEnabled)
+    audit.verbose = updated.auditVerbose
     // PRIV-02: push validated custom patterns into the live redaction pipeline so edits
     // take effect without a restart (per 13-RESEARCH A7 / Open Question 1).
     com.six2dez.burp.aiagent.redact.Redaction
@@ -635,6 +640,18 @@ internal fun SettingsPanel.applyAndSaveSettingsAsync(
     // Same placement rule and same reason as OffEdtDispatch's dispatchedObserver and
     // SettingsPersistQueue.submit: the generation must be the CLICK's, not the thread-start's.
     val generation = saveGeneration.incrementAndGet()
+    // Quick 261008-n0c: the rendering of the applied settings, for the Unsaved changes marker. It is
+    // captured at dispatch, not re-read at completion, so an edit made during the flight stays marked
+    // unsaved. On Restore defaults it is the rendering of the defaults applySettingsToUi just wrote,
+    // which is why it is not `updated`. The working copy is installed first, on the EDT, because the
+    // fields with no component (salt, TTLs, context window) are read from it and the body installs the
+    // same value on the worker; without this a restore, whose defaults carry a fresh salt, would leave
+    // a false marker. For a plain Save `updated` was read from that same working copy, so it is a no-op.
+    // Quick 261008-o97: a header write that waited on the repository lock and landed after this save is
+    // carried onto this dispatch-time rendering by markSaveApplied. That works because this save's own
+    // listener post always runs on the EDT before this tail (same worker, FIFO).
+    settings = updated
+    val onScreenAtDispatch = currentSettings()
     val lowered = AtomicBoolean(false)
     val lowerBusy = {
         if (lowered.compareAndSet(false, true)) {
@@ -665,6 +682,7 @@ internal fun SettingsPanel.applyAndSaveSettingsAsync(
             try {
                 result.onSuccess {
                     onSettingsChanged?.invoke(updated)
+                    markSaveApplied(updated, onScreenAtDispatch)
                     refreshPassiveAiStatus()
                     refreshActiveAiStatus()
                     updateProfileWarnings()

@@ -134,6 +134,56 @@ object ScanPolicy {
         )
     val CACHE_CLASSES = setOf(VulnClass.CACHE_POISONING, VulnClass.CACHE_DECEPTION)
 
+    /**
+     * Request methods the active scanner may replay at every risk level: three of the four RFC 9110
+     * safe methods. TRACE, the fourth, is left out on purpose: the user decision (quick 261008-vau)
+     * names exactly GET, HEAD and OPTIONS. Compared after trim + uppercase; every
+     * other method, a custom verb and a missing or blank method count as state-changing (fail
+     * closed). This is the ONE definition read by both the IDOR/BOLA gate and 403 method switching.
+     */
+    val SAFE_METHODS: Set<String> = setOf("GET", "HEAD", "OPTIONS")
+
+    /** Methods the 403 bypass may switch a request to, in the order they are tried. */
+    val METHOD_SWITCH_CANDIDATES: List<String> = listOf("GET", "HEAD", "POST", "PUT")
+
+    fun isSafeMethod(method: String?): Boolean = normalizedMethod(method) in SAFE_METHODS
+
+    /**
+     * Whether a state-changing request may be replayed with altered input. Only the top risk level,
+     * [PayloadRisk.DANGEROUS] (the level the user decision calls AGGRESSIVE, and whose UI text
+     * already reads "may modify or delete data"), allows it.
+     */
+    fun allowsStateChangingReplay(maxRisk: PayloadRisk): Boolean = maxRisk == PayloadRisk.DANGEROUS
+
+    /**
+     * Why an IDOR/BOLA test must not replay a request with [method] at [maxRisk], or null when it
+     * may. The text is shown as the scan result's reason and on Burp's Output tab.
+     */
+    fun idorReplayBlockReason(
+        method: String?,
+        maxRisk: PayloadRisk,
+    ): String? {
+        if (isSafeMethod(method) || allowsStateChangingReplay(maxRisk)) return null
+        val shown = normalizedMethod(method).ifEmpty { "an unknown method" }
+        return "Skipped: $shown is a state-changing method; IDOR and BOLA tests replay it with neighbouring IDs " +
+            "only at the DANGEROUS risk level (current: ${maxRisk.name})"
+    }
+
+    /**
+     * The methods the 403 bypass switches [originalMethod] to: [METHOD_SWITCH_CANDIDATES] minus the
+     * original, and only the safe ones (GET, HEAD) unless [maxRisk] allows state-changing replays.
+     */
+    fun methodSwitchAlternatives(
+        originalMethod: String?,
+        maxRisk: PayloadRisk,
+    ): List<String> {
+        val original = normalizedMethod(originalMethod)
+        val stateChangingAllowed = allowsStateChangingReplay(maxRisk)
+        return METHOD_SWITCH_CANDIDATES.filter { it != original && (stateChangingAllowed || isSafeMethod(it)) }
+    }
+
+    private fun normalizedMethod(method: String?): String = method?.trim()?.uppercase().orEmpty()
+
     fun isAllowedForMode(
         mode: ScanMode,
         vulnClass: VulnClass,

@@ -14,6 +14,7 @@ import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -25,6 +26,7 @@ import org.mockito.kotlin.spy
 import org.mockito.kotlin.whenever
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * BUG-69-01: send() no longer falls back to OkHttp when transport == null — it fails fast.
@@ -74,13 +76,18 @@ class OpenAiCompatibleBackendDefaultsTest {
             )
 
         val done = CountDownLatch(1)
+        val error = AtomicReference<Throwable?>(null)
         connection.send(
             text = "hello",
             onChunk = {},
-            onComplete = { done.countDown() },
+            onComplete = {
+                error.set(it)
+                done.countDown()
+            },
             jsonMode = false,
         )
         assertTrue(done.await(5, TimeUnit.SECONDS))
+        assertNull(error.get(), "send must complete without an error")
 
         val recorded = server.takeRequest(1, TimeUnit.SECONDS) ?: error("no request")
         assertEquals("/v1/chat/completions", recorded.path)
@@ -112,13 +119,18 @@ class OpenAiCompatibleBackendDefaultsTest {
             )
 
         val done = CountDownLatch(1)
+        val error = AtomicReference<Throwable?>(null)
         connection.send(
             text = "hello",
             onChunk = {},
-            onComplete = { done.countDown() },
+            onComplete = {
+                error.set(it)
+                done.countDown()
+            },
             jsonMode = true,
         )
         assertTrue(done.await(5, TimeUnit.SECONDS))
+        assertNull(error.get(), "send must complete without an error")
 
         val recorded = server.takeRequest(1, TimeUnit.SECONDS) ?: error("no request")
         val body = mapper.readTree(recorded.body.readUtf8())

@@ -73,6 +73,22 @@ internal const val PRIVACY_MODE_TOOLTIP =
         "re-scanning does not rewrite them."
 
 /**
+ * Quick 261008-sqa: what the audit log does and does not do. Each record carries a digest of its own
+ * payload only, so the copy must not claim that later edits to the file are detected (LOCKED-4).
+ */
+internal const val AUDIT_LOGGING_TOOLTIP =
+    "Writes an opt-in JSONL log to ~/.burp-ai-agent/audit.jsonl as an owner-only file. " +
+        "Prompts, context and responses are recorded as SHA-256 plus byte length unless Verbose is on. " +
+        "Each record carries a SHA-256 of its own payload, but there is no hash chain or signature, " +
+        "so later changes to the file are not detected."
+
+/** Quick 261008-sqa: the Verbose audit switch beside Audit logging. */
+internal const val AUDIT_VERBOSE_TOOLTIP =
+    "Also writes the full prompt, context, response and error text to the audit log. " +
+        "Credentials (API keys, header values, environment values such as the MCP token) are never written. " +
+        "Off by default; applies while Audit logging is on."
+
+/**
  * Wires all UI component styling, tooltips, tab panels, and event listeners for SettingsPanel.
  * Extracted from the SettingsPanel init block to keep SettingsPanel.kt under the module size target.
  * Called exclusively from the SettingsPanel init { } block.
@@ -120,7 +136,11 @@ internal fun SettingsPanel.initUiWiring() {
     auditEnabled.font = DesignTokens.Typography.body
     auditEnabled.background = DesignTokens.Colors.surface
     auditEnabled.foreground = DesignTokens.Colors.onSurface
-    auditEnabled.toolTipText = "Tamper-evident logs (JSONL + SHA-256 hashes). Logs saved to ~/.burp-ai-agent/audit.jsonl"
+    auditEnabled.toolTipText = AUDIT_LOGGING_TOOLTIP
+    auditVerbose.font = DesignTokens.Typography.body
+    auditVerbose.background = DesignTokens.Colors.surface
+    auditVerbose.foreground = DesignTokens.Colors.onSurface
+    auditVerbose.toolTipText = AUDIT_VERBOSE_TOOLTIP
     chatSmallModelMode.font = DesignTokens.Typography.body
     chatSmallModelMode.background = DesignTokens.Colors.surface
     chatSmallModelMode.foreground = DesignTokens.Colors.onSurface
@@ -514,6 +534,7 @@ internal fun SettingsPanel.initUiWiring() {
         Timer(2000) {
             refreshPassiveAiStatus()
             refreshActiveAiStatus()
+            refreshUnsavedMarker()
         }
     statusRefreshTimer?.start()
     updateProfileWarnings()

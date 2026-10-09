@@ -1,6 +1,9 @@
 package com.six2dez.burp.aiagent.ui
 
 import com.six2dez.burp.aiagent.config.AgentSettings
+import com.six2dez.burp.aiagent.config.AgentSettingsRepository
+import com.six2dez.burp.aiagent.config.toPreprocessorSettings
+import com.six2dez.burp.aiagent.mcp.McpSupervisor
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
@@ -17,22 +20,24 @@ import kotlin.concurrent.withLock
  * `OffEdtDispatch`'s KDoc draws between offloading and actually freeing the UI.
  *
  * **Defect 2 — the torn-snapshot half of CR-02, and the sharper of the two.** Two settings writes in
- * flight at once can interleave inside `AgentSettingsRepository.save()`, which writes ~107 preference
- * keys one at a time with `KEY_PRIVACY_MODE` and `KEY_CUSTOM_REDACTION_PATTERNS` a hundred keys apart.
- * An interleave can therefore persist `privacyMode` from one snapshot beside `customRedactionPatterns`
- * from another, leaving redaction weaker than either state the user actually chose. On a tool whose
- * stated core value is that the privacy controls are non-negotiable, that is not a cosmetic race.
- * [applyIfCurrent] runs each apply body to completion under one [ReentrantLock], so two writes
- * submitted through this queue cannot interleave.
- *
- * **Scope of that claim, stated honestly.** It covers writes submitted THROUGH this queue. `MainTab`
- * still calls `settingsRepo.save` on the EDT from the `applySettings` lambda it hands `ChatPanel`,
- * outside this lock — recorded as residual `D-23-06-1` and threat `T-23-06-08`, not silently absorbed.
+ * flight at once could interleave inside `AgentSettingsRepository.save()`, which writes ~107 preference
+ * keys one at a time with `KEY_PRIVACY_MODE` and `KEY_CUSTOM_REDACTION_PATTERNS` a hundred keys apart,
+ * and so persist `privacyMode` from one snapshot beside `customRedactionPatterns` from another. That
+ * is now guarded by `AgentSettingsRepository`'s write lock, which `save()` and `update()` both take, for
+ * EVERY writer: the header writes submitted here and the Settings tab's Save and Restore defaults on
+ * their own `burp-ai-settings-save` worker alike. That closes residual R2 of quick 261008-n0c (quick
+ * 261008-o97). This queue's [lock] still runs each apply body to completion before the next starts,
+ * so two header MCP writes never overlap their bounded MCP stop/start.
  *
  * **Ordering.** [submit] mints its generation on the CALLING thread as its first statement, so
  * submission order is click order rather than thread-start order — the same placement rule, and the
- * same reason, as `OffEdtDispatch`'s dispatched observer. A generation that reaches the lock after a
- * newer one has already begun applying is dropped rather than replayed over it.
+ * same reason, as `OffEdtDispatch`'s dispatched observer. The newest click wins PER SUPERSEDE KEY: a
+ * generation that reaches the lock after a newer one with the same key has already begun applying is
+ * dropped rather than replayed over it. Writes with different keys never drop each other, because each
+ * sets one field of the saved snapshot. Residual R4, stated rather than hidden: a Settings Save
+ * dispatched BEFORE a header click but persisted AFTER it writes its click-time value of that field back
+ * over the click; the Save tail re-syncs the header controls to what it saved, and the Settings control
+ * keeps the Unsaved changes marker on.
  *
  * Concurrency is `java.util.concurrent` plus JDK Swing via `OffEdtDispatch`, per CONVENTIONS.md:95 and
  * D-05: no second marshalling helper, no pool, no additional concurrency layer outside the `mcp`
@@ -44,29 +49,34 @@ internal class SettingsPersistQueue(
     /** Monotonic submission counter. Minted on the calling (EDT) thread so order is click order. */
     private val submitted = AtomicLong(0)
 
-    /** Highest generation whose apply body has BEGUN. Advanced under [lock], before the body runs. */
-    private val applied = AtomicLong(0)
+    /**
+     * Per supersede key, the highest generation whose apply body has BEGUN. Read and written only under
+     * [lock], and advanced before the body runs.
+     */
+    private val appliedByKey = HashMap<Any, Long>()
 
-    /** Serialises apply bodies so a settings write is persisted whole. See "Defect 2" above. */
+    /** Serialises apply bodies, so two header MCP writes never overlap. See "Defect 2" above. */
     private val lock = ReentrantLock()
 
     @Volatile
     private var disposed = false
 
     /**
-     * Persists [snapshot] off the EDT and reports the outcome to [onSettled] on the EDT.
+     * Runs [apply] on [payload] off the EDT and reports the outcome to [onSettled] on the EDT.
      *
-     * Call this from the EDT with [snapshot] already read off the Swing components — the snapshot is
-     * what crosses the thread boundary, so the worker never reads a live component. [label] identifies
-     * this unit of work in `OffEdtDispatch`'s observers and in the error log; the generation is
-     * appended so two clicks on the same control stay distinguishable.
+     * Call this from the EDT. [payload] is the value a click chose, never a snapshot read off the Swing
+     * components: the worker reads the saved snapshot itself, at apply time (quick 261008-o97).
+     * [supersedeKey] names what the write sets (one field); only a newer write with the SAME key can
+     * supersede this one. [label] identifies this unit of work in `OffEdtDispatch`'s observers and in the
+     * error log; the generation is appended so two clicks on the same control stay distinguishable.
      *
      * Returns as soon as the worker thread is started. The worker is named `burp-ai-settings-sync`.
      */
-    fun submit(
+    fun <T> submit(
         label: String,
-        snapshot: AgentSettings,
-        apply: (AgentSettings) -> Unit,
+        supersedeKey: Any,
+        payload: T,
+        apply: (T) -> Unit,
         onSettled: (Result<Unit>) -> Unit,
     ) {
         // FIRST STATEMENT, and load-bearing rather than stylistic: minted on the calling thread, so
@@ -77,7 +87,7 @@ internal class SettingsPersistQueue(
             threadName = "burp-ai-settings-sync",
             label = "$label-$generation",
             logError = logError,
-            work = { applyIfCurrent(generation, snapshot, apply) },
+            work = { applyIfCurrent(generation, supersedeKey, payload, apply) },
             onEdt = onSettled,
         )
     }
@@ -99,22 +109,119 @@ internal class SettingsPersistQueue(
     }
 
     /**
-     * Applies [snapshot] under [lock] if [generation] is still the newest one to have reached here.
+     * Applies [payload] under [lock] if [generation] is still the newest one with [supersedeKey] to have
+     * reached here.
      *
-     * [applied] is advanced BEFORE [apply] runs, on purpose: a body that throws must not leave its
-     * generation replayable, or a failed older write could later be applied over a newer successful
-     * one — the same torn state the lock exists to prevent, arriving by a slower route.
+     * The key's generation is recorded BEFORE [apply] runs, on purpose: a body that throws must not leave
+     * its generation replayable, or a failed older write could later be applied over a newer successful
+     * one to the same field.
      */
-    private fun applyIfCurrent(
+    private fun <T> applyIfCurrent(
         generation: Long,
-        snapshot: AgentSettings,
-        apply: (AgentSettings) -> Unit,
+        supersedeKey: Any,
+        payload: T,
+        apply: (T) -> Unit,
     ) {
         lock.withLock {
             if (disposed) return
-            if (generation <= applied.get()) return
-            applied.set(generation)
-            apply(snapshot)
+            if (generation <= (appliedByKey[supersedeKey] ?: 0L)) return
+            appliedByKey[supersedeKey] = generation
+            apply(payload)
         }
     }
+}
+
+/**
+ * One settings write made outside Save settings: the single field a click changed (quick 261008-o97).
+ *
+ * These are the four fields `MainTab`'s backend picker and MCP, Passive and Active header toggles, and
+ * the Settings tab's MCP, passive and active switches write. One subclass per field. What crosses the
+ * EDT boundary is this value, never a snapshot: the worker applies it to the SAVED snapshot inside the
+ * repository write lock, so unsaved Settings edits stay unsaved.
+ */
+internal sealed class HeaderSettingsChange {
+    /** [settings] with exactly this change's one field set; every other field unchanged. */
+    abstract fun applyTo(settings: AgentSettings): AgentSettings
+
+    /** The persist-queue supersede key: the subclass, i.e. the field this change sets. */
+    val supersedeKey: Any get() = javaClass
+
+    companion object {
+        /**
+         * [into] with every header field that differs between [from] and [to] set to [to]'s value; every
+         * other field of [into] unchanged. Used by the Unsaved changes marker: a header write changes one
+         * field of the saved snapshot, and the same single-field change is applied to the on-screen
+         * rendering of the applied settings.
+         */
+        fun carry(
+            from: AgentSettings,
+            to: AgentSettings,
+            into: AgentSettings,
+        ): AgentSettings =
+            listOf(
+                PreferredBackend(to.preferredBackendId),
+                McpEnabled(to.mcpSettings.enabled),
+                PassiveAiEnabled(to.passiveAiEnabled),
+                ActiveAiEnabled(to.activeAiEnabled),
+            ).filter { it.applyTo(from) != from }
+                .fold(into) { acc, change -> change.applyTo(acc) }
+    }
+
+    data class PreferredBackend(
+        val backendId: String,
+    ) : HeaderSettingsChange() {
+        override fun applyTo(settings: AgentSettings): AgentSettings = settings.copy(preferredBackendId = backendId)
+    }
+
+    data class McpEnabled(
+        val enabled: Boolean,
+    ) : HeaderSettingsChange() {
+        override fun applyTo(settings: AgentSettings): AgentSettings = settings.copy(mcpSettings = settings.mcpSettings.copy(enabled = enabled))
+    }
+
+    data class PassiveAiEnabled(
+        val enabled: Boolean,
+    ) : HeaderSettingsChange() {
+        override fun applyTo(settings: AgentSettings): AgentSettings = settings.copy(passiveAiEnabled = enabled)
+    }
+
+    data class ActiveAiEnabled(
+        val enabled: Boolean,
+    ) : HeaderSettingsChange() {
+        override fun applyTo(settings: AgentSettings): AgentSettings = settings.copy(activeAiEnabled = enabled)
+    }
+}
+
+/**
+ * Worker body of a header write that does not touch MCP: saves [change] onto the saved snapshot through
+ * the atomic `AgentSettingsRepository.update`. Runs on `burp-ai-settings-sync`. Returns what was saved.
+ *
+ * **Worker-body ledger.** `headerWriteWorkerBodiesSaveOnlyThroughTheAtomicUpdate` asserts these counts
+ * as equalities on the comment-stripped code of this file:
+ *
+ * | Token | Count | Composition |
+ * |---|---|---|
+ * | `settingsRepo.update(` | 2 | one in each of the two worker bodies |
+ * | `settingsRepo.save(` | 0 | a header write never saves a whole snapshot |
+ * | `mcpSupervisor.applySettings(` | 1 | persistHeaderChangeAndApplyMcp only |
+ */
+internal fun persistHeaderChange(
+    settingsRepo: AgentSettingsRepository,
+    change: HeaderSettingsChange,
+): AgentSettings = settingsRepo.update(change::applyTo)
+
+/**
+ * Worker body of a header MCP write: saves [change] like [persistHeaderChange], then applies MCP built
+ * from what was SAVED (MCP settings, privacy mode, determinism and preprocessor settings), never from
+ * unsaved MCP edits. Only this body reaches `McpSupervisor.stop()`, as `T-23-06-07` requires. The MCP
+ * apply runs outside the repository lock, because its stop is a bounded ten-second wait (residual R5).
+ */
+internal fun persistHeaderChangeAndApplyMcp(
+    settingsRepo: AgentSettingsRepository,
+    mcpSupervisor: McpSupervisor,
+    change: HeaderSettingsChange.McpEnabled,
+): AgentSettings {
+    val saved = settingsRepo.update(change::applyTo)
+    mcpSupervisor.applySettings(saved.mcpSettings, saved.privacyMode, saved.determinismMode, saved.toPreprocessorSettings())
+    return saved
 }

@@ -97,6 +97,7 @@ object App {
         auditLogger = AuditLogger(api)
         AuditLogger.registerGlobalEmitter { type, payload -> auditLogger.logEvent(type, payload) }
         supervisor = AgentSupervisor(api, backendRegistry, auditLogger, workerPool)
+        mirrorAppliedSettingsInto(settingsRepo, supervisor)
         Alerting.transport = supervisor.httpTransport
         aiRequestLogger = AiRequestLogger()
         supervisor.aiRequestLogger = aiRequestLogger
@@ -126,9 +127,9 @@ object App {
         // MAX_REDACTION_BUDGET_MS and drops real content behind markers on every call. Re-validating
         // here is what stops a stale preferences file from doing that.
         //
-        // COST: at most (patterns x probes x SafeRegex.DEFAULT_TIMEOUT_MS) once per launch, and a
-        // realistic ten-pattern list measured 2.2 ms because benign patterns complete in
-        // microseconds against every probe. This runs on the extension-load thread, NOT on the
+        // COST: at most patterns x 6 x SafeRegex.PROBE_ACCESS_BUDGET character accesses once per
+        // launch. A pathological pattern is rejected in about 8-15 ms; a realistic ten-pattern list
+        // measured 2.2 ms. This runs on the extension-load thread, NOT on the
         // EDT-critical path — the EDT exposure is the save path, tracked for Phase 23 / REL-05.
         //
         // setCustomPatterns still silently drops uncompilable entries; this filter is about
@@ -154,6 +155,7 @@ object App {
             )
         }
         auditLogger.setEnabled(settings.auditEnabled)
+        auditLogger.verbose = settings.auditVerbose
         supervisor.applySettings(settings)
         mcpSupervisor.applySettings(
             settings.mcpSettings,
@@ -181,7 +183,7 @@ object App {
         activeAiScanner.useCollaborator = settings.activeAiUseCollaborator
         activeAiScanner.setEnabled(settings.activeAiEnabled)
 
-        val ui = MainTab(api, backendRegistry, supervisor, auditLogger, mcpSupervisor, passiveAiScanner, activeAiScanner, aiRequestLogger)
+        val ui = MainTab(api, settingsRepo, backendRegistry, supervisor, auditLogger, mcpSupervisor, passiveAiScanner, activeAiScanner, aiRequestLogger)
         mainTab = ui
         api.userInterface().registerSuiteTab("Custom AI Agent", ui.root)
 
@@ -341,6 +343,21 @@ object App {
             api.logging().logToError("$component shutdown failed: ${e.message}")
         }
     }
+}
+
+/**
+ * Quick 261008-n0c — makes [AgentSupervisor]'s settings copy a mirror of the one [settingsRepo].
+ *
+ * AgentSupervisor keeps its own AtomicReference because its launch config (backend commands, URLs,
+ * keys, MCP env) and its auto-restart read settings off the EDT. This listener updates it inside every
+ * successful save, including MainTab's header writes (backend picker, scanner and MCP toggles), which
+ * never call `supervisor.applySettings` themselves.
+ */
+internal fun mirrorAppliedSettingsInto(
+    settingsRepo: AgentSettingsRepository,
+    supervisor: AgentSupervisor,
+) {
+    settingsRepo.addChangeListener { supervisor.applySettings(it) }
 }
 
 /**

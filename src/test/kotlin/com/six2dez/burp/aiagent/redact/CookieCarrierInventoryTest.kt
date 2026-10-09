@@ -531,18 +531,25 @@ class CookieCarrierInventoryTest {
                     "This file emits nothing itself.",
                 CarrierSite(CONTEXT_COLLECTOR, RAW_MESSAGE) to
                     "Redaction.apply, called directly. Consumer read: :41 and :45 are truncated and then " +
-                    "passed to Redaction.apply at :51 and :52; only the redacted strings reach HttpItem.",
+                    "passed to Redaction.apply at :65 and :67 and, in STRICT, to " +
+                    "UrlRedaction.anonymizeHostOccurrences with the item's own host; only those strings " +
+                    "reach HttpItem. HttpItem.url is built by UrlRedaction.redact (:72). The earlier " +
+                    "wording of this record was false for the url field, which was serialized raw until " +
+                    "quick task 261008-jx2; the committed probes are ContextCollectorPrivacyTest and " +
+                    "UrlRedactionTest.",
                 CarrierSite(BOUNTY_TAG_RESOLVER, RAW_MESSAGE) to
-                    "Redaction.apply, called directly. Consumer read: :77 and :78 are redacted at :79 and " +
-                    ":80 into requestRedacted / responseRedacted, and every tag branch below reads only " +
-                    "those.",
+                    "Redaction.apply, called directly. Consumer read: :77 and :78 are redacted at :92 and " +
+                    ":93 into requestRedacted / responseRedacted, followed in STRICT by the " +
+                    "UrlRedaction.anonymizeHostOccurrences own-host pass, and every tag branch below " +
+                    "reads only those.",
                 CarrierSite(BOUNTY_TAG_RESOLVER, PARAMETER_LIST) to
-                    "Redaction.isCookieParameterType, added by plan 27-07 (D-27-21). Consumer read: " +
-                    "buildRequestParameters at :119 renders `name=value (TYPE)` and the type gate at " +
-                    ":151 writes [STRIPPED] for a COOKIE-typed value under any stripCookies policy. " +
-                    "NOTE, recorded rather than hidden: this tag value never passes Redaction.apply, so " +
-                    "the control here is the type gate alone — a token in a URL/BODY-typed parameter " +
-                    "VALUE is NOT covered (the wider defect recorded at that site in source).",
+                    "Redaction.isCookieParameterType plus Redaction.apply (quick task 261008-jx2). " +
+                    "Consumer read: buildRequestParameters at :152 renders `name=value (TYPE)`. The " +
+                    "cookie TYPE gate writes [STRIPPED] for a COOKIE-typed value under any stripCookies " +
+                    "policy, the NAME filter writes [REDACTED] for a sensitive-looking name, and every " +
+                    "other line passes Redaction.apply in every mode (tokens, JWTs, custom patterns) " +
+                    "before truncation; STRICT then aliases the own host over the whole block. Held by " +
+                    "BountyPromptTagResolverTest.",
                 CarrierSite(PASSIVE_ANALYSIS, HEADER_LIST) to
                     "Redaction.apply, via redactScanMetadata. Consumer read: :257 and :258 go through " +
                     "sanitizeHeadersForPrompt; :266 selects Cookie header values for cookieSectionLines " +

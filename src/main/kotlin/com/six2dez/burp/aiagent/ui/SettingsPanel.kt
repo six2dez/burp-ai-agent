@@ -26,10 +26,12 @@ import javax.swing.JSpinner
 import javax.swing.JTextArea
 import javax.swing.JTextField
 import javax.swing.SpinnerNumberModel
+import javax.swing.SwingUtilities
 import javax.swing.Timer
 
 class SettingsPanel(
     internal val api: MontoyaApi,
+    internal val settingsRepo: AgentSettingsRepository,
     internal val backends: BackendRegistry,
     internal val supervisor: AgentSupervisor,
     internal val audit: AuditLogger,
@@ -37,7 +39,10 @@ class SettingsPanel(
     internal val passiveAiScanner: com.six2dez.burp.aiagent.scanner.PassiveAiScanner,
     internal val activeAiScanner: com.six2dez.burp.aiagent.scanner.ActiveAiScanner,
 ) {
-    internal val settingsRepo = AgentSettingsRepository(api)
+    /**
+     * The panel's working copy for fields that have no component (salt, TTLs, context window), not an
+     * applied-snapshot cache.
+     */
     internal var settings: AgentSettings = settingsRepo.load()
     internal val customPromptLibraryEditor =
         CustomPromptLibraryEditor().apply {
@@ -160,6 +165,7 @@ class SettingsPanel(
     internal val determinism = ToggleSwitch(settings.determinismMode)
     internal val autoRestart = ToggleSwitch(settings.autoRestart)
     internal val auditEnabled = ToggleSwitch(settings.auditEnabled)
+    internal val auditVerbose = ToggleSwitch(settings.auditVerbose)
 
     // 07-02 D-02: caps chat context to 1500/750 chars when ON (BUG-69-02 / issue #69).
     internal val chatSmallModelMode = ToggleSwitch(settings.smallModelMode)
@@ -522,7 +528,92 @@ class SettingsPanel(
             10,
         )
 
+    /**
+     * Quick 261008-n0c — the "Unsaved changes" marker in the Settings button row.
+     *
+     * Visible exactly while the on-screen settings differ from the settings in effect. Chat and
+     * scanners act only on the saved snapshot, so this is the one place the gap is shown.
+     */
+    internal val unsavedChangesLabel =
+        JLabel("Unsaved changes").apply {
+            font = DesignTokens.Typography.label
+            foreground = DesignTokens.Colors.statusWarning
+            toolTipText =
+                "On-screen settings differ from the settings in effect. Chat and scanners keep using " +
+                "the saved settings until you click Save settings."
+            isVisible = false
+        }
+
+    /**
+     * The on-screen RENDERING of the applied settings, i.e. what [currentSettings] returned when the
+     * applied snapshot was on screen. EDT only.
+     *
+     * It is deliberately not the repository object: the components normalize stored values (a backend
+     * the combo cannot show, KB/byte conversion, spinner clamps, merged tool toggles, re-validated custom
+     * patterns), so comparing against `settingsRepo.load()` would show a false marker on a fresh panel
+     * and after Restore defaults. A Save marks its dispatch-time rendering ([markSaveApplied]); a header
+     * write carries its one field into it ([onAppliedSnapshotPublished], quick 261008-o97).
+     */
+    private var appliedOnScreen: AgentSettings? = null
+
+    /**
+     * The last applied snapshot this panel was told about: a repository object, not a rendering. EDT
+     * only. [onAppliedSnapshotPublished] diffs consecutive values to find the header fields a save changed.
+     */
+    private var lastAppliedSeen: AgentSettings = settings
+
+    /**
+     * EDT only. Called, in save order, with every snapshot the repository publishes. Carries the header
+     * fields that changed since the previous one into [appliedOnScreen], so a header write moves the
+     * rendering by the same single-field change it made to the saved snapshot: no false marker after a
+     * header toggle, and the marker stays while other edits are unsaved.
+     */
+    internal fun onAppliedSnapshotPublished(saved: AgentSettings) {
+        val previous = lastAppliedSeen
+        lastAppliedSeen = saved
+        appliedOnScreen?.let { markOnScreenSettingsApplied(HeaderSettingsChange.carry(previous, saved, it)) }
+    }
+
+    /**
+     * EDT only. The Save tail: marks [onScreenAtDispatch] (the rendering of what [saved] persisted) as
+     * applied, plus every header write that waited on the repository lock and landed after this save,
+     * i.e. the header fields that differ between [saved] and the newest published snapshot.
+     */
+    internal fun markSaveApplied(
+        saved: AgentSettings,
+        onScreenAtDispatch: AgentSettings,
+    ) {
+        markOnScreenSettingsApplied(HeaderSettingsChange.carry(saved, lastAppliedSeen, onScreenAtDispatch))
+    }
+
+    /** EDT only. Records [view] as the rendering of the applied settings and refreshes the marker. */
+    internal fun markOnScreenSettingsApplied(view: AgentSettings) {
+        appliedOnScreen = view
+        refreshUnsavedMarker()
+    }
+
+    /**
+     * EDT only. Shows the marker exactly when the on-screen settings differ from [appliedOnScreen].
+     *
+     * Cost: one [currentSettings] (bounded SafeRegex probes per custom pattern) on every 2 s status
+     * tick, replacing MainTab's former once-a-second call of the same function.
+     */
+    internal fun refreshUnsavedMarker() {
+        unsavedChangesLabel.isVisible = currentSettings() != appliedOnScreen
+    }
+
     init {
         initUiWiring()
+        markOnScreenSettingsApplied(currentSettings())
+        // The listener runs on the saving worker inside the repository write lock and only posts, so
+        // the posts reach the EDT in save order. A header write changes one field of the saved snapshot,
+        // and the same single-field change is applied to the rendering (quick 261008-o97). Installing
+        // the repository object itself would show a false marker, because the components normalize
+        // stored values.
+        settingsRepo.addChangeListener { saved ->
+            SwingUtilities.invokeLater {
+                if (!disposed) onAppliedSnapshotPublished(saved)
+            }
+        }
     }
 }

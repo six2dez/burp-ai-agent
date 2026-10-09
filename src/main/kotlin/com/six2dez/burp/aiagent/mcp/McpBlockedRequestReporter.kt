@@ -38,17 +38,17 @@ private const val TRUNCATION_MARKER = "..."
  * `{ line -> api.logging().logToOutput(line) }`; tests capture into a list. That keeps this class
  * testable without a Mockito deep stub.
  *
- * **D-10 / [verboseAudit].** `AgentSettings` has `auditEnabled` but no verbose-audit flag anywhere in
- * the repo, so [verboseAudit] is a constructor seam that callers wire to `false`. Hashing reflected
- * header values is therefore the effective default, which is what CLAUDE.md's "hashes only unless
- * verbose is on" requires. Adding a user-facing verbose toggle is not in SEC-04/SEC-05 and is not
- * done here. `method` and `path` are sanitized but not hashed: they are not reflected header values,
- * and a hashed request path would make a blocked route undiagnosable.
+ * **D-10 / [verboseAudit].** A user-facing Verbose audit setting (`AgentSettings.auditVerbose`) exists
+ * since quick 261008-sqa and is deliberately NOT wired here: the four reflected values are header values
+ * sent by a remote, possibly unauthenticated peer, and header values are never written in plaintext in
+ * either audit mode. [verboseAudit] therefore stays `false` at every call site, and the reflected header
+ * values are always hashed. `method` and `path` are sanitized but not hashed: they are not reflected
+ * header values, and a hashed request path would make a blocked route undiagnosable.
  *
  * **T-20-12, residual risk, stated for the audit-ENABLED case.** `App.kt:69` registers the
  * `AuditLogger` global emitter unconditionally at startup — the `enabled` short-circuit lives one
  * level deeper, in `AuditLogger.logEvent`. So when the user has turned audit logging ON, an audit
- * event means one synchronous `logFile.appendText` per emission, on a Netty event-loop thread.
+ * event means one synchronous append to audit.jsonl per emission, on a Netty event-loop thread.
  *
  * In EXTERNAL mode every route except `/__mcp/health` answers `401` to an unauthenticated peer, and
  * each of those is an `UNAUTHORIZED` or `BLANK_TOKEN` denial, so per-occurrence emission for those
@@ -144,7 +144,8 @@ internal class McpBlockedRequestReporter(
      * Builds the D-06 audit payload.
      *
      * Deliberately ABSENT: the raw, attacker-controlled header values. Every value is D-07 sanitized,
-     * and the four reflected header values are SHA-256 hashed unless [verboseAudit] is on (D-10), so
+     * and the four reflected header values are SHA-256 hashed in both audit modes, because the
+     * [verboseAudit] seam is never wired to the Verbose audit setting (D-10, quick 261008-sqa), so
      * an attacker cannot use a blocked request to write chosen plaintext — a session cookie echoed in
      * a `Referer`, a bearer token misplaced into `Origin` — into `~/.burp-ai-agent/audit.jsonl`.
      * Also absent: any request body, any response detail, and the configured token itself.

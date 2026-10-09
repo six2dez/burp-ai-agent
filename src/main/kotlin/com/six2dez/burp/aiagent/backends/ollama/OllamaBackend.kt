@@ -7,6 +7,7 @@ import com.six2dez.burp.aiagent.backends.AiBackend
 import com.six2dez.burp.aiagent.backends.BackendDiagnostics
 import com.six2dez.burp.aiagent.backends.BackendLaunchConfig
 import com.six2dez.burp.aiagent.backends.HealthCheckResult
+import com.six2dez.burp.aiagent.backends.HttpTransportAware
 import com.six2dez.burp.aiagent.backends.JsonModeCapable
 import com.six2dez.burp.aiagent.backends.TokenUsage
 import com.six2dez.burp.aiagent.backends.UsageAwareConnection
@@ -24,7 +25,9 @@ import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
-class OllamaBackend : AiBackend {
+class OllamaBackend :
+    AiBackend,
+    HttpTransportAware {
     override val id: String = "ollama"
     override val displayName: String = "Ollama (local)"
     override val supportsSystemRole: Boolean = true
@@ -34,16 +37,16 @@ class OllamaBackend : AiBackend {
     /**
      * Optional, supervisor-injected [MontoyaHttpTransport] used by [healthCheck]. Null only on the
      * unit-test path (tests construct backends directly without a supervisor); production wiring
-     * lives in [com.six2dez.burp.aiagent.supervisor.AgentSupervisor]'s init block.
+     * lives in [com.six2dez.burp.aiagent.backends.BackendRegistry] (re-applied on every reload).
      */
     @Volatile
     private var healthCheckTransport: MontoyaHttpTransport? = null
 
-    fun setHealthCheckTransport(transport: MontoyaHttpTransport) {
+    override fun setHealthCheckTransport(transport: MontoyaHttpTransport) {
         healthCheckTransport = transport
     }
 
-    fun healthCheckTransport(): MontoyaHttpTransport? = healthCheckTransport
+    override fun healthCheckTransport(): MontoyaHttpTransport? = healthCheckTransport
 
     companion object {
         private const val DEFAULT_CONTEXT_WINDOW = 8192

@@ -2,7 +2,6 @@ package com.six2dez.burp.aiagent.scanner
 
 import burp.api.montoya.MontoyaApi
 import burp.api.montoya.collaborator.CollaboratorClient
-import burp.api.montoya.http.RequestOptions
 import burp.api.montoya.http.message.HttpRequestResponse
 import burp.api.montoya.http.message.requests.HttpRequest
 import burp.api.montoya.scanner.audit.issues.AuditIssue
@@ -111,6 +110,10 @@ class ActiveAiScanner(
     private val pendingOast = ConcurrentHashMap<String, PendingOast>()
     private var oastPoller: ScheduledExecutorService? = null
 
+    // Quick 261008-vau: one baseline per original request, shared by all of its targets (points x
+    // classes, manual and passive-driven). Bounded by size and age, dropped in stopProcessing.
+    private val baselineCache = ScanBaselineCache()
+
     private val headerInjectionAllowlist = ScannerUtils.HEADER_INJECTION_ALLOWLIST
     private val authHeaderNames =
         setOf(
@@ -145,7 +148,12 @@ class ActiveAiScanner(
     var maxPayloadsPerPoint: Int = 10
     var timeoutSeconds: Int = 30
     var requestDelayMs: Long = 100
+
+    // Written on the EDT / Save worker, read by scan workers: payload filtering, the IDOR/BOLA gate
+    // and 403 method switching all read this one field (quick 261008-vau).
+    @Volatile
     var maxRiskLevel: PayloadRisk = PayloadRisk.SAFE
+
     var scopeOnly: Boolean = true
     var scanMode: ScanMode = ScanMode.FULL
     var useCollaborator: Boolean = false
@@ -420,8 +428,10 @@ class ActiveAiScanner(
         executor = null
         scheduledExecutor = null
         oastPoller = null
-        // Abandon any pending OOB confirmations and drop the shared client for a clean restart.
+        // Abandon any pending OOB confirmations, drop the shared baselines and drop the shared
+        // client for a clean restart.
         pendingOast.clear()
+        baselineCache.clear()
         oastLock.lock()
         try {
             collaboratorClient = null
@@ -475,17 +485,27 @@ class ActiveAiScanner(
             return ActiveScanResult(target, 0, null, "Vulnerability class not enabled for scan mode")
         }
 
-        // Measure baseline response time
-        val baselineStart = System.currentTimeMillis()
-        val baselineResponse =
-            sendRequestWithTimeout(target.originalRequest.request())
-                ?: return ActiveScanResult(target, 0, null, "Failed to send baseline request (timeout)")
-        val baselineTime = System.currentTimeMillis() - baselineStart
-        val baselineRequestResponse =
-            HttpRequestResponse.httpRequestResponse(
-                target.originalRequest.request(),
-                baselineResponse.response(),
-            )
+        // One risk read per target, shared by the IDOR/BOLA gate and payload filtering.
+        val riskCeiling = maxRiskLevel
+        if (vulnClass in ScanPolicy.IDOR_CLASSES) {
+            // Checked BEFORE the baseline, so a skipped state-changing target sends nothing.
+            val blockReason = ScanPolicy.idorReplayBlockReason(target.originalRequest.request().method(), riskCeiling)
+            if (blockReason != null) {
+                api.logging().logToOutput("[ActiveAiScanner] ${target.id.take(200)}: $blockReason")
+                return ActiveScanResult(target, 0, null, blockReason)
+            }
+        }
+
+        // Baseline response and time, shared by every target of the same original request
+        val originalRequest = target.originalRequest.request()
+        val baseline =
+            baselineCache.baselineFor(
+                originalRequest,
+                waitTimeoutMs = timeoutSeconds.coerceAtLeast(5) * 1000L + Defaults.ACTIVE_SCAN_BASELINE_WAIT_GRACE_MS,
+            ) { measureBaseline(originalRequest) }
+                ?: return ActiveScanResult(target, 0, null, "Failed to send baseline request (timeout, error or no response)")
+        val baselineTime = baseline.elapsedMs
+        val baselineRequestResponse = baseline.requestResponse
 
         // 403 bypass testing: only trigger when explicitly requested via ACCESS_CONTROL_BYPASS
         val baselineStatus = baselineRequestResponse.response()?.statusCode()?.toInt() ?: 0
@@ -507,7 +527,7 @@ class ActiveAiScanner(
         }
 
         // Get payloads for this vulnerability class
-        val quickPayloads = payloadGenerator.getQuickPayloads(vulnClass, maxRiskLevel)
+        val quickPayloads = payloadGenerator.getQuickPayloads(vulnClass, riskCeiling)
         val contextPayloads =
             payloadGenerator.generateContextAwarePayloads(
                 vulnClass,
@@ -687,6 +707,14 @@ class ActiveAiScanner(
         }
 
         return ActiveScanResult(target, allPayloads.size, null)
+    }
+
+    /** Sends [request] once and times it; null when the send fails or brings no response. */
+    private fun measureBaseline(request: HttpRequest): BaselineSample? {
+        val start = System.currentTimeMillis()
+        val response = sendRequestWithTimeout(request)?.response() ?: return null
+        val elapsedMs = System.currentTimeMillis() - start
+        return BaselineSample(HttpRequestResponse.httpRequestResponse(request, response), elapsedMs)
     }
 
     private fun executeIdorScan(
@@ -1138,8 +1166,6 @@ class ActiveAiScanner(
         pendingOast.entries.removeIf { now - it.value.registeredAtMs > ttlMs }
     }
 
-    private val tlsRequestOptions by lazy { RequestOptions.requestOptions().withUpstreamTLSVerification() }
-
     private fun sendRequestWithTimeout(request: HttpRequest): HttpRequestResponse? {
         val timeout = timeoutSeconds.coerceAtLeast(5).toLong()
         // REL-07 / SC6: the submit lives INSIDE the try, and the handle is a nullable local so the
@@ -1152,7 +1178,7 @@ class ActiveAiScanner(
             future =
                 requestExecutor.submit(
                     Callable {
-                        api.http().sendRequest(request, tlsRequestOptions)
+                        api.http().sendRequest(request)
                     },
                 )
             future.get(timeout, TimeUnit.SECONDS)
@@ -1211,12 +1237,13 @@ class ActiveAiScanner(
             mapOf(
                 "vuln_class" to confirmation.target.vulnHint.vulnClass.name,
                 "url" to
-                    confirmation.target.originalRequest
-                        .request()
-                        .url(),
-                "payload" to confirmation.payload.value.take(100),
+                    AuditLogger.endpointOf(
+                        confirmation.target.originalRequest
+                            .request()
+                            .url(),
+                    ),
                 "confidence" to confirmation.confidence.toString(),
-            ),
+            ) + audit.bodyFields("payload", confirmation.payload.value),
         )
     }
 
@@ -1471,7 +1498,8 @@ class ActiveAiScanner(
      * Attempt to bypass 403 responses using:
      * 1. IP spoofing headers (X-Forwarded-For, X-Real-IP, etc.)
      * 2. Path manipulation (/path/ , /path/., /path/..;/path, etc.)
-     * 3. HTTP method switching (GET <-> POST)
+     * 3. HTTP method switching: only GET and HEAD below DANGEROUS; POST and PUT are tried only at
+     *    DANGEROUS (ScanPolicy.methodSwitchAlternatives, quick 261008-vau)
      */
     private fun execute403Bypass(
         target: ActiveScanTarget,
@@ -1582,12 +1610,7 @@ class ActiveAiScanner(
         }
 
         // === Technique 3: HTTP method switching ===
-        val alternativeMethods =
-            when (request.method().uppercase()) {
-                "GET" -> listOf("POST", "PUT")
-                "POST" -> listOf("GET", "PUT")
-                else -> listOf("GET", "POST")
-            }
+        val alternativeMethods = ScanPolicy.methodSwitchAlternatives(request.method(), maxRiskLevel)
         for (method in alternativeMethods) {
             try {
                 val modifiedRequest = request.withMethod(method)

@@ -163,70 +163,38 @@ private const val SWEEP_TAIL_CHARS = 800
 
 // (PRIV-06) CR-04 / T-21-33 / W-04: parameters of the newline-free oversize fixture below.
 //
-// SIZING IS THE ARGUMENT, not a round number — and it is a TWO-SIDED argument, which is the part the
-// original version of this comment was missing. A newline-free body becomes exactly ONE window at any
-// size, because windowEnd gives an over-width line its own window and a body with no '\n' is a single
-// line. The multiplier therefore does not control how many windows there are; it controls where the
-// fixture sits between two bounds that both have to hold:
+// A newline-free body becomes exactly ONE window at any size, because windowEnd gives an over-width
+// line its own window and a body with no '\n' is a single line. The multiplier therefore does not
+// control how many windows there are, only how large that one window is.
 //
-//   LOWER BOUND — the ladder must ENGAGE. The single top-level pass has to EXCEED the 50 ms
-//   per-pattern deadline, or scanWindow never calls dropOrRetry, splitPoint is never reached and the
-//   fixture reproduces nothing. Measured on this content: ~187 ms per MB per rule on Apple Silicon /
-//   JDK 21 with the JaCoCo agent attached, so 1x the window width is ~187 ms — 3.7x over the
-//   deadline.
+// THE WALL-CLOCK LOWER/UPPER BOUND ARGUMENT IS RETIRED. This fixture used to be sized between two
+// clock-dependent bounds: large enough that the single pass overran the former per-rule wall clock
+// (so the ladder engaged), small enough that the deepest piece then scanned inside it. Both bounds
+// moved with machine speed and JaCoCo, and a rule that got more expensive once pushed the upper one
+// under a 4x fixture, destroying it on every run. The per-rule bound is now a deterministic access
+// budget, and newlineFreeOversizeBodyIsScannedNotDestroyed FORCES the ladder by injecting it (see
+// NEWLINE_FREE_LADDER_EXHAUST_ABOVE), so which depths exhaust and which scan is arithmetic.
 //
-//   UPPER BOUND — the ladder must REACH A SCANNABLE PIECE. dropOrRetry halves at most
-//   WINDOW_RETRY_MAX_DEPTH (4) times, so the smallest piece the ladder can ever produce is
-//   fixture/16; if THAT still exceeds the 50 ms deadline, every piece is dropped behind a marker and
-//   the body is destroyed anyway. At ~187 ms/MB the deadline scans roughly 200 KB, so the fixture
-//   must stay under ~3.2 MB. At 1x, fixture/16 is 62 501 characters (~12 ms, 4.3x under the
-//   deadline), and depth 3 at 125 002 characters (~23 ms) already succeeds — so there is a whole
-//   spare ladder level, which is what makes the outcome deterministic rather than marginal.
-//   Measured: 20 consecutive runs, 20 clean, minimum output 1 000 011 characters of a 1 000 021
-//   character input (input minus exactly the 10 characters the one redaction removes), 779 ms worst
-//   case.
+// WHY 1x: speed. Any size above the window width exercises the same wiring, and 1x is the cheapest.
 //
-// WHY THIS IS 1 AND NOT 4 (W-04, and this is a CORRECTION to a previously-stated argument, recorded
-// as one rather than quietly applied). The value was 4 on the strength of a measured ~31 ms/MB, which
-// put fixture/16 at 250 000 characters and ~47 ms — inside the 50 ms deadline by about 6 %. Plan
-// 21-12 then factored SENSITIVE_KEY_EXPR and raised jsonSecretKeyRegex's cost by roughly half (its
-// own commit message records 47 ms vs 58 ms on a 1 MB body), which pushed fixture/16 past the
-// deadline. Since then a 4x fixture has been destroyed rather than scanned, on every run: 15-16 of
-// its 16 depth-4 pieces dropped behind markers, output 928 characters of a 4 000 005 character
-// input, measured identically WITH and WITHOUT the JaCoCo agent. That is not a flake and no budget
-// can fix it — the failure is the per-pattern deadline against the piece size, and it reproduces at
-// a 60 000 ms injected budget exactly as it does at the shipped 2 000 ms one.
-//
-// THE 4 MB CASE IS A REAL PRODUCT LIMIT, NOT A TEST ARTEFACT, and it is recorded in
-// .planning/phases/21-redaction-completeness/deferred-items.md as D-21-02 rather than absorbed here:
-// the retry ladder's capability ceiling is 2^WINDOW_RETRY_MAX_DEPTH times whatever the per-pattern
-// deadline can scan, so CR-04 is closed only up to roughly 3 MB of newline-free minified JSON. The
-// MCP default maxBodyBytes is 2 MiB, which is inside that ceiling, so the defect CR-04 actually
-// describes is covered — but the ceiling exists, it moved when a rule got more expensive, and
-// nothing but this fixture was watching it.
-//
-// WHAT THE INJECTED BUDGET FIXES AND WHAT IT DOES NOT. It removes the TOTAL-budget race: at 1x the
-// stage takes up to 779 ms of the shipped 2 000 ms budget — 2.6x headroom, under this phase's own 3x
-// bar — so the assertion below would still be a race against MAX_REDACTION_BUDGET_MS without
-// NEWLINE_FREE_INJECTED_BUDGET_MS. It does NOT and cannot move the per-pattern deadline, which is
-// what the two bounds above are about. Both changes were needed; neither is sufficient alone.
+// THE FORMER ~3 MB NEWLINE-FREE CEILING NO LONGER APPLIES to the built-in rules. It was the ladder's
+// reach under a fixed per-rule wall clock: 2^WINDOW_RETRY_MAX_DEPTH times what one call could scan.
+// Under a length-proportional access budget a newline-free window of any size scans in ONE pass
+// with the built-in rules, and only the 2 s stage budget bounds it.
 private const val NEWLINE_FREE_WINDOW_MULTIPLIER = 1
 
 // (PRIV-06) W-04 / T-21-52: the total body-stage budget injected into Redaction.testWindowedBodyStage
 // by newlineFreeOversizeBodyIsScannedNotDestroyed.
 //
-// THE ARITHMETIC, so this is a derivation rather than a round number. Driven through the seam — which
-// bypasses the header stage entirely — the fixture's windowed body stage measures 591-779 ms over 20
-// consecutive runs on Apple Silicon / JDK 21 with the JaCoCo agent attached. 60 000 ms is therefore
-// 77x the WORST measured run, nearly two orders of magnitude of headroom: the budget cannot be
-// reached on any machine this project targets, including a CI runner an order of magnitude slower
-// than the reference one and instrumented on top of that.
+// THE ARITHMETIC, so this is a derivation rather than a round number. Driven through the seam - which
+// bypasses the header stage entirely - with the ladder forced to depth 2, the fixture's windowed body
+// stage measured about 110 ms on Apple Silicon / JDK 21 with the JaCoCo agent attached. 60 000 ms is
+// therefore several hundred times that run: the budget cannot be reached on any machine this project
+// targets, including a CI runner an order of magnitude slower and instrumented on top of that.
 //
-// WHY AN INJECTED BUDGET IS NEEDED AT ALL AT THIS FIXTURE SIZE, since the fixture is now much smaller
-// than the one that first flaked: 779 ms against the shipped 2 000 ms budget is 2.6x headroom, which
-// is UNDER this phase's own 3x bar for a wall-clock-dependent assertion. Left on the shipped budget
-// this test would still be a race, just a slower-burning one — and that is precisely how it presented
-// the first time, passing for months before a rule got more expensive.
+// WHY AN INJECTED BUDGET IS NEEDED AT ALL: under the former per-rule wall clock this stage measured
+// 591-779 ms against the shipped 2 000 ms, UNDER this phase's own 3x bar for a wall-clock-dependent
+// assertion. Injecting a total budget far above any run keeps the stage clock out of the outcome.
 //
 // IT IS NOT Defaults.MAX_REDACTION_BUDGET_MS AND MUST NEVER BE SET FROM IT. The shipped 2 s budget is
 // a product decision (2 s covers tens of megabytes on a background scanner thread) and is untouched by
@@ -234,6 +202,13 @@ private const val NEWLINE_FREE_WINDOW_MULTIPLIER = 1
 // speed. Raising the shipped constant to make an assertion pass is the move this seam exists to make
 // unnecessary.
 private const val NEWLINE_FREE_INJECTED_BUDGET_MS = 60_000L
+
+// (PRIV-06) W-04: the piece length above which newlineFreeOversizeBodyIsScannedNotDestroyed injects
+// a per-rule access budget of 0. The fixture is 1 000 021 characters, so depth 0 (the whole body)
+// and depth 1 (~500 000) exhaust and dropOrRetry must split again; depth 2 (~250 000) gets the
+// shipped budget and scans. Arithmetic on the fixture, not a timing: the ladder engages and
+// completes at the same depth on every machine.
+private const val NEWLINE_FREE_LADDER_EXHAUST_ABOVE = 300_000
 
 // The repeating minified-JSON fragment. No '=', no whitespace, no newline — the exact shape
 // toolJson.encodeToString(...) emits into McpToolContext.redactIfNeeded, which is what makes CR-04
@@ -2115,7 +2090,7 @@ class RedactionTest {
     // façade this comment used to name, so the hazard is now spelled out in the form that ships.)
     //
     // (a+)+$ is the classic catastrophic-backtracking pattern and 2 000 'a' characters followed by
-    // '!' is the input shape SafeRegexTest already proves trips the 50 ms deadline on JDK 21. It is
+    // '!' is the input shape on which SafeRegexTest proves (a+)+$ exhausts its access budget. It is
     // pushed in through setCustomPatterns rather than through the save path on purpose: isPatternSafe
     // rejects it at save time, and what is under test here is what the ENGINE does if such a pattern
     // ever reaches it. The @AfterEach resetCustomPatterns prevents any bleed.
@@ -2170,8 +2145,8 @@ class RedactionTest {
     // The sibling above covers oversized input. This one covers the single-pass path, which plan
     // 21-06 shipped assigning the return value of the since-deleted SafeRegex.replaceAllSafe façade
     // (WR-03): that value was replaceAllSafeReporting's .text, which on timeout is the input
-    // unchanged, byte-identical to "the pattern matched nothing", so a rule that overran the 50 ms
-    // deadline was silently skipped and its unredacted content passed straight through. That is fail-OPEN, one size class below the defect the phase exists to remove, and
+    // unchanged, byte-identical to "the pattern matched nothing", so a rule that overran its per-rule
+    // bound was silently skipped and its unredacted content passed straight through. That is fail-OPEN, one size class below the defect the phase exists to remove, and
     // it is what this test pins shut. The fix discards the partial result and re-scans the ORIGINAL
     // input through the windowed path, which already drops unscannable content behind a marker.
     //
@@ -2232,8 +2207,8 @@ class RedactionTest {
     // single return value is what destroys a minified-JSON payload in its entirety.
     //
     // WHY A SEAM RATHER THAN ONLY THE END-TO-END TEST. Reaching this branch through
-    // Redaction.apply requires a rule to genuinely exceed its 50 ms deadline, which needs a
-    // multi-megabyte fixture and depends on machine speed, JIT warm-up and JaCoCo instrumentation.
+    // Redaction.apply requires a rule to genuinely exhaust its access budget, which the built-in
+    // rules never do, so it needs a pathological custom pattern or an injected budget.
     // The defect itself is a pure function of one string. Asserting it directly makes the core of
     // CR-04 deterministic and hardware-independent, and leaves the end-to-end sibling below to prove
     // the wiring rather than the arithmetic.
@@ -2374,27 +2349,25 @@ class RedactionTest {
     // green — the window was dropped fail-closed, so it was never a leak, but it was an indefinitely
     // red security test, and a red security test is one contributor away from being @Disabled.
     //
-    // TWO INDEPENDENT CAUSES, and the second was NOT the one originally diagnosed. Recorded in full
-    // because a fix aimed at only the first would have left this test red:
+    // TWO INDEPENDENT CAUSES, both now removed. Recorded in full because a fix aimed at only the
+    // first would have left this test red:
     //   1. a TOTAL-BUDGET race. The stage ran at 97-101 % of MAX_REDACTION_BUDGET_MS, and the
-    //      reviewer bisected the break point at roughly a 1 000 ms effective budget — the ordinary
+    //      reviewer bisected the break point at roughly a 1 000 ms effective budget, the ordinary
     //      speed of a GitHub-hosted runner for single-threaded regex work before instrumentation.
     //      That is what NEWLINE_FREE_INJECTED_BUDGET_MS removes.
-    //   2. a PER-PATTERN DEADLINE cliff, which no budget can remove. The fixture was 4x the window
-    //      width, so the deepest piece the ladder can produce was fixture/2^WINDOW_RETRY_MAX_DEPTH =
-    //      250 000 characters, and after plan 21-12 made jsonSecretKeyRegex about half as fast again
-    //      that no longer scans inside SafeRegex.DEFAULT_TIMEOUT_MS. All 16 pieces were dropped, at a
-    //      60 000 ms injected budget exactly as at 2 000 ms, with the JaCoCo agent and without it.
-    //      That is what the corrected NEWLINE_FREE_WINDOW_MULTIPLIER sizing removes, and its comment
-    //      carries the measurements and the two-sided bound.
+    //   2. a PER-RULE BOUND cliff. The per-rule bound was a wall clock, so whether the ladder engaged,
+    //      and whether its deepest pieces (fixture/2^WINDOW_RETRY_MAX_DEPTH) then scanned, depended
+    //      on the machine. It is now a deterministic access budget, and this test injects it: 0 above
+    //      NEWLINE_FREE_LADDER_EXHAUST_ABOVE, the shipped budget below. Depths 0 and 1 exhaust and
+    //      depth 2 scans, on any machine. newlineFreeOversizeBodyCollapsesWhenNoLadderPieceCanScan
+    //      is the anti-vacuity twin that proves the injection reaches scanWindow.
     //
     // The shipped 2 s budget stays exactly as it is: it is a product decision, not a dial, and
-    // raising it to make an assertion pass would be tuning the product to the test — and against
-    // cause 2 it would not have worked anyway. What is injected instead is a generous budget through
-    // Redaction.testWindowedBodyStage, so this assertion measures SCANNING BEHAVIOUR rather than
-    // machine speed. See Redaction.testWindowedBodyStage for why the 50 ms PER-PATTERN deadline is
-    // deliberately NOT injected — that deadline is the precondition the defect needs, and injecting
-    // it would make this fixture stop reproducing anything at all.
+    // raising it to make an assertion pass would be tuning the product to the test. What is injected
+    // instead, through Redaction.testWindowedBodyStage, is a generous total budget and a ladder-forcing
+    // per-rule budget, so this assertion measures SCANNING BEHAVIOUR rather than machine speed. With
+    // the shipped per-rule budget the built-in rules never exhaust, the body scans in one pass, and
+    // the ladder this test exists to carry would go untested.
     //
     // WHAT IS GIVEN UP, stated plainly: this test no longer exercises Redaction.apply -> bodyStage ->
     // windowedScan end to end. That wiring is still covered, by five tests that all drive
@@ -2412,9 +2385,9 @@ class RedactionTest {
     // carries is the newline-free RETRY LADDER, and that is what the seam preserves.
     //
     // TIMING EXPOSURE, rewritten to describe what ships. There is none left in this test: the total
-    // budget is injected at 77x the worst measured run of the stage, and no assertion below reads a
-    // clock. A RED RUN HERE IS A GENUINE CR-04 REGRESSION, not deadline pressure under
-    // instrumentation — that diagnosis applied to the previous form of this test and no longer
+    // budget is injected far above the measured run of the stage, the per-rule bound counts accesses,
+    // and no assertion below reads a clock. A RED RUN HERE IS A GENUINE CR-04 REGRESSION, not timing
+    // pressure under instrumentation - that diagnosis applied to the previous form of this test and no longer
     // applies to this one. Check splitPointCutsNewlineFreeWindowsInsteadOfRefusing first: it asserts
     // the same defect as pure arithmetic in 0 ms, so if it is red too, splitPoint itself has
     // regressed; if it is green while this is red, the ladder's wiring has broken downstream of
@@ -2446,7 +2419,12 @@ class RedactionTest {
         )
 
         val start = System.currentTimeMillis()
-        val output = Redaction.testWindowedBodyStage(body, budgetMs = NEWLINE_FREE_INJECTED_BUDGET_MS)
+        val output =
+            Redaction.testWindowedBodyStage(
+                body,
+                budgetMs = NEWLINE_FREE_INJECTED_BUDGET_MS,
+                accessBudget = { len -> if (len > NEWLINE_FREE_LADDER_EXHAUST_ABOVE) 0L else SafeRegex.accessBudgetFor(len) },
+            )
         // MEASURED, NEVER ASSERTED ON. The previous form of this test carried an
         // `assertTrue(elapsed < 30_000)` crash guard, and it is deliberately gone rather than
         // retightened, for two independent reasons. First, it could not do the job it was named for:
@@ -2475,7 +2453,7 @@ class RedactionTest {
         // STRENGTHENED under the injected budget, and only affordable because of it. Under the
         // shipped 2 s budget a marker was a legitimate outcome on a slow machine, so the strongest
         // available statement was the half-length bound below. With budget exhaustion unreachable,
-        // NEITHER marker shape may appear ANYWHERE: every one of the ~4 MB must be scanned and
+        // NEITHER marker shape may appear ANYWHERE: every one of the ~1 MB must be scanned and
         // appended, so any marker at all means the ladder failed to produce a scannable piece.
         assertFalse(
             output.contains("REDACTION INCOMPLETE"),
@@ -2497,6 +2475,60 @@ class RedactionTest {
             "A newline-free body must be SCANNED, not collapsed behind a drop marker; " +
                 "output was ${output.length} chars against a ${body.length}-char input",
         )
+    }
+
+    // ANTI-VACUITY TWIN of newlineFreeOversizeBodyIsScannedNotDestroyed: the same body under a
+    // per-rule access budget of 0 EVERYWHERE, so no ladder depth can scan. It must collapse behind
+    // drop markers with the secret gone. Without this twin, a seam that ignored its accessBudget
+    // parameter would leave the sibling green (the shipped budget scans the body in one pass) while
+    // the ladder it claims to exercise never ran.
+    @Test
+    fun newlineFreeOversizeBodyCollapsesWhenNoLadderPieceCanScan() {
+        val target = Defaults.MAX_REDACTION_BODY_CHARS * NEWLINE_FREE_WINDOW_MULTIPLIER
+        val body =
+            buildString {
+                while (length < target / 2) append(NEWLINE_FREE_FRAGMENT)
+                append(NEWLINE_FREE_SECRET_PAIR)
+                while (length < target) append(NEWLINE_FREE_FRAGMENT)
+            }
+
+        val output = Redaction.testWindowedBodyStage(body, budgetMs = NEWLINE_FREE_INJECTED_BUDGET_MS, accessBudget = { 0L })
+
+        assertTrue(
+            output.contains("REDACTION INCOMPLETE"),
+            "With a zero access budget at every depth the ladder cannot produce a scannable piece, so the body " +
+                "must be dropped behind markers",
+        )
+        assertTrue(
+            output.length < body.length / 2,
+            "A body no piece of which can scan must collapse to markers; output was ${output.length} chars " +
+                "against a ${body.length}-char input",
+        )
+        assertFalse(output.contains("SC4-NEWLINE-SECRET-9"), "A dropped body must not carry the secret")
+    }
+
+    // HEADROOM PIN for SafeRegex.ACCESS_BUDGET_PER_CHAR. The worst measured built-in shapes are
+    // degenerate 1 MB bodies: only '&' or only newlines through formBodyParamRegex (30.0 accesses per
+    // char) and only '"' through jsonSecretKeyRegex (29.0). Each must pass the windowed body stage
+    // UNCHANGED under HALF the shipped budget (32.5 per char at this size), so the shipped budget
+    // keeps a factor of at least 2 over them. A cost regression in either built-in rule then trips
+    // here deterministically, on any machine, instead of dropping content behind markers in use.
+    @Test
+    fun builtinBodyRulesFitInHalfTheAccessBudgetOnDegenerateBodies() {
+        val shapes = listOf("'&'" to '&', "newline" to '\n', "'\"'" to '"')
+        for ((label, c) in shapes) {
+            val body = c.toString().repeat(Defaults.MAX_REDACTION_BODY_CHARS)
+
+            val output =
+                Redaction.testWindowedBodyStage(body, NEWLINE_FREE_INJECTED_BUDGET_MS) { SafeRegex.accessBudgetFor(it) / 2 }
+
+            assertTrue(
+                output == body,
+                "$label x ${body.length}: the built-in body rules must scan this body unchanged under HALF the access " +
+                    "budget, or ACCESS_BUDGET_PER_CHAR no longer keeps its 2x safety factor over the worst built-in " +
+                    "shape (output ${output.length} chars, drop marker=${output.contains("REDACTION INCOMPLETE")})",
+            )
+        }
     }
 
     // (PRIV-06) CR-02 / WR-06 / D-01 AMENDED: the windowing invariant D-01 always CLAIMED and never
@@ -2685,6 +2717,30 @@ class RedactionTest {
         }
     }
 
+    // DETERMINISM PIN: the same input redacts byte-identically on two consecutive runs. Under the
+    // former per-rule wall clock this sweep fixture was marked at shift=18 on a loaded Windows
+    // runner, and every shift under 3x CPU oversubscription; no per-rule outcome reads a clock now.
+    // The straddle pair at shifts 0, 7 and 18, with no marker in either output.
+    @Test
+    fun boundarySweepRedactionIsIdenticalAcrossRepeatedRuns() {
+        val pair = "  \"api_key\": \"AK\nSTRADDLE-SECRET-2\"\n"
+        val policy = RedactionPolicy.fromMode(PrivacyMode.STRICT)
+
+        for (shift in listOf(0, 7, 18)) {
+            val body = boundarySweepBody(shift, pair)
+
+            val first = Redaction.apply(body, policy, stableHostSalt = "salt")
+            val second = Redaction.apply(body, policy, stableHostSalt = "salt")
+
+            assertTrue(first == second, "shift=$shift: two runs over the same input must redact byte-identically")
+            assertFalse(
+                first.contains("REDACTION INCOMPLETE") || first.contains("REDACTION BUDGET EXCEEDED"),
+                "shift=$shift: the sweep fixture must scan without a marker",
+            )
+            assertFalse(first.contains("STRADDLE-SECRET-2"), "shift=$shift: the straddling secret must be redacted")
+        }
+    }
+
     // (PRIV-06) CR-02 / IN-03 / T-21-54: reaching MAX_JSON_BOUNDARY_LOOKAHEAD_LINES had no test.
     //
     // The cap is documented as a deliberate residual and it behaves as documented, but NOTHING
@@ -2694,10 +2750,8 @@ class RedactionTest {
     // is what turns a theoretical gap into a live one.
     //
     // WHY A SEAM RATHER THAN AN END-TO-END FIXTURE. Reaching the cap through Redaction.apply takes a
-    // multi-megabyte body whose outcome then depends on machine speed and on JaCoCo's per-character
-    // instrumentation of DeadlineCharSequence.get() — the exact exposure W-04 spent this plan removing
-    // from newlineFreeOversizeBodyIsScannedNotDestroyed. Where the loop stops is a pure function, so
-    // it is asserted as one. Same reasoning, and the same answer, as testSplitPoint.
+    // multi-megabyte body, slow to build and to scan, for a property that is not about scanning at
+    // all. Where the loop stops is a pure function, so it is asserted as one. Same reasoning, and the same answer, as testSplitPoint.
     //
     // THE FIXTURE'S ANTI-VACUITY PROPERTIES ARE ASSERTED, NOT DESCRIBED — plan 21-11 shipped two seam
     // tests in this very file that were vacuous by numeric coincidence, so a comment claiming a
