@@ -15,6 +15,20 @@ import com.six2dez.burp.aiagent.util.IssueUtils
 
 private val headerInjectionAllowlist = ScannerUtils.HEADER_INJECTION_ALLOWLIST
 
+// Whole-word tokenizer for mapTitleToVulnClass: every non-alphanumeric run is a word boundary.
+private val titleWordSeparator = Regex("[^a-z0-9]+")
+
+// SQL dialect names whose error messages in a finding title are a SQL injection hint.
+private val sqlDialectTokens = listOf("mysql", "postgresql", "mssql", "sqlite")
+
+/**
+ * Quick 261009-d0i - short acronyms are compared as whole words so that "ato" no longer matches
+ * "Indicators" or "rce" "Source". The words come from splitting the lower-cased title on every
+ * non-alphanumeric run, so `-`, `_`, `/`, `.`, brackets and spaces are all boundaries (a regex `\b`
+ * would keep `_` inside a word). The token followed by "s" also matches (plural, e.g. JWTs, IDORs).
+ */
+private fun Set<String>.hasWord(token: String): Boolean = token in this || "${token}s" in this
+
 // ---- finding handlers ----
 
 internal fun PassiveAiScanner.handleAiResponse(
@@ -326,27 +340,33 @@ internal fun PassiveAiScanner.queueToActiveScanner(
 
 internal fun PassiveAiScanner.mapTitleToVulnClass(title: String): VulnClass? {
     val lowerTitle = title.lowercase()
+    val words = lowerTitle.split(titleWordSeparator).toSet()
+    // Quick 261009-d0i: short acronyms (sql, xss, rce, ato, ...) are tested as whole words through
+    // words.hasWord, so they no longer match inside other words. Longer words and phrases stay
+    // substring tests (a whole-word "debug" would lose "Debugging Enabled"). NoSQL is checked before SQL.
     return when {
         // Injection vulnerabilities
-        lowerTitle.contains("sql") || lowerTitle.contains("injection") && lowerTitle.contains("database") -> VulnClass.SQLI
-        lowerTitle.contains(
-            "xss",
-        ) ||
+        lowerTitle.contains("nosql") -> VulnClass.NOSQL_INJECTION // must win over the SQL branch below
+        words.hasWord("sql") ||
+            words.hasWord("sqli") ||
+            sqlDialectTokens.any { lowerTitle.contains(it) } ||
+            lowerTitle.contains("injection") &&
+            lowerTitle.contains("database") -> VulnClass.SQLI
+        words.hasWord("xss") ||
             lowerTitle.contains("cross-site scripting") ||
             lowerTitle.contains("script injection") -> VulnClass.XSS_REFLECTED
-        lowerTitle.contains("lfi") || lowerTitle.contains("local file") || lowerTitle.contains("file inclusion") -> VulnClass.LFI
+        words.hasWord("lfi") || lowerTitle.contains("local file") || lowerTitle.contains("file inclusion") -> VulnClass.LFI
         lowerTitle.contains("path traversal") || lowerTitle.contains("directory traversal") -> VulnClass.PATH_TRAVERSAL
-        lowerTitle.contains("command") || lowerTitle.contains("rce") || lowerTitle.contains("os injection") -> VulnClass.CMDI
-        lowerTitle.contains("ssti") || lowerTitle.contains("template injection") -> VulnClass.SSTI
-        lowerTitle.contains("ssrf") || lowerTitle.contains("server-side request") -> VulnClass.SSRF
-        lowerTitle.contains("xxe") || lowerTitle.contains("xml external") -> VulnClass.XXE
-        lowerTitle.contains("nosql") -> VulnClass.NOSQL_INJECTION
-        lowerTitle.contains("ldap") -> VulnClass.LDAP_INJECTION
+        lowerTitle.contains("command") || words.hasWord("rce") || lowerTitle.contains("os injection") -> VulnClass.CMDI
+        words.hasWord("ssti") || lowerTitle.contains("template injection") -> VulnClass.SSTI
+        words.hasWord("ssrf") || lowerTitle.contains("server-side request") -> VulnClass.SSRF
+        words.hasWord("xxe") || lowerTitle.contains("xml external") -> VulnClass.XXE
+        words.hasWord("ldap") -> VulnClass.LDAP_INJECTION
 
         // Access control
-        lowerTitle.contains("bola") || lowerTitle.contains("object level authorization") -> VulnClass.BOLA
-        lowerTitle.contains("idor") || lowerTitle.contains("insecure direct") -> VulnClass.IDOR
-        lowerTitle.contains("bfla") || lowerTitle.contains("function level") -> VulnClass.BFLA
+        words.hasWord("bola") || lowerTitle.contains("object level authorization") -> VulnClass.BOLA
+        words.hasWord("idor") || lowerTitle.contains("insecure direct") -> VulnClass.IDOR
+        words.hasWord("bfla") || lowerTitle.contains("function level") -> VulnClass.BFLA
         lowerTitle.contains("horizontal") && lowerTitle.contains("privilege") -> VulnClass.BAC_HORIZONTAL
         lowerTitle.contains("vertical") && lowerTitle.contains("privilege") -> VulnClass.BAC_VERTICAL
         lowerTitle.contains("privilege escalation") -> VulnClass.BAC_VERTICAL
@@ -359,18 +379,18 @@ internal fun PassiveAiScanner.mapTitleToVulnClass(title: String): VulnClass? {
         lowerTitle.contains(
             "account takeover",
         ) ||
-            lowerTitle.contains("ato") ||
+            words.hasWord("ato") ||
             lowerTitle.contains("password reset") -> VulnClass.ACCOUNT_TAKEOVER
-        lowerTitle.contains("oauth") || lowerTitle.contains("sso") && lowerTitle.contains("bypass") -> VulnClass.OAUTH_MISCONFIGURATION
-        lowerTitle.contains("2fa") || lowerTitle.contains("mfa") || lowerTitle.contains("two-factor") -> VulnClass.MFA_BYPASS
-        lowerTitle.contains("jwt") || lowerTitle.contains("json web token") -> VulnClass.JWT_WEAKNESS
-        lowerTitle.contains("csrf") || lowerTitle.contains("cross-site request forgery") -> VulnClass.CSRF
+        lowerTitle.contains("oauth") || words.hasWord("sso") && lowerTitle.contains("bypass") -> VulnClass.OAUTH_MISCONFIGURATION
+        words.hasWord("2fa") || words.hasWord("mfa") || lowerTitle.contains("two-factor") -> VulnClass.MFA_BYPASS
+        words.hasWord("jwt") || lowerTitle.contains("json web token") -> VulnClass.JWT_WEAKNESS
+        words.hasWord("csrf") || lowerTitle.contains("cross-site request forgery") -> VulnClass.CSRF
         lowerTitle.contains("deserialization") || lowerTitle.contains("serialized object") -> VulnClass.DESERIALIZATION
 
         // Host/Header injection (NEW)
         lowerTitle.contains("host header") -> VulnClass.HOST_HEADER_INJECTION
         lowerTitle.contains("email header") || lowerTitle.contains("mail injection") -> VulnClass.EMAIL_HEADER_INJECTION
-        lowerTitle.contains("crlf") || lowerTitle.contains("header injection") -> VulnClass.HEADER_INJECTION
+        words.hasWord("crlf") || lowerTitle.contains("header injection") -> VulnClass.HEADER_INJECTION
 
         // Cache attacks (NEW)
         lowerTitle.contains("cache poison") -> VulnClass.CACHE_POISONING
@@ -396,7 +416,7 @@ internal fun PassiveAiScanner.mapTitleToVulnClass(title: String): VulnClass? {
         lowerTitle.contains("stack trace") || lowerTitle.contains("error leak") -> VulnClass.STACK_TRACE_EXPOSURE
 
         // Cloud/Infrastructure (NEW)
-        lowerTitle.contains("s3") || lowerTitle.contains("bucket") && lowerTitle.contains("public") -> VulnClass.S3_MISCONFIGURATION
+        words.hasWord("s3") || lowerTitle.contains("bucket") && lowerTitle.contains("public") -> VulnClass.S3_MISCONFIGURATION
         lowerTitle.contains("subdomain takeover") || lowerTitle.contains("dangling") -> VulnClass.SUBDOMAIN_TAKEOVER
 
         // Business logic (NEW)
@@ -405,7 +425,7 @@ internal fun PassiveAiScanner.mapTitleToVulnClass(title: String): VulnClass? {
         ) ||
             lowerTitle.contains("quantity") &&
             lowerTitle.contains("manipulation") -> VulnClass.PRICE_MANIPULATION
-        lowerTitle.contains("race condition") || lowerTitle.contains("toctou") -> VulnClass.RACE_CONDITION_TOCTOU
+        lowerTitle.contains("race condition") || words.hasWord("toctou") -> VulnClass.RACE_CONDITION_TOCTOU
 
         // API security (NEW)
         lowerTitle.contains("api version") || lowerTitle.contains("deprecated api") -> VulnClass.API_VERSION_BYPASS
@@ -413,7 +433,7 @@ internal fun PassiveAiScanner.mapTitleToVulnClass(title: String): VulnClass? {
 
         // Other
         lowerTitle.contains("redirect") || lowerTitle.contains("open redirect") -> VulnClass.OPEN_REDIRECT
-        lowerTitle.contains("cors") -> VulnClass.CORS_MISCONFIGURATION
+        words.hasWord("cors") -> VulnClass.CORS_MISCONFIGURATION
         lowerTitle.contains("directory listing") -> VulnClass.DIRECTORY_LISTING
         lowerTitle.contains(
             "403 bypass",
