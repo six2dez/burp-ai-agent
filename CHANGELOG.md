@@ -147,6 +147,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
   403 bypass switched requests to POST or PUT. Now a request whose method is not GET, HEAD or
   OPTIONS is replayed with neighbouring IDs only at DANGEROUS (below it the IDOR test is skipped and
   the Output tab says why), and method switching tries only GET and HEAD below DANGEROUS.
+- **Links in chat replies opened any kind of address without asking** (shipped in 1.0.0) - a
+  markdown link in an AI reply or in tool output, text the scanned target can influence, became
+  clickable whatever its URL, and a click opened it at once without showing the address or asking.
+  On Windows a `file:` link makes the system connect to the named host over SMB, which can leak the
+  user's NTLM credentials. A quote in the link address also broke out of the generated link and
+  could add HTML attributes to it. Now only http and https links to a named host, with no `user@`
+  part, are clickable, and any other link is shown as plain text; a click first asks, shows the full
+  address and opens it only on Open; quotes in link addresses are escaped.
 
 ## [1.0.0] - 2026-08-22
 
