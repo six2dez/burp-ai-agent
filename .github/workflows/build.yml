@@ -74,9 +74,107 @@ jobs:
             build/reports/tests/test/**
             build/test-results/test/**
 
-      - name: Upload coverage report (Linux only)
-        if: matrix.os == 'ubuntu-latest' && always()
+  coverage:
+    needs: lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      # Only `test` may be finalized by jacocoTestReport. If another Test task pulled in :test or
+      # :jacocoTestReport again, a single invocation would run the whole suite twice (as the
+      # assertions-disabled step in pr-gate once did). The dry run reads Gradle's real task graph.
+      - name: Only the test task pulls in the coverage report
+        run: |
+          plan="$(./gradlew edtGuardWithoutAssertionsTest nightlyRegressionTest --dry-run --no-daemon)"
+          printf '%s\n' "$plan"
+          for task in edtGuardWithoutAssertionsTest nightlyRegressionTest; do
+            if ! grep -qx ":${task} SKIPPED" <<< "$plan"; then
+              echo "::error::the dry run did not list :${task}, so the guard cannot read the task graph"
+              exit 1
+            fi
+          done
+          if grep -Eqx ':(test|jacocoTestReport) SKIPPED' <<< "$plan"; then
+            echo "::error::a Test task other than test pulls in :test or :jacocoTestReport"
+            exit 1
+          fi
+
+      # The floors are full-suite floors: the fast suite (-PexcludeHeavyTests=true) misses the CLI
+      # backend floors, so this job runs every test class.
+      - name: Full test suite and the coverage floors
+        run: ./gradlew test jacocoTestCoverageVerification jacocoMcpTreeCoverageVerification --continue --no-daemon
+
+      - name: Upload coverage report
+        if: always()
         uses: actions/upload-artifact@v7
         with:
           name: coverage-${{ github.sha }}
           path: build/reports/jacoco/test/**
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-report-full-suite-${{ github.sha }}
+          path: |
+            build/reports/tests/test/**
+            build/test-results/test/**
+
+  store-build:
+    needs: lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Run fast verification suite (BApp Store flavor)
+        run: ./gradlew test -PexcludeHeavyTests=true -PstoreBuild=true --no-daemon
+
+      - name: Build BApp Store JAR
+        run: ./gradlew shadowJar -PstoreBuild=true --no-daemon
+
+      # One JAR only, the store flavor: the Montoya entry point is there and STORE_BUILD is true.
+      - name: Smoke-test BApp Store JAR
+        run: |
+          shopt -s nullglob
+          jars=(build/libs/Custom-AI-Agent-*.jar)
+          if [ "${#jars[@]}" -ne 1 ] || [[ "${jars[0]##*/}" == *-full-* ]]; then
+            echo "::error::expected exactly one BApp Store JAR in build/libs, found: ${jars[*]:-none}"
+            exit 1
+          fi
+          javap -cp "${jars[0]}" com.six2dez.burp.aiagent.BurpAiAgentExtension | grep -F 'implements burp.api.montoya.BurpExtension'
+          javap -constants -cp "${jars[0]}" com.six2dez.burp.aiagent.BuildFlags | grep -F 'boolean STORE_BUILD = true;'
+
+      - name: Upload BApp Store JAR
+        uses: actions/upload-artifact@v7
+        with:
+          name: Custom-AI-Agent-store-${{ github.sha }}
+          path: build/libs/Custom-AI-Agent-*.jar
+          if-no-files-found: error
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-report-store-${{ github.sha }}
+          path: |
+            build/reports/tests/test/**
+            build/test-results/test/**
