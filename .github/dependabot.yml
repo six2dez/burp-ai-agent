@@ -24,7 +24,9 @@ updates:
     # Kotlin, kotlinx, Ktor, the MCP SDK, the Kotlin Gradle plugins and the CycloneDX plugin must
     # move together, so their minor and major updates are ignored here (patch updates still
     # arrive) until the joint toolchain upgrade, which removes these rules. The CycloneDX 3.x
-    # migration is done by hand.
+    # migration is done by hand. Netty, the ktlint Gradle plugin and the Gradle wrapper move with
+    # the same joint toolchain upgrade: Ktor 3.1.3 is built against Netty 4.1 (so only Netty patch
+    # updates arrive), and Gradle 9 needs a newer Shadow plugin.
     ignore:
       - dependency-name: "org.jetbrains.kotlin*"
         update-types: ["version-update:semver-major", "version-update:semver-minor"]
@@ -40,6 +42,12 @@ updates:
         update-types: ["version-update:semver-major", "version-update:semver-minor"]
       - dependency-name: "org.cyclonedx.bom"
         update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "io.netty:*"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "org.jlleitschuh.gradle.ktlint"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "gradle-wrapper"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: "/"

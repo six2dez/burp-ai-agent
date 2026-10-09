@@ -9,9 +9,11 @@ import burp.api.montoya.core.Range
 import burp.api.montoya.http.HttpMode
 import burp.api.montoya.http.RequestOptions
 import burp.api.montoya.http.message.HttpHeader
+import burp.api.montoya.http.message.HttpRequestResponse
 import burp.api.montoya.http.message.requests.HttpRequest
 import burp.api.montoya.intruder.HttpRequestTemplate
 import burp.api.montoya.intruder.HttpRequestTemplateGenerationOptions
+import burp.api.montoya.proxy.ProxyHttpRequestResponse
 import burp.api.montoya.scanner.AuditConfiguration
 import burp.api.montoya.scanner.BuiltInAuditConfiguration
 import burp.api.montoya.scanner.ReportFormat
@@ -986,18 +988,23 @@ object McpToolExecutor {
                                 context.passiveScanner
                                     ?: return@runTool "Passive scanner not available."
 
-                            @Suppress("UNCHECKED_CAST")
-                            val allHistory: List<burp.api.montoya.http.message.HttpRequestResponse> =
-                                api.proxy().history() as List<burp.api.montoya.http.message.HttpRequestResponse>
+                            // From Burp 2026.9, proxy history elements implement only ProxyHttpRequestResponse,
+                            // which does not extend HttpRequestResponse, so each kept entry is converted
+                            // rather than casting the list (issue #90). Converting after take() keeps large
+                            // histories cheap.
+                            val allHistory: List<ProxyHttpRequestResponse> = api.proxy().history()
                             val filtered =
                                 if (input.siteMapUrl != null) {
-                                    allHistory.filter { reqRes ->
-                                        runCatching { reqRes.request().url().contains(input.siteMapUrl) }.getOrDefault(false)
+                                    allHistory.filter { entry ->
+                                        runCatching { entry.url().contains(input.siteMapUrl) }.getOrDefault(false)
                                     }
                                 } else {
                                     allHistory
                                 }
-                            val requests = filtered.take(input.maxRequests)
+                            val requests =
+                                filtered.take(input.maxRequests).map { entry ->
+                                    HttpRequestResponse.httpRequestResponse(entry.request(), entry.response(), entry.annotations())
+                                }
                             if (requests.isEmpty()) return@runTool "No matching requests found."
                             val count = scanner.manualScan(requests)
                             "Queued $count requests for AI passive scan."
