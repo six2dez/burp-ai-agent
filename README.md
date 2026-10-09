@@ -10,10 +10,26 @@
 Custom AI Agent is an extension for Burp Suite that integrates AI into your security workflow. Use local models or cloud providers, connect external AI agents via MCP, and let passive/active scanners find vulnerabilities while you focus on manual testing.
 
 > [!IMPORTANT]
-> **If you are running 0.9.0, 0.9.1 or 0.9.2, read [the security advisories](SECURITY.md#security-advisories) before upgrading.**
-> Two defects confirmed by running the shipped code affect every published `0.9.x` release, and one of
-> them requires rotating credentials that may already have been disclosed to a third party. Both are
-> fixed in 1.0.0. No CVE or GHSA identifier has been issued for either — do not go looking for one.
+> **If you are running 1.0.0 or earlier, read [the security advisories](SECURITY.md#security-advisories) and upgrade to 1.0.1.**
+> Audit files written with Audit logging on may hold the MCP token and full prompts, and right-click
+> "send to AI" context could bypass the privacy mode; both advisories say which credentials to rotate.
+> No CVE or GHSA identifier has been issued for any of them.
+
+## What's new in v1.0.1
+
+A correctness and privacy hotfix for 1.0.0. Full detail in [CHANGELOG.md](CHANGELOG.md) and
+[SECURITY.md](SECURITY.md#fixed-in-101).
+
+- **Non-ASCII prompts work on every HTTP backend** (#84, #85, #86, #88). Request bodies are sent as
+  UTF-8 bytes; before, non-ASCII characters were corrupted and target text could change the JSON
+  structure of the request.
+- **Privacy:** right-click context, scanner settings, audit logging and chat links now honour the
+  privacy mode and the hashes-only audit default; chat links open only after a confirmation.
+- **Scanner safety:** state-changing requests are replayed only at DANGEROUS; the Burp Scanner AI
+  checks respect the scan's resource pool and the AI passive switch.
+- **Reliability:** NVIDIA NIM and Perplexity work again, follow-up chat messages keep their context,
+  and redaction no longer drops content on slow or busy machines.
+- **Bundled libraries:** Netty 4.1.138, Jackson 2.22.3.
 
 ## What's new in v1.0.0
 

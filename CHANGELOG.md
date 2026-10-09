@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-10-09
+
 ### Changed
 
 - **The AI status pill no longer polls the backend every 5 seconds** - local backends (CLI tools,
