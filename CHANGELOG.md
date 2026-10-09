@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
   are checked only at startup, after a settings or backend change, and when the pill is clicked.
   All checks run on a single background thread and never overlap; the tooltip shows when the last
   check ran.
+- Bumped slf4j to 2.0.18; updated `actions/setup-java` to v6 in CI.
 
 ### Fixed
 
@@ -155,6 +156,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
   could add HTML attributes to it. Now only http and https links to a named host, with no `user@`
   part, are clickable, and any other link is shown as plain text; a click first asks, shows the full
   address and opens it only on Open; quotes in link addresses are escaped.
+- **The bundled Netty and Jackson libraries had known advisories** (shipped in 1.0.0) - the
+  extension JAR bundled Netty 4.1.119.Final, which Ktor 3.1.3 pulls in to run the MCP server, and
+  Jackson 2.22.1, the JSON library. Netty is now pinned to 4.1.138.Final through the Netty BOM
+  without changing Ktor, and Jackson is now 2.22.3.
 
 ## [1.0.0] - 2026-08-22
 
