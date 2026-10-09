@@ -250,15 +250,44 @@ class PassiveAiScanner(
     }
 
     /**
+     * The AI half's gates for Burp Scanner check work: the scanner is on, the token budget is not
+     * paused and the Burp AI gate is open. Shared by [enqueueForScanCheck] and [recordScanCheckFindings].
+     */
+    private fun acceptsScanCheckWork(): Boolean =
+        enabled.get() &&
+            // CAP-04: no-op when paused (does NOT clear KB or flip enabled)
+            !budgetPaused.get() &&
+            !supervisor.isBlockedByBurpAiGate()
+
+    /**
      * Enqueues a request/response for asynchronous AI deep-analysis.
-     * Called by AiPassiveScanCheck.doCheck() after local heuristics run synchronously.
+     * Called by AiPassiveScanCheck.doCheck() after the check filed the local findings itself, so the
+     * analysis does not file them again but still uses them to decide whether to skip the AI call.
      * Returns immediately — AI findings surface later via api.siteMap().add().
      */
     fun enqueueForScanCheck(requestResponse: HttpRequestResponse) {
-        if (!enabled.get()) return
-        if (budgetPaused.get()) return // CAP-04: no-op when paused (does NOT clear KB or flip enabled)
-        if (supervisor.isBlockedByBurpAiGate()) return
-        executor.submit { analyzeManually(requestResponse) }
+        if (!acceptsScanCheckWork()) return
+        executor.submit { analyzeManually(requestResponse, localIssuesFiledByScanCheck = true) }
+    }
+
+    /**
+     * Records the side effects of the local findings AiPassiveScanCheck.doCheck() has just filed in its
+     * AuditResult (quick 261009-1ao): counter, Output line, knowledge-base signal, auto-queue,
+     * `passive_ai_issue` audit record and findings buffer, once per new issue, consolidated on repeats.
+     * Same gates as the AI half ([acceptsScanCheckWork]): nothing is recorded while the scanner is off,
+     * the token budget is paused or the Burp AI gate is closed.
+     *
+     * Runs synchronously, before doCheck returns: the consolidation check reads the site map, and on the
+     * executor it would race Burp adding the check's own, same-named issue and usually see it, dropping
+     * the side effects of the very first finding. Before doCheck returns it sees only earlier issues.
+     */
+    internal fun recordScanCheckFindings(
+        requestResponse: HttpRequestResponse,
+        filed: List<LocalFinding>,
+    ) {
+        if (filed.isEmpty() || !acceptsScanCheckWork()) return
+        val settings = getSettings()
+        filed.forEach { finding -> recordFiledLocalFinding(requestResponse, finding, settings) }
     }
 
     /**

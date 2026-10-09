@@ -69,9 +69,7 @@ internal fun PassiveAiScanner.handleFinding(
     settings: AgentSettings,
     source: String,
 ) {
-    val minSeverityLevel = severityLevel(minSeverity)
-    val severityLevel = severityLevel(rawSeverity)
-    val shouldCreate = confidence >= 85 && severityLevel >= minSeverityLevel
+    val shouldCreate = qualifiesForIssue(confidence, rawSeverity, minSeverity)
 
     if (source == "ai" && confidence < 85) {
         return
@@ -128,34 +126,7 @@ internal fun PassiveAiScanner.handleFinding(
                             listOf(markedReqResp),
                         )
                     api.siteMap().add(issue)
-                    issuesFound.incrementAndGet()
-                    api.logging().logToOutput("[PassiveAiScanner] Issue: $title | $rawSeverity | $confidence%")
-
-                    // Record finding in knowledge base
-                    ScanKnowledgeBase.recordVulnSignal(
-                        ScanKnowledgeBase.VulnSignal(
-                            endpoint = requestResponse.request().url(),
-                            vulnClass = title,
-                            severity = rawSeverity,
-                            confidence = confidence,
-                            source = source,
-                            evidence = detail.take(200),
-                        ),
-                    )
-
-                    // Auto-queue to active scanner if enabled
-                    queueToActiveScanner(requestResponse, title, rawSeverity, detail, confidence, settings)
-
-                    audit.logEvent(
-                        "passive_ai_issue",
-                        mapOf(
-                            "title" to title,
-                            "severity" to rawSeverity,
-                            "confidence" to confidence.toString(),
-                            "url" to AuditLogger.endpointOf(requestResponse.request().url()),
-                            "source" to source,
-                        ),
-                    )
+                    recordNewIssue(requestResponse, title, rawSeverity, detail, confidence, settings, source)
                     true
                 }
             } catch (e: Exception) {
@@ -167,6 +138,98 @@ internal fun PassiveAiScanner.handleFinding(
         }
 
     recordFinding(requestResponse, title, rawSeverity, detail, confidence, source, issueCreated)
+}
+
+/**
+ * The one rule deciding whether a passive finding becomes an issue: confidence of at least 85 and a
+ * severity at or above the configured minimum. Shared by [handleFinding] and [recordFiledLocalFinding].
+ */
+internal fun PassiveAiScanner.qualifiesForIssue(
+    confidence: Int,
+    rawSeverity: String,
+    minSeverity: String,
+): Boolean = confidence >= 85 && severityLevel(rawSeverity) >= severityLevel(minSeverity)
+
+/**
+ * Everything recorded once per NEW passive issue, after it was filed (by [handleFinding] through
+ * `api.siteMap().add`, or by the Burp Scanner check through its AuditResult): the counter, the Issue
+ * Output line, the knowledge-base signal, the auto-queue to the active scanner and the single
+ * `passive_ai_issue` audit record of this file.
+ */
+internal fun PassiveAiScanner.recordNewIssue(
+    requestResponse: HttpRequestResponse,
+    title: String,
+    rawSeverity: String,
+    detail: String,
+    confidence: Int,
+    settings: AgentSettings,
+    source: String,
+) {
+    issuesFound.incrementAndGet()
+    api.logging().logToOutput("[PassiveAiScanner] Issue: $title | $rawSeverity | $confidence%")
+
+    // Record finding in knowledge base
+    ScanKnowledgeBase.recordVulnSignal(
+        ScanKnowledgeBase.VulnSignal(
+            endpoint = requestResponse.request().url(),
+            vulnClass = title,
+            severity = rawSeverity,
+            confidence = confidence,
+            source = source,
+            evidence = detail.take(200),
+        ),
+    )
+
+    // Auto-queue to active scanner if enabled
+    queueToActiveScanner(requestResponse, title, rawSeverity, detail, confidence, settings)
+
+    audit.logEvent(
+        "passive_ai_issue",
+        mapOf(
+            "title" to title,
+            "severity" to rawSeverity,
+            "confidence" to confidence.toString(),
+            "url" to AuditLogger.endpointOf(requestResponse.request().url()),
+            "source" to source,
+        ),
+    )
+}
+
+/**
+ * Side effects of a local finding the Burp Scanner check ([AiPassiveScanCheck]) has already filed
+ * through its AuditResult (quick 261009-1ao). Records everything [handleFinding] would have recorded
+ * for it except the second site-map add: a qualifying finding with an equivalent issue already in the
+ * site map logs the same consolidation line, a new one goes through [recordNewIssue] with source
+ * `local`, and every finding is buffered. A failure here is logged and never reaches the scan check,
+ * so it cannot lose the scan check's own filing.
+ */
+internal fun PassiveAiScanner.recordFiledLocalFinding(
+    requestResponse: HttpRequestResponse,
+    finding: LocalFinding,
+    settings: AgentSettings,
+) {
+    try {
+        val qualifies = qualifiesForIssue(finding.confidence, finding.severity, settings.passiveAiMinSeverity.name)
+        if (qualifies) {
+            val issueName = issueNameForPassive(finding.title)
+            if (hasExistingIssue(issueName, requestResponse.request().url())) {
+                api.logging().logToOutput("[PassiveAiScanner] Consolidated duplicate issue: $issueName")
+            } else {
+                recordNewIssue(
+                    requestResponse,
+                    finding.title,
+                    finding.severity,
+                    finding.detail,
+                    finding.confidence,
+                    settings,
+                    "local",
+                )
+            }
+        }
+        recordFinding(requestResponse, finding.title, finding.severity, finding.detail, finding.confidence, "local", qualifies)
+    } catch (e: Exception) {
+        api.logging().logToError("[PassiveAiScanner] Failed to record local finding: ${e.message}")
+    }
 }
 
 internal fun PassiveAiScanner.recordFinding(

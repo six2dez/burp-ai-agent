@@ -40,8 +40,12 @@ class AiPassiveScanCheck(
      *  1. Skip when the AI passive scanner is off (checked first, so the off path does no scope
      *     lookup) or when the request is out of scope while scope-only is set.
      *  2. Run fast local heuristics via passiveScanner.localChecks().
-     *  3. Convert LocalFinding list to AuditIssue list and return immediately.
-     *  4. Enqueue async AI deep-analysis via passiveScanner.enqueueForScanCheck().
+     *  3. Convert each LocalFinding to an AuditIssue named passiveScanner.issueNameForPassive(title),
+     *     the name the AI passive scanner gives it, so each local finding is filed once.
+     *  4. Record the findings' side effects (audit record, counter, knowledge-base signal, findings
+     *     buffer, auto-queue) via passiveScanner.recordScanCheckFindings() before returning.
+     *  5. Enqueue async AI deep-analysis via passiveScanner.enqueueForScanCheck(); it does not file
+     *     the local findings again but still uses them to decide whether to skip the AI call.
      *
      * MUST NOT call supervisor.send() or any blocking AI operation.
      */
@@ -67,7 +71,7 @@ class AiPassiveScanCheck(
         val localIssues =
             localFindings.map { finding ->
                 AuditIssue.auditIssue(
-                    "[AI Passive] ${finding.title}",
+                    passiveScanner.issueNameForPassive(finding.title),
                     finding.detail,
                     "Verify the finding manually or use AI Active Scanner for confirmation.",
                     request.url(),
@@ -79,6 +83,9 @@ class AiPassiveScanCheck(
                     listOf(httpRequestResponse),
                 )
             }
+
+        // Side effects of the filed findings, recorded before Burp files the returned issues
+        passiveScanner.recordScanCheckFindings(httpRequestResponse, localFindings)
 
         // Enqueue async AI deep-analysis (returns immediately; findings surface via siteMap().add())
         passiveScanner.enqueueForScanCheck(httpRequestResponse)

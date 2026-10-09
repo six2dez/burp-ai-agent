@@ -161,8 +161,22 @@ internal fun PassiveAiScanner.extractAndLogJsEndpoints(
 
 // ---- analysis flow ----
 
-internal fun PassiveAiScanner.analyzeManually(requestResponse: HttpRequestResponse) {
+/**
+ * Runs the passive analysis of one request on the scanner's executor. Two callers:
+ *  - [PassiveAiScanner.manualScan] (right-click): [localIssuesFiledByScanCheck] is false, so the local
+ *    findings are filed here first, through [fileLocalFindings].
+ *  - [PassiveAiScanner.enqueueForScanCheck]: [localIssuesFiledByScanCheck] is true, because
+ *    AiPassiveScanCheck.doCheck already filed them and recorded their side effects (quick 261009-1ao).
+ * In both cases [doAnalysis] still uses the local findings to decide whether to skip the AI call.
+ */
+internal fun PassiveAiScanner.analyzeManually(
+    requestResponse: HttpRequestResponse,
+    localIssuesFiledByScanCheck: Boolean = false,
+) {
     try {
+        if (!localIssuesFiledByScanCheck) {
+            fileLocalFindings(requestResponse)
+        }
         doAnalysis(requestResponse)
     } catch (e: Exception) {
         api.logging().logToError("[PassiveAiScanner] Manual scan error: ${e.message}")
@@ -171,6 +185,7 @@ internal fun PassiveAiScanner.analyzeManually(requestResponse: HttpRequestRespon
 
 internal fun PassiveAiScanner.analyzeInBackground(requestResponse: HttpRequestResponse) {
     try {
+        fileLocalFindings(requestResponse)
         doAnalysis(requestResponse)
         // Flush batch if timeout expired (handles case where no new requests arrive)
         if (batchQueue.shouldFlush()) {
@@ -180,6 +195,45 @@ internal fun PassiveAiScanner.analyzeInBackground(requestResponse: HttpRequestRe
         api.logging().logToError("[PassiveAiScanner] Error: ${e.message}")
     }
 }
+
+/**
+ * Files the local heuristic findings of one request through [handleFinding] (source `local`): the
+ * manual right-click path and [analyzeInBackground]. Requests from the Burp Scanner check skip this,
+ * because the check files them itself.
+ */
+internal fun PassiveAiScanner.fileLocalFindings(requestResponse: HttpRequestResponse) {
+    val settings = getSettings()
+    val request = requestResponse.request()
+    val response = requestResponse.response()
+    val requestBodyRaw = runCatching { request.bodyToString() }.getOrDefault("")
+    val responseBodyRaw = runCatching { response?.bodyToString().orEmpty() }.getOrDefault("")
+    for (finding in localFindingsOf(request, response, requestBodyRaw, responseBodyRaw)) {
+        handleFinding(
+            requestResponse,
+            finding.title,
+            finding.severity,
+            finding.detail,
+            finding.confidence,
+            settings.passiveAiMinSeverity.name,
+            settings,
+            "local",
+        )
+    }
+}
+
+/** Local heuristic findings over the bodies truncated to the local-check limits. */
+internal fun localFindingsOf(
+    request: burp.api.montoya.http.message.requests.HttpRequest,
+    response: burp.api.montoya.http.message.responses.HttpResponse?,
+    requestBodyRaw: String,
+    responseBodyRaw: String,
+): List<LocalFinding> =
+    runLocalChecks(
+        request,
+        response,
+        truncateWithEllipsis(requestBodyRaw, REQUEST_BODY_LOCAL_CHECK_MAX_CHARS),
+        truncateWithEllipsis(responseBodyRaw, RESPONSE_BODY_LOCAL_CHECK_MAX_CHARS),
+    )
 
 @Suppress("CyclomaticComplexMethod", "LongMethod")
 internal fun PassiveAiScanner.doAnalysis(requestResponse: HttpRequestResponse) {
@@ -191,23 +245,10 @@ internal fun PassiveAiScanner.doAnalysis(requestResponse: HttpRequestResponse) {
 
         val requestBodyRaw = runCatching { request.bodyToString() }.getOrDefault("")
         val responseBodyRaw = runCatching { response?.bodyToString().orEmpty() }.getOrDefault("")
-        val requestBodyForLocalChecks = truncateWithEllipsis(requestBodyRaw, REQUEST_BODY_LOCAL_CHECK_MAX_CHARS)
-        val responseBodyForLocalChecks = truncateWithEllipsis(responseBodyRaw, RESPONSE_BODY_LOCAL_CHECK_MAX_CHARS)
 
-        // Local passive checks (independent of AI backend availability)
-        val localFindings = runLocalChecks(request, response, requestBodyForLocalChecks, responseBodyForLocalChecks)
-        for (finding in localFindings) {
-            handleFinding(
-                requestResponse,
-                finding.title,
-                finding.severity,
-                finding.detail,
-                finding.confidence,
-                settings.passiveAiMinSeverity.name,
-                settings,
-                "local",
-            )
-        }
+        // Local findings are filed by the entry point (the Burp Scanner check through its AuditResult,
+        // the manual path through fileLocalFindings); here they only decide whether to skip the AI call.
+        val localFindings = localFindingsOf(request, response, requestBodyRaw, responseBodyRaw)
 
         if (shouldSkipAiAfterLocalFindings(localFindings, request, requestBodyRaw)) {
             requestsAnalyzed.incrementAndGet()
