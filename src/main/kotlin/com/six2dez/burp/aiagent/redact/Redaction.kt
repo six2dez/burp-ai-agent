@@ -2262,6 +2262,23 @@ object Redaction {
         stableHostSalt: String,
         recordMapping: Boolean = true,
     ): String {
+        return try {
+            applyInner(raw, policy, stableHostSalt, recordMapping)
+        } catch (_: StackOverflowError) {
+            // Header-stage Regex.replace runs unbounded on the whole payload (see the note above
+            // bodyStage). A fat body blows Java's recursive matcher before any timeout can fire,
+            // and that Error used to kill the MCP history tool. Keep a short prefix so the tool
+            // returns instead of dying.
+            raw.take(2_000) + "\n[redaction skipped: regex stack overflow]"
+        }
+    }
+
+    private fun applyInner(
+        raw: String,
+        policy: RedactionPolicy,
+        stableHostSalt: String,
+        recordMapping: Boolean,
+    ): String {
         var out = raw
 
         if (policy.stripCookies) {
