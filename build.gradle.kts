@@ -27,8 +27,9 @@ dependencies {
     compileOnly("net.portswigger.burp.extensions:montoya-api:2026.2")
 
     // JSON
-    implementation("com.fasterxml.jackson.core:jackson-databind:2.22.1")
-    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.22.1")
+    // Jackson's Gradle module metadata imports its BOM, so these two versions also align jackson-core and jackson-annotations
+    implementation("com.fasterxml.jackson.core:jackson-databind:2.22.3")
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.22.3")
 
     // HTTP client (Ollama + webhooks)
     implementation("com.squareup.okhttp3:okhttp:5.4.0")
@@ -37,6 +38,8 @@ dependencies {
     implementation("io.modelcontextprotocol:kotlin-sdk:0.5.0")
     implementation("io.ktor:ktor-server-core:3.1.3")
     implementation("io.ktor:ktor-server-netty:3.1.3")
+    // Ktor 3.1.3 pulls Netty 4.1.119, which has known advisories; the BOM pins the patched 4.1.x line without a Ktor upgrade
+    implementation(platform("io.netty:netty-bom:4.1.138.Final"))
     implementation("io.ktor:ktor-server-cors:3.1.3")
     implementation("io.ktor:ktor-server-sse:3.1.3")
     implementation("io.ktor:ktor-server-content-negotiation:3.1.3")
@@ -51,8 +54,8 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
 
     // Logging façade (we keep it minimal; Burp logs are also used)
-    implementation("org.slf4j:slf4j-api:2.0.16")
-    implementation("org.slf4j:slf4j-simple:2.0.16")
+    implementation("org.slf4j:slf4j-api:2.0.18")
+    implementation("org.slf4j:slf4j-simple:2.0.18")
 
     testImplementation(kotlin("test"))
     testImplementation("org.junit.jupiter:junit-jupiter:6.0.3")
