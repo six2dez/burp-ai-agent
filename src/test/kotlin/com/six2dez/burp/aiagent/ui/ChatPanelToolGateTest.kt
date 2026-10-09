@@ -113,9 +113,12 @@ class ChatPanelToolGateTest {
         val h = ChatPanelTestHarness.create(modelResponse = toolCall("scope_check", """{"url":"http://evil.example/"}"""))
 
         ChatPanelTestHarness.sendUserMessage(h, "check scope please")
-        // REL-05: the AUTO call is dispatched to a daemon worker, so the drain this replaces would run
-        // the assertion below in the window between dispatch and the worker's EDT tail.
-        ChatPanelTestHarness.awaitToolSettled(count = 1)
+        val traceId = ChatPanelTestHarness.chainTraceId(h)
+        // REL-05: the AUTO call is dispatched to a daemon worker, so a bare drain would run the assertion
+        // below in the window between dispatch and the worker's EDT tail. The AUTO chain then runs to its
+        // budget with nobody asked, and waiting for the whole of it is what stops its workers settling
+        // inside later tests (measured: 7 of 8 outlived this test and satisfied the next two tests' awaits).
+        ChatPanelTestHarness.awaitToolSettled(label = traceId, count = ChatPanel.MAX_AUTO_TOOL_ITERATIONS)
 
         // D-02: scope_check is SecTier.AUTO, so the gate returns Run and the call still reaches Burp.
         // Unchanged behaviour is the CORRECT result here, not a sign the gate is inert. Do not invert.
@@ -134,10 +137,11 @@ class ChatPanelToolGateTest {
         ChatPanelTestHarness.sendUserMessage(h, "summarise the proxy history")
         ChatPanelTestHarness.drainEdt()
         val card = requireNotNull(ChatPanelTestHarness.findApprovalCard(h.panel.root)) { NO_CARD }
+        val traceId = pendingTraceId(h)
 
         click(card, "Approve once")
         // REL-05: replaces the post-click drain, which cannot see a daemon worker (see @BeforeEach).
-        ChatPanelTestHarness.awaitToolSettled(count = 1)
+        ChatPanelTestHarness.awaitToolSettled(label = traceId, count = 1)
 
         verify(h.api.proxy(), times(1)).history()
         assertEquals(
@@ -178,7 +182,7 @@ class ChatPanelToolGateTest {
         // REL-05: added BESIDE the explicit drain, not in place of it — the drain's count is load-bearing
         // for chain continuation (one invokeLater per chained turn) and the await is what proves the
         // worker's EDT tail has run. Over-draining an empty EDT queue is free.
-        ChatPanelTestHarness.awaitToolSettled(count = 1)
+        ChatPanelTestHarness.awaitToolSettled(label = traceId, count = 1)
         ChatPanelTestHarness.drainEdt(times = LONG_DRAIN)
 
         // NON-VACUITY FIRST, AND THAT ORDERING IS THE POINT. The claim below is "the continuation was
@@ -221,12 +225,14 @@ class ChatPanelToolGateTest {
         ChatPanelTestHarness.sendUserMessage(h, "summarise the proxy history")
         ChatPanelTestHarness.drainEdt()
         val card = requireNotNull(ChatPanelTestHarness.findApprovalCard(h.panel.root)) { NO_CARD }
+        val traceId = pendingTraceId(h)
 
         click(card, "Approve for session")
         // REL-05, and N = 2 for the same reason the verification below is atLeast(2): the claim is that
-        // a SECOND call ran without a second decision, so two workers must have settled before it is
-        // read. Added beside the explicit drain, which stays — see anApprovedToolThatThrows... above.
-        ChatPanelTestHarness.awaitToolSettled(count = 2)
+        // a SECOND call ran without a second decision, so two of this chain's own workers must have
+        // settled before it is read. Added beside the explicit drain, which stays; see
+        // anApprovedToolThatThrows... above.
+        ChatPanelTestHarness.awaitToolSettled(label = traceId, count = 2)
         ChatPanelTestHarness.drainEdt(times = LONG_DRAIN)
 
         // The grant is applied to every later call in this chat with nobody asked, so the model's
@@ -409,7 +415,7 @@ class ChatPanelToolGateTest {
         // EDT drain cannot see that window at all — it drains the EDT queue and knows nothing about a
         // thread it did not queue — so the verification below would run against a call that has not
         // happened yet, and fail intermittently rather than honestly.
-        ChatPanelTestHarness.awaitToolSettled(count = 1)
+        ChatPanelTestHarness.awaitToolSettled(label = ChatPanelTestHarness.slashToolLabel(), count = 1)
 
         verify(h.api.proxy(), times(1)).history()
         assertNull(
@@ -505,6 +511,7 @@ class ChatPanelToolGateTest {
             ChatPanelTestHarness.sendUserMessage(h, "summarise the proxy history")
             ChatPanelTestHarness.drainEdt()
             // A session grant, so nothing downstream is waiting on a click.
+            val traceId = pendingTraceId(h)
             click(requireNotNull(ChatPanelTestHarness.findApprovalCard(h.panel.root)) { NO_CARD }, "Approve for session")
             assertTrue(
                 entered.await(SUPERSEDE_FAILSAFE_SECONDS, TimeUnit.SECONDS),
@@ -512,7 +519,7 @@ class ChatPanelToolGateTest {
             )
             SwingUtilities.invokeAndWait { cancelButton(h).doClick() }
             release.countDown()
-            ChatPanelTestHarness.awaitToolSettled(count = 1)
+            ChatPanelTestHarness.awaitToolSettled(label = traceId, count = 1)
         }
 
         // FIRST. Exactly the turn the user typed, and no other.
@@ -562,6 +569,7 @@ class ChatPanelToolGateTest {
         assertTimeoutPreemptively(Duration.ofSeconds(30)) {
             ChatPanelTestHarness.sendUserMessage(h, "summarise the proxy history")
             ChatPanelTestHarness.drainEdt()
+            val chainLabel = pendingTraceId(h)
             click(requireNotNull(ChatPanelTestHarness.findApprovalCard(h.panel.root)) { NO_CARD }, "Approve for session")
             assertTrue(
                 entered.await(SUPERSEDE_FAILSAFE_SECONDS, TimeUnit.SECONDS),
@@ -570,9 +578,12 @@ class ChatPanelToolGateTest {
             // Mints its own running-tool token on the EDT, which is the supersede. Synchronous, so by
             // the time this returns the chain's token is already the loser of the compare-and-set.
             ChatPanelTestHarness.sendUserMessage(h, "/tool status {}")
+            val slashLabel = ChatPanelTestHarness.slashToolLabel()
             release.countDown()
-            // Two workers: the superseding /tool one and the superseded chain one.
-            ChatPanelTestHarness.awaitToolSettled(count = 2)
+            // Two workers, each awaited under its own label: the superseding /tool one and the
+            // superseded chain one.
+            ChatPanelTestHarness.awaitToolSettled(label = slashLabel, count = 1)
+            ChatPanelTestHarness.awaitToolSettled(label = chainLabel, count = 1)
         }
 
         verifySendChatCount(h, 1)
@@ -727,7 +738,7 @@ class ChatPanelToolGateTest {
         // REL-05: the approval dispatches a worker, and the next card only exists once that worker's EDT
         // tail has chained the followup turn. The later Deny click needs no await — a denial starts no
         // worker at all, so waiting on one would hang for the full failsafe and then fail.
-        ChatPanelTestHarness.awaitToolSettled(count = 1)
+        ChatPanelTestHarness.awaitToolSettled(label = traceId, count = 1)
         ChatPanelTestHarness.drainEdt()
         // Approve once writes no session memory, so the model's next identical call raises a new card.
         click(requireNotNull(liveApprovalCard(h.panel.root)) { NO_CARD }, "Deny")

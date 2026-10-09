@@ -211,8 +211,11 @@ class AuditVerboseSettingTest {
             requireNotNull(allDescendants(card).filterIsInstance<AbstractButton>().firstOrNull { it.text == "Approve once" }) {
                 "No 'Approve once' button on the card."
             }
+        // The parked decision's trace id and the chain's trace id are the same value: one chain
+        // threads one id through the gate and every worker it dispatches.
+        val traceId = ChatPanelTestHarness.chainTraceId(h)
         SwingUtilities.invokeAndWait { approve.doClick() }
-        ChatPanelTestHarness.awaitToolSettled(count = 1)
+        ChatPanelTestHarness.awaitToolSettled(label = traceId, count = 1)
         AuditLogger.registerGlobalEmitter(null)
     }
 

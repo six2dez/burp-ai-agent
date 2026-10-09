@@ -13,12 +13,13 @@ import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
 import java.awt.Container
 import java.util.concurrent.CopyOnWriteArrayList
-import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.locks.ReentrantLock
 import javax.swing.JButton
 import javax.swing.JComponent
 import javax.swing.JTextArea
 import javax.swing.SwingUtilities
+import kotlin.concurrent.withLock
 
 /**
  * Shared headless fixture that builds a **real** [ChatPanel] and drives its **real** Send button.
@@ -58,6 +59,17 @@ object ChatPanelTestHarness {
     private const val ON_COMPLETE_INDEX = 8
 
     /**
+     * Zero-based index of `traceId: String?` in `AgentSupervisor.sendChat`.
+     *
+     * Verified against the real signature at AgentSupervisor.kt:430-444: `traceId` is the 10th
+     * parameter, at :440.
+     */
+    private const val TRACE_ID_INDEX = 9
+
+    /** The label prefix ChatPanel's `/tool` branch dispatches its worker under. */
+    private const val SLASH_TOOL_LABEL_PREFIX = "chat-tool-slash-"
+
+    /**
      * Measured-sufficient number of EDT drains for the send -> response -> tool-call chain.
      *
      * Exposed as a parameter on [drainEdt] so a later plan can raise it in one place instead of
@@ -81,6 +93,13 @@ object ChatPanelTestHarness {
          * test thread reads the list.
          */
         val shownErrors: CopyOnWriteArrayList<String>,
+        /**
+         * Every non-null trace id this panel passed to `sendChat`, in call order.
+         *
+         * Written by the `sendChat` stub in [create]. A test that replaces that stub with `doAnswer`
+         * records nothing here and must record the trace id itself.
+         */
+        val sentTraceIds: CopyOnWriteArrayList<String>,
     )
 
     /**
@@ -103,6 +122,7 @@ object ChatPanelTestHarness {
 
         val supervisor: AgentSupervisor = mock(defaultAnswer = Answers.RETURNS_DEEP_STUBS)
         whenever(supervisor.requiresBurpAiAndDisabled(any())).thenReturn(false)
+        val sentTraceIds = CopyOnWriteArrayList<String>()
         whenever(
             // 13 matchers, one per parameter of AgentSupervisor.sendChat; nullable parameters use
             // anyOrNull() so an omitted optional argument still matches.
@@ -127,6 +147,7 @@ object ChatPanelTestHarness {
 
             @Suppress("UNCHECKED_CAST")
             val onComplete = invocation.arguments[ON_COMPLETE_INDEX] as (Throwable?) -> Unit
+            (invocation.arguments[TRACE_ID_INDEX] as String?)?.let { sentTraceIds.add(it) }
             onChunk(modelResponse)
             onComplete(null)
             null
@@ -146,7 +167,37 @@ object ChatPanelTestHarness {
                 passiveScanner = null,
             )
         panel.createNewSession()
-        return Harness(panel, api, supervisor, shownErrors)
+        return Harness(panel, api, supervisor, shownErrors, sentTraceIds)
+    }
+
+    /**
+     * The trace id of the one chain [h]'s panel ran, read from what it passed to `sendChat`.
+     *
+     * One chain threads one trace id through every followup turn, and that id is the label
+     * `OffEdtDispatch.run` settles every chain tool worker under. That the record collapses to one
+     * distinct value is itself the claim that exactly one chain ran in this panel.
+     */
+    fun chainTraceId(h: Harness): String {
+        val distinct = h.sentTraceIds.distinct()
+        return requireNotNull(distinct.singleOrNull()) {
+            "Expected exactly one distinct trace id passed to sendChat; recorded ${h.sentTraceIds.toList()}. " +
+                "A test that replaced the sendChat stub with doAnswer records nothing here."
+        }
+    }
+
+    /**
+     * The label of the single `/tool` worker dispatched since [installSettledObserver].
+     *
+     * Fails with the dispatched list when there is not exactly one, so a second `/tool` call cannot
+     * silently bind an await to the wrong worker.
+     */
+    fun slashToolLabel(): String {
+        val dispatched = dispatchedLabels()
+        val slash = dispatched.filter { it.startsWith(SLASH_TOOL_LABEL_PREFIX) }
+        check(slash.size == 1) {
+            "Expected exactly one dispatched label starting with $SLASH_TOOL_LABEL_PREFIX; dispatched: $dispatched"
+        }
+        return slash.single()
     }
 
     /**
@@ -299,26 +350,31 @@ object ChatPanelTestHarness {
      */
     private const val DEFAULT_SETTLE_FAILSAFE_SECONDS = 10L
 
-    /**
-     * The settle events [awaitToolSettled] CONSUMES, one per finished worker.
-     *
-     * Three collections rather than one, because each read has a use the others cannot serve.
-     */
-    private val settled = LinkedBlockingQueue<String>()
+    /** Guards [settledCounts]; [settledChanged] is signalled on every settle. */
+    private val settleLock = ReentrantLock()
+
+    private val settledChanged = settleLock.newCondition()
 
     /**
-     * The non-draining record of the same settle events, for assertions that need to inspect what
-     * finished without destroying the await's supply. A single queue would make those two uses mutually
-     * destructive.
+     * Settles per label since [installSettledObserver], read by [awaitToolSettled].
+     *
+     * Cumulative and never consumed: a second await on the same label sees the same total, and no
+     * await can take a settle that belongs to another label. Guarded by [settleLock].
+     */
+    private val settledCounts = HashMap<String, Int>()
+
+    /**
+     * The ordered record of the same settle events, for assertions that need to inspect what finished
+     * and in which order. Written under [settleLock] together with [settledCounts].
      */
     private val settledLog = CopyOnWriteArrayList<String>()
 
     /**
-     * The record of workers STARTED — a different moment from the two above, and the one a test must
+     * The record of workers STARTED, a different moment from the two above, and the one a test must
      * read when its claim is that no worker ran at all.
      *
      * A settle record is written from the worker's EDT tail, i.e. at settle. So in the buggy world such
-     * a test exists to catch — a denied or un-decided call that dispatched a worker anyway — that worker
+     * a test exists to catch (a denied or un-decided call that dispatched a worker anyway), that worker
      * has not finished at assert time and its label is missing from [settledLog] too, so the assertion
      * passes while the bug is present. `OffEdtDispatch.run` writes THIS log as its first statement,
      * synchronous with the dispatch, so a started worker is visible the moment it exists and its absence
@@ -336,12 +392,17 @@ object ChatPanelTestHarness {
      * `AuditLogger.registerGlobalEmitter`.
      */
     fun installSettledObserver() {
-        settled.clear()
-        settledLog.clear()
-        dispatchedLog.clear()
+        settleLock.withLock {
+            settledCounts.clear()
+            settledLog.clear()
+            dispatchedLog.clear()
+        }
         OffEdtDispatch.registerSettledObserver { label ->
-            settled.add(label)
-            settledLog.add(label)
+            settleLock.withLock {
+                settledCounts[label] = (settledCounts[label] ?: 0) + 1
+                settledLog.add(label)
+                settledChanged.signalAll()
+            }
         }
         OffEdtDispatch.registerDispatchedObserver { label -> dispatchedLog.add(label) }
     }
@@ -353,23 +414,45 @@ object ChatPanelTestHarness {
     }
 
     /**
-     * Blocks until [count] tool workers have finished their marshalled EDT tail, then drains the EDT.
+     * Blocks until [count] tool workers dispatched under [label] have finished their marshalled EDT
+     * tail, then drains the EDT.
+     *
+     * **[label] is mandatory because the settle stream is process-global.** `OffEdtDispatch` is an
+     * `object`, panels built by earlier tests stay alive after those tests end, and their chains keep
+     * settling under their own trace ids. An await that accepted any label once returned on exactly
+     * those: the eight-step AUTO chain of `autoToolStillRunsWithNoCard` satisfied the awaits of the next
+     * two tests while their own workers were still running, which left only the EDT drain as a disguised
+     * wall-clock wait. Callers pass their own chain's trace id or their own `/tool` worker's label.
+     *
+     * **Counts are cumulative since [installSettledObserver] and are never consumed**, so a second await
+     * on the same label sees the same total and asks for the new one.
      *
      * **[drainEdt] alone cannot do this and the gap is structural, not a matter of draining harder.**
      * It drains the EDT QUEUE and knows nothing about a daemon worker, so an assertion placed straight
      * after it runs in the window between the dispatch and the worker's tail. The settle observer fires
      * from that tail's `finally`, so a successful await means the tail has ALREADY run on the EDT.
      *
-     * [failsafeSeconds] bounds a deadlock; it is not a threshold the work is measured against.
+     * [failsafeSeconds] is one overall deadline that bounds a deadlock; it is not a measurement. Past it
+     * the await fails with an IllegalStateException naming the label, the counts and both logs.
      */
     fun awaitToolSettled(
+        label: String,
         count: Int,
         failsafeSeconds: Long = DEFAULT_SETTLE_FAILSAFE_SECONDS,
     ) {
-        repeat(count) { index ->
-            requireNotNull(settled.poll(failsafeSeconds, TimeUnit.SECONDS)) {
-                "Tool worker ${index + 1} of $count never settled within ${failsafeSeconds}s — the async " +
-                    "dispatch or its EDT tail is broken. Settled so far: ${settledLabels()}; dispatched: ${dispatchedLabels()}."
+        require(count >= 1) { "count must be at least 1; was $count" }
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(failsafeSeconds)
+        settleLock.withLock {
+            while ((settledCounts[label] ?: 0) < count) {
+                val remaining = deadline - System.nanoTime()
+                if (remaining <= 0L) {
+                    error(
+                        "Tool worker(s) under label $label did not settle $count time(s) within ${failsafeSeconds}s " +
+                            "(observed ${settledCounts[label] ?: 0}). The async dispatch or its EDT tail is broken, " +
+                            "or the label is not this test's own. Settled so far: ${settledLabels()}; dispatched: ${dispatchedLabels()}.",
+                    )
+                }
+                settledChanged.awaitNanos(remaining)
             }
         }
         drainEdt()

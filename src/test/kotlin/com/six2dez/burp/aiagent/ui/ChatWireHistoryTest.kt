@@ -149,7 +149,7 @@ class ChatWireHistoryTest {
                 Outcome.Reply("Reply three."),
             )
         ChatPanelTestHarness.sendUserMessage(f.h, "check the scope")
-        ChatPanelTestHarness.awaitToolSettled(1)
+        ChatPanelTestHarness.awaitToolSettled(label = requireNotNull(f.sent[0].traceId), count = 1)
         ChatPanelTestHarness.sendUserMessage(f.h, "next question")
         ChatPanelTestHarness.drainEdt()
 
@@ -192,7 +192,7 @@ class ChatWireHistoryTest {
         val command = """/tool scope_check {"url":"https://target.example/"}"""
         ChatPanelTestHarness.sendUserMessage(f.h, "/tools")
         ChatPanelTestHarness.sendUserMessage(f.h, command)
-        ChatPanelTestHarness.awaitToolSettled(1)
+        ChatPanelTestHarness.awaitToolSettled(label = ChatPanelTestHarness.slashToolLabel(), count = 1)
         assertTrue(f.sent.isEmpty(), "Neither tool command sends anything to the model: ${f.sent}")
 
         ChatPanelTestHarness.sendUserMessage(f.h, "hello")
@@ -335,6 +335,7 @@ class ChatWireHistoryTest {
         val history: List<ChatMessage>,
         val contextJson: String?,
         val privacyMode: PrivacyMode,
+        val traceId: String?,
     )
 
     /** What the scripted backend does with the next `sendChat` call. */
@@ -390,6 +391,7 @@ class ChatWireHistoryTest {
                     history = history,
                     contextJson = args[CONTEXT_INDEX] as String?,
                     privacyMode = args[PRIVACY_INDEX] as PrivacyMode,
+                    traceId = args[TRACE_ID_INDEX] as String?,
                 ),
             )
 
@@ -502,6 +504,15 @@ class ChatWireHistoryTest {
 
         /** `onComplete` in AgentSupervisor.sendChat. */
         const val ON_COMPLETE_INDEX = 8
+
+        /**
+         * `traceId: String?` in AgentSupervisor.sendChat.
+         *
+         * Verified against the real signature at AgentSupervisor.kt:430-444: `traceId` is the 10th
+         * parameter, at :440. Recorded here because this fixture replaces the harness's sendChat stub,
+         * so the harness's own trace id record never sees these calls.
+         */
+        const val TRACE_ID_INDEX = 9
 
         const val PROMPT = "Find the authorization flaw in this request."
         const val CONTEXT_MARKER = "CTX-WIRE-7F3A"

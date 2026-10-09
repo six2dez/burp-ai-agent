@@ -5,13 +5,14 @@ import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
 /**
- * Pins that the harness's tool-settle await returns only on the caller's own label.
+ * Pins that [ChatPanelTestHarness.awaitToolSettled] returns only on the caller's own label.
  *
  * The settle stream is process-global: `OffEdtDispatch` is an `object`, and its settle observer sees
  * every worker in the JVM. Panels built by earlier tests stay alive after those tests end, and their
@@ -19,8 +20,11 @@ import java.util.concurrent.atomic.AtomicReference
  * returns on those foreign settles while the caller's own worker is still running, which leaves only the
  * EDT drain that follows it as a disguised wall-clock wait.
  *
- * These probes drive `OffEdtDispatch.run` directly, with no panel: a foreign label settles first, the
- * test's own worker is held on a latch, and the await must not return until that latch is released.
+ * The scoped contract these probes pin: the await counts only settles of the label it was given, the
+ * counts are cumulative and never consumed, and a label that never settles fails loudly with its name
+ * instead of passing. The probes drive `OffEdtDispatch.run` directly, with no panel: a foreign label
+ * settles first, the test's own worker is held on a latch, and the await must not return until that
+ * latch is released.
  *
  * **Naming constraint (hard).** The class name carries none of the heavy suffixes `build.gradle.kts`
  * excludes from the fast gate, so these probes run on every PR.
@@ -45,7 +49,7 @@ class AwaitScopeProbeTest {
 
         val release = CountDownLatch(1)
         dispatch(own) { check(release.await(FAILSAFE_SECONDS, TimeUnit.SECONDS)) }
-        val waiter = startWaiter { ChatPanelTestHarness.awaitToolSettled(count = 1) }
+        val waiter = startWaiter { ChatPanelTestHarness.awaitToolSettled(label = own, count = 1) }
 
         val returnedEarly: Boolean
         try {
@@ -79,7 +83,7 @@ class AwaitScopeProbeTest {
 
         val release = CountDownLatch(1)
         dispatch(own) { check(release.await(FAILSAFE_SECONDS, TimeUnit.SECONDS)) }
-        val waiter = startWaiter { ChatPanelTestHarness.awaitToolSettled(count = 2) }
+        val waiter = startWaiter { ChatPanelTestHarness.awaitToolSettled(label = own, count = 2) }
 
         val returnedEarly: Boolean
         try {
@@ -99,6 +103,19 @@ class AwaitScopeProbeTest {
         assertTrue(
             waiter.returned.get(),
             "The await must return once this test's own second worker settled. Failure: ${waiter.failure.get()}",
+        )
+    }
+
+    @Test
+    fun aLabelThatNeverSettlesFailsLoudly() {
+        val never = "await-scope-c-never-dispatched"
+        val thrown =
+            assertThrows<IllegalStateException> {
+                ChatPanelTestHarness.awaitToolSettled(label = never, count = 1, failsafeSeconds = 1)
+            }
+        assertTrue(
+            thrown.message.orEmpty().contains(never),
+            "A label that never settles must fail with its name, so a wrong label reads as a wrong label. Got: ${thrown.message}",
         )
     }
 }
