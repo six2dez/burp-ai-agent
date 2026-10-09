@@ -107,9 +107,9 @@ object Defaults {
     // (PRIV-06 / D-02) Total wall-clock budget for the body-redaction stage. Windows are processed
     // in order until it is spent; everything past that point is dropped behind a visible marker
     // rather than passed through — fail closed, so unscanned bytes never reach a backend. The
-    // per-pattern deadline handed to SafeRegex is min(SafeRegex.DEFAULT_TIMEOUT_MS, remaining
-    // budget), so a per-pattern deadline can never outlive the total. The MAX_ prefix matches
-    // MAX_REDACTION_BODY_CHARS above.
+    // per-pattern bound is SafeRegex's deterministic access budget, not a share of this budget.
+    // This wall-clock budget is a liveness backstop checked between rules, so a single rule can
+    // overrun it by at most its own access budget. The MAX_ prefix matches MAX_REDACTION_BODY_CHARS.
     // Sized from measurement rather than from an external source: ~27 ms per 1 MB window for the
     // form plus JSON rules on Apple Silicon / JDK 21, so 2 000 ms covers tens of megabytes (the
     // reference implementation processed a 4.16 MB input in 849 ms).

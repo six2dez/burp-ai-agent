@@ -127,9 +127,9 @@ object App {
         // MAX_REDACTION_BUDGET_MS and drops real content behind markers on every call. Re-validating
         // here is what stops a stale preferences file from doing that.
         //
-        // COST: at most (patterns x probes x SafeRegex.DEFAULT_TIMEOUT_MS) once per launch, and a
-        // realistic ten-pattern list measured 2.2 ms because benign patterns complete in
-        // microseconds against every probe. This runs on the extension-load thread, NOT on the
+        // COST: at most patterns x 6 x SafeRegex.PROBE_ACCESS_BUDGET character accesses once per
+        // launch. A pathological pattern is rejected in about 8-15 ms; a realistic ten-pattern list
+        // measured 2.2 ms. This runs on the extension-load thread, NOT on the
         // EDT-critical path — the EDT exposure is the save path, tracked for Phase 23 / REL-05.
         //
         // setCustomPatterns still silently drops uncompilable entries; this filter is about

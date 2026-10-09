@@ -28,8 +28,8 @@ import com.six2dez.burp.aiagent.config.Defaults
  * 131 times the 2000-character head the two CLI error paths take. It is bounded from ABOVE by memory
  * amplification: the success path feeds this value to `stripAnsiCodes`, whose four sequential
  * full-string regex passes each allocate a fresh full-size string, so peak transient heap is roughly
- * five times the cap. Those four passes use raw `Regex`, not the project's `SafeRegex` deadline
- * wrapper, so bounding the input is the only protection they have. That residual is named here
+ * five times the cap. Those four passes use raw `Regex`, not the project's `SafeRegex` access
+ * budget wrapper, so bounding the input is the only protection they have. That residual is named here
  * deliberately rather than left implicit.
  *
  * **Truncation is visible, and only when it happened.** When the cap is reached, [snapshot] appends

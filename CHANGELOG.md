@@ -101,6 +101,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
   IDOR, JWT and CORS now match only as whole words, NoSQL is checked before SQL, and MySQL /
   PostgreSQL / MSSQL / SQLite error titles still count as SQL injection. Issues already filed
   under the old names keep them.
+- **Large bodies could lose content behind "REDACTION INCOMPLETE" markers on slow or busy
+  machines** - which parts were dropped depended on CPU load, so the same request could redact
+  differently from one run to the next. Redaction now bounds each pattern by a
+  deterministic amount of work, so the same input always redacts the same way.
 
 ### Security
 

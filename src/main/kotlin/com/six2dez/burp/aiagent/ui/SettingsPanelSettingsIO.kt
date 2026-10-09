@@ -212,7 +212,7 @@ internal fun SettingsPanel.currentSettings(): AgentSettings {
 
 /**
  * Splits the custom-patterns text area by newline, validates each non-blank line via
- * SafeRegex.isPatternSafe (regex compile + 50 ms ReDoS probe), and updates the
+ * SafeRegex.isPatternSafe (regex compile + ReDoS probes bounded by an access budget), and updates the
  * patternsFeedbackLabel with statusError / statusSuccess accordingly.
  *
  * Valid lines are returned; invalid/slow lines are dropped (not persisted).

@@ -387,9 +387,9 @@ internal fun SettingsPanel.refreshPrivacyNotice() {
     // has no effect on anything. Passing the persisted list makes this banner agree with the two
     // sibling claims that already read it: `ChatPanel.privacySummary` and the
     // customPatternsConfigured parameter of ContextPreviewDialog.privacyModeHint.
-    // D-07: this deliberately does NOT call validateAndCollectCustomPatterns(), whose 50 ms
-    // per-pattern ReDoS probe must never run on the EDT during a notice refresh. No probe is needed
-    // here — the persisted list was already validated on the way in.
+    // D-07: this deliberately does NOT call validateAndCollectCustomPatterns(), whose ReDoS probes
+    // (six, each bounded by SafeRegex.PROBE_ACCESS_BUDGET) must never run on the EDT during a notice
+    // refresh. No probe is needed here - the persisted list was already validated on the way in.
     val (level, htmlMessage) =
         privacyNoticeFor(selectedPrivacy, auditOff, activeOn, settings.customRedactionPatterns)
     if (level != null && htmlMessage != null) {

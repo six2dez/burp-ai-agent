@@ -30,7 +30,7 @@ package com.six2dez.burp.aiagent.util
  * `InetAddress.getByAddress`, an API that cannot resolve.
  *
  * There is deliberately no `Regex` here either, so the parser has no ReDoS surface and the repo's
- * `SafeRegex` deadline is never involved. Work is bounded to O(length) by [MAX_LITERAL_LENGTH].
+ * `SafeRegex` access budget is never involved. Work is bounded to O(length) by [MAX_LITERAL_LENGTH].
  */
 object Ipv4Literal {
     /**
