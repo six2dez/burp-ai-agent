@@ -39,7 +39,7 @@ dependencies {
     implementation("io.ktor:ktor-server-core:3.1.3")
     implementation("io.ktor:ktor-server-netty:3.1.3")
     // Ktor 3.1.3 pulls Netty 4.1.119, which has known advisories; the BOM pins the patched 4.1.x line without a Ktor upgrade
-    implementation(platform("io.netty:netty-bom:4.1.138.Final"))
+    implementation(platform("io.netty:netty-bom:4.1.139.Final"))
     implementation("io.ktor:ktor-server-cors:3.1.3")
     implementation("io.ktor:ktor-server-sse:3.1.3")
     implementation("io.ktor:ktor-server-content-negotiation:3.1.3")
