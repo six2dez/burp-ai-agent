@@ -105,6 +105,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
   machines** - which parts were dropped depended on CPU load, so the same request could redact
   differently from one run to the next. Redaction now bounds each pattern by a
   deterministic amount of work, so the same input always redacts the same way.
+- **`ai_passive_scan` did nothing on Burp 2026.9 and later** (shipped in 1.0.0) - from Burp
+  2026.9, proxy history entries are no longer `HttpRequestResponse` objects, so the MCP
+  `ai_passive_scan` tool failed silently with a ClassCastException. History entries are now
+  converted before scanning. Thanks to @shaman4ik for the report and root cause (#90).
 
 ### Security
 
