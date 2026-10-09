@@ -17,6 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - CI no longer runs the whole test suite a second time after the fast gate; it now enforces the
   coverage floors on the full test suite and builds and tests the BApp Store JAR
   (`-PstoreBuild=true`).
+- Fixed tests that failed intermittently on the macOS and Windows CI runners.
 
 ### Fixed
 
