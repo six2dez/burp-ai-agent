@@ -84,6 +84,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
   name the AI passive scanner gives it (for example `[AI Passive] CSRF`), and records its audit
   entry once. Issues already filed by 1.0.0 keep their old names. Right-click AI passive scans
   still file their local findings.
+- **AI passive issues were filed under the wrong vulnerability class and could auto-queue the
+  wrong active tests** (shipped in 1.0.0) - the class in an `[AI Passive]` issue name was found
+  by searching the title for short acronyms as plain text, so they matched inside other words
+  ("ato" in "Indicators", "Validator" or "Actuator", "rce" in "Source", "Resource" or "Force",
+  "sso" in "Associated", "idor" in "Corridor", "sql" in "NoSQL"). The local request smuggling
+  check was filed as `[AI Passive] ACCOUNT_TAKEOVER`, JavaScript source map findings as
+  `[AI Passive] CMDI` and NoSQL injection as `[AI Passive] SQLI`; with the AI active scanner and
+  "Auto-queue passive findings" on, those findings could queue account-takeover or
+  command-injection tests against the request. Acronyms such as SQL, XSS, RCE, SSRF, ATO, SSO,
+  IDOR, JWT and CORS now match only as whole words, NoSQL is checked before SQL, and MySQL /
+  PostgreSQL / MSSQL / SQLite error titles still count as SQL injection. Issues already filed
+  under the old names keep them.
 
 ### Security
 
