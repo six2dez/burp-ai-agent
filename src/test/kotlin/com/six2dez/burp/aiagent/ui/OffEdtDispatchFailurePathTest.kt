@@ -86,12 +86,12 @@ class OffEdtDispatchFailurePathTest {
     fun aThrowingErrorSinkDoesNotCostTheEdtTail() {
         val settled = CountDownLatch(1)
         val tail = AtomicReference<Result<String>?>(null)
-        OffEdtDispatch.registerSettledObserver { settled.countDown() }
+        OffEdtDispatch.registerSettledObserver { label -> if (label == TAIL_LABEL) settled.countDown() }
 
         assertTimeoutPreemptively(Duration.ofSeconds(30)) {
             OffEdtDispatch.run<String>(
                 threadName = PROBE_THREAD_NAME,
-                label = "failure-path-tail",
+                label = TAIL_LABEL,
                 logError = { throw InjectedSinkFailure(SINK_FAILURE) },
                 work = { throw InjectedWorkFailure(WORK_FAILURE) },
                 onEdt = { result -> tail.set(result) },
@@ -135,14 +135,14 @@ class OffEdtDispatchFailurePathTest {
     @Test
     fun aThrowingErrorSinkInTheTailDoesNotCostTheSettleRecord() {
         val settled = CountDownLatch(1)
-        OffEdtDispatch.registerSettledObserver { settled.countDown() }
+        OffEdtDispatch.registerSettledObserver { label -> if (label == IN_TAIL_LABEL) settled.countDown() }
 
         val escaped =
             capturingEventPumpOutput {
                 assertTimeoutPreemptively(Duration.ofSeconds(30)) {
                     OffEdtDispatch.run(
                         threadName = PROBE_THREAD_NAME,
-                        label = "failure-path-in-tail",
+                        label = IN_TAIL_LABEL,
                         logError = { throw InjectedSinkFailure(SINK_FAILURE) },
                         work = { "the work itself succeeds; it is the TAIL that throws" },
                         onEdt = { throw InjectedTailFailure(TAIL_FAILURE) },
@@ -172,15 +172,25 @@ class OffEdtDispatchFailurePathTest {
      *
      * The observer records BEFORE it throws, so the record is written on the throwing path too and the
      * two-dispatch claim is about both tails rather than about the first one only.
+     *
+     * **The two dispatches are sequenced by the test, not by `OffEdtDispatch`.** Each `run` call starts
+     * its own daemon thread, and `OffEdtDispatch.run`'s KDoc tells callers to select by identity, not by
+     * position: two workers settle in whichever order they finish. So SECOND is dispatched only after
+     * FIRST's settle was observed, and the observer acts only on this scenario's two labels, so a worker
+     * leaked by another class cannot count down either latch. [FIRST_WORK_DELAY_MS] keeps the first
+     * worker slow on every run, which is what made the old back-to-back shape fail every time.
      */
     @Test
     fun aThrowingSettleObserverDoesNotEscapeTheTail() {
         val seen = CopyOnWriteArrayList<String>()
-        val bothSettled = CountDownLatch(2)
+        val firstSettled = CountDownLatch(1)
+        val secondSettled = CountDownLatch(1)
         OffEdtDispatch.registerSettledObserver { label ->
-            seen.add(label)
-            bothSettled.countDown()
-            if (label == FIRST_LABEL) throw InjectedObserverFailure(OBSERVER_FAILURE)
+            if (label == FIRST_LABEL || label == SECOND_LABEL) {
+                seen.add(label)
+                (if (label == FIRST_LABEL) firstSettled else secondSettled).countDown()
+                if (label == FIRST_LABEL) throw InjectedObserverFailure(OBSERVER_FAILURE)
+            }
         }
 
         val escaped =
@@ -196,6 +206,10 @@ class OffEdtDispatchFailurePathTest {
                         },
                         onEdt = { },
                     )
+                    assertTrue(
+                        firstSettled.await(FAILSAFE_SECONDS, TimeUnit.SECONDS),
+                        "The first dispatch, whose settle observer throws, never settled. Settled: $seen",
+                    )
                     OffEdtDispatch.run(
                         threadName = PROBE_THREAD_NAME,
                         label = SECOND_LABEL,
@@ -204,13 +218,19 @@ class OffEdtDispatchFailurePathTest {
                         onEdt = { },
                     )
                     assertTrue(
-                        bothSettled.await(FAILSAFE_SECONDS, TimeUnit.SECONDS),
+                        secondSettled.await(FAILSAFE_SECONDS, TimeUnit.SECONDS),
                         "A throwing settle observer must not leave the helper unable to run more work. Settled: $seen",
                     )
                 }
             }
 
-        assertEquals(listOf(FIRST_LABEL, SECOND_LABEL), seen.toList(), "Both dispatches must settle, in dispatch order.")
+        assertEquals(
+            listOf(FIRST_LABEL, SECOND_LABEL),
+            seen.toList(),
+            "Both dispatches must settle. The order is this test's own sequencing: SECOND is dispatched only " +
+                "after FIRST settled, so its EDT tail cannot run before FIRST's throwing tail finished. It is " +
+                "not a promise OffEdtDispatch makes.",
+        )
         assertFalse(
             escaped.contains(OBSERVER_FAILURE),
             "CR-04: a throwing settle observer must not escape the finally into the AWT event pump. " +
@@ -271,7 +291,17 @@ private const val FAILSAFE_SECONDS = 10L
 /** The worker thread name these scenarios dispatch under; distinct from production's so a thread dump is unambiguous. */
 private const val PROBE_THREAD_NAME = "burp-ai-dispatch-probe"
 
-/** The two labels [OffEdtDispatchFailurePathTest.aThrowingSettleObserverDoesNotEscapeTheTail] orders its claim by. */
+/** The label [OffEdtDispatchFailurePathTest.aThrowingErrorSinkDoesNotCostTheEdtTail] dispatches and awaits. */
+private const val TAIL_LABEL = "failure-path-tail"
+
+/** The label [OffEdtDispatchFailurePathTest.aThrowingErrorSinkInTheTailDoesNotCostTheSettleRecord] dispatches and awaits. */
+private const val IN_TAIL_LABEL = "failure-path-in-tail"
+
+/**
+ * The two labels [OffEdtDispatchFailurePathTest.aThrowingSettleObserverDoesNotEscapeTheTail] dispatches,
+ * one after the other. Its observer acts only on these two, and the order it records is produced by the
+ * test's own sequencing rather than promised by `OffEdtDispatch`.
+ */
 private const val FIRST_LABEL = "settle-observer-throws"
 
 private const val SECOND_LABEL = "settle-observer-recovers"
