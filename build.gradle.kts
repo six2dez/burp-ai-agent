@@ -54,8 +54,8 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
 
     // Logging façade (we keep it minimal; Burp logs are also used)
-    implementation("org.slf4j:slf4j-api:2.0.18")
-    implementation("org.slf4j:slf4j-simple:2.0.18")
+    implementation("org.slf4j:slf4j-api:2.0.20")
+    implementation("org.slf4j:slf4j-simple:2.0.20")
 
     testImplementation(kotlin("test"))
     testImplementation("org.junit.jupiter:junit-jupiter:6.0.3")
