@@ -14,6 +14,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
   All checks run on a single background thread and never overlap; the tooltip shows when the last
   check ran.
 - Bumped slf4j to 2.0.18; updated `actions/setup-java` to v6 in CI.
+- CI no longer runs the whole test suite a second time after the fast gate; it now enforces the
+  coverage floors on the full test suite and builds and tests the BApp Store JAR
+  (`-PstoreBuild=true`).
 
 ### Fixed
 
