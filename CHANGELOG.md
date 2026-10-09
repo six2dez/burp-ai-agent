@@ -74,6 +74,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
   Burp's scanner thread for the AI request delay and re-sent the base request before every
   time-based payload. It now sends through the scan's client, measures the time-based baseline once
   per insertion point, and the Delay (ms) setting applies only to the AI active scanner queue.
+- **Burp Scanner filed `[AI Passive]` issues while the AI passive scanner was off, and
+  filed them twice while it was on** (shipped in 1.0.0) - every passive audit in Burp Professional
+  ran the extension's local checks (request smuggling indicators, a missing CSRF token, serialized
+  data, an executable upload) and filed their issues even though the AI passive scanner is off by
+  default; with it on, each finding was filed a second time under another name (for example
+  "Potential CSRF (Missing Token)" and "CSRF"). With the AI passive scanner off, the Burp Scanner
+  check now files nothing; with it on, it files each local finding once, under the `[AI Passive]`
+  name the AI passive scanner gives it (for example `[AI Passive] CSRF`), and records its audit
+  entry once. Issues already filed by 1.0.0 keep their old names. Right-click AI passive scans
+  still file their local findings.
 
 ### Security
 
