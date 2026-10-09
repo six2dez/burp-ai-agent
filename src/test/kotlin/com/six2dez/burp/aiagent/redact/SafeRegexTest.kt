@@ -9,8 +9,9 @@ import java.util.regex.Pattern
 // PRIV-02 / SC3: unit tests for the SafeRegex interruptible-CharSequence ReDoS guard.
 // All tests run headless (no AWT) and must complete well under the CI timeout budget.
 class SafeRegexTest {
-    // PRIV-02 / SC3: a catastrophically-backtracking pattern should be rejected within the
-    // timeout budget and the call must return within ~200 ms wall-clock.
+    // PRIV-02 / SC3: a catastrophically-backtracking pattern is rejected because (a+)+$ needs
+    // 4 011 997 accesses on the first probe, 4.0x over PROBE_ACCESS_BUDGET. The 200 ms bound pins
+    // that exhausting a probe budget is cheap (measured 8-15 ms).
     @Test
     fun catastrophicPatternIsRejectedWithinBudget() {
         val start = System.currentTimeMillis()
@@ -39,8 +40,8 @@ class SafeRegexTest {
     // not.
     @Test
     fun catastrophicPatternTimesOutAndReturnsInput() {
-        // 2 000 'a' characters followed by '!' — on JDK 21 this reliably triggers the 50 ms
-        // deadline for pathological patterns like (a+)+$ anchored at the end. The shorter
+        // 2 000 'a' characters followed by '!': (a+)+$ needs 4 011 997 accesses on this input,
+        // 3.6x the default budget of 1 128 064, so it exhausts on any machine. The shorter
         // 64-char probe is handled by JDK 21's improved NFA engine without catastrophic blowup.
         val input = "a".repeat(2_000) + "!"
         val pattern = Pattern.compile("(a+)+\$")
@@ -66,8 +67,8 @@ class SafeRegexTest {
     // the two would lose exactly that distinction.
     @Test
     fun catastrophicPatternReportsTimedOut() {
-        // Same input and pattern as catastrophicPatternTimesOutAndReturnsInput — 2 000 'a'
-        // characters followed by '!' reliably trips the 50 ms deadline on JDK 21 for (a+)+$.
+        // Same input and pattern as catastrophicPatternTimesOutAndReturnsInput: (a+)+$ needs
+        // 4 011 997 accesses on it, 3.6x the default budget of 1 128 064.
         val input = "a".repeat(2_000) + "!"
         val pattern = Pattern.compile("(a+)+\$")
 
@@ -135,7 +136,7 @@ class SafeRegexTest {
     // WR-07: ANTI-VACUITY PRECONDITION for the three rejection tests below, hoisted into its own
     // assertion so a reader can see it was checked rather than assumed.
     //
-    // Every catastrophic candidate below must be rejected BY THE PROBE DEADLINE, not by WR-01's
+    // Every catastrophic candidate below must be rejected BY THE PROBE BUDGET, not by WR-01's
     // zero-width guard, which runs first and would make the rejection tests green for entirely the
     // wrong reason. A candidate that matched the empty string would be rejected before a single
     // probe ran, and the test would pass identically with the corpus widening reverted. That is
@@ -255,24 +256,20 @@ class SafeRegexTest {
     // widening the corpus would have quietly swallowed a separately documented control and its
     // distinct save-path rejection message.
     //
-    // Asserted by cost, which is the only externally visible difference: the guard returns in
-    // microseconds while any probe timeout costs at least DEFAULT_TIMEOUT_MS (50 ms). Nine
-    // empty-matchers, so a corpus-driven rejection could not hide inside the bound.
+    // Asserted by verdict under a probe budget of 0: any probe that ran would exhaust at once and
+    // yield PROBE_BUDGET_EXHAUSTED, so MATCHES_EMPTY proves "before any probe" directly. The former
+    // check was a wall-time bound tied to a constant that no longer exists.
     @Test
     fun zeroWidthPatternsAreRejectedWithoutRunningAnyProbe() {
         val emptyMatchers = listOf("a*", "\\d*", "[0-9]*", "\\s*", "x?", "(foo)?", ".*", "(abc)*", "a|")
 
-        val start = System.currentTimeMillis()
         for (p in emptyMatchers) {
-            assertFalse(SafeRegex.isPatternSafe(p), "Empty-matching pattern must be rejected: $p")
+            assertEquals(
+                PatternVerdict.MATCHES_EMPTY,
+                SafeRegex.patternVerdict(p, probeBudget = 0L),
+                "WR-01's zero-width guard must reject before any probe runs: $p",
+            )
         }
-        val elapsed = System.currentTimeMillis() - start
-
-        assertTrue(
-            elapsed < SafeRegex.DEFAULT_TIMEOUT_MS,
-            "WR-01's zero-width guard must reject before any probe runs: ${emptyMatchers.size} empty-matchers " +
-                "took $elapsed ms, which is at least one probe deadline (${SafeRegex.DEFAULT_TIMEOUT_MS} ms)",
-        )
     }
 
     // PRIV-02 / WR-03: the counter-assertion to catastrophicPatternTimesOutAndReturnsInput — a
@@ -317,10 +314,10 @@ class SafeRegexTest {
     }
 
     // A replacement carrying a back-reference makes the matcher materialise the captured group,
-    // which slices the deadline-wrapped input rather than reading it character by character. The
-    // slice must stay deadline-aware — a plain String slice would silently drop the interruption
-    // guarantee for exactly the patterns most likely to backtrack. Asserted on the produced text;
-    // no wall-clock threshold is involved.
+    // which slices the budget-wrapped input rather than reading it character by character. The
+    // slice must stay budget-aware: a plain String slice would silently drop the access bound
+    // for exactly the patterns most likely to backtrack. Asserted on the produced text; no
+    // wall-clock threshold is involved.
     @Test
     fun groupReferencingReplacementSlicesTheInputAndKeepsWorking() {
         val result =

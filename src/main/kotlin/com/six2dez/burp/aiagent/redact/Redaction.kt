@@ -1762,13 +1762,7 @@ object Redaction {
                 dropOrRetry(window, rules, budgetDeadlineNanos, depth, sink)
                 return
             }
-            val result =
-                SafeRegex.replaceAllSafeReporting(
-                    current,
-                    pattern,
-                    replacement,
-                    minOf(SafeRegex.DEFAULT_TIMEOUT_MS, remainingMs),
-                )
+            val result = SafeRegex.replaceAllSafeReporting(current, pattern, replacement)
             if (result.timedOut) {
                 dropOrRetry(window, rules, budgetDeadlineNanos, depth, sink)
                 return
