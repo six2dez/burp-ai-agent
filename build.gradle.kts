@@ -372,11 +372,18 @@ detekt {
     config.setFrom(files("detekt.yml")) // project-specific overrides
 }
 
-tasks.withType<Test> {
+// Only `test` is finalized by the coverage report. The report reads the execution data of `test` and
+// depends on `test`, so finalizing every Test task made edtGuardWithoutAssertionsTest and
+// nightlyRegressionTest schedule a second full `test` run under whatever Gradle properties that
+// invocation had. In CI the assertions-disabled step re-ran the whole suite, heavy tests included,
+// after the fast suite had already passed with -PexcludeHeavyTests=true.
+tasks.test {
     finalizedBy(tasks.named("jacocoTestReport"))
 }
 
 tasks.named<JacocoReport>("jacocoTestReport") {
+    // Kept on purpose: Gradle's JaCoCo plugin does not make the report depend on `test`, so without
+    // this line the two floor tasks run on their own (as CI does) would verify stale or absent data.
     dependsOn(tasks.named("test"))
     reports {
         xml.required.set(true)
@@ -445,9 +452,9 @@ val jacocoMcpTreePackages =
 val jacocoMcpTreeLineFloor = 0.650
 
 tasks.named<JacocoCoverageVerification>("jacocoTestCoverageVerification") {
-    // `tasks.withType<Test>` already finalises the test task with jacocoTestReport, but relying on that
-    // ordering would leave this task reading whatever exec data happened to be on disk. Depend on the
-    // report explicitly so the verification cannot run against a stale or absent one.
+    // `tasks.test` (the only task the report finalizes) already runs jacocoTestReport after it, but
+    // relying on that ordering would leave this task reading whatever exec data happened to be on disk.
+    // Depend on the report explicitly so the verification cannot run against a stale or absent one.
     dependsOn(tasks.named<JacocoReport>("jacocoTestReport"))
     violationRules {
         rule {
