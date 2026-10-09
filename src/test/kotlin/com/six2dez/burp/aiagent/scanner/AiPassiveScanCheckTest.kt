@@ -32,6 +32,8 @@ class AiPassiveScanCheckTest {
 
         // localChecks() returns an empty list so the AuditResult factory is called with empty list
         whenever(passiveScanner.localChecks(any(), any())).thenReturn(emptyList())
+        // The check runs only while the passive AI scanner is on (quick 261009-1ao).
+        whenever(passiveScanner.isEnabled()).thenReturn(true)
 
         val check = AiPassiveScanCheck(api, passiveScanner) { testSettings() }
 
@@ -58,6 +60,8 @@ class AiPassiveScanCheckTest {
         val reqResp = mock<HttpRequestResponse>(defaultAnswer = Answers.RETURNS_DEEP_STUBS)
 
         whenever(passiveScanner.localChecks(any(), any())).thenReturn(emptyList())
+        // The check runs only while the passive AI scanner is on (quick 261009-1ao).
+        whenever(passiveScanner.isEnabled()).thenReturn(true)
 
         val check = AiPassiveScanCheck(api, passiveScanner) { testSettings() }
 
