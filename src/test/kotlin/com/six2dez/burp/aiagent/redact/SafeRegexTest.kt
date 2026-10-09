@@ -2,6 +2,7 @@ package com.six2dez.burp.aiagent.redact
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.util.regex.Pattern
@@ -171,6 +172,8 @@ class SafeRegexTest {
             "WR-07: (\\d+)+! is catastrophic on a digit run NOT terminated by '!' and must be rejected; " +
                 "every '!'-terminated probe accepts it because the trailing literal matches",
         )
+        assertEquals(PatternVerdict.PROBE_BUDGET_EXHAUSTED, SafeRegex.patternVerdict("(\\d+)+@"))
+        assertEquals(PatternVerdict.PROBE_BUDGET_EXHAUSTED, SafeRegex.patternVerdict("(\\d+)+!"))
     }
 
     // WR-07 (b): catastrophic on LOWERCASE — and the reason the corpus needs more than one
@@ -190,6 +193,7 @@ class SafeRegexTest {
             "WR-07: ([a-z]+)+! must be rejected; it survives EVERY '!'-terminated probe because its " +
                 "own trailing literal is '!', so the corpus must terminate a lowercase run some other way",
         )
+        assertEquals(PatternVerdict.PROBE_BUDGET_EXHAUSTED, SafeRegex.patternVerdict("([a-z]+)+!"))
     }
 
     // WR-07 (c): catastrophic on UPPERCASE. Not one of WR-07's three examples — added because the
@@ -203,6 +207,7 @@ class SafeRegexTest {
             "WR-07: ([A-Z]+)+! is catastrophic on a run of uppercase and must be rejected; " +
                 "no lowercase or digit probe reaches it",
         )
+        assertEquals(PatternVerdict.PROBE_BUDGET_EXHAUSTED, SafeRegex.patternVerdict("([A-Z]+)+!"))
     }
 
     // WR-07 (d): REGRESSION PIN, NOT A NEW GUARD — labelled as such deliberately.
@@ -219,6 +224,7 @@ class SafeRegexTest {
             SafeRegex.isPatternSafe("(\\w+\\s?)+\$"),
             "WR-07: (\\w+\\s?)+\$ must stay rejected (already rejected before the widening — regression pin)",
         )
+        assertEquals(PatternVerdict.PROBE_BUDGET_EXHAUSTED, SafeRegex.patternVerdict("(\\w+\\s?)+\$"))
     }
 
     // WR-07: the counter-assertion the rejection tests are worthless without. A corpus that rejects
@@ -329,5 +335,90 @@ class SafeRegexTest {
 
         assertFalse(result.timedOut, "a benign group-referencing pattern must not report a timeout")
         assertEquals("token=abc[REDACTED] and token=def[REDACTED]", result.text)
+    }
+
+    // DETERMINISM PIN (i): a catastrophic pattern is cut off by COUNT, so the outcome is identical
+    // on every call and every machine. (a+)+$ needs 4 011 997 accesses on this input: three
+    // consecutive default-budget calls (1 128 064 each) all report timedOut, and ten times that
+    // budget lets the same call complete, which proves the cut-off is the budget and nothing else.
+    @Test
+    fun catastrophicPatternIsCutOffByCountNotByTime() {
+        val probe = "a".repeat(2_000) + "!"
+        val pattern = Pattern.compile("(a+)+\$")
+
+        repeat(3) { call ->
+            val result = SafeRegex.replaceAllSafeReporting(probe, pattern, "X")
+            assertTrue(result.timedOut, "call ${call + 1}: (a+)+\$ must exhaust the default budget every time")
+            assertEquals(probe, result.text, "call ${call + 1}: an exhausted call must return the input unchanged")
+        }
+
+        val generous =
+            SafeRegex.replaceAllSafeReporting(probe, pattern, "X", accessBudget = 10 * SafeRegex.accessBudgetFor(probe.length))
+        assertFalse(generous.timedOut, "(a+)+\$ must complete under 10x the default budget; it needs 4 011 997 accesses")
+        assertEquals(probe, generous.text, "(a+)+\$ matches nothing in this input, so a completed call returns it unchanged")
+    }
+
+    // DETERMINISM PIN (ii): a subSequence and its parent drain ONE budget. The Matcher slices the
+    // input to materialise groups; a slice with a fresh or copied budget would escape the bound for
+    // exactly the patterns most likely to backtrack. A nested slice shares it too.
+    @Test
+    fun subSequenceSharesTheParentsAccessBudget() {
+        val parent = BudgetedCharSequence("abcdefgh", AccessBudget(4))
+        val child = parent.subSequence(2, 6)
+
+        assertEquals('c', child[0])
+        assertEquals('d', child[1])
+        assertEquals('a', parent[0])
+        assertEquals('b', parent[1])
+        assertThrows(RegexTimeoutException::class.java, { child[2] }, "the 5th read via the child must exhaust the shared budget")
+        assertThrows(RegexTimeoutException::class.java, { parent[2] }, "the 5th read via the parent must exhaust the shared budget")
+
+        val root = BudgetedCharSequence("abcdefgh", AccessBudget(3))
+        val mid = root.subSequence(1, 7)
+        val leaf = mid.subSequence(1, 5)
+        assertEquals('c', leaf[0])
+        assertEquals('b', mid[0])
+        assertEquals('a', root[0])
+        assertThrows(RegexTimeoutException::class.java, { leaf[1] }, "a nested slice must share the same budget")
+        assertThrows(RegexTimeoutException::class.java, { mid[1] }, "a nested slice must share the same budget")
+        assertThrows(RegexTimeoutException::class.java, { root[1] }, "a nested slice must share the same budget")
+    }
+
+    // DETERMINISM PIN (iii): a budget of 0 exhausts on the FIRST access, and the call fails soft on
+    // the text while reporting timedOut, exactly as a spent budget does on a large input.
+    @Test
+    fun zeroAccessBudgetTimesOutOnTheFirstAccess() {
+        val result = SafeRegex.replaceAllSafeReporting("abc", Pattern.compile("b"), "X", accessBudget = 0L)
+
+        assertTrue(result.timedOut, "a budget of 0 must report timedOut")
+        assertEquals("abc", result.text, "an exhausted call must return the input unchanged")
+    }
+
+    // The budget is EXACT: N accesses succeed and the (N+1)-th throws. length and toString() spend
+    // nothing, so the Matcher's bookkeeping cannot exhaust a budget on its own.
+    @Test
+    fun accessBudgetAllowsExactlyItsCount() {
+        val seq = BudgetedCharSequence("abcd", AccessBudget(3))
+        assertEquals('a', seq[0])
+        assertEquals('b', seq[1])
+        assertEquals('c', seq[2])
+        assertThrows(RegexTimeoutException::class.java, { seq[3] }, "the 4th access on a budget of 3 must throw")
+
+        val empty = BudgetedCharSequence("abcd", AccessBudget(0))
+        assertEquals(4, empty.length, "length must spend nothing")
+        assertEquals("abcd", empty.toString(), "toString() must spend nothing")
+    }
+
+    // Every arm of patternVerdict, named. Each WR-07 catastrophic candidate is rejected by an
+    // exhausted probe budget (the cheapest, (a+)+$, needs 4.0x PROBE_ACCESS_BUDGET), never by the
+    // zero-width guard or the compiler.
+    @Test
+    fun patternVerdictNamesTheArmThatDecided() {
+        val catastrophic = listOf("(\\d+)+@", "(\\d+)+!", "([a-z]+)+!", "([A-Z]+)+!", "(\\w+\\s?)+\$", "(a+)+\$")
+        for (p in catastrophic) {
+            assertEquals(PatternVerdict.PROBE_BUDGET_EXHAUSTED, SafeRegex.patternVerdict(p), "WR-07 candidate: $p")
+        }
+        assertEquals(PatternVerdict.UNCOMPILABLE, SafeRegex.patternVerdict("(unclosed"))
+        assertEquals(PatternVerdict.ACCEPTED, SafeRegex.patternVerdict("\\d+"))
     }
 }
