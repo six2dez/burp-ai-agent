@@ -90,6 +90,28 @@ class SafeRegexTest {
         assertEquals("abc[REDACTED]", result.text, "replaceAllSafeReporting must apply the replacement when it completes")
     }
 
+    // A LINEAR pattern over a LARGE input must complete, whatever the speed or load of the machine.
+    //
+    // [a-z]{1,8}# over 2 000 000 'a' followed by '#' costs 17 character accesses per input char: 8
+    // greedy reads, 8 '#' checks while backtracking, plus 1. That is about 34.0 M accesses in total.
+    // Under the former wall-clock deadline, at about 20 ns per access with the clock read, that is
+    // about 0.7 s of matcher work, about 14x over the deadline, so the call reported timedOut on any
+    // machine. Under the access budget it gets 1 000 000 + 64 x 2 000 001 = 129 000 064 accesses,
+    // about 3.8x headroom. The property pinned: whether a linear scan completes no longer depends on
+    // the speed of the machine.
+    @Test
+    fun aLinearScanOverALargeInputNeverReportsTimedOut() {
+        val input = "a".repeat(2_000_000) + "#"
+
+        val result = SafeRegex.replaceAllSafeReporting(input, Pattern.compile("[a-z]{1,8}#"), "X")
+
+        assertFalse(
+            result.timedOut,
+            "a linear pattern over a large input must never report timedOut; the bound must not depend on machine speed",
+        )
+        assertEquals("a".repeat(1_999_992) + "X", result.text, "the linear scan must run to completion")
+    }
+
     // WR-01: patterns that can match the empty (zero-width) string must be rejected. Otherwise
     // replaceAll would insert the replacement between every character, corrupting/bloating the
     // outbound context. Covers the common footguns: *, ?, and alternations with an empty branch.
