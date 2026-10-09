@@ -190,7 +190,10 @@ class OffEdtDispatchFailurePathTest {
                         threadName = PROBE_THREAD_NAME,
                         label = FIRST_LABEL,
                         logError = { },
-                        work = { "first" },
+                        work = {
+                            Thread.sleep(FIRST_WORK_DELAY_MS)
+                            "first"
+                        },
                         onEdt = { },
                     )
                     OffEdtDispatch.run(
@@ -272,6 +275,15 @@ private const val PROBE_THREAD_NAME = "burp-ai-dispatch-probe"
 private const val FIRST_LABEL = "settle-observer-throws"
 
 private const val SECOND_LABEL = "settle-observer-recovers"
+
+/**
+ * Permanent delay in the first worker of [OffEdtDispatchFailurePathTest.aThrowingSettleObserverDoesNotEscapeTheTail], in milliseconds.
+ *
+ * It widens the first worker so that a test which assumed settles arrive in dispatch order fails on
+ * every run instead of a few times in thousands (measured: 4 in 5000 quiet, 1 in 5000 under CPU
+ * contention). Nothing compares an elapsed duration to it, consistent with this file's KDoc.
+ */
+private const val FIRST_WORK_DELAY_MS = 50L
 
 /** Unique markers, so an assertion reading captured output cannot match something another test printed. */
 private const val WORK_FAILURE = "CR-04 probe: the unit of work exploded"

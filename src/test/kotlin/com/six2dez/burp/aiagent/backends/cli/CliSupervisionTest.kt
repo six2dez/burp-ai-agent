@@ -1,6 +1,7 @@
 package com.six2dez.burp.aiagent.backends.cli
 
 import com.six2dez.burp.aiagent.backends.BackendLaunchConfig
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -24,13 +25,7 @@ class CliSupervisionTest {
     @Test
     @Timeout(70, unit = TimeUnit.SECONDS)
     fun sendTimesOutAndReportsViaOnComplete() {
-        // Platform guard: use the correct argv for "sleep forever" on each OS
-        val sleepCmd =
-            if (System.getProperty("os.name").lowercase().contains("win")) {
-                listOf("cmd", "/c", "timeout", "/t", "60")
-            } else {
-                listOf("sleep", "60")
-            }
+        val sleepCmd = sleepForeverCommand(System.getProperty("os.name"))
 
         // Use a generic backend id so NonInteractiveCliConnection.buildCommand() returns
         // the raw sleepCmd without Codex-specific command wrapping (which would prepend
@@ -79,4 +74,24 @@ class CliSupervisionTest {
             connection.stop()
         }
     }
+
+    @Test
+    fun theSleepCommandIsChosenByOsName() {
+        val why =
+            "The backend always redirects the child's stdin (from NUL or from a pipe). Windows timeout.exe " +
+                "exits at once on redirected input, while ping ignores stdin; and ping must be the direct child, " +
+                "because destroyForcibly kills only the direct child."
+        assertEquals(listOf("ping", "-n", "61", "127.0.0.1"), sleepForeverCommand("Windows 11"), why)
+        assertEquals(listOf("ping", "-n", "61", "127.0.0.1"), sleepForeverCommand("Windows Server 2022"), why)
+        assertEquals(listOf("sleep", "60"), sleepForeverCommand("Mac OS X"), "macOS keeps the POSIX sleep, which ignores stdin.")
+        assertEquals(listOf("sleep", "60"), sleepForeverCommand("Linux"), "Linux keeps the POSIX sleep, which ignores stdin.")
+    }
 }
+
+/** The argv for a process that runs well past the 30 s watchdog on the OS named by [osName]. */
+private fun sleepForeverCommand(osName: String): List<String> =
+    if (osName.lowercase().contains("win")) {
+        listOf("cmd", "/c", "timeout", "/t", "60")
+    } else {
+        listOf("sleep", "60")
+    }
