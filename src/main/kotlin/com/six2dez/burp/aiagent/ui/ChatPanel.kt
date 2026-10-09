@@ -2411,16 +2411,8 @@ class ChatPanel(
             editorPane.font = UiTheme.Typography.chatBody
             editorPane.border = EmptyBorder(0, 0, 0, 0)
             editorPane.isVisible = !showSpinner
-            editorPane.addHyperlinkListener { e ->
-                if (e.eventType == javax.swing.event.HyperlinkEvent.EventType.ACTIVATED) {
-                    try {
-                        java.awt.Desktop
-                            .getDesktop()
-                            .browse(e.url.toURI())
-                    } catch (_: Exception) {
-                    }
-                }
-            }
+            // Quick 261009-do9: links open only through ChatLinkPolicy (http/https) after a confirmation that shows the URL.
+            editorPane.addHyperlinkListener(ChatLinkOpener())
 
             // Spinner
             spinnerLabel.font = UiTheme.Typography.body
