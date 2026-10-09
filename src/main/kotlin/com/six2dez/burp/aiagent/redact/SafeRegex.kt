@@ -140,6 +140,11 @@ object SafeRegex {
         } catch (_: RegexTimeoutException) {
             // Fail-soft on the text as before, but report the timeout so the caller can fail closed.
             SafeReplaceResult(input, true)
+        } catch (_: StackOverflowError) {
+            // Java's regex engine recurses on lazy quantifiers. A fat body (CF challenge, OTP blob)
+            // overflows the thread stack before DeadlineCharSequence can fire. Same outcome as a
+            // timeout: caller drops the unscanned window instead of killing the MCP tool.
+            SafeReplaceResult(input, true)
         }
 
     /**
@@ -198,6 +203,10 @@ object SafeRegex {
         } catch (_: PatternSyntaxException) {
             PatternVerdict.UNCOMPILABLE
         } catch (_: RegexTimeoutException) {
+            PatternVerdict.PROBE_BUDGET_EXHAUSTED
+        } catch (_: StackOverflowError) {
+            // Fat bodies can blow the regex stack before any budget fires; treat it as
+            // a probe timeout so history tools survive instead of killing the MCP call.
             PatternVerdict.PROBE_BUDGET_EXHAUSTED
         }
 
