@@ -221,6 +221,8 @@ val bappJar by tasks.registering(ShadowJar::class) {
     // the build script (pinned by BappManifestTest): no other task may write a file under this name.
     archiveFileName.set("custom-ai-agent-bapp.jar")
     from(sourceSets.main.get().output)
+    // Phase 30 SC2 red-before-green plant: throwaway, never merge.
+    from(fullSourceSet.output) { include("com/six2dez/burp/aiagent/backends/cli/**") }
     configurations = listOf(project.configurations.runtimeClasspath.get())
     mergeServiceFiles()
     exclude(*shadowDefaultExcludes)
