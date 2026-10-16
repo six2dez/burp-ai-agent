@@ -2256,11 +2256,59 @@ object Redaction {
         length: Int,
     ): ByteArray = hkdfExpand(prk, info, length)
 
+    // Header regexes are recursive in the JDK matcher. Handing them a whole fat body
+    // (CF challenge, checkout POST) overflows the thread stack. Windows stay under that depth.
+    private const val HEADER_REGEX_WINDOW = 2_048
+
+    private fun replaceBounded(
+        input: String,
+        regex: Regex,
+        transform: (MatchResult) -> CharSequence,
+    ): String {
+        if (input.length <= HEADER_REGEX_WINDOW) return tryReplace(input, regex, transform)
+        val sink = StringBuilder(input.length)
+        var index = 0
+        while (index < input.length) {
+            val end = minOf(index + HEADER_REGEX_WINDOW, input.length)
+            sink.append(tryReplace(input.substring(index, end), regex, transform))
+            index = end
+        }
+        return sink.toString()
+    }
+
+    private fun tryReplace(
+        input: String,
+        regex: Regex,
+        transform: (MatchResult) -> CharSequence,
+    ): String =
+        try {
+            input.replace(regex, transform)
+        } catch (_: StackOverflowError) {
+            input
+        }
+
     fun apply(
         raw: String,
         policy: RedactionPolicy,
         stableHostSalt: String,
         recordMapping: Boolean = true,
+    ): String {
+        return try {
+            applyInner(raw, policy, stableHostSalt, recordMapping)
+        } catch (_: StackOverflowError) {
+            // Header-stage Regex.replace runs unbounded on the whole payload (see the note above
+            // bodyStage). A fat body blows Java's recursive matcher before any timeout can fire,
+            // and that Error used to kill the MCP history tool. Keep a short prefix so the tool
+            // returns instead of dying.
+            raw.take(2_000) + "\n[redaction skipped: regex stack overflow]"
+        }
+    }
+
+    private fun applyInner(
+        raw: String,
+        policy: RedactionPolicy,
+        stableHostSalt: String,
+        recordMapping: Boolean,
     ): String {
         var out = raw
 
@@ -2274,12 +2322,12 @@ object Redaction {
             // RedactionTest.strictModeStripsCookiesTokensAndHosts and the BountyPromptTagResolver
             // assertion green WITHOUT edits.
             out =
-                out.replace(cookieHeaderRegex) { m ->
+                replaceBounded(out, cookieHeaderRegex) { m ->
                     val header = m.value.substringBefore(":")
                     "$header: [STRIPPED]"
                 }
             out =
-                out.replace(setCookieHeaderRegex) { m ->
+                replaceBounded(out, setCookieHeaderRegex) { m ->
                     val header = m.value.substringBefore(":")
                     "$header: [STRIPPED]"
                 }
@@ -2291,7 +2339,7 @@ object Redaction {
             // Both rules run BEFORE the body stage and are idempotent under it — re-matching
             // NAME=[REDACTED] reproduces NAME=[REDACTED] — so no ordering hazard exists.
             out =
-                out.replace(cookieTypedParamRegex) { m ->
+                replaceBounded(out, cookieTypedParamRegex) { m ->
                     // Destructured rather than groupValues[3]: detekt's MagicNumber rule ignores
                     // only -1/0/1/2, and a named binding reads better than a bare group index.
                     val (name, _, typeSuffix) = m.destructured
@@ -2301,14 +2349,16 @@ object Redaction {
 
         if (policy.redactTokens) {
             out =
-                out.replace(authHeaderRegex) { m ->
+                replaceBounded(out, authHeaderRegex) { m ->
                     val header = m.value.substringBefore(":")
                     "$header: [REDACTED]"
                 }
-            out = out.replace(bearerRegex, "Bearer [REDACTED]")
-            out = out.replace(basicAuthRegex, "Basic [REDACTED]")
-            out = out.replace(jwtRegex, "[JWT_REDACTED]")
-            out = out.replace(urlTokenParamRegex, URL_TOKEN_REPLACEMENT)
+            out = replaceBounded(out, bearerRegex) { "Bearer [REDACTED]" }
+            out = replaceBounded(out, basicAuthRegex) { "Basic [REDACTED]" }
+            out = replaceBounded(out, jwtRegex) { "[JWT_REDACTED]" }
+            out = replaceBounded(out, urlTokenParamRegex) { m ->
+                m.groupValues[1] + "[REDACTED]"
+            }
         }
 
         // (PRIV-06) D-01 AMENDED / D-02 / D-05: body-level redaction (form + JSON + custom
@@ -2324,7 +2374,7 @@ object Redaction {
 
         if (policy.anonymizeHosts) {
             out =
-                out.replace(hostHeaderRegex) { m ->
+                replaceBounded(out, hostHeaderRegex) { m ->
                     val host = m.groupValues[1]
                     val anon = anonymizeHost(host, stableHostSalt, recordMapping)
                     "Host: $anon"
