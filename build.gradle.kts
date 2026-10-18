@@ -80,8 +80,8 @@ dependencies {
     testImplementation("org.mockito.kotlin:mockito-kotlin:5.4.0")
     // MCP server tests use OkHttp as an HTTP client; production provider traffic goes only through Burp's
     // networking (Phase 31 / NET-01)
-    testImplementation("com.squareup.okhttp3:okhttp:5.4.0")
-    testImplementation("com.squareup.okhttp3:mockwebserver:5.4.0")
+    testImplementation("com.squareup.okhttp3:okhttp:5.5.0")
+    testImplementation("com.squareup.okhttp3:mockwebserver:5.5.0")
 }
 
 java {
